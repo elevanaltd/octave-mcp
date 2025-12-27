@@ -37,6 +37,8 @@ See the [protocol specs in `specs/`](specs/README.oct.md) for the precise operat
 - **`octave create`** – normalize and write new OCTAVE documents to disk.
 - **`octave amend`** – read, modify, normalize, and write OCTAVE documents (with optional hash-based consistency checking).
 
+These write tools are MCP-only because they're designed for **LLM agents to modify files programmatically**. Humans typically use `octave ingest` to prepare new documents for storage.
+
 These tools make it easy for LLMs to emit minimal intent while relying on deterministic mechanics for structure and safety. If the LLM were replaced by a plain text emitter, OCTAVE would still provide value.
 
 > **Future consolidation ([#51](https://github.com/elevanaltd/octave-mcp/issues/51))**: The 4 MCP tools will be consolidated into 3 (`octave validate`, `octave write`, `octave eject`) for cleaner orthogonal concerns. `octave write` will auto-detect new vs. existing files, merging the `create`/`amend` distinction.
