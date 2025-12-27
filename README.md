@@ -5,7 +5,7 @@
 [![Tests](https://img.shields.io/badge/tests-178%20passing-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)]()
 
-This repository ships the **OCTAVE MCP Server**—a Model Context Protocol implementation that exposes the OCTAVE document protocol as deterministic tools (`octave ingest`, `octave eject`, `octave validate`). The MCP layer is delivery plumbing; the value is the OCTAVE protocol itself.
+This repository ships the **OCTAVE MCP Server**—a Model Context Protocol implementation that exposes the OCTAVE document protocol as deterministic tools. The MCP layer is delivery plumbing; the value is the OCTAVE protocol itself.
 
 OCTAVE (Olympian Common Text And Vocabulary Engine) is a deterministic document format and control plane for LLM systems. It keeps meaning durable when text is compressed, routed between agents, or projected into different views.
 
@@ -24,13 +24,24 @@ See the [protocol specs in `specs/`](specs/README.oct.md) for the precise operat
 
 ## What this server provides
 
-`octave-mcp` bundles the OCTAVE tooling as MCP tools and as a CLI:
+`octave-mcp` bundles the OCTAVE tooling as MCP tools and a CLI.
+
+### Available via CLI and MCP
 
 - **`octave ingest`** – normalize lenient OCTAVE to canonical form, validate against schemas, and log every change.
 - **`octave eject`** – project canonical OCTAVE into multiple views (canonical, authoring, executive, developer) and formats (OCTAVE, JSON, YAML, Markdown) with declared loss tiers.
-- **`octave validate`** – run validation-only flows for schema conformance and error reporting.
+- **`octave validate`** – validate OCTAVE against schemas without modifying files.
+
+### Available via MCP only (LLM agents)
+
+- **`octave create`** – normalize and write new OCTAVE documents to disk.
+- **`octave amend`** – read, modify, normalize, and write OCTAVE documents (with optional hash-based consistency checking).
+
+These write tools are MCP-only because they're designed for **LLM agents to modify files programmatically**. Humans typically use `octave ingest` to prepare new documents for storage.
 
 These tools make it easy for LLMs to emit minimal intent while relying on deterministic mechanics for structure and safety. If the LLM were replaced by a plain text emitter, OCTAVE would still provide value.
+
+> **Future consolidation ([#51](https://github.com/elevanaltd/octave-mcp/issues/51))**: The 4 MCP tools will be consolidated into 3 (`octave validate`, `octave write`, `octave eject`) for cleaner orthogonal concerns. `octave write` will auto-detect new vs. existing files, merging the `create`/`amend` distinction.
 
 ## When OCTAVE helps
 
@@ -73,7 +84,7 @@ pip install -e .
 octave ingest document.oct.md --schema DECISION_LOG
 
 # Project to a view/format
-octave eject document.oct.md --mode executive --format markdown
+octave eject document.oct.md --mode executive
 
 # Validate only
 octave validate document.oct.md --schema DECISION_LOG --strict
