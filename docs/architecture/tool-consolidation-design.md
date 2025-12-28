@@ -150,10 +150,13 @@ changes = {
         *   Parse -> Apply `changes` -> Normalize.
     *   **Case B: `content` provided (Create/Overwrite Mode)**:
         *   Parse `content` -> Normalize.
-        *   (Optional) If file exists, treat as overwrite (logging diff).
+        *   If file exists AND `base_hash` provided: Verify hash matches (CAS guard against concurrent edits).
+        *   If file exists: Treat as overwrite (logging diff).
 4.  **Mutation**: Apply `mutations` (META fields) to AST.
 5.  **Write**: Atomic write (temp file -> fsync -> rename).
 6.  **Audit**: Return diff and corrections.
+
+> **CAS Consistency**: `base_hash` is honored in BOTH modes when the target file exists. This prevents silent clobbering of concurrent edits regardless of whether `content` or `changes` is used.
 
 **North Star Alignment**:
 - **I1 (Syntactic Fidelity)**: Normalizes to canonical form. Logs all corrections.
