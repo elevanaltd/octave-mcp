@@ -14,6 +14,33 @@ from typing import Any
 from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, Section
 from octave_mcp.core.lexer import Token, TokenType, tokenize
 
+# Unified set of operators valid in expression contexts (GH#62, GH#65)
+# This replaces ad-hoc inline operator checks in parse_flow_expression.
+# By centralizing expression operators, we ensure consistent handling
+# across the parser and make it easy to add new operators.
+EXPRESSION_OPERATORS: frozenset[TokenType] = frozenset(
+    {
+        TokenType.FLOW,  # → or ->
+        TokenType.SYNTHESIS,  # ⊕ or +
+        TokenType.AT,  # @
+        TokenType.CONCAT,  # ⧺ or ~
+        TokenType.TENSION,  # ⇌ or vs or <->
+        TokenType.CONSTRAINT,  # ∧ or &
+        TokenType.ALTERNATIVE,  # ∨ or |
+    }
+)
+
+
+def _token_to_str(token: Token) -> str:
+    """Convert token to string, preserving raw lexeme for NUMBER tokens (GH#66).
+
+    For NUMBER tokens, uses the raw lexeme to preserve scientific notation format
+    (e.g., '1e10' instead of '10000000000.0'). For other tokens, uses str(value).
+    """
+    if token.type == TokenType.NUMBER and token.raw is not None:
+        return token.raw
+    return str(token.value)
+
 
 class ParserError(Exception):
     """Parser error with position information."""
@@ -36,6 +63,7 @@ class Parser:
         self.tokens = tokens
         self.pos = 0
         self.current_indent = 0
+        self.warnings: list[dict] = []  # I4 audit trail for lenient parsing events
 
     def current(self) -> Token:
         """Get current token."""
@@ -108,7 +136,7 @@ class Parser:
                 doc.sections.append(section)
             elif self.current().type not in (TokenType.ENVELOPE_END, TokenType.EOF):
                 # Consume unexpected token to prevent infinite loop
-                # In lenient mode, we could log this or try to recover
+                # GH#64: Warning is already emitted by parse_section for bare identifiers
                 self.advance()
 
             self.skip_whitespace()
@@ -349,7 +377,9 @@ class Parser:
         if self.current().type != TokenType.IDENTIFIER:
             return None
 
-        key = self.current().value
+        # Capture token info before consuming for potential I4 audit warning
+        identifier_token = self.current()
+        key = identifier_token.value
         self.advance()
 
         # Check for assignment or block
@@ -407,12 +437,29 @@ class Parser:
                     child = self.parse_section(child_indent)
                     if child:
                         children.append(child)
+                    elif self.current().type in (TokenType.NEWLINE, TokenType.INDENT):
+                        # GH#64: parse_section consumed and warned about bare identifier,
+                        # leaving us at NEWLINE/INDENT. Continue parsing remaining children.
+                        continue
                     else:
                         # No valid child parsed, might be end of block
                         break
 
             return Block(key=key, children=children, line=self.current().line, column=self.current().column)
 
+        # GH#64: Bare identifier without :: or : operator - emit I4 audit warning
+        # Per I4 (Transform Auditability): "If bits lost must have receipt"
+        # The identifier was already consumed above, so use captured token info
+        self.warnings.append(
+            {
+                "type": "lenient_parse",
+                "subtype": "bare_line_dropped",
+                "original": str(identifier_token.value),
+                "line": identifier_token.line,
+                "column": identifier_token.column,
+                "reason": "Bare identifier without :: or : operator",
+            }
+        )
         return None
 
     def parse_value(self) -> Any:
@@ -439,19 +486,20 @@ class Parser:
             return self.parse_list()
 
         elif token.type == TokenType.IDENTIFIER:
-            # Check if this starts a flow/synthesis/at/concat expression
+            # Check if this starts an expression with operators (GH#62, GH#65)
             next_token = self.peek()
-            if next_token.type in (TokenType.FLOW, TokenType.SYNTHESIS, TokenType.AT, TokenType.CONCAT):
-                # Flow expression like A→B→C, synthesis like X⊕Y, location like A@B, or concat like A⧺B
+            if next_token.type in EXPRESSION_OPERATORS:
+                # Expression with operators like A->B->C, X+Y, A@B, A~B, Speed vs Quality, etc.
                 return self.parse_flow_expression()
 
-            # Consume compound identifier with colons (Issue #41 Phase 2)
-            # Examples: HERMES:API_TIMEOUT, MODULE:SUBMODULE:COMPONENT
-            # This preserves single colons WITHIN values
+            # GH#66: Capture multi-word bare values
+            # Examples: "Main content", "Hello World Again"
+            # Stops at: NEWLINE, COMMA, LIST_END, ENVELOPE markers, operators
             parts = [token.value]
             self.advance()
 
-            # Collect colon-separated path components
+            # Collect colon-separated path components (Issue #41 Phase 2)
+            # Examples: HERMES:API_TIMEOUT, MODULE:SUBMODULE:COMPONENT
             while self.current().type == TokenType.BLOCK and self.peek().type == TokenType.IDENTIFIER:
                 # Consume BLOCK token (:)
                 self.advance()
@@ -459,10 +507,80 @@ class Parser:
                 parts.append(self.current().value)
                 self.advance()
 
-            # Return compound path if multiple parts, else single value
+            # If we consumed colons, return as colon-joined path
             if len(parts) > 1:
                 return ":".join(parts)
-            return parts[0]
+
+            # GH#66: Continue capturing consecutive identifiers as multi-word value
+            # GH#63: Include NUMBER tokens in multi-word capture (convert to string)
+            # Stop at delimiters, operators, or non-identifier/number tokens
+            word_parts = [parts[0]]
+            # Track start position for I4 audit
+            start_line = token.line
+            start_column = token.column
+
+            while self.current().type in (TokenType.IDENTIFIER, TokenType.NUMBER):
+                # Check if next token after this identifier is an operator
+                # If so, we're starting an expression, not a multi-word value
+                if self.peek().type in EXPRESSION_OPERATORS:
+                    # Include this word and then parse the rest as expression
+                    # GH#66: Use _token_to_str to preserve NUMBER lexemes
+                    word_parts.append(_token_to_str(self.current()))
+                    self.advance()
+                    # Now we need to continue with flow expression parsing
+                    expr_parts = [" ".join(word_parts)]
+                    while (
+                        self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER)
+                        or self.current().type in EXPRESSION_OPERATORS
+                    ):
+                        if self.current().type in EXPRESSION_OPERATORS:
+                            expr_parts.append(self.current().value)
+                            self.advance()
+                        elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER):
+                            # GH#66: Use _token_to_str to preserve NUMBER lexemes
+                            expr_parts.append(_token_to_str(self.current()))
+                            self.advance()
+                        else:
+                            break
+                    # I4 Audit: Emit warning when multi-word coalescing occurs in expression path
+                    # Same pattern as terminal multi-word at line 557-567
+                    if len(word_parts) > 1:
+                        self.warnings.append(
+                            {
+                                "type": "lenient_parse",
+                                "subtype": "multi_word_coalesce",
+                                "original": word_parts,
+                                "result": " ".join(word_parts),
+                                "context": "expression_path",
+                                "line": start_line,
+                                "column": start_column,
+                            }
+                        )
+                    return "".join(str(p) for p in expr_parts)
+
+                # Just another word/number in the multi-word value
+                # GH#66: Use _token_to_str to preserve NUMBER lexemes (e.g., 1e10)
+                word_parts.append(_token_to_str(self.current()))
+                self.advance()
+
+            # Join words with spaces
+            result = " ".join(word_parts)
+
+            # GH#66 I4 Audit: Emit warning when multiple tokens coalesced into single value
+            # "If bits lost must have receipt" - multi-word coalescing is lenient parsing
+            if len(word_parts) > 1:
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "multi_word_coalesce",
+                        "original": word_parts,
+                        "result": result,
+                        "line": start_line,
+                        "column": start_column,
+                    }
+                )
+
+            return result
 
         elif token.type == TokenType.FLOW:
             # Flow expression starting with operator like →B→C
@@ -532,19 +650,20 @@ class Parser:
         return self.parse_value()
 
     def parse_flow_expression(self) -> str:
-        """Parse flow/synthesis/at/concat expression like A→B→C, X⊕Y, A@B, or A⧺B."""
+        """Parse expression with operators like A→B→C, X⊕Y, A@B, A⧺B, or Speed⇌Quality.
+
+        Uses EXPRESSION_OPERATORS set for unified operator handling (GH#62, GH#65).
+        This ensures all expression operators (FLOW, SYNTHESIS, AT, CONCAT, TENSION,
+        CONSTRAINT, ALTERNATIVE) are properly captured in expressions.
+        """
         parts = []
 
-        # Collect all parts of flow/synthesis/at/concat expression
-        while self.current().type in (
-            TokenType.IDENTIFIER,
-            TokenType.FLOW,
-            TokenType.SYNTHESIS,
-            TokenType.AT,
-            TokenType.CONCAT,
-            TokenType.STRING,
+        # Collect all parts of expression using unified EXPRESSION_OPERATORS set
+        while (
+            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING)
+            or self.current().type in EXPRESSION_OPERATORS
         ):
-            if self.current().type in (TokenType.FLOW, TokenType.SYNTHESIS, TokenType.AT, TokenType.CONCAT):
+            if self.current().type in EXPRESSION_OPERATORS:
                 parts.append(self.current().value)
                 self.advance()
             elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING):
@@ -575,3 +694,48 @@ def parse(content: str | list[Token]) -> Document:
 
     parser = Parser(tokens)
     return parser.parse_document()
+
+
+def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict]]:
+    """Parse OCTAVE content into AST with I4 audit trail.
+
+    Returns both the parsed document and any warnings generated during
+    lenient parsing (e.g., multi-word value coalescing).
+
+    I4 Immutable: "If not written and addressable, didn't happen"
+    - Lenient parsing transforms must be auditable
+    - Multi-word bare values coalesced into single string emit warnings
+
+    Args:
+        content: Raw OCTAVE text (lenient or canonical) or list of tokens
+
+    Returns:
+        Tuple of (Document AST, list of warning dicts)
+        Warning dict structure:
+        {
+            "type": "lenient_parse",
+            "subtype": "multi_word_coalesce",
+            "original": ["word1", "word2", ...],
+            "result": "word1 word2 ...",
+            "line": int,
+            "column": int
+        }
+
+    Raises:
+        ParserError: On syntax errors
+    """
+    if isinstance(content, str):
+        tokens, lexer_repairs = tokenize(content)
+    else:
+        tokens = content
+        lexer_repairs = []
+
+    parser = Parser(tokens)
+    doc = parser.parse_document()
+
+    # Combine lexer repairs and parser warnings
+    # Lexer repairs are about ASCII normalization
+    # Parser warnings are about lenient parsing (multi-word coalescing)
+    all_warnings = list(lexer_repairs) + parser.warnings
+
+    return doc, all_warnings

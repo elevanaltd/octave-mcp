@@ -63,6 +63,7 @@ class Token:
     line: int
     column: int
     normalized_from: str | None = None  # Original ASCII alias if normalized
+    raw: str | None = None  # Original lexeme text (for NUMBER tokens)
 
 
 class LexerError(Exception):
@@ -79,6 +80,7 @@ class LexerError(Exception):
 # ASCII to Unicode normalization table
 ASCII_ALIASES = {
     "->": "→",
+    "<->": "⇌",  # GH#65: ASCII tension operator
     "+": "⊕",
     "~": "⧺",
     "vs": "⇌",
@@ -101,6 +103,7 @@ TOKEN_PATTERNS = [
     (r"::", TokenType.ASSIGN),
     (r":", TokenType.BLOCK),
     (r"→", TokenType.FLOW),
+    (r"<->", TokenType.TENSION),  # GH#65: ASCII tension (must come before ->)
     (r"->", TokenType.FLOW),
     (r"⊕", TokenType.SYNTHESIS),
     # Note: + handled specially to distinguish from numbers
@@ -119,6 +122,9 @@ TOKEN_PATTERNS = [
     (r"\]", TokenType.LIST_END),
     (r",", TokenType.COMMA),
     # Quoted strings (with escape handling)
+    # GH#63: Triple quotes MUST come before single quotes (longest match first)
+    # Triple-quoted strings can contain newlines and internal quotes
+    (r'"""(?:[^"\\]|\\.|"(?!""))*"""', TokenType.STRING),
     (r'"(?:[^"\\]|\\.)*"', TokenType.STRING),
     # Numbers (including negative and scientific notation)
     (r"-?\d+\.?\d*(?:[eE][+-]?\d+)?", TokenType.NUMBER),
@@ -197,6 +203,7 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
             if match:
                 matched_text = match.group()
                 normalized_from = None
+                raw_lexeme = None  # GH#66: Preserve raw lexeme for NUMBER tokens
 
                 # ... (value extraction logic)
                 # Handle special tokens
@@ -205,19 +212,29 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 elif token_type == TokenType.ENVELOPE_END:
                     value = "END"
                 elif token_type == TokenType.STRING:
-                    # Remove quotes and handle escapes
-                    value = matched_text[1:-1]  # Remove surrounding quotes
+                    # GH#63: Handle triple quotes vs single quotes
+                    # I4 Audit Trail: Record triple quote normalization
+                    if matched_text.startswith('"""'):
+                        # Triple-quoted string: remove """ from both ends
+                        value = matched_text[3:-3]
+                        # I4: Record triple quote to single quote normalization
+                        normalized_from = '"""'
+                    else:
+                        # Single-quoted string: remove " from both ends
+                        value = matched_text[1:-1]
                     # Process escape sequences
                     value = value.replace(r"\"", '"')
                     value = value.replace(r"\\", "\\")
                     value = value.replace(r"\n", "\n")
                     value = value.replace(r"\t", "\t")
                 elif token_type == TokenType.NUMBER:
-                    # Convert to int or float
+                    # Convert to int or float, but preserve raw lexeme for fidelity (GH#66)
                     if "." in matched_text or "e" in matched_text.lower():
                         value = float(matched_text)
                     else:
                         value = int(matched_text)
+                    # Store raw lexeme for multi-word value reconstruction
+                    raw_lexeme = matched_text
                 elif token_type == TokenType.BOOLEAN:
                     value = matched_text == "true"
                 elif token_type == TokenType.NULL:
@@ -248,7 +265,7 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                         normalized_from = matched_text
                         value = ASCII_ALIASES[matched_text]
 
-                token = Token(token_type, value, line, column, normalized_from)
+                token = Token(token_type, value, line, column, normalized_from, raw_lexeme)
                 tokens.append(token)
 
                 if normalized_from:
@@ -262,10 +279,14 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                         }
                     )
 
-                # Update position
-                if token_type == TokenType.NEWLINE:
-                    line += 1
-                    column = 1
+                # Update position - count embedded newlines in matched text
+                newline_count = matched_text.count("\n")
+                if newline_count > 0:
+                    # Token contains newlines (e.g., triple-quoted strings)
+                    line += newline_count
+                    # Column is position after last newline
+                    last_newline_pos = matched_text.rfind("\n")
+                    column = len(matched_text) - last_newline_pos
                 else:
                     column += len(matched_text)
                 pos = match.end()

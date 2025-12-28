@@ -185,6 +185,134 @@ class TestStringTokenization:
         # Escapes should be preserved in token value
 
 
+class TestTripleQuoteI4AuditTrail:
+    """Tests for I4 audit trail when triple quotes are normalized (GH#63).
+
+    Location: lexer.py:213-224 (triple quote handling)
+
+    ISSUE: Triple quote to single quote normalization is NOT recorded
+    in the repairs array. Per I4 (Discoverable Artifact Persistence),
+    all normalizations should be tracked.
+
+    FIX: Set Token.normalized_from when triple quotes detected,
+    and add a repairs entry for the normalization.
+    """
+
+    def test_triple_quote_normalization_recorded_in_token(self):
+        """Triple quote normalization should set normalized_from on token.
+
+        Input: KEY::\"\"\"multi-line content\"\"\"
+        Expected: Token.normalized_from = '\"\"\"' (or similar indicator)
+        """
+        content = 'KEY::"""multi-line content"""'
+        tokens, _ = tokenize(content)
+
+        string_token = [t for t in tokens if t.type == TokenType.STRING][0]
+        assert string_token.value == "multi-line content"
+        # After fix: normalized_from should indicate triple quote source
+        assert string_token.normalized_from is not None
+        assert '"""' in string_token.normalized_from
+
+    def test_triple_quote_normalization_in_repairs_array(self):
+        """Triple quote normalization should appear in repairs array.
+
+        Per I4: If not written and addressable, didn't happen.
+        The repairs array is the audit trail for normalizations.
+        """
+        content = 'DESCRIPTION::"""This is a multi-line description"""'
+        tokens, repairs = tokenize(content)
+
+        # After fix: repairs should include triple quote normalization entry
+        triple_quote_repairs = [
+            r for r in repairs if r.get("type") == "normalization" and '"""' in r.get("original", "")
+        ]
+        assert len(triple_quote_repairs) >= 1, "Triple quote normalization should be in repairs"
+        assert triple_quote_repairs[0]["original"] == '"""'
+
+    def test_single_quote_no_normalization(self):
+        """Single-quoted strings should NOT have normalization entries."""
+        content = 'KEY::"single quoted"'
+        tokens, repairs = tokenize(content)
+
+        string_token = [t for t in tokens if t.type == TokenType.STRING][0]
+        assert string_token.value == "single quoted"
+        # Single quotes are canonical, no normalization needed
+        assert string_token.normalized_from is None
+
+        # No triple-quote related repairs
+        triple_quote_repairs = [r for r in repairs if '"""' in r.get("original", "")]
+        assert len(triple_quote_repairs) == 0
+
+    def test_triple_quote_with_internal_single_quotes(self):
+        """Triple quotes containing single quotes should normalize correctly."""
+        content = 'MSG::"""He said "hello" to her"""'
+        tokens, repairs = tokenize(content)
+
+        string_token = [t for t in tokens if t.type == TokenType.STRING][0]
+        assert string_token.value == 'He said "hello" to her'
+        # Should record the normalization
+        assert string_token.normalized_from is not None
+
+
+class TestMultiLineStringLineTracking:
+    """Test line/column tracking for multi-line strings (PR #70 review fix).
+
+    When triple-quoted strings span multiple lines, the lexer must count
+    embedded newlines and update line/column correctly for subsequent tokens.
+    """
+
+    def test_multiline_triple_quote_updates_line_correctly(self):
+        """Tokens after multi-line string should have correct line numbers.
+
+        Input:
+            ===TEST===
+            BODY::\"\"\"Line one
+            Line two
+            Line three\"\"\"
+            NEXT::value
+            ===END===
+
+        NEXT should be on line 5, not line 3.
+        """
+        content = '''===TEST===
+BODY::"""Line one
+Line two
+Line three"""
+NEXT::value
+===END==='''
+        tokens, _ = tokenize(content)
+
+        # Find NEXT identifier
+        next_token = [t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "NEXT"][0]
+        # NEXT should be on line 5 (after 3-line string content)
+        assert next_token.line == 5, f"Expected line 5, got {next_token.line}"
+        assert next_token.column == 1
+
+    def test_multiline_string_column_after_last_newline(self):
+        """Column should reset correctly after embedded newlines."""
+        content = '''KEY::"""first
+second
+third"""'''
+        tokens, _ = tokenize(content)
+
+        # The closing """ ends at column 8 on line 3
+        # Next token should be on new position
+        string_token = [t for t in tokens if t.type == TokenType.STRING][0]
+        # String token is created at its START position
+        assert string_token.line == 1
+        assert string_token.column == 6  # After KEY::
+
+    def test_single_line_string_no_line_increment(self):
+        """Single-line strings should not increment line counter."""
+        content = """KEY::"single line"
+NEXT::value"""
+        tokens, _ = tokenize(content)
+
+        next_token = [t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "NEXT"][0]
+        assert next_token.line == 2
+        assert next_token.column == 1
+
+
 class TestNumberTokenization:
     """Test number literal handling."""
 
