@@ -61,13 +61,18 @@ def emit_value(value: Any) -> str:
     """Emit a value in canonical form.
 
     I2 Compliance:
-    - Absent values return empty string (caller should skip)
+    - Absent values raise ValueError (caller must filter before calling)
     - None values return "null" (explicitly empty)
+    - ListValue and InlineMap filter out Absent items/values internally
+
+    Raises:
+        ValueError: If passed an Absent value directly. This catches
+            caller bugs where Absent leaked through without filtering.
     """
     if isinstance(value, Absent):
         # I2: Absent is NOT the same as null
-        # Return empty string - caller should filter before calling
-        return ""
+        # Raise to catch caller bugs - Absent should be filtered BEFORE emit_value
+        raise ValueError("Absent value passed to emit_value(). " "I2 requires filtering Absent before emission.")
     if value is None:
         return "null"
     elif isinstance(value, bool):
@@ -83,10 +88,12 @@ def emit_value(value: Any) -> str:
     elif isinstance(value, ListValue):
         if not value.items:
             return "[]"
-        items = [emit_value(item) for item in value.items]
+        # I2: Filter out Absent items before emission
+        items = [emit_value(item) for item in value.items if not is_absent(item)]
         return f"[{','.join(items)}]"
     elif isinstance(value, InlineMap):
-        pairs = [f"{k}::{emit_value(v)}" for k, v in value.pairs.items()]
+        # I2: Filter out pairs with Absent values before emission
+        pairs = [f"{k}::{emit_value(v)}" for k, v in value.pairs.items() if not is_absent(v)]
         return f"[{','.join(pairs)}]"
     else:
         # Fallback for unknown types
@@ -155,20 +162,27 @@ def emit_section(section: Section, indent: int = 0) -> str:
 def emit_meta(meta: dict[str, Any]) -> str:
     """Emit META block.
 
-    I2 Compliance: Skips fields with Absent values.
+    I2 Compliance:
+    - Skips fields with Absent values
+    - Returns empty string if all fields are absent (no empty META: header)
     """
     if not meta:
         return ""
 
-    lines = ["META:"]
+    # I2: Collect non-absent fields first, then decide whether to emit header
+    content_lines = []
     for key, value in meta.items():
         # I2: Skip Absent values
         if is_absent(value):
             continue
         value_str = emit_value(value)
-        lines.append(f"  {key}::{value_str}")
+        content_lines.append(f"  {key}::{value_str}")
 
-    return "\n".join(lines)
+    # I2: If all fields were absent, return empty string (no header)
+    if not content_lines:
+        return ""
+
+    return "META:\n" + "\n".join(content_lines)
 
 
 def emit(doc: Document) -> str:

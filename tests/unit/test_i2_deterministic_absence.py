@@ -160,29 +160,25 @@ ITEMS::[]
 class TestEmitValueHandlesAbsent:
     """Test emit_value behavior with Absent sentinel."""
 
-    def test_emit_value_with_absent_returns_special_marker(self):
-        """emit_value(Absent()) should indicate absence, not null.
+    def test_emit_value_with_absent_raises_value_error(self):
+        """emit_value(Absent()) must raise ValueError.
 
-        This test verifies that Absent is handled distinctly.
-        The exact behavior may be:
-        - Returning a special marker string
-        - Raising an exception (shouldn't be emitting absent values)
-        - Returning empty string
+        Per CRS blocking feedback and I2 compliance:
+        - Absent fields should be filtered BEFORE reaching emit_value
+        - If Absent reaches emit_value, it's a caller bug
+        - Raising ValueError catches these bugs early
 
-        For I2 compliance, Absent fields should be filtered before
-        reaching emit_value, but if they do reach it, behavior must
-        be distinct from null.
+        Previous behavior (returning empty string) caused invalid output:
+        - KEY:: (empty value) for direct emit_value(Absent())
+        - [,a,,b,] for lists with Absent items
+        - k:: for maps with Absent values
         """
-        absent_val = Absent()
-        # emit_value should handle Absent differently than None
-        # Option 1: Returns a special marker (we can filter in emit)
-        # Option 2: Returns empty string (caller skips)
-        # Option 3: Raises (caller must filter first)
+        import pytest
 
-        # For now, let's test that it's distinguishable
-        result = emit_value(absent_val)
-        # Result should NOT be "null"
-        assert result != "null"
+        absent_val = Absent()
+        # emit_value must raise ValueError when passed Absent
+        with pytest.raises(ValueError, match="Absent"):
+            emit_value(absent_val)
 
 
 class TestMetaBlockHandlesAbsence:
