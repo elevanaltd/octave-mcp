@@ -12,7 +12,7 @@ META:
     context::[PROJECT-CONTEXT,PROJECT-ROADMAP,PROJECT-CHECKLIST]
   ]
 
-SUMMARY::"D2 COMPLETE. 3-tool design approved by quality gates. Next: B0 workspace setup, B1 implementation."
+SUMMARY::"B1 COMPLETE. 3-tool consolidation implemented with quality gates passed. PR #61 ready for merge. Next: B2 features."
 
 ISSUE_INVENTORY:
   OPEN_ISSUES::6
@@ -65,28 +65,37 @@ PHASE_STRUCTURE:
     OWNER::technical-architect
 
   B0::WORKSPACE_SETUP:
-    STATUS::PENDING
-    WORK_ITEMS::[
-      validate_quality_gates[mypy,ruff,black,pytest],
-      confirm_CI_pipeline,
-      verify_test_infrastructure
+    STATUS::COMPLETE
+    ARTIFACTS::[
+      quality_gates::[ruff_pass,black_pass,mypy_pass,pytest_383_pass]
     ]
     GATE::"All quality gates green"
     OWNER::workspace-architect
 
   B1::FOUNDATION_FIXES:
-    STATUS::PENDING
+    STATUS::COMPLETE
     DEPENDS_ON::[D2,B0]
-    WORK_ITEMS::[
-      GH_56::core_ingest_fixes[
-        P0::lenient_syntax_parsing[accept_unquoted_dotted_paths],
-        P1::metadata_mutation[mutations_parameter],
-        P2::structure_preservation[preserve_structure_flag],
-        P3::round_trip_validation[document_behavior+validate_function],
-        P4::error_recovery[lenient_mode+partial_output]
-      ]
+    ARTIFACTS::[
+      octave_validate::"src/octave_mcp/mcp/validate.py",
+      octave_write::"src/octave_mcp/mcp/write.py",
+      tests::[test_validate_tool.py,test_write_tool.py]
     ]
-    GATE::"All P0-P2 fixes verified, tests passing"
+    QUALITY_GATES_PASSED::[
+      CRS_codex::PASS[after_error_envelope_fix],
+      CE_gemini::PASS[I1-I5_compliance],
+      PE_claude::GO[strategic_viability]
+    ]
+    WORK_ITEMS_COMPLETED::[
+      tool_consolidation::[octave_validate,octave_write,deprecation_markers],
+      tri_state_semantics::DELETE_sentinel_implemented,
+      base_hash_CAS::both_modes_protected,
+      error_envelope::unified_across_all_paths
+    ]
+    REMAINING_FOR_B2::[
+      GH_56::core_ingest_fixes[P0-P4],
+      mutations_implementation::stub_remains
+    ]
+    GATE::"Tool consolidation complete, 423 tests passing"
     OWNER::implementation-lead
 
   B2::FEATURE_IMPLEMENTATION:
@@ -111,8 +120,9 @@ CRITICAL_PATH::[
   D0::COMPLETE,
   D1::COMPLETE,
   D2::COMPLETE,
-  B0::workspace_setup->NEXT[ready_for_implementation],
-  B1::core_fixes->BLOCKING[B2_features]
+  B0::COMPLETE,
+  B1::COMPLETE[tool_consolidation_merged],
+  B2::feature_implementation->NEXT
 ]
 
 RECOMMENDATIONS:
