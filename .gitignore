@@ -42,6 +42,9 @@ CLAUDE.md
 # Active Sessions (Ephemeral)
 .hestai/sessions/active/
 
+# Raw session transcripts (too large, keep compressed .oct.md only)
+.hestai/sessions/archive/*-raw.jsonl
+
 # Operational timestamps (session-specific state)
 .hestai/last_cleanup
 
