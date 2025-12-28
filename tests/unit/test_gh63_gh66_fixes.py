@@ -253,3 +253,143 @@ TITLE::kebab-case title-here
         assert assignment.key == "TITLE"
         assert "kebab-case" in str(assignment.value)
         assert "title-here" in str(assignment.value)
+
+
+class TestNumberLexemeFidelity:
+    """GH#66 Round 2: Scientific notation fidelity regression.
+
+    Root cause: When NUMBER tokens are included in multi-word values,
+    the lexeme is lost because:
+    1. lexer.py:228-233 converts '1e10' to float 10000000000.0
+    2. parser.py multi-word join uses str(token.value) which gives '10000000000.0'
+
+    Expected: Original lexeme like '1e10' should be preserved in multi-word values.
+    """
+
+    def test_scientific_notation_preserved_in_multi_word(self):
+        """Scientific notation should preserve original format in multi-word values.
+
+        Input: VAL::Version 1e10 Beta
+        Expected: 'Version 1e10 Beta'
+        Actual before fix: 'Version 10000000000.0 Beta'
+        """
+        content = """===TEST===
+VAL::Version 1e10 Beta
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "VAL"
+        # The original lexeme '1e10' should be preserved, not converted to '10000000000.0'
+        assert assignment.value == "Version 1e10 Beta"
+
+    def test_decimal_preserved_in_multi_word(self):
+        """Decimal numbers should preserve original format in multi-word values.
+
+        Input: SCORE::Score 3.14159 points
+        Expected: 'Score 3.14159 points'
+        """
+        content = """===TEST===
+SCORE::Score 3.14159 points
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "SCORE"
+        assert assignment.value == "Score 3.14159 points"
+
+    def test_integer_in_multi_word(self):
+        """Integers should be preserved in multi-word values.
+
+        Input: VERSION::Version 2 Beta
+        Expected: 'Version 2 Beta'
+        """
+        content = """===TEST===
+VERSION::Version 2 Beta
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "VERSION"
+        assert assignment.value == "Version 2 Beta"
+
+    def test_negative_scientific_notation_in_multi_word(self):
+        """Negative scientific notation should preserve lexeme format.
+
+        Input: TINY::Value -1e-10 units
+        Expected: 'Value -1e-10 units'
+        """
+        content = """===TEST===
+TINY::Value -1e-10 units
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "TINY"
+        assert assignment.value == "Value -1e-10 units"
+
+    def test_standalone_number_still_converts(self):
+        """Standalone NUMBER values should still be converted to numeric types.
+
+        This ensures we don't break existing behavior where:
+        COUNT::42 produces int 42
+        PI::3.14 produces float 3.14
+        """
+        content = """===TEST===
+COUNT::42
+PI::3.14
+BIG::1e10
+===END==="""
+        doc = parse(content)
+
+        count = doc.sections[0]
+        pi = doc.sections[1]
+        big = doc.sections[2]
+
+        assert count.key == "COUNT"
+        assert count.value == 42
+        assert isinstance(count.value, int)
+
+        assert pi.key == "PI"
+        assert pi.value == 3.14
+        assert isinstance(pi.value, float)
+
+        assert big.key == "BIG"
+        assert big.value == 1e10
+        assert isinstance(big.value, float)
+
+    def test_lexer_stores_raw_for_number_tokens(self):
+        """Lexer should store raw lexeme for NUMBER tokens.
+
+        This is the underlying fix: Token.raw should contain the original
+        matched text for NUMBER tokens.
+        """
+        tokens, _ = tokenize("VAL::1e10")
+
+        number_tokens = [t for t in tokens if t.type == TokenType.NUMBER]
+        assert len(number_tokens) == 1
+        number_token = number_tokens[0]
+
+        # Token should have raw attribute with original lexeme
+        assert hasattr(number_token, "raw"), "Token should have 'raw' attribute"
+        assert number_token.raw == "1e10", f"Expected raw='1e10', got raw='{number_token.raw}'"
+
+    def test_lexer_raw_for_various_number_formats(self):
+        """Lexer raw field should work for all number formats."""
+        test_cases = [
+            ("42", 42, "42"),
+            ("-10", -10, "-10"),
+            ("3.14", 3.14, "3.14"),
+            ("1e10", 1e10, "1e10"),
+            ("-1e-10", -1e-10, "-1e-10"),
+            ("1E5", 1e5, "1E5"),  # Uppercase E
+        ]
+
+        for raw_input, expected_value, expected_raw in test_cases:
+            tokens, _ = tokenize(f"NUM::{raw_input}")
+            number_tokens = [t for t in tokens if t.type == TokenType.NUMBER]
+            assert len(number_tokens) == 1, f"Failed for input: {raw_input}"
+            token = number_tokens[0]
+            assert token.value == expected_value, f"Value mismatch for {raw_input}"
+            assert hasattr(token, "raw"), f"Missing raw for {raw_input}"
+            assert token.raw == expected_raw, f"Raw mismatch for {raw_input}: got '{token.raw}'"

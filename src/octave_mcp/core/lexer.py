@@ -63,6 +63,7 @@ class Token:
     line: int
     column: int
     normalized_from: str | None = None  # Original ASCII alias if normalized
+    raw: str | None = None  # Original lexeme text (for NUMBER tokens)
 
 
 class LexerError(Exception):
@@ -202,6 +203,7 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
             if match:
                 matched_text = match.group()
                 normalized_from = None
+                raw_lexeme = None  # GH#66: Preserve raw lexeme for NUMBER tokens
 
                 # ... (value extraction logic)
                 # Handle special tokens
@@ -226,11 +228,13 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                     value = value.replace(r"\n", "\n")
                     value = value.replace(r"\t", "\t")
                 elif token_type == TokenType.NUMBER:
-                    # Convert to int or float
+                    # Convert to int or float, but preserve raw lexeme for fidelity (GH#66)
                     if "." in matched_text or "e" in matched_text.lower():
                         value = float(matched_text)
                     else:
                         value = int(matched_text)
+                    # Store raw lexeme for multi-word value reconstruction
+                    raw_lexeme = matched_text
                 elif token_type == TokenType.BOOLEAN:
                     value = matched_text == "true"
                 elif token_type == TokenType.NULL:
@@ -261,7 +265,7 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                         normalized_from = matched_text
                         value = ASCII_ALIASES[matched_text]
 
-                token = Token(token_type, value, line, column, normalized_from)
+                token = Token(token_type, value, line, column, normalized_from, raw_lexeme)
                 tokens.append(token)
 
                 if normalized_from:

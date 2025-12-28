@@ -31,6 +31,17 @@ EXPRESSION_OPERATORS: frozenset[TokenType] = frozenset(
 )
 
 
+def _token_to_str(token: Token) -> str:
+    """Convert token to string, preserving raw lexeme for NUMBER tokens (GH#66).
+
+    For NUMBER tokens, uses the raw lexeme to preserve scientific notation format
+    (e.g., '1e10' instead of '10000000000.0'). For other tokens, uses str(value).
+    """
+    if token.type == TokenType.NUMBER and token.raw is not None:
+        return token.raw
+    return str(token.value)
+
+
 class ParserError(Exception):
     """Parser error with position information."""
 
@@ -489,7 +500,8 @@ class Parser:
                 # If so, we're starting an expression, not a multi-word value
                 if self.peek().type in EXPRESSION_OPERATORS:
                     # Include this word and then parse the rest as expression
-                    word_parts.append(str(self.current().value))
+                    # GH#66: Use _token_to_str to preserve NUMBER lexemes
+                    word_parts.append(_token_to_str(self.current()))
                     self.advance()
                     # Now we need to continue with flow expression parsing
                     expr_parts = [" ".join(word_parts)]
@@ -501,15 +513,16 @@ class Parser:
                             expr_parts.append(self.current().value)
                             self.advance()
                         elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER):
-                            expr_parts.append(str(self.current().value))
+                            # GH#66: Use _token_to_str to preserve NUMBER lexemes
+                            expr_parts.append(_token_to_str(self.current()))
                             self.advance()
                         else:
                             break
                     return "".join(str(p) for p in expr_parts)
 
                 # Just another word/number in the multi-word value
-                # Convert NUMBER values to string for consistent joining
-                word_parts.append(str(self.current().value))
+                # GH#66: Use _token_to_str to preserve NUMBER lexemes (e.g., 1e10)
+                word_parts.append(_token_to_str(self.current()))
                 self.advance()
 
             # Join words with spaces
