@@ -36,6 +36,7 @@ class Parser:
         self.tokens = tokens
         self.pos = 0
         self.current_indent = 0
+        self.warnings: list[dict[str, Any]] = []  # Issue #64: track dropped lines
 
     def current(self) -> Token:
         """Get current token."""
@@ -102,20 +103,40 @@ class Parser:
                 self.advance()
                 continue
 
+            # Issue #64: Capture potential bare identifier info before parsing
+            # because parse_section advances past the identifier if it's not a valid section
+            potential_bare_token = self.current()
+            initial_pos = self.pos
+
             # Parse section (assignment or block)
             section = self.parse_section(0)
             if section:
                 doc.sections.append(section)
             elif self.current().type not in (TokenType.ENVELOPE_END, TokenType.EOF):
-                # Consume unexpected token to prevent infinite loop
-                # In lenient mode, we could log this or try to recover
-                self.advance()
+                # Issue #64: Log warning for dropped bare line instead of silent discard
+                # Use the token we captured before parse_section modified position
+                if potential_bare_token.type == TokenType.IDENTIFIER:
+                    self.warnings.append(
+                        {
+                            "type": "bare_line_dropped",
+                            "message": f"Line without operator dropped: '{potential_bare_token.value}'",
+                            "line": potential_bare_token.line,
+                            "column": potential_bare_token.column,
+                            "value": str(potential_bare_token.value),
+                        }
+                    )
+                # Consume any remaining unexpected token to prevent infinite loop
+                if self.pos == initial_pos:
+                    self.advance()
 
             self.skip_whitespace()
 
         # Expect END envelope (lenient - allow missing)
         if self.current().type == TokenType.ENVELOPE_END:
             self.advance()
+
+        # Issue #64: Attach collected warnings to document
+        doc.warnings = self.warnings
 
         return doc
 

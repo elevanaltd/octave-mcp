@@ -53,6 +53,7 @@ class Document(ASTNode):
     meta: dict[str, Any] = field(default_factory=dict)
     sections: list[ASTNode] = field(default_factory=list)
     has_separator: bool = False
+    warnings: list[dict[str, Any]] = field(default_factory=list)  # Issue #64: parser warnings
 
 
 @dataclass
