@@ -439,10 +439,16 @@ class Parser:
             return self.parse_list()
 
         elif token.type == TokenType.IDENTIFIER:
-            # Check if this starts a flow/synthesis/at/concat expression
+            # Check if this starts a flow/synthesis/at/concat/tension expression
             next_token = self.peek()
-            if next_token.type in (TokenType.FLOW, TokenType.SYNTHESIS, TokenType.AT, TokenType.CONCAT):
-                # Flow expression like A→B→C, synthesis like X⊕Y, location like A@B, or concat like A⧺B
+            if next_token.type in (
+                TokenType.FLOW,
+                TokenType.SYNTHESIS,
+                TokenType.AT,
+                TokenType.CONCAT,
+                TokenType.TENSION,  # Issue #62: Include tension operator
+            ):
+                # Flow expression like A→B→C, synthesis like X⊕Y, location like A@B, concat like A⧺B, or tension like A⇌B
                 return self.parse_flow_expression()
 
             # Consume compound identifier with colons (Issue #41 Phase 2)
@@ -532,19 +538,29 @@ class Parser:
         return self.parse_value()
 
     def parse_flow_expression(self) -> str:
-        """Parse flow/synthesis/at/concat expression like A→B→C, X⊕Y, A@B, or A⧺B."""
+        """Parse flow/synthesis/at/concat/tension expression like A→B→C, X⊕Y, A@B, A⧺B, or A⇌B.
+
+        Issue #62: Added TENSION to expression operators to prevent truncation.
+        """
         parts = []
 
-        # Collect all parts of flow/synthesis/at/concat expression
+        # Collect all parts of flow/synthesis/at/concat/tension expression
         while self.current().type in (
             TokenType.IDENTIFIER,
             TokenType.FLOW,
             TokenType.SYNTHESIS,
             TokenType.AT,
             TokenType.CONCAT,
+            TokenType.TENSION,  # Issue #62: Include tension operator
             TokenType.STRING,
         ):
-            if self.current().type in (TokenType.FLOW, TokenType.SYNTHESIS, TokenType.AT, TokenType.CONCAT):
+            if self.current().type in (
+                TokenType.FLOW,
+                TokenType.SYNTHESIS,
+                TokenType.AT,
+                TokenType.CONCAT,
+                TokenType.TENSION,  # Issue #62: Include tension operator
+            ):
                 parts.append(self.current().value)
                 self.advance()
             elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING):
