@@ -228,9 +228,12 @@ class AmendTool(BaseTool):
         base_hash = params.get("base_hash")
 
         # Initialize result
+        # I5 compliance: Schema bypass shall be visible, never silent
+        # Deprecated tools include validation_status: UNVALIDATED
         result: dict[str, Any] = {
             "status": "success",
             "corrections": [],
+            "validation_status": "UNVALIDATED",
         }
 
         # STEP 1: Validate path
@@ -239,6 +242,7 @@ class AmendTool(BaseTool):
             return {
                 "status": "error",
                 "errors": [{"code": "E_PATH", "message": path_error}],
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 2: Check file exists
@@ -247,6 +251,7 @@ class AmendTool(BaseTool):
             return {
                 "status": "error",
                 "errors": [{"code": "E_FILE", "message": "File does not exist"}],
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 3: Read existing file
@@ -257,6 +262,7 @@ class AmendTool(BaseTool):
             return {
                 "status": "error",
                 "errors": [{"code": "E_READ", "message": f"Read error: {str(e)}"}],
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 4: Check base_hash if provided
@@ -271,6 +277,7 @@ class AmendTool(BaseTool):
                             "message": f"Hash mismatch - file has been modified (expected {base_hash[:8]}..., got {current_hash[:8]}...)",
                         }
                     ],
+                    "validation_status": "UNVALIDATED",
                 }
 
         # STEP 5: Parse existing content
@@ -283,6 +290,7 @@ class AmendTool(BaseTool):
             return {
                 "status": "error",
                 "errors": [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 6: Apply changes to AST
@@ -292,6 +300,7 @@ class AmendTool(BaseTool):
             return {
                 "status": "error",
                 "errors": [{"code": "E_APPLY", "message": f"Apply changes error: {str(e)}"}],
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 7: Emit canonical form
@@ -301,6 +310,7 @@ class AmendTool(BaseTool):
             return {
                 "status": "error",
                 "errors": [{"code": "E_EMIT", "message": f"Emit error: {str(e)}"}],
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 8: Tokenize canonical for repair tracking
@@ -324,6 +334,7 @@ class AmendTool(BaseTool):
                 return {
                     "status": "error",
                     "errors": [{"code": "E_WRITE", "message": "Cannot write to symlink target"}],
+                    "validation_status": "UNVALIDATED",
                 }
 
             # I2 FIX: Preserve original file permissions
@@ -361,6 +372,7 @@ class AmendTool(BaseTool):
                                     "message": f"Hash mismatch before write - file was modified during operation (expected {base_hash[:8]}..., got {verify_hash[:8]}...)",
                                 }
                             ],
+                            "validation_status": "UNVALIDATED",
                         }
 
                 # Atomic replace (POSIX guarantees atomicity)
@@ -376,6 +388,7 @@ class AmendTool(BaseTool):
             return {
                 "status": "error",
                 "errors": [{"code": "E_WRITE", "message": f"Write error: {str(e)}"}],
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 11: Compute hash

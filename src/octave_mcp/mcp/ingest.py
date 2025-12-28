@@ -112,10 +112,13 @@ class IngestTool(BaseTool):
         verbose = params.get("verbose", False)
 
         # Initialize result
+        # I5 compliance: Schema bypass shall be visible, never silent
+        # Deprecated tools include validation_status: UNVALIDATED
         result: dict[str, Any] = {
             "canonical": "",
             "repairs": [],
             "warnings": [],
+            "validation_status": "UNVALIDATED",
         }
 
         # Track pipeline stages if verbose

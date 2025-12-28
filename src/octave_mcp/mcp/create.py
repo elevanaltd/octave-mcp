@@ -232,9 +232,12 @@ class CreateTool(BaseTool):
         _ = params.get("schema")
 
         # Initialize result
+        # I5 compliance: Schema bypass shall be visible, never silent
+        # Deprecated tools include validation_status: UNVALIDATED
         result: dict[str, Any] = {
             "status": "success",
             "corrections": [],
+            "validation_status": "UNVALIDATED",
         }
 
         # STEP 1: Validate path
@@ -243,6 +246,7 @@ class CreateTool(BaseTool):
             return {
                 "status": "error",
                 "errors": [{"code": "E_PATH", "message": path_error}],
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 2: Parse and normalize content
@@ -264,6 +268,7 @@ class CreateTool(BaseTool):
                 "status": "error",
                 "errors": [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
                 "corrections": corrections,
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 3: Track corrections
@@ -285,6 +290,7 @@ class CreateTool(BaseTool):
                 return {
                     "status": "error",
                     "errors": [{"code": "E_WRITE", "message": "Cannot write to symlink target"}],
+                    "validation_status": "UNVALIDATED",
                 }
 
             # Atomic write: tempfile→fsync→os.replace
@@ -309,6 +315,7 @@ class CreateTool(BaseTool):
             return {
                 "status": "error",
                 "errors": [{"code": "E_WRITE", "message": f"Write error: {str(e)}"}],
+                "validation_status": "UNVALIDATED",
             }
 
         # STEP 6: Compute hash

@@ -227,3 +227,27 @@ class TestIngestTool:
         # But unpacking the tuple is still required for future tracking
         repairs = result["repairs"]
         assert isinstance(repairs, list)
+
+    @pytest.mark.asyncio
+    async def test_ingest_returns_validation_status_unvalidated(self):
+        """Test that ingest returns validation_status: UNVALIDATED.
+
+        North Star I5 states: "Schema bypass shall be visible, never silent."
+        Deprecated tools that bypass schema validation must explicitly indicate
+        their unvalidated status.
+        """
+        tool = IngestTool()
+
+        result = await tool.execute(
+            content="===TEST===\nKEY::value\n===END===",
+            schema="TEST",
+            tier="LOSSLESS",
+            fix=False,
+            verbose=False,
+        )
+
+        # I5 compliance: validation_status must be present and UNVALIDATED
+        assert "validation_status" in result, "Missing validation_status field (I5 violation)"
+        assert (
+            result["validation_status"] == "UNVALIDATED"
+        ), f"Expected validation_status='UNVALIDATED', got '{result.get('validation_status')}'"
