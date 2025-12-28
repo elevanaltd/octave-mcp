@@ -5,11 +5,16 @@ Implements octave_create tool for writing OCTAVE files with:
 - META field injection via mutations
 - Correction tracking (W001-W005)
 - Compact diff or full summary output
+
+DEPRECATED: This tool is deprecated and will be removed in 12 weeks.
+Use octave_write instead:
+  - octave_create(...) -> octave_write(content=...)
 """
 
 import hashlib
 import os
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +25,10 @@ from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 
 
 class CreateTool(BaseTool):
-    """MCP tool for octave_create - write canonical OCTAVE to file."""
+    """MCP tool for octave_create - write canonical OCTAVE to file.
+
+    DEPRECATED: Use octave_write instead. This tool will be removed in 12 weeks.
+    """
 
     # Security: allowed file extensions
     ALLOWED_EXTENSIONS = {".oct.md", ".octave", ".md"}
@@ -32,6 +40,7 @@ class CreateTool(BaseTool):
     def get_description(self) -> str:
         """Get tool description."""
         return (
+            "[DEPRECATED: Use octave_write instead] "
             "Write OCTAVE content to file with normalization. "
             "Validates path, normalizes content to canonical form, "
             "tracks corrections (W001-W005), and returns diff or full summary."
@@ -186,6 +195,8 @@ class CreateTool(BaseTool):
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
         """Execute create pipeline.
 
+        DEPRECATED: Use octave_write instead. This tool will be removed in 12 weeks.
+
         Args:
             content: OCTAVE content to write
             target_path: File path to write to
@@ -203,6 +214,14 @@ class CreateTool(BaseTool):
             - content: Full canonical content (if full_summary)
             - errors: List of errors (on failure)
         """
+        # Emit deprecation warning
+        warnings.warn(
+            "octave_create is deprecated and will be removed in 12 weeks. "
+            "Use octave_write instead: octave_create(...) -> octave_write(content=...)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         # Validate and extract parameters
         params = self.validate_parameters(kwargs)
         content = params["content"]

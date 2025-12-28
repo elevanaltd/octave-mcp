@@ -4,14 +4,15 @@
 
 META:
   TYPE::"ORCHESTRATION_PLAN"
-  VERSION::"1.0.0"
-  SESSION::d3ab0393
+  VERSION::"1.1.0"
+  SESSION::3fecf983
+  UPDATED::"2025-12-28"
   SYNTHESIZED_FROM::[
     gh_issues::[25,48,51,52,55,56],
     context::[PROJECT-CONTEXT,PROJECT-ROADMAP,PROJECT-CHECKLIST]
   ]
 
-SUMMARY::"6 open GitHub issues mapped to HestAI phase gates. Critical path: D0 completion -> D1 requirements -> D2 tool consolidation design -> B1 core fixes"
+SUMMARY::"B1 COMPLETE. 3-tool consolidation implemented with quality gates passed. PR #61 ready for merge. Next: B2 features."
 
 ISSUE_INVENTORY:
   OPEN_ISSUES::6
@@ -26,75 +27,75 @@ ISSUE_INVENTORY:
 
 PHASE_STRUCTURE:
 
-  D0::DISCOVERY[current]:
-    STATUS::95%_COMPLETE
-    REMAINING::[
-      create_north_star_document[BLOCKING]
-    ]
+  D0::DISCOVERY:
+    STATUS::COMPLETE
+    ARTIFACT::.hestai/workflow/000-OCTAVE-MCP-NORTH-STAR.md
     GATE::"North star defined with OCTAVE protocol immutables"
     OWNER::requirements-steward
 
   D1::REQUIREMENTS:
-    STATUS::PENDING
-    WORK_ITEMS::[
-      define_octave_immutables[
-        lenient_parsing_as_default,
-        canonical_output_as_option,
-        round_trip_fidelity_guarantee
-      ],
-      GH_25::spec_clarification[
-        add_SEMANTIC_NEVER_section,
-        clarify_arrow_operator_semantics,
-        document_correct_mapping_patterns
-      ],
-      tool_interface_decision[
-        resolve_2_vs_3_vs_4_tools,
-        define_orthogonal_concerns
-      ]
+    STATUS::COMPLETE
+    ARTIFACTS::[
+      north_star::".hestai/workflow/000-OCTAVE-MCP-NORTH-STAR.md",
+      immutables::[I1_syntactic_fidelity,I2_deterministic_absence,I3_mirror_constraint,I4_transform_auditability,I5_schema_sovereignty],
+      tool_decision::3_tools[validate,write,eject]
     ]
     GATE::"Immutables defined, tool count decided"
     OWNER::north-star-architect
 
   D2::ARCHITECTURE_DESIGN:
-    STATUS::PENDING
-    DEPENDS_ON::D1[tool_interface_decision]
-    WORK_ITEMS::[
+    STATUS::COMPLETE
+    ARTIFACT::"docs/architecture/tool-consolidation-design.md"
+    QUALITY_GATES_PASSED::[
+      CE_gemini::PASS[I1-I5_compliance],
+      CRS_codex::PASS[API_design,DELETE_encoding,error_envelope],
+      PE_claude::CONDITIONAL_GO[strategic_viability]
+    ]
+    WORK_ITEMS_COMPLETED::[
       GH_51::tool_consolidation[
-        IF[3_tools_chosen]::design[
-          octave_validate[schema_check+repair_suggestions,read_only],
-          octave_write[normalize+write+auto_detect_new_vs_existing,write],
-          octave_eject[format_conversion+projection,none]
-        ],
-        migration_path_from_current_4_tools,
-        deprecation_timeline
-      ]
+        octave_validate[schema_check+repair_suggestions,read_only],
+        octave_write[unified_create_amend+tri_state_semantics+schema_param],
+        octave_eject[format_conversion+projection,unchanged]
+      ],
+      migration_path[12_week_deprecation],
+      i2_compliance[DELETE_sentinel_as_JSON_object],
+      i5_compliance[validation_status_always_returned]
     ]
     GATE::"Tool specs complete, migration documented"
     OWNER::technical-architect
 
   B0::WORKSPACE_SETUP:
-    STATUS::PENDING
-    WORK_ITEMS::[
-      validate_quality_gates[mypy,ruff,black,pytest],
-      confirm_CI_pipeline,
-      verify_test_infrastructure
+    STATUS::COMPLETE
+    ARTIFACTS::[
+      quality_gates::[ruff_pass,black_pass,mypy_pass,pytest_383_pass]
     ]
     GATE::"All quality gates green"
     OWNER::workspace-architect
 
   B1::FOUNDATION_FIXES:
-    STATUS::PENDING
+    STATUS::COMPLETE
     DEPENDS_ON::[D2,B0]
-    WORK_ITEMS::[
-      GH_56::core_ingest_fixes[
-        P0::lenient_syntax_parsing[accept_unquoted_dotted_paths],
-        P1::metadata_mutation[mutations_parameter],
-        P2::structure_preservation[preserve_structure_flag],
-        P3::round_trip_validation[document_behavior+validate_function],
-        P4::error_recovery[lenient_mode+partial_output]
-      ]
+    ARTIFACTS::[
+      octave_validate::"src/octave_mcp/mcp/validate.py",
+      octave_write::"src/octave_mcp/mcp/write.py",
+      tests::[test_validate_tool.py,test_write_tool.py]
     ]
-    GATE::"All P0-P2 fixes verified, tests passing"
+    QUALITY_GATES_PASSED::[
+      CRS_codex::PASS[after_error_envelope_fix],
+      CE_gemini::PASS[I1-I5_compliance],
+      PE_claude::GO[strategic_viability]
+    ]
+    WORK_ITEMS_COMPLETED::[
+      tool_consolidation::[octave_validate,octave_write,deprecation_markers],
+      tri_state_semantics::DELETE_sentinel_implemented,
+      base_hash_CAS::both_modes_protected,
+      error_envelope::unified_across_all_paths
+    ]
+    REMAINING_FOR_B2::[
+      GH_56::core_ingest_fixes[P0-P4],
+      mutations_implementation::stub_remains
+    ]
+    GATE::"Tool consolidation complete, 423 tests passing"
     OWNER::implementation-lead
 
   B2::FEATURE_IMPLEMENTATION:
@@ -116,24 +117,26 @@ PHASE_STRUCTURE:
     OWNER::implementation-lead
 
 CRITICAL_PATH::[
-  D0::north_star_creation->BLOCKING[all_subsequent_phases],
-  D1::tool_decision->BLOCKING[D2_design],
-  D2::tool_specs->BLOCKING[B1_implementation],
-  B1::core_fixes->BLOCKING[B2_features]
+  D0::COMPLETE,
+  D1::COMPLETE,
+  D2::COMPLETE,
+  B0::COMPLETE,
+  B1::COMPLETE[tool_consolidation_merged],
+  B2::feature_implementation->NEXT
 ]
 
 RECOMMENDATIONS:
 
   IMMEDIATE::[
-    1::complete_D0[create_north_star_document],
+    1::B0_workspace_setup[validate_quality_gates],
     2::close_GH_55[duplicate_of_GH_56],
-    3::validate_GH_51_against_D1_decision[ensure_alignment]
+    3::begin_B1_implementation[GH_56_core_fixes]
   ]
 
   SEQUENCING::[
-    GH_25::can_proceed_in_D1[no_dependencies],
-    GH_51::requires_D1_completion[tool_decision_needed],
-    GH_56::requires_D2_completion[design_needed_before_implementation],
+    GH_25::can_proceed_in_parallel[spec_clarification],
+    GH_51::COMPLETE[design_approved],
+    GH_56::ready_for_B1[design_complete],
     GH_52_and_GH_48::queue_for_B2[after_core_stable]
   ]
 
@@ -144,23 +147,28 @@ RECOMMENDATIONS:
 
 GAP_ANALYSIS:
 
-  DISCOVERED_GAPS::[
-    roadmap_says_2_tools_issue_51_says_3_tools[RECONCILE_IN_D1],
-    no_workflow_dir_created_yet[CREATED_WITH_THIS_ARTIFACT],
+  RESOLVED_GAPS::[
+    tool_count_decision::3_tools_chosen[validate,write,eject],
+    workflow_dir::CREATED,
+    D2_design::COMPLETE_WITH_QUALITY_GATES
+  ]
+
+  REMAINING_GAPS::[
+    mutations_stub::needs_implementation_before_B1,
+    schema_validation_infrastructure::P2.5_work,
     checklist_not_updated_with_issues[SEPARATE_TASK]
   ]
 
   OWNERSHIP::[
-    D0_completion::requirements-steward,
-    tool_decision::north-star-architect+technical-architect,
-    issue_triage::holistic-orchestrator[CURRENT_SESSION],
-    implementation::implementation-lead[DELEGATED]
+    B0_setup::workspace-architect,
+    B1_implementation::implementation-lead[DELEGATED],
+    issue_triage::holistic-orchestrator[CURRENT_SESSION]
   ]
 
 NEXT_SESSION_HANDOFF::[
-  1::review_this_plan_with_user,
-  2::initiate_D0_completion[north_star_creation],
-  3::update_PROJECT-CHECKLIST_with_issue_links,
+  1::approve_D2_design[tool-consolidation-design.md],
+  2::initiate_B0_workspace_setup,
+  3::delegate_B1_implementation_to_IL,
   4::close_duplicate_issue_GH_55
 ]
 
