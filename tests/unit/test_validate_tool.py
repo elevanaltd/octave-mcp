@@ -300,3 +300,78 @@ class TestValidateTool:
             # Other errors should still follow envelope format
             # If the tool handles the error gracefully, check the result
             pass
+
+
+class TestValidateToolI5SchemaSovereignty:
+    """Tests for I5 (Schema Sovereignty) requirement.
+
+    North Star I5 states:
+    - A document processed without schema validation shall be marked as UNVALIDATED
+    - Schema-validated documents shall record the schema name and version used
+    - Schema bypass shall be visible, never silent
+
+    Current state: validation_status is "PENDING_INFRASTRUCTURE" which is a silent bypass.
+    Required state: validation_status must be "UNVALIDATED" to make bypass visible.
+    """
+
+    @pytest.mark.asyncio
+    async def test_i5_validation_status_is_unvalidated_when_no_validator(self):
+        """I5: validation_status must be UNVALIDATED when no schema validator exists.
+
+        The North Star requires: "Schema bypass shall be visible, never silent."
+        PENDING_INFRASTRUCTURE is a silent bypass - UNVALIDATED is visible.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        result = await tool.execute(
+            content="===TEST===\nKEY::value\n===END===",
+            schema="META",  # Schema provided but no validator implemented
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+        # I5 REQUIREMENT: Must be UNVALIDATED, not PENDING_INFRASTRUCTURE
+        assert result["validation_status"] == "UNVALIDATED", (
+            f"I5 violation: validation_status should be 'UNVALIDATED' to make bypass visible, "
+            f"but got '{result['validation_status']}'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_i5_validation_status_field_always_present(self):
+        """I5: validation_status field must always be present in output."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        result = await tool.execute(
+            content="===TEST===\nKEY::value\n===END===",
+            schema="TEST",
+            fix=False,
+        )
+
+        # I5: Field must be present (not silently omitted)
+        assert "validation_status" in result, "I5 violation: validation_status field must always be present"
+
+    @pytest.mark.asyncio
+    async def test_i5_validation_status_explicit_not_silent(self):
+        """I5: Schema bypass must be visible, never silent.
+
+        PENDING_INFRASTRUCTURE implies "we'll get to it" - this is silent bypass.
+        UNVALIDATED explicitly states "this was not validated" - visible bypass.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        result = await tool.execute(
+            content="===TEST===\nSTATUS::active\n===END===",
+            schema="TEST",
+            fix=False,
+        )
+
+        # Value must not be the silent PENDING_INFRASTRUCTURE placeholder
+        assert result["validation_status"] != "PENDING_INFRASTRUCTURE", (
+            "I5 violation: PENDING_INFRASTRUCTURE is a silent bypass. " "Must use UNVALIDATED to make bypass visible."
+        )

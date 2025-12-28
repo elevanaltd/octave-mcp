@@ -207,36 +207,71 @@ META:
 
 # Template generated for schema: {schema_name}
 ===END==="""
-            return {"output": template, "lossy": False, "fields_omitted": []}
+            # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
+            # "Schema bypass shall be visible, never silent" - North Star I5
+            return {
+                "output": template,
+                "lossy": False,
+                "fields_omitted": [],
+                "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
+            }
 
         # Parse content to AST
         try:
             doc = parse(content)
         except Exception as e:
             # If parsing fails, return error
-            return {"output": f"# Parse error: {str(e)}\n{content}", "lossy": False, "fields_omitted": []}
+            # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
+            return {
+                "output": f"# Parse error: {str(e)}\n{content}",
+                "lossy": False,
+                "fields_omitted": [],
+                "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
+            }
 
         # Project to desired mode
         result = project(doc, mode=mode)
 
         # Convert to requested output format
         # IL-PLACEHOLDER-FIX-002-REWORK: Use filtered AST from projection for all formats
+        # I5 (Schema Sovereignty): All outputs must include validation_status
+        # "Schema bypass shall be visible, never silent" - North Star I5
         if output_format == "json":
             # Convert filtered AST to dictionary, then serialize as JSON
             data = _ast_to_dict(result.filtered_doc)
             output = json.dumps(data, indent=2, ensure_ascii=False)
-            return {"output": output, "lossy": result.lossy, "fields_omitted": result.fields_omitted}
+            return {
+                "output": output,
+                "lossy": result.lossy,
+                "fields_omitted": result.fields_omitted,
+                "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+            }
 
         elif output_format == "yaml":
             # Convert filtered AST to dictionary, then serialize as YAML
             data = _ast_to_dict(result.filtered_doc)
             output = yaml.dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
-            return {"output": output, "lossy": result.lossy, "fields_omitted": result.fields_omitted}
+            return {
+                "output": output,
+                "lossy": result.lossy,
+                "fields_omitted": result.fields_omitted,
+                "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+            }
 
         elif output_format == "markdown":
             # Convert filtered AST to Markdown
             output = _ast_to_markdown(result.filtered_doc)
-            return {"output": output, "lossy": result.lossy, "fields_omitted": result.fields_omitted}
+            return {
+                "output": output,
+                "lossy": result.lossy,
+                "fields_omitted": result.fields_omitted,
+                "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+            }
 
         else:  # output_format == "octave"
-            return {"output": result.output, "lossy": result.lossy, "fields_omitted": result.fields_omitted}
+            return {
+                "output": result.output,
+                "lossy": result.lossy,
+                "fields_omitted": result.fields_omitted,
+                "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+            }

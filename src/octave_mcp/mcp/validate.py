@@ -80,13 +80,15 @@ class ValidateTool(BaseTool):
         fix = params.get("fix", False)
 
         # Initialize result with unified envelope per D2 design
+        # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
+        # "Schema bypass shall be visible, never silent" - North Star I5
         result: dict[str, Any] = {
             "status": "success",
             "canonical": "",
             "repairs": [],
             "warnings": [],
             "errors": [],
-            "validation_status": "PENDING_INFRASTRUCTURE",  # I5: Schema validation pending P2.5
+            "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
         }
 
         # STAGE 1: Tokenize with ASCII normalization
@@ -156,9 +158,8 @@ class ValidateTool(BaseTool):
             result["errors"].append({"code": "E_EMIT", "message": f"Emit error: {str(e)}"})
             return result
 
-        # I5: Set validation_status
-        # PENDING_INFRASTRUCTURE until schema validation is complete (P2.5)
-        # Will be VALIDATED or UNVALIDATED once schema validation is implemented
-        result["validation_status"] = "PENDING_INFRASTRUCTURE"
+        # I5 (Schema Sovereignty): validation_status already set to UNVALIDATED
+        # When schema validation is implemented, this will be set to VALIDATED
+        # with schema name and version recorded. For now, explicit bypass is visible.
 
         return result

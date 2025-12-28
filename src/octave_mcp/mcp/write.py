@@ -61,6 +61,8 @@ class WriteTool(BaseTool):
         Returns:
             Complete error envelope with all required fields per D2 design
         """
+        # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
+        # "Schema bypass shall be visible, never silent" - North Star I5
         return {
             "status": "error",
             "path": target_path,
@@ -68,7 +70,7 @@ class WriteTool(BaseTool):
             "corrections": corrections if corrections is not None else [],
             "diff": "",
             "errors": errors,
-            "validation_status": "PENDING_INFRASTRUCTURE",
+            "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
         }
 
     def get_name(self) -> str:
@@ -292,6 +294,8 @@ class WriteTool(BaseTool):
         _ = params.get("schema")  # Reserved for P2.5
 
         # Initialize result with unified envelope per D2 design
+        # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
+        # "Schema bypass shall be visible, never silent" - North Star I5
         result: dict[str, Any] = {
             "status": "success",
             "path": target_path,
@@ -299,7 +303,7 @@ class WriteTool(BaseTool):
             "corrections": [],
             "diff": "",
             "errors": [],
-            "validation_status": "PENDING_INFRASTRUCTURE",  # I5
+            "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
         }
 
         # STEP 1: Validate path
