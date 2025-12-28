@@ -211,9 +211,12 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                     value = "END"
                 elif token_type == TokenType.STRING:
                     # GH#63: Handle triple quotes vs single quotes
+                    # I4 Audit Trail: Record triple quote normalization
                     if matched_text.startswith('"""'):
                         # Triple-quoted string: remove """ from both ends
                         value = matched_text[3:-3]
+                        # I4: Record triple quote to single quote normalization
+                        normalized_from = '"""'
                     else:
                         # Single-quoted string: remove " from both ends
                         value = matched_text[1:-1]

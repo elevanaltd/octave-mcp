@@ -302,6 +302,89 @@ SINGLE::word
         assert assignment.value == "word"
 
 
+class TestMultiWordWithNumberFix:
+    """Tests for NUMBER token inclusion in multi-word capture (GH#63, GH#66).
+
+    Location: parser.py:485-511 (parse_value multi-word loop)
+
+    ISSUE: The while loop at line 486 only checks TokenType.IDENTIFIER.
+    When VERSION::Version 2 Beta is parsed, the NUMBER token "2" breaks
+    the loop, causing only "Version" to be captured.
+
+    FIX: Include TokenType.NUMBER in the multi-word accumulation loop,
+    converting the number value to string for concatenation.
+    """
+
+    def test_multi_word_with_embedded_number_captures_full_value(self):
+        """FIX for GH#63/GH#66: NUMBER tokens should be included in multi-word values.
+
+        Input: VERSION::Version 2 Beta
+        Expected: "Version 2 Beta" (full capture)
+        Current bug: Only "Version" captured (NUMBER "2" breaks loop)
+        """
+        content = """===TEST===
+VERSION::Version 2 Beta
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "VERSION"
+        # After fix: should capture the full multi-word value including number
+        assert assignment.value == "Version 2 Beta"
+
+    def test_multi_word_with_leading_number_identifier(self):
+        """Multi-word starting with identifier, then number, then more words."""
+        content = """===TEST===
+RELEASE::Release 42 Final
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.value == "Release 42 Final"
+
+    def test_multi_word_with_multiple_numbers(self):
+        """Multiple numbers in multi-word value should all be captured."""
+        content = """===TEST===
+SPEC::Version 1 Point 2 Revision 3
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.value == "Version 1 Point 2 Revision 3"
+
+    def test_multi_word_number_at_end(self):
+        """Number at end of multi-word value."""
+        content = """===TEST===
+BUILD::Build Number 123
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.value == "Build Number 123"
+
+    def test_single_number_remains_number_type(self):
+        """A single number value should still return as number, not string."""
+        content = """===TEST===
+COUNT::42
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.value == 42
+        assert isinstance(assignment.value, int)
+
+    def test_multi_word_with_float_number(self):
+        """Float numbers in multi-word value."""
+        content = """===TEST===
+METRIC::Score 3.14 Points
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        # Float should be converted to string in multi-word context
+        assert assignment.value == "Score 3.14 Points"
+
+
 class TestParserLoopSafety:
     """Tests ensuring parser loop at 98-113 doesn't hang on edge cases.
 

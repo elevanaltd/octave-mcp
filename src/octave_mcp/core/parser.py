@@ -481,33 +481,35 @@ class Parser:
                 return ":".join(parts)
 
             # GH#66: Continue capturing consecutive identifiers as multi-word value
-            # Stop at delimiters, operators, or non-identifier tokens
+            # GH#63: Include NUMBER tokens in multi-word capture (convert to string)
+            # Stop at delimiters, operators, or non-identifier/number tokens
             word_parts = [parts[0]]
-            while self.current().type == TokenType.IDENTIFIER:
+            while self.current().type in (TokenType.IDENTIFIER, TokenType.NUMBER):
                 # Check if next token after this identifier is an operator
                 # If so, we're starting an expression, not a multi-word value
                 if self.peek().type in EXPRESSION_OPERATORS:
                     # Include this word and then parse the rest as expression
-                    word_parts.append(self.current().value)
+                    word_parts.append(str(self.current().value))
                     self.advance()
                     # Now we need to continue with flow expression parsing
                     expr_parts = [" ".join(word_parts)]
                     while (
-                        self.current().type in (TokenType.IDENTIFIER, TokenType.STRING)
+                        self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER)
                         or self.current().type in EXPRESSION_OPERATORS
                     ):
                         if self.current().type in EXPRESSION_OPERATORS:
                             expr_parts.append(self.current().value)
                             self.advance()
-                        elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING):
-                            expr_parts.append(self.current().value)
+                        elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER):
+                            expr_parts.append(str(self.current().value))
                             self.advance()
                         else:
                             break
                     return "".join(str(p) for p in expr_parts)
 
-                # Just another word in the multi-word value
-                word_parts.append(self.current().value)
+                # Just another word/number in the multi-word value
+                # Convert NUMBER values to string for consistent joining
+                word_parts.append(str(self.current().value))
                 self.advance()
 
             # Join words with spaces
