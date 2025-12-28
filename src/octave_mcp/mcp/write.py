@@ -45,6 +45,32 @@ class WriteTool(BaseTool):
     # Security: allowed file extensions
     ALLOWED_EXTENSIONS = {".oct.md", ".octave", ".md"}
 
+    def _error_envelope(
+        self,
+        target_path: str,
+        errors: list[dict[str, Any]],
+        corrections: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Build consistent error envelope with all required fields.
+
+        Args:
+            target_path: The target file path
+            errors: List of error records
+            corrections: Optional list of corrections (defaults to empty list)
+
+        Returns:
+            Complete error envelope with all required fields per D2 design
+        """
+        return {
+            "status": "error",
+            "path": target_path,
+            "canonical_hash": "",
+            "corrections": corrections if corrections is not None else [],
+            "diff": "",
+            "errors": errors,
+            "validation_status": "PENDING_INFRASTRUCTURE",
+        }
+
     def get_name(self) -> str:
         """Get tool name."""
         return "octave_write"
@@ -279,37 +305,28 @@ class WriteTool(BaseTool):
         # STEP 1: Validate path
         path_valid, path_error = self._validate_path(target_path)
         if not path_valid:
-            return {
-                "status": "error",
-                "path": target_path,
-                "errors": [{"code": "E_PATH", "message": path_error}],
-                "corrections": [],
-                "validation_status": "PENDING_INFRASTRUCTURE",
-            }
+            return self._error_envelope(
+                target_path,
+                [{"code": "E_PATH", "message": path_error}],
+            )
 
         # STEP 2: Validate content XOR changes
         if content is not None and changes is not None:
-            return {
-                "status": "error",
-                "path": target_path,
-                "errors": [
+            return self._error_envelope(
+                target_path,
+                [
                     {
                         "code": "E_INPUT",
                         "message": "Cannot provide both content and changes - they are mutually exclusive",
                     }
                 ],
-                "corrections": [],
-                "validation_status": "PENDING_INFRASTRUCTURE",
-            }
+            )
 
         if content is None and changes is None:
-            return {
-                "status": "error",
-                "path": target_path,
-                "errors": [{"code": "E_INPUT", "message": "Must provide either content or changes"}],
-                "corrections": [],
-                "validation_status": "PENDING_INFRASTRUCTURE",
-            }
+            return self._error_envelope(
+                target_path,
+                [{"code": "E_INPUT", "message": "Must provide either content or changes"}],
+            )
 
         path_obj = Path(target_path)
         file_exists = path_obj.exists()
@@ -321,81 +338,61 @@ class WriteTool(BaseTool):
         if changes is not None:
             # CHANGES MODE (Amend) - file must exist
             if not file_exists:
-                return {
-                    "status": "error",
-                    "path": target_path,
-                    "errors": [
-                        {"code": "E_FILE", "message": "File does not exist - changes mode requires existing file"}
-                    ],
-                    "corrections": [],
-                    "validation_status": "PENDING_INFRASTRUCTURE",
-                }
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_FILE", "message": "File does not exist - changes mode requires existing file"}],
+                )
 
             # Read existing file
             try:
                 with open(target_path, encoding="utf-8") as f:
                     original_content = f.read()
             except Exception as e:
-                return {
-                    "status": "error",
-                    "path": target_path,
-                    "errors": [{"code": "E_READ", "message": f"Read error: {str(e)}"}],
-                    "corrections": [],
-                    "validation_status": "PENDING_INFRASTRUCTURE",
-                }
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_READ", "message": f"Read error: {str(e)}"}],
+                )
 
             # Check base_hash if provided
             if base_hash:
                 current_hash = self._compute_hash(original_content)
                 if current_hash != base_hash:
-                    return {
-                        "status": "error",
-                        "path": target_path,
-                        "errors": [
+                    return self._error_envelope(
+                        target_path,
+                        [
                             {
                                 "code": "E_HASH",
                                 "message": f"Hash mismatch - file has been modified (expected {base_hash[:8]}..., got {current_hash[:8]}...)",
                             }
                         ],
-                        "corrections": [],
-                        "validation_status": "PENDING_INFRASTRUCTURE",
-                    }
+                    )
 
             # Parse existing content
             try:
                 doc = parse(original_content)
             except Exception as e:
-                return {
-                    "status": "error",
-                    "path": target_path,
-                    "errors": [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
-                    "corrections": [],
-                    "validation_status": "PENDING_INFRASTRUCTURE",
-                }
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
+                )
 
             # Apply changes with tri-state semantics
             try:
                 doc = self._apply_changes(doc, changes)
             except Exception as e:
-                return {
-                    "status": "error",
-                    "path": target_path,
-                    "errors": [{"code": "E_APPLY", "message": f"Apply changes error: {str(e)}"}],
-                    "corrections": [],
-                    "validation_status": "PENDING_INFRASTRUCTURE",
-                }
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_APPLY", "message": f"Apply changes error: {str(e)}"}],
+                )
 
             # Emit canonical form
             try:
                 canonical_content = emit(doc)
             except Exception as e:
-                return {
-                    "status": "error",
-                    "path": target_path,
-                    "errors": [{"code": "E_EMIT", "message": f"Emit error: {str(e)}"}],
-                    "corrections": [],
-                    "validation_status": "PENDING_INFRASTRUCTURE",
-                }
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_EMIT", "message": f"Emit error: {str(e)}"}],
+                )
 
             # Track repairs from canonical
             try:
@@ -415,63 +412,49 @@ class WriteTool(BaseTool):
                         existing_content = f.read()
                     current_hash = self._compute_hash(existing_content)
                     if current_hash != base_hash:
-                        return {
-                            "status": "error",
-                            "path": target_path,
-                            "errors": [
+                        return self._error_envelope(
+                            target_path,
+                            [
                                 {
                                     "code": "E_HASH",
                                     "message": f"Hash mismatch - file has been modified (expected {base_hash[:8]}..., got {current_hash[:8]}...)",
                                 }
                             ],
-                            "corrections": [],
-                            "validation_status": "PENDING_INFRASTRUCTURE",
-                        }
+                        )
                 except Exception as e:
-                    return {
-                        "status": "error",
-                        "path": target_path,
-                        "errors": [{"code": "E_READ", "message": f"Read error: {str(e)}"}],
-                        "corrections": [],
-                        "validation_status": "PENDING_INFRASTRUCTURE",
-                    }
+                    return self._error_envelope(
+                        target_path,
+                        [{"code": "E_READ", "message": f"Read error: {str(e)}"}],
+                    )
 
             # Tokenize with repairs
             try:
                 _, tokenize_repairs = tokenize(content)
             except Exception as e:
-                return {
-                    "status": "error",
-                    "path": target_path,
-                    "errors": [{"code": "E_TOKENIZE", "message": f"Tokenization error: {str(e)}"}],
-                    "corrections": [],
-                    "validation_status": "PENDING_INFRASTRUCTURE",
-                }
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_TOKENIZE", "message": f"Tokenization error: {str(e)}"}],
+                )
 
             # Parse to AST
             try:
                 doc = parse(content)
             except Exception as e:
                 corrections = self._track_corrections(content, content, tokenize_repairs)
-                return {
-                    "status": "error",
-                    "path": target_path,
-                    "errors": [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
-                    "corrections": corrections,
-                    "validation_status": "PENDING_INFRASTRUCTURE",
-                }
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
+                    corrections,
+                )
 
             # Emit canonical form
             try:
                 canonical_content = emit(doc)
             except Exception as e:
-                return {
-                    "status": "error",
-                    "path": target_path,
-                    "errors": [{"code": "E_EMIT", "message": f"Emit error: {str(e)}"}],
-                    "corrections": [],
-                    "validation_status": "PENDING_INFRASTRUCTURE",
-                }
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_EMIT", "message": f"Emit error: {str(e)}"}],
+                )
 
         # Track corrections
         corrections = self._track_corrections(original_content, canonical_content, tokenize_repairs)
@@ -488,13 +471,11 @@ class WriteTool(BaseTool):
 
             # Reject symlink targets (security)
             if path_obj.exists() and path_obj.is_symlink():
-                return {
-                    "status": "error",
-                    "path": target_path,
-                    "errors": [{"code": "E_WRITE", "message": "Cannot write to symlink target"}],
-                    "corrections": corrections,
-                    "validation_status": "PENDING_INFRASTRUCTURE",
-                }
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_WRITE", "message": "Cannot write to symlink target"}],
+                    corrections,
+                )
 
             # Preserve permissions if file exists
             original_mode = None
@@ -520,18 +501,16 @@ class WriteTool(BaseTool):
                     verify_hash = self._compute_hash(verify_content)
                     if verify_hash != base_hash:
                         os.unlink(temp_path)
-                        return {
-                            "status": "error",
-                            "path": target_path,
-                            "errors": [
+                        return self._error_envelope(
+                            target_path,
+                            [
                                 {
                                     "code": "E_HASH",
                                     "message": f"Hash mismatch before write - file was modified during operation (expected {base_hash[:8]}..., got {verify_hash[:8]}...)",
                                 }
                             ],
-                            "corrections": corrections,
-                            "validation_status": "PENDING_INFRASTRUCTURE",
-                        }
+                            corrections,
+                        )
 
                 # Atomic replace
                 os.replace(temp_path, target_path)
@@ -542,13 +521,11 @@ class WriteTool(BaseTool):
                 raise
 
         except Exception as e:
-            return {
-                "status": "error",
-                "path": target_path,
-                "errors": [{"code": "E_WRITE", "message": f"Write error: {str(e)}"}],
-                "corrections": corrections,
-                "validation_status": "PENDING_INFRASTRUCTURE",
-            }
+            return self._error_envelope(
+                target_path,
+                [{"code": "E_WRITE", "message": f"Write error: {str(e)}"}],
+                corrections,
+            )
 
         # Compute hash of written content
         canonical_hash = self._compute_hash(canonical_content)
