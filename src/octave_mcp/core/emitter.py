@@ -8,12 +8,17 @@ Emits strict canonical OCTAVE from AST with:
 - Explicit envelope always present
 - Deterministic formatting
 - 2-space indentation
+
+I2 (Deterministic Absence) Support:
+- Absent values are NOT emitted (field is absent, not present with null)
+- None values are emitted as 'null' (explicitly empty)
+- This preserves the tri-state distinction: absent vs null vs value
 """
 
 import re
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue, Section
+from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue, Section
 
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
 
@@ -43,8 +48,26 @@ def needs_quotes(value: Any) -> bool:
     return False
 
 
+def is_absent(value: Any) -> bool:
+    """Check if a value is the Absent sentinel.
+
+    I2 (Deterministic Absence): Absent fields should not be emitted.
+    This helper enables filtering before emission.
+    """
+    return isinstance(value, Absent)
+
+
 def emit_value(value: Any) -> str:
-    """Emit a value in canonical form."""
+    """Emit a value in canonical form.
+
+    I2 Compliance:
+    - Absent values return empty string (caller should skip)
+    - None values return "null" (explicitly empty)
+    """
+    if isinstance(value, Absent):
+        # I2: Absent is NOT the same as null
+        # Return empty string - caller should filter before calling
+        return ""
     if value is None:
         return "null"
     elif isinstance(value, bool):
@@ -78,13 +101,19 @@ def emit_assignment(assignment: Assignment, indent: int = 0) -> str:
 
 
 def emit_block(block: Block, indent: int = 0) -> str:
-    """Emit a block in canonical form."""
+    """Emit a block in canonical form.
+
+    I2 Compliance: Skips children with Absent values.
+    """
     indent_str = "  " * indent
     lines = [f"{indent_str}{block.key}:"]
 
     # Emit children
+    # I2: Skip assignments with Absent values
     for child in block.children:
         if isinstance(child, Assignment):
+            if is_absent(child.value):
+                continue
             lines.append(emit_assignment(child, indent + 1))
         elif isinstance(child, Block):
             lines.append(emit_block(child, indent + 1))
@@ -99,6 +128,8 @@ def emit_section(section: Section, indent: int = 0) -> str:
 
     Supports both plain numbers ("1", "2") and suffix forms ("2b", "2c").
     Includes optional bracket annotation if present.
+
+    I2 Compliance: Skips children with Absent values.
     """
     indent_str = "  " * indent
     section_line = f"{indent_str}§{section.section_id}::{section.key}"
@@ -107,8 +138,11 @@ def emit_section(section: Section, indent: int = 0) -> str:
     lines = [section_line]
 
     # Emit children
+    # I2: Skip assignments with Absent values
     for child in section.children:
         if isinstance(child, Assignment):
+            if is_absent(child.value):
+                continue
             lines.append(emit_assignment(child, indent + 1))
         elif isinstance(child, Block):
             lines.append(emit_block(child, indent + 1))
@@ -119,12 +153,18 @@ def emit_section(section: Section, indent: int = 0) -> str:
 
 
 def emit_meta(meta: dict[str, Any]) -> str:
-    """Emit META block."""
+    """Emit META block.
+
+    I2 Compliance: Skips fields with Absent values.
+    """
     if not meta:
         return ""
 
     lines = ["META:"]
     for key, value in meta.items():
+        # I2: Skip Absent values
+        if is_absent(value):
+            continue
         value_str = emit_value(value)
         lines.append(f"  {key}::{value_str}")
 
@@ -155,8 +195,12 @@ def emit(doc: Document) -> str:
         lines.append("---")
 
     # Emit sections
+    # I2 Compliance: Skip assignments with Absent values
     for section in doc.sections:
         if isinstance(section, Assignment):
+            if is_absent(section.value):
+                # I2: Absent fields are not emitted
+                continue
             lines.append(emit_assignment(section, 0))
         elif isinstance(section, Block):
             lines.append(emit_block(section, 0))
