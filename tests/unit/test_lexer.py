@@ -254,6 +254,65 @@ class TestTripleQuoteI4AuditTrail:
         assert string_token.normalized_from is not None
 
 
+class TestMultiLineStringLineTracking:
+    """Test line/column tracking for multi-line strings (PR #70 review fix).
+
+    When triple-quoted strings span multiple lines, the lexer must count
+    embedded newlines and update line/column correctly for subsequent tokens.
+    """
+
+    def test_multiline_triple_quote_updates_line_correctly(self):
+        """Tokens after multi-line string should have correct line numbers.
+
+        Input:
+            ===TEST===
+            BODY::\"\"\"Line one
+            Line two
+            Line three\"\"\"
+            NEXT::value
+            ===END===
+
+        NEXT should be on line 5, not line 3.
+        """
+        content = '''===TEST===
+BODY::"""Line one
+Line two
+Line three"""
+NEXT::value
+===END==='''
+        tokens, _ = tokenize(content)
+
+        # Find NEXT identifier
+        next_token = [t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "NEXT"][0]
+        # NEXT should be on line 5 (after 3-line string content)
+        assert next_token.line == 5, f"Expected line 5, got {next_token.line}"
+        assert next_token.column == 1
+
+    def test_multiline_string_column_after_last_newline(self):
+        """Column should reset correctly after embedded newlines."""
+        content = '''KEY::"""first
+second
+third"""'''
+        tokens, _ = tokenize(content)
+
+        # The closing """ ends at column 8 on line 3
+        # Next token should be on new position
+        string_token = [t for t in tokens if t.type == TokenType.STRING][0]
+        # String token is created at its START position
+        assert string_token.line == 1
+        assert string_token.column == 6  # After KEY::
+
+    def test_single_line_string_no_line_increment(self):
+        """Single-line strings should not increment line counter."""
+        content = """KEY::"single line"
+NEXT::value"""
+        tokens, _ = tokenize(content)
+
+        next_token = [t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "NEXT"][0]
+        assert next_token.line == 2
+        assert next_token.column == 1
+
+
 class TestNumberTokenization:
     """Test number literal handling."""
 

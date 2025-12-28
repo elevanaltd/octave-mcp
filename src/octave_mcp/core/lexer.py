@@ -279,10 +279,14 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                         }
                     )
 
-                # Update position
-                if token_type == TokenType.NEWLINE:
-                    line += 1
-                    column = 1
+                # Update position - count embedded newlines in matched text
+                newline_count = matched_text.count("\n")
+                if newline_count > 0:
+                    # Token contains newlines (e.g., triple-quoted strings)
+                    line += newline_count
+                    # Column is position after last newline
+                    last_newline_pos = matched_text.rfind("\n")
+                    column = len(matched_text) - last_newline_pos
                 else:
                     column += len(matched_text)
                 pos = match.end()
