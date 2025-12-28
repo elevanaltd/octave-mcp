@@ -174,7 +174,7 @@ jobs:
 
       - name: Run property tests with increased iterations
         run: |
-          pytest tests/properties/ -v --hypothesis-profile=ci
+          pytest tests/properties/ -v --hypothesis-profile=ci --no-cov
 
   build:
     name: Build Distribution
