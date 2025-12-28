@@ -4,11 +4,8 @@ META:
   VERSION::"1.0"
   PROJECT::"OCTAVE-MCP"
   STATUS::PENDING_APPROVAL
-  PHASE::D1_03
   CREATED::"2025-12-28"
   FULL_DOC::".hestai/workflow/000-OCTAVE-MCP-NORTH-STAR.md"
-  DEBATE_THREAD::"octave-mcp-north-star-2025-12-28"
-  VALIDATED_BY::"requirements-steward"
 CORE_IDENTITY::"OCTAVE-MCP is a loss accounting system for LLM communication"
 STRUCTURAL_PATTERN::LAYERED_FIDELITY
 INTENT_LAYER::I3
@@ -18,38 +15,33 @@ SCHEMA_LAYER::I5
 ABSENCE_LAYER::I2
 IMMUTABLES::5
 I1::SYNTACTIC_FIDELITY
-PRINCIPLE::normalization_alters_syntax_never_semantics
-WHY::semantic_preservation_is_core_value
+STATEMENT::normalization_alters_syntax_never_semantics
+RATIONALE::canon_must_be_idempotent_and_bijective_on_semantic_space
 STATUS::ENFORCED
 I2::DETERMINISTIC_ABSENCE
-PRINCIPLE::distinguish_absent_null_default
-WHY::downstream_must_know_didnt_check_vs_not_there
+STATEMENT::distinguish_absent_null_default
+RATIONALE::downstream_must_know_didnt_check_vs_not_there
 STATUS::PARTIAL
 I3::MIRROR_CONSTRAINT
-PRINCIPLE::reflect_only_present_create_nothing
-WHY::prevents_prompt_injection_by_typo
+STATEMENT::reflect_only_present_create_nothing
+RATIONALE::non_reasoning_is_core_differentiator
 STATUS::PARTIAL
 I4::TRANSFORM_AUDITABILITY
-PRINCIPLE::every_transformation_logged_with_stable_ids
-WHY::if_bits_lost_must_have_receipt
+STATEMENT::every_transformation_logged_with_stable_ids
+RATIONALE::if_bits_lost_must_have_receipt
 STATUS::ENFORCED_FOR_NORMALIZATION
 I5::SCHEMA_SOVEREIGNTY
-PRINCIPLE::validation_status_visible_in_output
-WHY::schema_bypass_must_be_visible_never_silent
+STATEMENT::validation_status_visible_in_output
+RATIONALE::if_you_cant_validate_say_so
 STATUS::BLOCKED_CONVERTIBLE_TO_PARTIAL
-ASSUMPTIONS::[[A1::SCHEMA_VALIDATION_VALUABLE],[confidence_85],"→PENDING",[A2::LENIENT_PARSING_PREFERRED],[confidence_90],"→VALIDATED",[A3::THREE_TOOL_DESIGN_SIMPLER],[confidence_75],"→PENDING",[A4::LLM_COMPREHENDS_OCTAVE],[confidence_92],"→VALIDATED",[A5::TOKEN_REDUCTION_SIGNIFICANT],[confidence_95],"→VALIDATED",[A6::HESTAI_MCP_NEEDS_STABLE_TOOLS],[confidence_80],"→PENDING",[A7::REPAIRLOG_STRUCTURE_SUFFICIENT],[confidence_70],"→PENDING",[A8::PARSE_ERROR_CONTRACT_FORMALIZABLE],[confidence_85],"→PENDING"]
+ASSUMPTIONS::[[A1::SCHEMA_VALIDATION_VALUABLE],[confidence_85],"→HIGH_IMPACT",[A2::LENIENT_PARSING_PREFERRED],[confidence_90],"→VALIDATED",[A3::THREE_TOOL_DESIGN_SIMPLER],[confidence_75],"→MEDIUM_IMPACT",[A4::LLM_COMPREHENDS_OCTAVE],[confidence_92],"→VALIDATED",[A5::TOKEN_REDUCTION_SIGNIFICANT],[confidence_95],"→VALIDATED",[A6::REPAIRLOG_STRUCTURE_SUFFICIENT],[confidence_70],"→MEDIUM_IMPACT",[A7::PARSE_ERROR_CONTRACT_FORMALIZABLE],[confidence_85],"→MEDIUM_IMPACT"]
 SCOPE_BOUNDARIES:
-  IS::[deterministic_document_format_processor,loss_accounting_system_for_LLM_communication,lenient_to_canonical_normalizer,schema_validation_framework]
-  IS_NOT::[LLM_or_reasoning_engine,agent_orchestration_system,debate_management_system,identity_authentication_system]
-  GATES::["D0→D1→D2→B0→B1→B2"]
-  GATE_STATUS::[[D0::DONE],[D1::CURRENT],[D2::PENDING],[B0::PENDING],[B1::PENDING],[B2::PENDING]]
-  ESCALATION_ROUTING:
-    requirements_steward::[violates_immutable,scope_boundary,north_star_amendment]
-    technical_architect::[tool_consolidation,architecture_decisions]
-    implementation_lead::[assumption_validation,build_phase_execution]
-    LOAD_FULL_NORTH_STAR_IF::[immutable_conflict_detected,design_decisions_needed,validation_evidence_required,scope_boundary_question,commitment_ceremony_pending]
-    PROTECTION_CLAUSE::[[IF::agent_detects_work_contradicting_North_Star],[THEN::"STOP→CITE→ESCALATE"],[FORMAT::"NORTH_STAR_VIOLATION: [work] violates [I#] because [evidence]"]]
-    DEBATE_PROVENANCE::[[WIND::"edge_optimizer_gemini→"],7,_candidates,[WALL::"critical_engineer_codex→verdicts"],[DOOR::"synthesizer_claude→"],5,_immutables_via_layered_fidelity]
-    COMPRESSION_RATIO::"300_lines_to_85_lines"
-    FIDELITY::"100_percent_decision_logic_preserved"
+  IS::[deterministic_document_format_processor,loss_accounting_system_for_LLM_communication,lenient_to_canonical_normalizer,schema_validation_framework,audit_trail_generator]
+  IS_NOT::[LLM_or_reasoning_engine,agent_orchestration_system,database_or_persistence_layer,identity_authentication_system]
+  CONSTRAINED_VARIABLES:
+    IMMUTABLE::[I1,I2,I3,I4,I5]
+    FLEXIBLE::[tool_count,error_codes,tier_names,schema_formats]
+    NEGOTIABLE::[default_strictness,feature_priority,integration_timeline]
+    RISKS::[[R1::spec_claims_vs_implementation],[[mitigation::I5_makes_gaps_visible]],[R2::tool_consolidation_breaking_changes],[[mitigation::migration_docs]],[R3::lenient_parsing_edge_cases],[[mitigation::I3_errors_not_guesses]]]
+    APPROVAL::PENDING
 ===END===
