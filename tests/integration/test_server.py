@@ -2,7 +2,7 @@
 
 Tests the MCP server entry point:
 - Server initialization
-- Tool registration (IngestTool, EjectTool)
+- Tool registration (new and deprecated tools)
 - Basic integration smoke tests
 """
 
@@ -24,8 +24,8 @@ class TestMCPServer:
         assert server.name == "octave-mcp"
 
     @pytest.mark.asyncio
-    async def test_server_lists_both_tools(self, server):
-        """Server lists ingest, eject, create, and amend tools."""
+    async def test_server_lists_all_tools(self, server):
+        """Server lists new and deprecated tools (GH#51 consolidation)."""
         from mcp.types import ListToolsRequest
 
         request = ListToolsRequest(method="tools/list")
@@ -39,11 +39,18 @@ class TestMCPServer:
         tools = result.root.tools
         tool_names = [tool.name for tool in tools]
 
-        assert "octave_ingest" in tool_names
+        # New tools (GH#51)
+        assert "octave_validate" in tool_names
+        assert "octave_write" in tool_names
         assert "octave_eject" in tool_names
+
+        # Deprecated tools (kept for 12-week migration)
+        assert "octave_ingest" in tool_names
         assert "octave_create" in tool_names
         assert "octave_amend" in tool_names
-        assert len(tool_names) == 4
+
+        # Total: 6 tools
+        assert len(tool_names) == 6
 
     @pytest.mark.asyncio
     async def test_ingest_tool_has_required_params(self, server):

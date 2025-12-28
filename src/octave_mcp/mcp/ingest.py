@@ -2,8 +2,13 @@
 
 Implements octave_ingest tool with pipeline:
 PREPARSE→PARSE→NORMALIZE→VALIDATE→REPAIR(if fix)→VALIDATE
+
+DEPRECATED: This tool is deprecated and will be removed in 12 weeks.
+Use octave_validate instead:
+  - octave_ingest(...) -> octave_validate(..., fix=True)
 """
 
+import warnings
 from typing import Any
 
 from octave_mcp.core.emitter import emit
@@ -15,7 +20,10 @@ from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 
 
 class IngestTool(BaseTool):
-    """MCP tool for octave_ingest - lenient to canonical pipeline."""
+    """MCP tool for octave_ingest - lenient to canonical pipeline.
+
+    DEPRECATED: Use octave_validate instead. This tool will be removed in 12 weeks.
+    """
 
     def get_name(self) -> str:
         """Get tool name."""
@@ -24,6 +32,7 @@ class IngestTool(BaseTool):
     def get_description(self) -> str:
         """Get tool description."""
         return (
+            "[DEPRECATED: Use octave_validate instead] "
             "Ingest lenient OCTAVE content and emit canonical form. "
             "Accepts ASCII aliases (→/->, ⊕/+, etc.) and normalizes to unicode. "
             "Validates against schema and optionally applies repairs. "
@@ -61,6 +70,8 @@ class IngestTool(BaseTool):
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
         """Execute ingest pipeline.
 
+        DEPRECATED: Use octave_validate instead. This tool will be removed in 12 weeks.
+
         Args:
             content: OCTAVE content to ingest
             schema: Schema name (reserved for future use in P2.5, currently not used for validation)
@@ -75,6 +86,14 @@ class IngestTool(BaseTool):
             - warnings: List of validation warnings (basic validation only, schema validation deferred to P2.5)
             - stages: Pipeline stage details (if verbose=true)
         """
+        # Emit deprecation warning
+        warnings.warn(
+            "octave_ingest is deprecated and will be removed in 12 weeks. "
+            "Use octave_validate instead: octave_ingest(...) -> octave_validate(..., fix=True)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         # Validate and extract parameters
         params = self.validate_parameters(kwargs)
         content = params["content"]

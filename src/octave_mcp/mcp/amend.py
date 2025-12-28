@@ -6,9 +6,14 @@ Implements octave_amend tool for updating existing OCTAVE files with:
 - Optional base_hash consistency check
 - Correction tracking (W001-W005)
 - Compact diff or full summary output
+
+DEPRECATED: This tool is deprecated and will be removed in 12 weeks.
+Use octave_write instead:
+  - octave_amend(...) -> octave_write(changes=...)
 """
 
 import hashlib
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +25,10 @@ from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 
 
 class AmendTool(BaseTool):
-    """MCP tool for octave_amend - update existing OCTAVE files."""
+    """MCP tool for octave_amend - update existing OCTAVE files.
+
+    DEPRECATED: Use octave_write instead. This tool will be removed in 12 weeks.
+    """
 
     # Security: allowed file extensions (same as CreateTool)
     ALLOWED_EXTENSIONS = {".oct.md", ".octave", ".md"}
@@ -32,6 +40,7 @@ class AmendTool(BaseTool):
     def get_description(self) -> str:
         """Get tool description."""
         return (
+            "[DEPRECATED: Use octave_write instead] "
             "Amend existing OCTAVE file with field updates. "
             "Reads file, applies changes, normalizes to canonical form, "
             "tracks corrections (W001-W005), and returns diff or full summary."
@@ -188,6 +197,8 @@ class AmendTool(BaseTool):
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
         """Execute amend pipeline.
 
+        DEPRECATED: Use octave_write instead. This tool will be removed in 12 weeks.
+
         Args:
             target_path: Existing file path to amend
             changes: Field updates to apply
@@ -202,6 +213,14 @@ class AmendTool(BaseTool):
             - diff: Compact diff
             - errors: List of errors (on failure)
         """
+        # Emit deprecation warning
+        warnings.warn(
+            "octave_amend is deprecated and will be removed in 12 weeks. "
+            "Use octave_write instead: octave_amend(...) -> octave_write(changes=...)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         # Validate and extract parameters
         params = self.validate_parameters(kwargs)
         target_path = params["target_path"]

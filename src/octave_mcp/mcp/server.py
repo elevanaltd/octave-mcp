@@ -1,6 +1,12 @@
 """MCP server entry point (P2.4).
 
-Provides the MCP server with octave_ingest and octave_eject tools.
+Provides the MCP server with OCTAVE tools:
+- octave_validate (new - replaces octave_ingest)
+- octave_write (new - replaces octave_create + octave_amend)
+- octave_eject (unchanged)
+- octave_ingest (deprecated)
+- octave_create (deprecated)
+- octave_amend (deprecated)
 """
 
 import asyncio
@@ -15,6 +21,8 @@ from octave_mcp.mcp.amend import AmendTool
 from octave_mcp.mcp.create import CreateTool
 from octave_mcp.mcp.eject import EjectTool
 from octave_mcp.mcp.ingest import IngestTool
+from octave_mcp.mcp.validate import ValidateTool
+from octave_mcp.mcp.write import WriteTool
 
 
 def create_server() -> Server:
@@ -25,25 +33,44 @@ def create_server() -> Server:
     """
     server = Server("octave-mcp")
 
-    # Initialize tools
-    ingest_tool = IngestTool()
+    # Initialize new tools (GH#51 consolidation)
+    validate_tool = ValidateTool()
+    write_tool = WriteTool()
     eject_tool = EjectTool()
+
+    # Initialize deprecated tools (kept for 12-week migration period)
+    ingest_tool = IngestTool()
     create_tool = CreateTool()
     amend_tool = AmendTool()
 
     @server.list_tools()
     async def handle_list_tools() -> list[Tool]:
-        """List available tools."""
+        """List available tools.
+
+        New tools are listed first, deprecated tools last.
+        """
         return [
+            # New tools (GH#51 consolidation)
             Tool(
-                name=ingest_tool.get_name(),
-                description=ingest_tool.get_description(),
-                inputSchema=ingest_tool.get_input_schema(),
+                name=validate_tool.get_name(),
+                description=validate_tool.get_description(),
+                inputSchema=validate_tool.get_input_schema(),
+            ),
+            Tool(
+                name=write_tool.get_name(),
+                description=write_tool.get_description(),
+                inputSchema=write_tool.get_input_schema(),
             ),
             Tool(
                 name=eject_tool.get_name(),
                 description=eject_tool.get_description(),
                 inputSchema=eject_tool.get_input_schema(),
+            ),
+            # Deprecated tools (kept for 12-week migration period)
+            Tool(
+                name=ingest_tool.get_name(),
+                description=ingest_tool.get_description(),
+                inputSchema=ingest_tool.get_input_schema(),
             ),
             Tool(
                 name=create_tool.get_name(),
@@ -62,7 +89,7 @@ def create_server() -> Server:
         """Route tool calls to appropriate handler.
 
         Args:
-            name: Tool name (octave_ingest or octave_eject)
+            name: Tool name
             arguments: Tool arguments
 
         Returns:
@@ -75,10 +102,16 @@ def create_server() -> Server:
             arguments = {}
 
         # Route to appropriate tool
-        if name == "octave_ingest":
-            result = await ingest_tool.execute(**arguments)
+        # New tools (GH#51 consolidation)
+        if name == "octave_validate":
+            result = await validate_tool.execute(**arguments)
+        elif name == "octave_write":
+            result = await write_tool.execute(**arguments)
         elif name == "octave_eject":
             result = await eject_tool.execute(**arguments)
+        # Deprecated tools (kept for 12-week migration period)
+        elif name == "octave_ingest":
+            result = await ingest_tool.execute(**arguments)
         elif name == "octave_create":
             result = await create_tool.execute(**arguments)
         elif name == "octave_amend":
