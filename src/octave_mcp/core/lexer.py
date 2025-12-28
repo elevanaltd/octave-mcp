@@ -121,6 +121,9 @@ TOKEN_PATTERNS = [
     (r"\]", TokenType.LIST_END),
     (r",", TokenType.COMMA),
     # Quoted strings (with escape handling)
+    # GH#63: Triple quotes MUST come before single quotes (longest match first)
+    # Triple-quoted strings can contain newlines and internal quotes
+    (r'"""(?:[^"\\]|\\.|"(?!""))*"""', TokenType.STRING),
     (r'"(?:[^"\\]|\\.)*"', TokenType.STRING),
     # Numbers (including negative and scientific notation)
     (r"-?\d+\.?\d*(?:[eE][+-]?\d+)?", TokenType.NUMBER),
@@ -207,8 +210,13 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 elif token_type == TokenType.ENVELOPE_END:
                     value = "END"
                 elif token_type == TokenType.STRING:
-                    # Remove quotes and handle escapes
-                    value = matched_text[1:-1]  # Remove surrounding quotes
+                    # GH#63: Handle triple quotes vs single quotes
+                    if matched_text.startswith('"""'):
+                        # Triple-quoted string: remove """ from both ends
+                        value = matched_text[3:-3]
+                    else:
+                        # Single-quoted string: remove " from both ends
+                        value = matched_text[1:-1]
                     # Process escape sequences
                     value = value.replace(r"\"", '"')
                     value = value.replace(r"\\", "\\")

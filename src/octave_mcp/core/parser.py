@@ -458,16 +458,17 @@ class Parser:
             # Check if this starts an expression with operators (GH#62, GH#65)
             next_token = self.peek()
             if next_token.type in EXPRESSION_OPERATORS:
-                # Expression with operators like A→B→C, X⊕Y, A@B, A⧺B, Speed⇌Quality, etc.
+                # Expression with operators like A->B->C, X+Y, A@B, A~B, Speed vs Quality, etc.
                 return self.parse_flow_expression()
 
-            # Consume compound identifier with colons (Issue #41 Phase 2)
-            # Examples: HERMES:API_TIMEOUT, MODULE:SUBMODULE:COMPONENT
-            # This preserves single colons WITHIN values
+            # GH#66: Capture multi-word bare values
+            # Examples: "Main content", "Hello World Again"
+            # Stops at: NEWLINE, COMMA, LIST_END, ENVELOPE markers, operators
             parts = [token.value]
             self.advance()
 
-            # Collect colon-separated path components
+            # Collect colon-separated path components (Issue #41 Phase 2)
+            # Examples: HERMES:API_TIMEOUT, MODULE:SUBMODULE:COMPONENT
             while self.current().type == TokenType.BLOCK and self.peek().type == TokenType.IDENTIFIER:
                 # Consume BLOCK token (:)
                 self.advance()
@@ -475,10 +476,42 @@ class Parser:
                 parts.append(self.current().value)
                 self.advance()
 
-            # Return compound path if multiple parts, else single value
+            # If we consumed colons, return as colon-joined path
             if len(parts) > 1:
                 return ":".join(parts)
-            return parts[0]
+
+            # GH#66: Continue capturing consecutive identifiers as multi-word value
+            # Stop at delimiters, operators, or non-identifier tokens
+            word_parts = [parts[0]]
+            while self.current().type == TokenType.IDENTIFIER:
+                # Check if next token after this identifier is an operator
+                # If so, we're starting an expression, not a multi-word value
+                if self.peek().type in EXPRESSION_OPERATORS:
+                    # Include this word and then parse the rest as expression
+                    word_parts.append(self.current().value)
+                    self.advance()
+                    # Now we need to continue with flow expression parsing
+                    expr_parts = [" ".join(word_parts)]
+                    while (
+                        self.current().type in (TokenType.IDENTIFIER, TokenType.STRING)
+                        or self.current().type in EXPRESSION_OPERATORS
+                    ):
+                        if self.current().type in EXPRESSION_OPERATORS:
+                            expr_parts.append(self.current().value)
+                            self.advance()
+                        elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING):
+                            expr_parts.append(self.current().value)
+                            self.advance()
+                        else:
+                            break
+                    return "".join(str(p) for p in expr_parts)
+
+                # Just another word in the multi-word value
+                word_parts.append(self.current().value)
+                self.advance()
+
+            # Join words with spaces
+            return " ".join(word_parts)
 
         elif token.type == TokenType.FLOW:
             # Flow expression starting with operator like →B→C
