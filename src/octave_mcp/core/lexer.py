@@ -79,6 +79,7 @@ class LexerError(Exception):
 # ASCII to Unicode normalization table
 ASCII_ALIASES = {
     "->": "→",
+    "<->": "⇌",  # GH#65: ASCII tension operator
     "+": "⊕",
     "~": "⧺",
     "vs": "⇌",
@@ -101,6 +102,7 @@ TOKEN_PATTERNS = [
     (r"::", TokenType.ASSIGN),
     (r":", TokenType.BLOCK),
     (r"→", TokenType.FLOW),
+    (r"<->", TokenType.TENSION),  # GH#65: ASCII tension (must come before ->)
     (r"->", TokenType.FLOW),
     (r"⊕", TokenType.SYNTHESIS),
     # Note: + handled specially to distinguish from numbers

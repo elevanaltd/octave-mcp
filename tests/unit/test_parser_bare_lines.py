@@ -145,6 +145,134 @@ TENSION::Speed
         assert assignment.value == "Speed"
 
 
+class TestTensionOperatorFixedBehavior:
+    """Tests for CORRECT tension operator behavior after fixes.
+
+    These tests define the EXPECTED behavior after fixing issues #62 and #65.
+    They should FAIL before the fix and PASS after.
+
+    Issue #62: Unicode tension operator (swirl) should capture full expression
+    Issue #65: ASCII tension operator <-> should be recognized and normalized
+    """
+
+    def test_tension_operator_unicode_captures_full_expression(self):
+        """FIX for Issue #62: Unicode tension captures full expression.
+
+        After fix: parse_flow_expression should include TokenType.TENSION
+        in its while loop, allowing expressions like "Speed ⇌ Quality".
+        """
+        content = """===TEST===
+TRADEOFF::Speed⇌Quality
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "TRADEOFF"
+        # After fix: should capture the full expression including tension operator
+        assert assignment.value == "Speed⇌Quality"
+
+    def test_tension_operator_unicode_with_spaces(self):
+        """Unicode tension with identifiers on both sides."""
+        content = """===TEST===
+BALANCE::Performance⇌Readability
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "BALANCE"
+        assert "Performance" in assignment.value
+        assert "Readability" in assignment.value
+        assert "⇌" in assignment.value
+
+    def test_tension_operator_ascii_recognized(self):
+        """FIX for Issue #65: ASCII <-> is recognized as TENSION operator.
+
+        After fix: <-> should be in TOKEN_PATTERNS and ASCII_ALIASES,
+        tokenizing as TokenType.TENSION and normalizing to unicode swirl.
+        """
+        content = """===TEST===
+TRADEOFF::Speed<->Quality
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "TRADEOFF"
+        # ASCII <-> should normalize to unicode swirl
+        assert assignment.value == "Speed⇌Quality"
+
+    def test_tension_operator_ascii_vs_embedded_is_not_recognized(self):
+        """Embedded 'vs' in identifier is NOT recognized (word boundary required).
+
+        The lexer pattern uses \\bvs\\b which requires word boundaries.
+        'GoodvsBad' is parsed as a single identifier, not as 'Good' vs 'Bad'.
+        This is expected behavior - use <-> for embedded tension.
+        """
+        content = """===TEST===
+VERSUS::GoodvsBad
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "VERSUS"
+        # Without word boundaries, vs is part of the identifier
+        assert assignment.value == "GoodvsBad"  # Not normalized
+
+    def test_tension_operator_ascii_vs_with_unicode_swirl(self):
+        """Unicode swirl (not vs) can be embedded in expressions."""
+        content = """===TEST===
+VERSUS::Good⇌Bad
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "VERSUS"
+        # Unicode swirl is always recognized
+        assert assignment.value == "Good⇌Bad"
+
+    def test_tension_in_complex_expression(self):
+        """Tension operator mixed with other operators."""
+        content = """===TEST===
+COMPLEX::A→B⇌C→D
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "COMPLEX"
+        # Full expression should be captured
+        assert "A" in assignment.value
+        assert "B" in assignment.value
+        assert "C" in assignment.value
+        assert "D" in assignment.value
+        assert "→" in assignment.value
+        assert "⇌" in assignment.value
+
+    def test_constraint_operator_in_expression(self):
+        """CONSTRAINT operator (∧) should also work in expressions."""
+        content = """===TEST===
+RULE::ConditionA∧ConditionB
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "RULE"
+        assert "ConditionA" in assignment.value
+        assert "ConditionB" in assignment.value
+        assert "∧" in assignment.value
+
+    def test_alternative_operator_in_expression(self):
+        """ALTERNATIVE operator (∨) should also work in expressions."""
+        content = """===TEST===
+CHOICE::OptionA∨OptionB
+===END==="""
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "CHOICE"
+        assert "OptionA" in assignment.value
+        assert "OptionB" in assignment.value
+        assert "∨" in assignment.value
+
+
 class TestMultiWordValueCurrentBehavior:
     """Document current multi-word value handling behavior.
 

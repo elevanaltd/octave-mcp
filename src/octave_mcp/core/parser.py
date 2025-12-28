@@ -14,6 +14,22 @@ from typing import Any
 from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, Section
 from octave_mcp.core.lexer import Token, TokenType, tokenize
 
+# Unified set of operators valid in expression contexts (GH#62, GH#65)
+# This replaces ad-hoc inline operator checks in parse_flow_expression.
+# By centralizing expression operators, we ensure consistent handling
+# across the parser and make it easy to add new operators.
+EXPRESSION_OPERATORS: frozenset[TokenType] = frozenset(
+    {
+        TokenType.FLOW,  # → or ->
+        TokenType.SYNTHESIS,  # ⊕ or +
+        TokenType.AT,  # @
+        TokenType.CONCAT,  # ⧺ or ~
+        TokenType.TENSION,  # ⇌ or vs or <->
+        TokenType.CONSTRAINT,  # ∧ or &
+        TokenType.ALTERNATIVE,  # ∨ or |
+    }
+)
+
 
 class ParserError(Exception):
     """Parser error with position information."""
@@ -439,10 +455,10 @@ class Parser:
             return self.parse_list()
 
         elif token.type == TokenType.IDENTIFIER:
-            # Check if this starts a flow/synthesis/at/concat expression
+            # Check if this starts an expression with operators (GH#62, GH#65)
             next_token = self.peek()
-            if next_token.type in (TokenType.FLOW, TokenType.SYNTHESIS, TokenType.AT, TokenType.CONCAT):
-                # Flow expression like A→B→C, synthesis like X⊕Y, location like A@B, or concat like A⧺B
+            if next_token.type in EXPRESSION_OPERATORS:
+                # Expression with operators like A→B→C, X⊕Y, A@B, A⧺B, Speed⇌Quality, etc.
                 return self.parse_flow_expression()
 
             # Consume compound identifier with colons (Issue #41 Phase 2)
@@ -532,19 +548,20 @@ class Parser:
         return self.parse_value()
 
     def parse_flow_expression(self) -> str:
-        """Parse flow/synthesis/at/concat expression like A→B→C, X⊕Y, A@B, or A⧺B."""
+        """Parse expression with operators like A→B→C, X⊕Y, A@B, A⧺B, or Speed⇌Quality.
+
+        Uses EXPRESSION_OPERATORS set for unified operator handling (GH#62, GH#65).
+        This ensures all expression operators (FLOW, SYNTHESIS, AT, CONCAT, TENSION,
+        CONSTRAINT, ALTERNATIVE) are properly captured in expressions.
+        """
         parts = []
 
-        # Collect all parts of flow/synthesis/at/concat expression
-        while self.current().type in (
-            TokenType.IDENTIFIER,
-            TokenType.FLOW,
-            TokenType.SYNTHESIS,
-            TokenType.AT,
-            TokenType.CONCAT,
-            TokenType.STRING,
+        # Collect all parts of expression using unified EXPRESSION_OPERATORS set
+        while (
+            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING)
+            or self.current().type in EXPRESSION_OPERATORS
         ):
-            if self.current().type in (TokenType.FLOW, TokenType.SYNTHESIS, TokenType.AT, TokenType.CONCAT):
+            if self.current().type in EXPRESSION_OPERATORS:
                 parts.append(self.current().value)
                 self.advance()
             elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING):
