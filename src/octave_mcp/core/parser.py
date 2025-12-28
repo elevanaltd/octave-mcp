@@ -542,6 +542,20 @@ class Parser:
                             self.advance()
                         else:
                             break
+                    # I4 Audit: Emit warning when multi-word coalescing occurs in expression path
+                    # Same pattern as terminal multi-word at line 557-567
+                    if len(word_parts) > 1:
+                        self.warnings.append(
+                            {
+                                "type": "lenient_parse",
+                                "subtype": "multi_word_coalesce",
+                                "original": word_parts,
+                                "result": " ".join(word_parts),
+                                "context": "expression_path",
+                                "line": start_line,
+                                "column": start_column,
+                            }
+                        )
                     return "".join(str(p) for p in expr_parts)
 
                 # Just another word/number in the multi-word value

@@ -530,3 +530,79 @@ ITEMS::[First Item, Second One]
         # Should have warnings for each multi-word item
         coalesce_warnings = [w for w in warnings if w.get("type") == "lenient_parse"]
         assert len(coalesce_warnings) >= 2
+
+
+class TestExpressionPathCoalescingAudit:
+    """Tests for I4 audit in expression-path multi-word coalescing.
+
+    Debate synthesis (2025-12-28-multi-word-coalesce-i4) confirmed this is
+    objectively required per I4 immutable: "Silent transformation is FORBIDDEN."
+
+    The expression-path at parser.py:522-546 now emits warnings same as
+    the terminal multi-word path at parser.py:555-567.
+    """
+
+    def test_expression_path_coalescing_emits_warning(self):
+        """Multi-word before operator should emit I4 warning.
+
+        Example: `Step One->Step Two` has "Step One" coalesced.
+        Per I4: Every entropy-reducing transformation needs audit record.
+        """
+        from octave_mcp.core.parser import parse_with_warnings
+
+        content = """===TEST===
+FLOW::Step One->Step Two
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        # Value should be captured correctly
+        assignment = doc.sections[0]
+        assert "Step" in str(assignment.value)
+        assert "→" in str(assignment.value) or "->" in str(assignment.value)
+
+        # I4 requirement: warning for "Step One" coalescing
+        coalesce_warnings = [
+            w for w in warnings if w.get("type") == "lenient_parse" and w.get("subtype") == "multi_word_coalesce"
+        ]
+        assert len(coalesce_warnings) >= 1, "Expression-path coalescing should emit I4 warning"
+
+        # Verify warning content
+        warning = coalesce_warnings[0]
+        assert warning["original"] == ["Step", "One"]
+        assert warning["result"] == "Step One"
+        assert warning.get("context") == "expression_path"
+
+    def test_single_word_before_operator_no_warning(self):
+        """Single word before operator should NOT emit coalescing warning."""
+        from octave_mcp.core.parser import parse_with_warnings
+
+        content = """===TEST===
+FLOW::Start->End
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        # No multi-word coalescing occurred
+        coalesce_warnings = [
+            w for w in warnings if w.get("type") == "lenient_parse" and w.get("subtype") == "multi_word_coalesce"
+        ]
+        assert len(coalesce_warnings) == 0
+
+    def test_expression_path_warning_has_position(self):
+        """Expression-path warning should include line and column."""
+        from octave_mcp.core.parser import parse_with_warnings
+
+        content = """===TEST===
+PIPELINE::Phase One->Phase Two->Phase Three
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        coalesce_warnings = [
+            w for w in warnings if w.get("type") == "lenient_parse" and w.get("subtype") == "multi_word_coalesce"
+        ]
+        assert len(coalesce_warnings) >= 1
+
+        warning = coalesce_warnings[0]
+        assert "line" in warning
+        assert "column" in warning
+        assert isinstance(warning["line"], int)
+        assert isinstance(warning["column"], int)
