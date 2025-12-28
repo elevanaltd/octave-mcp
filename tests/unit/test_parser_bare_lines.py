@@ -11,7 +11,7 @@ Test Strategy:
 """
 
 from octave_mcp.core.ast_nodes import Assignment, Block
-from octave_mcp.core.parser import parse
+from octave_mcp.core.parser import parse, parse_with_warnings
 
 
 class TestBareLineCurrentBehavior:
@@ -60,11 +60,10 @@ bare_line_three
         assert doc.sections[1].key == "ANOTHER"
 
     def test_bare_line_between_block_children(self):
-        """Bare lines inside blocks terminate child parsing.
+        """Bare lines inside blocks are skipped with warning, children continue.
 
-        Current behavior: When parse_section returns None for bare_line_inside,
-        the block parsing loop at line 410-412 exits, dropping CHILD2.
-        This is more severe than just dropping the bare line.
+        GH#64 FIX: When parse_section emits warning for bare_line_inside,
+        the block parsing loop continues and correctly parses CHILD2.
         """
         content = """===TEST===
 BLOCK:
@@ -76,9 +75,10 @@ BLOCK:
 
         block = doc.sections[0]
         assert isinstance(block, Block)
-        # Current behavior: bare_line_inside causes early exit, CHILD2 is lost
-        assert len(block.children) == 1
+        # GH#64 FIX: bare_line_inside is skipped with warning, CHILD2 is preserved
+        assert len(block.children) == 2
         assert block.children[0].key == "CHILD1"
+        assert block.children[1].key == "CHILD2"
 
     def test_bare_line_at_document_end(self):
         """Bare line at end of document is dropped."""
@@ -90,6 +90,122 @@ bare_at_end
 
         assert len(doc.sections) == 1
         assert doc.sections[0].key == "FIELD"
+
+
+class TestBareLineWarningEmission:
+    """GH#64 FIX: Verify I4 audit warnings are emitted for bare lines.
+
+    Per I4 (Transform Auditability): "If bits lost must have receipt"
+    When bare lines are dropped, warnings must be emitted to the audit trail.
+    """
+
+    def test_bare_identifier_emits_warning(self):
+        """FIX for GH#64: Bare identifier should emit warning when dropped.
+
+        Location: parser.py:137-140 (parse_document body loop)
+        Expected warning structure:
+        {
+            "type": "lenient_parse",
+            "subtype": "bare_line_dropped",
+            "original": "MISSING_END",
+            "line": <line_number>,
+            "column": <column_number>,
+            "reason": "Bare identifier without :: or : operator"
+        }
+        """
+        content = """===MALFORMED===
+STATUS::ACTIVE
+MISSING_END
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        # Document should still parse correctly
+        assert doc.name == "MALFORMED"
+        assert len(doc.sections) == 1
+        assert doc.sections[0].key == "STATUS"
+
+        # I4 requirement: warning should be emitted for dropped bare line
+        bare_line_warnings = [w for w in warnings if w.get("subtype") == "bare_line_dropped"]
+        assert len(bare_line_warnings) == 1
+
+        warning = bare_line_warnings[0]
+        assert warning["type"] == "lenient_parse"
+        assert warning["original"] == "MISSING_END"
+        assert "line" in warning
+        assert "column" in warning
+        assert "reason" in warning
+
+    def test_multiple_bare_lines_emit_multiple_warnings(self):
+        """All bare lines should emit individual warnings."""
+        content = """===TEST===
+VALID::value
+bare_line_one
+bare_line_two
+ANOTHER::value2
+bare_line_three
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        # Document structure unchanged
+        assert len(doc.sections) == 2
+        assert doc.sections[0].key == "VALID"
+        assert doc.sections[1].key == "ANOTHER"
+
+        # Three bare lines should emit three warnings
+        bare_line_warnings = [w for w in warnings if w.get("subtype") == "bare_line_dropped"]
+        assert len(bare_line_warnings) == 3
+
+        # Verify warning content
+        originals = {w["original"] for w in bare_line_warnings}
+        assert originals == {"bare_line_one", "bare_line_two", "bare_line_three"}
+
+    def test_bare_line_inside_block_emits_warning(self):
+        """FIX for GH#64: Bare lines inside blocks should emit warnings.
+
+        Location: parser.py around line 438-440 (block parsing loop)
+        The fix now correctly continues parsing after bare lines, so CHILD2 is preserved.
+        """
+        content = """===TEST===
+BLOCK:
+  CHILD1::value1
+  bare_line_inside
+  CHILD2::value2
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        block = doc.sections[0]
+        assert isinstance(block, Block)
+        # GH#64 FIX: bare line is skipped with warning, CHILD2 is now correctly parsed
+        assert len(block.children) == 2
+        assert block.children[0].key == "CHILD1"
+        assert block.children[1].key == "CHILD2"
+
+        # I4 requirement: warning should be emitted for bare line in block
+        bare_line_warnings = [w for w in warnings if w.get("subtype") == "bare_line_dropped"]
+        assert len(bare_line_warnings) == 1
+
+        # Verify the bare_line_inside is in warnings
+        warning = bare_line_warnings[0]
+        assert warning["original"] == "bare_line_inside"
+        assert warning["line"] == 4  # Line 4 contains bare_line_inside
+        assert "reason" in warning
+
+    def test_bare_line_warning_includes_line_column(self):
+        """Warning should include accurate position information."""
+        content = """===TEST===
+FIELD::value
+bare_at_end
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        bare_line_warnings = [w for w in warnings if w.get("subtype") == "bare_line_dropped"]
+        assert len(bare_line_warnings) == 1
+
+        warning = bare_line_warnings[0]
+        # Line 3 (1-indexed) contains bare_at_end
+        assert warning["line"] == 3
+        # Column should be 1 (start of line)
+        assert warning["column"] == 1
 
 
 class TestTensionOperatorCurrentBehavior:

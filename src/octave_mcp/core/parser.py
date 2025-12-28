@@ -136,7 +136,7 @@ class Parser:
                 doc.sections.append(section)
             elif self.current().type not in (TokenType.ENVELOPE_END, TokenType.EOF):
                 # Consume unexpected token to prevent infinite loop
-                # In lenient mode, we could log this or try to recover
+                # GH#64: Warning is already emitted by parse_section for bare identifiers
                 self.advance()
 
             self.skip_whitespace()
@@ -377,7 +377,9 @@ class Parser:
         if self.current().type != TokenType.IDENTIFIER:
             return None
 
-        key = self.current().value
+        # Capture token info before consuming for potential I4 audit warning
+        identifier_token = self.current()
+        key = identifier_token.value
         self.advance()
 
         # Check for assignment or block
@@ -435,12 +437,29 @@ class Parser:
                     child = self.parse_section(child_indent)
                     if child:
                         children.append(child)
+                    elif self.current().type in (TokenType.NEWLINE, TokenType.INDENT):
+                        # GH#64: parse_section consumed and warned about bare identifier,
+                        # leaving us at NEWLINE/INDENT. Continue parsing remaining children.
+                        continue
                     else:
                         # No valid child parsed, might be end of block
                         break
 
             return Block(key=key, children=children, line=self.current().line, column=self.current().column)
 
+        # GH#64: Bare identifier without :: or : operator - emit I4 audit warning
+        # Per I4 (Transform Auditability): "If bits lost must have receipt"
+        # The identifier was already consumed above, so use captured token info
+        self.warnings.append(
+            {
+                "type": "lenient_parse",
+                "subtype": "bare_line_dropped",
+                "original": str(identifier_token.value),
+                "line": identifier_token.line,
+                "column": identifier_token.column,
+                "reason": "Bare identifier without :: or : operator",
+            }
+        )
         return None
 
     def parse_value(self) -> Any:
