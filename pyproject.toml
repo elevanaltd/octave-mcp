@@ -138,6 +138,7 @@ addopts = [
     "--strict-markers",
     "--cov=octave_mcp",
     "--cov-report=term-missing",
+    "--cov-report=html",
 ]
 
 [tool.hypothesis]

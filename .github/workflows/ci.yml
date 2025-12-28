@@ -140,7 +140,7 @@ jobs:
 
       - name: Run pytest with coverage
         run: |
-          pytest --cov=octave_mcp --cov-report=xml --cov-report=term-missing
+          pytest --cov=octave_mcp --cov-report=xml --cov-report=term-missing --cov-fail-under=85
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -174,7 +174,7 @@ jobs:
 
       - name: Run property tests with increased iterations
         run: |
-          pytest tests/properties/ -v --hypothesis-profile=ci
+          pytest tests/properties/ -v --hypothesis-profile=ci --no-cov
 
   build:
     name: Build Distribution
