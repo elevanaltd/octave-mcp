@@ -63,6 +63,7 @@ class Parser:
         self.tokens = tokens
         self.pos = 0
         self.current_indent = 0
+        self.warnings: list[dict] = []  # I4 audit trail for lenient parsing events
 
     def current(self) -> Token:
         """Get current token."""
@@ -495,6 +496,10 @@ class Parser:
             # GH#63: Include NUMBER tokens in multi-word capture (convert to string)
             # Stop at delimiters, operators, or non-identifier/number tokens
             word_parts = [parts[0]]
+            # Track start position for I4 audit
+            start_line = token.line
+            start_column = token.column
+
             while self.current().type in (TokenType.IDENTIFIER, TokenType.NUMBER):
                 # Check if next token after this identifier is an operator
                 # If so, we're starting an expression, not a multi-word value
@@ -526,7 +531,23 @@ class Parser:
                 self.advance()
 
             # Join words with spaces
-            return " ".join(word_parts)
+            result = " ".join(word_parts)
+
+            # GH#66 I4 Audit: Emit warning when multiple tokens coalesced into single value
+            # "If bits lost must have receipt" - multi-word coalescing is lenient parsing
+            if len(word_parts) > 1:
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "multi_word_coalesce",
+                        "original": word_parts,
+                        "result": result,
+                        "line": start_line,
+                        "column": start_column,
+                    }
+                )
+
+            return result
 
         elif token.type == TokenType.FLOW:
             # Flow expression starting with operator like →B→C
@@ -640,3 +661,48 @@ def parse(content: str | list[Token]) -> Document:
 
     parser = Parser(tokens)
     return parser.parse_document()
+
+
+def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict]]:
+    """Parse OCTAVE content into AST with I4 audit trail.
+
+    Returns both the parsed document and any warnings generated during
+    lenient parsing (e.g., multi-word value coalescing).
+
+    I4 Immutable: "If not written and addressable, didn't happen"
+    - Lenient parsing transforms must be auditable
+    - Multi-word bare values coalesced into single string emit warnings
+
+    Args:
+        content: Raw OCTAVE text (lenient or canonical) or list of tokens
+
+    Returns:
+        Tuple of (Document AST, list of warning dicts)
+        Warning dict structure:
+        {
+            "type": "lenient_parse",
+            "subtype": "multi_word_coalesce",
+            "original": ["word1", "word2", ...],
+            "result": "word1 word2 ...",
+            "line": int,
+            "column": int
+        }
+
+    Raises:
+        ParserError: On syntax errors
+    """
+    if isinstance(content, str):
+        tokens, lexer_repairs = tokenize(content)
+    else:
+        tokens = content
+        lexer_repairs = []
+
+    parser = Parser(tokens)
+    doc = parser.parse_document()
+
+    # Combine lexer repairs and parser warnings
+    # Lexer repairs are about ASCII normalization
+    # Parser warnings are about lenient parsing (multi-word coalescing)
+    all_warnings = list(lexer_repairs) + parser.warnings
+
+    return doc, all_warnings

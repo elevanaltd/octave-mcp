@@ -393,3 +393,140 @@ BIG::1e10
             assert token.value == expected_value, f"Value mismatch for {raw_input}"
             assert hasattr(token, "raw"), f"Missing raw for {raw_input}"
             assert token.raw == expected_raw, f"Raw mismatch for {raw_input}: got '{token.raw}'"
+
+
+class TestMultiWordCoalescingAudit:
+    """GH#66 I4 Audit Trail: Multi-word value coalescing must emit warnings.
+
+    I4 Immutable: "If not written and addressable, didn't happen"
+    - Multi-word bare values like "Main content" are coalesced from tokens
+    - This coalescing must emit a warning/repair entry for audit trail
+    - Without audit trail, lost bits have no receipt (I4 violation)
+    """
+
+    def test_multi_word_coalescing_emits_warning(self):
+        """Multi-word bare values should emit a warning when coalesced.
+
+        Input: BODY::Main content
+        Expected: Returns "Main content" AND emits warning about coalescing
+        """
+        from octave_mcp.core.parser import parse_with_warnings
+
+        content = """===TEST===
+BODY::Main content
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        # Value should still be correctly parsed
+        assignment = doc.sections[0]
+        assert assignment.key == "BODY"
+        assert assignment.value == "Main content"
+
+        # I4 Audit: Should have warning about multi-word coalescing
+        coalesce_warnings = [w for w in warnings if w.get("type") == "lenient_parse"]
+        assert len(coalesce_warnings) >= 1, "Expected warning for multi-word coalescing"
+
+        warning = coalesce_warnings[0]
+        assert "Main" in str(warning.get("original", []))
+        assert "content" in str(warning.get("original", []))
+        assert warning.get("result") == "Main content"
+
+    def test_three_word_coalescing_emits_warning(self):
+        """Three-word bare values should emit a warning with all tokens."""
+        from octave_mcp.core.parser import parse_with_warnings
+
+        content = """===TEST===
+TITLE::Hello World Again
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assignment = doc.sections[0]
+        assert assignment.value == "Hello World Again"
+
+        coalesce_warnings = [w for w in warnings if w.get("type") == "lenient_parse"]
+        assert len(coalesce_warnings) >= 1
+
+        warning = coalesce_warnings[0]
+        assert warning.get("result") == "Hello World Again"
+
+    def test_single_word_no_coalescing_warning(self):
+        """Single word values should NOT emit coalescing warning."""
+        from octave_mcp.core.parser import parse_with_warnings
+
+        content = """===TEST===
+KEY::value
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assignment = doc.sections[0]
+        assert assignment.value == "value"
+
+        # No multi-word coalescing happened
+        coalesce_warnings = [w for w in warnings if w.get("type") == "lenient_parse"]
+        assert len(coalesce_warnings) == 0
+
+    def test_quoted_string_no_coalescing_warning(self):
+        """Quoted strings should NOT emit coalescing warning."""
+        from octave_mcp.core.parser import parse_with_warnings
+
+        content = """===TEST===
+KEY::"Already Quoted String"
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assignment = doc.sections[0]
+        assert assignment.value == "Already Quoted String"
+
+        # Quoted strings are not coalesced, just parsed
+        coalesce_warnings = [w for w in warnings if w.get("type") == "lenient_parse"]
+        assert len(coalesce_warnings) == 0
+
+    def test_coalescing_warning_has_line_column(self):
+        """Coalescing warnings should include position information."""
+        from octave_mcp.core.parser import parse_with_warnings
+
+        content = """===TEST===
+BODY::Multi word value
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        coalesce_warnings = [w for w in warnings if w.get("type") == "lenient_parse"]
+        assert len(coalesce_warnings) >= 1
+
+        warning = coalesce_warnings[0]
+        assert "line" in warning
+        assert "column" in warning
+        assert isinstance(warning["line"], int)
+        assert isinstance(warning["column"], int)
+
+    def test_backward_compat_parse_still_works(self):
+        """Original parse() function should still work without changes."""
+        from octave_mcp.core.parser import parse
+
+        content = """===TEST===
+BODY::Main content
+===END==="""
+        # Should not raise - backward compatibility
+        doc = parse(content)
+
+        assignment = doc.sections[0]
+        assert assignment.key == "BODY"
+        assert assignment.value == "Main content"
+
+    def test_list_items_coalescing_emits_warning(self):
+        """Multi-word values in lists should also emit warnings."""
+        from octave_mcp.core.parser import parse_with_warnings
+
+        content = """===TEST===
+ITEMS::[First Item, Second One]
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assignment = doc.sections[0]
+        assert len(assignment.value.items) == 2
+        assert assignment.value.items[0] == "First Item"
+        assert assignment.value.items[1] == "Second One"
+
+        # Should have warnings for each multi-word item
+        coalesce_warnings = [w for w in warnings if w.get("type") == "lenient_parse"]
+        assert len(coalesce_warnings) >= 2
