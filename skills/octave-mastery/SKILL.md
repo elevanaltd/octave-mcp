@@ -52,7 +52,7 @@ META:
 §4::ADVANCED_SYNTAX
   // Extends octave-literacy with holographic and type patterns
   HOLOGRAPHIC::KEY::["value"∧CONSTRAINT→§TARGET]
-  INLINE_OBJECT::{{key:value, key2:value2}}
+  INLINE_OBJECT::[key::value, key2::value2]
   TYPE_DISAMBIGUATION::[
     STRING::"42",
     NUMBER::42,
