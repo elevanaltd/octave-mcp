@@ -6,10 +6,13 @@ Tests AST → canonical OCTAVE string emission with:
 - Explicit envelope
 - Deterministic output
 - Idempotence
+- I2 Deterministic Absence (Absent sentinel handling)
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, ListValue
-from octave_mcp.core.emitter import emit
+import pytest
+
+from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue
+from octave_mcp.core.emitter import emit, emit_meta, emit_value
 from octave_mcp.core.parser import parse
 
 
@@ -158,3 +161,73 @@ class TestBlockEmission:
         doc = Document(name="TEST", sections=[Block(key="EMPTY", children=[])])
         result = emit(doc)
         assert "EMPTY:" in result
+
+
+class TestI2AbsentHandling:
+    """Test I2 Deterministic Absence: Absent sentinel handling.
+
+    Per CRS blocking feedback:
+    - emit_value(Absent()) must raise ValueError (not return empty string)
+    - Absent values in ListValue must be filtered out
+    - Absent values in InlineMap must be filtered out
+    - emit_meta() must return "" when all fields are absent
+    """
+
+    def test_emit_value_raises_on_absent(self):
+        """emit_value(Absent()) must raise ValueError, not return empty string.
+
+        CRS Issue 1: Absent can leak into emit_value producing invalid output.
+        Previous behavior: returned "" which produced `KEY::` (empty value).
+        Required behavior: raise ValueError to catch caller bugs.
+        """
+        with pytest.raises(ValueError, match="Absent"):
+            emit_value(Absent())
+
+    def test_list_with_absent_filters_absent_items(self):
+        """ListValue containing Absent items must filter them out.
+
+        CRS Issue 1: [Absent(), 'a'] previously emitted `[,a]` (invalid).
+        Required: Absent items are filtered, emitting `[a]`.
+        """
+        list_val = ListValue(items=[Absent(), "a", Absent(), "b", Absent()])
+        result = emit_value(list_val)
+        assert result == "[a,b]"
+
+    def test_inline_map_with_absent_filters_absent_values(self):
+        """InlineMap with Absent values must filter those pairs out.
+
+        CRS Issue 1: {'k': Absent()} previously emitted `k::` (invalid).
+        Required: Pairs with Absent values are filtered out.
+        """
+        inline_map = InlineMap(pairs={"present": "value", "absent_key": Absent()})
+        result = emit_value(inline_map)
+        assert result == "[present::value]"
+        assert "absent_key" not in result
+
+    def test_emit_meta_empty_when_all_absent(self):
+        """emit_meta() must return '' when all fields are Absent.
+
+        CRS Issue 2: emit_meta() emitted header even if all fields skipped.
+        Required: Return "" when all meta fields are absent.
+        """
+        meta = {"TYPE": Absent(), "VERSION": Absent()}
+        result = emit_meta(meta)
+        assert result == ""
+
+    def test_emit_meta_filters_absent_preserves_values(self):
+        """emit_meta() filters Absent but preserves present values."""
+        meta = {"TYPE": "TEST", "VERSION": Absent(), "STATUS": "ACTIVE"}
+        result = emit_meta(meta)
+        assert "TYPE::TEST" in result
+        assert "STATUS::ACTIVE" in result
+        assert "VERSION" not in result
+
+    def test_absent_singleton_pattern(self):
+        """Absent() must return singleton instance.
+
+        CRS Issue 3: Missing test for singleton behavior.
+        """
+        assert Absent() is Absent()
+        a1 = Absent()
+        a2 = Absent()
+        assert a1 is a2

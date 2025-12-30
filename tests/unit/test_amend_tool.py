@@ -310,3 +310,59 @@ TIMEOUT::30
             stat_after = os.stat(target_path)
             mode_after = stat_after.st_mode & 0o777
             assert mode_after == original_mode, f"Permissions changed from {oct(mode_before)} to {oct(mode_after)}"
+
+    @pytest.mark.asyncio
+    async def test_amend_returns_validation_status_unvalidated_on_success(self):
+        """Test that amend returns validation_status: UNVALIDATED on success.
+
+        North Star I5 states: "Schema bypass shall be visible, never silent."
+        Deprecated tools that bypass schema validation must explicitly indicate
+        their unvalidated status.
+        """
+        create_tool = CreateTool()
+        amend_tool = AmendTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create initial file
+            await create_tool.execute(
+                content="===TEST===\nKEY::value1\n===END===",
+                target_path=target_path,
+            )
+
+            # Amend the file
+            result = await amend_tool.execute(
+                target_path=target_path,
+                changes={"KEY": "value2"},
+            )
+
+            assert result["status"] == "success"
+            # I5 compliance: validation_status must be present and UNVALIDATED
+            assert "validation_status" in result, "Missing validation_status field (I5 violation)"
+            assert (
+                result["validation_status"] == "UNVALIDATED"
+            ), f"Expected validation_status='UNVALIDATED', got '{result.get('validation_status')}'"
+
+    @pytest.mark.asyncio
+    async def test_amend_returns_validation_status_unvalidated_on_error(self):
+        """Test that amend returns validation_status: UNVALIDATED on error.
+
+        North Star I5 states: "Schema bypass shall be visible, never silent."
+        Even error responses must include validation_status to indicate bypass.
+        """
+        amend_tool = AmendTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Try to amend non-existent file
+            target_path = os.path.join(tmpdir, "nonexistent.oct.md")
+
+            result = await amend_tool.execute(
+                target_path=target_path,
+                changes={"KEY": "value"},
+            )
+
+            assert result["status"] == "error"
+            # I5 compliance: validation_status must be present even on error
+            assert "validation_status" in result, "Missing validation_status field on error (I5 violation)"
+            assert result["validation_status"] == "UNVALIDATED"

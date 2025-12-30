@@ -291,3 +291,48 @@ class TestCreateTool:
 
             # Should succeed with schema validation
             assert result["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_create_returns_validation_status_unvalidated_on_success(self):
+        """Test that create returns validation_status: UNVALIDATED on success.
+
+        North Star I5 states: "Schema bypass shall be visible, never silent."
+        Deprecated tools that bypass schema validation must explicitly indicate
+        their unvalidated status.
+        """
+        tool = CreateTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                content="===TEST===\nKEY::value\n===END===",
+                target_path=target_path,
+            )
+
+            assert result["status"] == "success"
+            # I5 compliance: validation_status must be present and UNVALIDATED
+            assert "validation_status" in result, "Missing validation_status field (I5 violation)"
+            assert (
+                result["validation_status"] == "UNVALIDATED"
+            ), f"Expected validation_status='UNVALIDATED', got '{result.get('validation_status')}'"
+
+    @pytest.mark.asyncio
+    async def test_create_returns_validation_status_unvalidated_on_error(self):
+        """Test that create returns validation_status: UNVALIDATED on error.
+
+        North Star I5 states: "Schema bypass shall be visible, never silent."
+        Even error responses must include validation_status to indicate bypass.
+        """
+        tool = CreateTool()
+
+        # Trigger error with invalid extension
+        result = await tool.execute(
+            content="===TEST===\nKEY::value\n===END===",
+            target_path="/invalid/path.exe",
+        )
+
+        assert result["status"] == "error"
+        # I5 compliance: validation_status must be present even on error
+        assert "validation_status" in result, "Missing validation_status field on error (I5 violation)"
+        assert result["validation_status"] == "UNVALIDATED"

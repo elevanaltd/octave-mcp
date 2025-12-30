@@ -12,7 +12,7 @@ import warnings
 from typing import Any
 
 from octave_mcp.core.emitter import emit
-from octave_mcp.core.lexer import tokenize
+from octave_mcp.core.lexer import LexerError, tokenize
 from octave_mcp.core.parser import parse
 from octave_mcp.core.repair import repair
 from octave_mcp.core.validator import Validator
@@ -112,10 +112,13 @@ class IngestTool(BaseTool):
         verbose = params.get("verbose", False)
 
         # Initialize result
+        # I5 compliance: Schema bypass shall be visible, never silent
+        # Deprecated tools include validation_status: UNVALIDATED
         result: dict[str, Any] = {
             "canonical": "",
             "repairs": [],
             "warnings": [],
+            "validation_status": "UNVALIDATED",
         }
 
         # Track pipeline stages if verbose
@@ -125,7 +128,18 @@ class IngestTool(BaseTool):
         if verbose:
             stages["PREPARSE"] = "Tokenizing with ASCII normalization"
 
-        tokens, tokenize_repairs = tokenize(content)
+        # I5 compliance: Catch LexerError to return envelope, never silent exception
+        try:
+            tokens, tokenize_repairs = tokenize(content)
+        except LexerError as e:
+            # Return envelope with error info instead of raising
+            result["error"] = str(e)
+            result["warnings"].append({"code": e.error_code, "message": e.message, "line": e.line, "column": e.column})
+            result["canonical"] = content  # Return original content
+            if verbose:
+                stages["TOKENIZE_FAILED"] = str(e)
+                result["stages"] = stages
+            return result
 
         if verbose:
             stages["TOKENIZE_COMPLETE"] = f"{len(tokens)} tokens produced"

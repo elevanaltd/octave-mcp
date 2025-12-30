@@ -1,10 +1,69 @@
 """AST node definitions for OCTAVE parser.
 
 Implements data structures for the abstract syntax tree.
+
+I2 (Deterministic Absence) Support:
+The Absent sentinel type distinguishes between:
+- Absent: Field not provided (should NOT be emitted)
+- None: Field explicitly set to null (`KEY::null`)
+- Value: Field has an actual value
 """
 
 from dataclasses import dataclass, field
 from typing import Any
+
+
+class Absent:
+    """Sentinel type for I2: Deterministic Absence.
+
+    Represents a field that was not provided, distinct from:
+    - None (Python): explicitly set to null (`KEY::null`)
+    - Default: schema-provided default value
+
+    Per North Star I2: "Absence shall propagate as addressable state,
+    never silently collapse to null or default."
+
+    Usage:
+        # Creating an absent value
+        absent_val = Absent()
+
+        # Checking if a value is absent
+        if isinstance(value, Absent):
+            # Field was not provided
+            pass
+
+        # Absent is falsy but not None
+        assert not absent_val
+        assert absent_val is not None
+    """
+
+    _instance: "Absent | None" = None
+
+    def __new__(cls) -> "Absent":
+        """Create or return singleton instance for efficiency."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __bool__(self) -> bool:
+        """Absent is falsy, like None."""
+        return False
+
+    def __repr__(self) -> str:
+        """Clear representation for debugging."""
+        return "Absent()"
+
+    def __eq__(self, other: object) -> bool:
+        """Absent only equals itself, not None."""
+        return isinstance(other, Absent)
+
+    def __hash__(self) -> int:
+        """Allow Absent to be used in sets/dicts."""
+        return hash("Absent")
+
+
+# Module-level singleton for convenience
+ABSENT = Absent()
 
 
 @dataclass

@@ -227,3 +227,56 @@ class TestIngestTool:
         # But unpacking the tuple is still required for future tracking
         repairs = result["repairs"]
         assert isinstance(repairs, list)
+
+    @pytest.mark.asyncio
+    async def test_ingest_returns_validation_status_unvalidated(self):
+        """Test that ingest returns validation_status: UNVALIDATED.
+
+        North Star I5 states: "Schema bypass shall be visible, never silent."
+        Deprecated tools that bypass schema validation must explicitly indicate
+        their unvalidated status.
+        """
+        tool = IngestTool()
+
+        result = await tool.execute(
+            content="===TEST===\nKEY::value\n===END===",
+            schema="TEST",
+            tier="LOSSLESS",
+            fix=False,
+            verbose=False,
+        )
+
+        # I5 compliance: validation_status must be present and UNVALIDATED
+        assert "validation_status" in result, "Missing validation_status field (I5 violation)"
+        assert (
+            result["validation_status"] == "UNVALIDATED"
+        ), f"Expected validation_status='UNVALIDATED', got '{result.get('validation_status')}'"
+
+    @pytest.mark.asyncio
+    async def test_ingest_returns_validation_status_on_lexer_error(self):
+        """Test that LexerError returns envelope with validation_status, not exception.
+
+        North Star I5 states: "Schema bypass shall be visible, never silent."
+        When tokenize() raises LexerError (e.g., tabs E005), the tool must
+        catch the exception and return a proper envelope with validation_status.
+
+        This prevents uncaught exceptions from bypassing I5 compliance.
+        """
+        tool = IngestTool()
+
+        # Tab character triggers LexerError E005 in tokenize()
+        result = await tool.execute(
+            content="===TEST===\n\tKEY::value\n===END===",  # Tab character
+            schema="TEST",
+        )
+
+        # I5 compliance: must return envelope with validation_status, not raise
+        assert "validation_status" in result, "Missing validation_status field (I5 violation)"
+        assert (
+            result["validation_status"] == "UNVALIDATED"
+        ), f"Expected validation_status='UNVALIDATED', got '{result.get('validation_status')}'"
+
+        # Should include error information
+        assert (
+            "error" in result or len(result.get("warnings", [])) > 0
+        ), "Expected error info in result when LexerError occurs"

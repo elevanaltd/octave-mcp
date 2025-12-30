@@ -587,3 +587,84 @@ class TestWriteTool:
             # No .tmp files should remain
             tmp_files = [f for f in files if f.endswith(".tmp")]
             assert len(tmp_files) == 0
+
+
+class TestWriteToolI5SchemaSovereignty:
+    """Tests for I5 (Schema Sovereignty) requirement in octave_write.
+
+    North Star I5 states:
+    - A document processed without schema validation shall be marked as UNVALIDATED
+    - Schema-validated documents shall record the schema name and version used
+    - Schema bypass shall be visible, never silent
+
+    Current state: validation_status is "PENDING_INFRASTRUCTURE" which is a silent bypass.
+    Required state: validation_status must be "UNVALIDATED" to make bypass visible.
+    """
+
+    @pytest.mark.asyncio
+    async def test_i5_write_validation_status_is_unvalidated_on_success(self):
+        """I5: validation_status must be UNVALIDATED when no schema validator exists."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+            )
+
+            assert result["status"] == "success"
+            # I5 REQUIREMENT: Must be UNVALIDATED, not PENDING_INFRASTRUCTURE
+            assert result["validation_status"] == "UNVALIDATED", (
+                f"I5 violation: validation_status should be 'UNVALIDATED' to make bypass visible, "
+                f"but got '{result['validation_status']}'"
+            )
+
+    @pytest.mark.asyncio
+    async def test_i5_write_validation_status_is_unvalidated_on_error(self):
+        """I5: validation_status must be UNVALIDATED even on error responses."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Trigger error with path traversal
+            result = await tool.execute(
+                target_path=os.path.join(tmpdir, "../evil.oct.md"),
+                content="===TEST===\nKEY::value\n===END===",
+            )
+
+            assert result["status"] == "error"
+            # I5: Even error responses must have visible bypass status
+            assert result["validation_status"] == "UNVALIDATED", (
+                f"I5 violation: validation_status should be 'UNVALIDATED' even on error, "
+                f"but got '{result['validation_status']}'"
+            )
+
+    @pytest.mark.asyncio
+    async def test_i5_write_validation_status_not_pending_infrastructure(self):
+        """I5: Schema bypass must be visible, never silent.
+
+        PENDING_INFRASTRUCTURE implies "we'll get to it" - this is silent bypass.
+        UNVALIDATED explicitly states "this was not validated" - visible bypass.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nSTATUS::active\n===END===",
+            )
+
+            # Value must not be the silent PENDING_INFRASTRUCTURE placeholder
+            assert result["validation_status"] != "PENDING_INFRASTRUCTURE", (
+                "I5 violation: PENDING_INFRASTRUCTURE is a silent bypass. "
+                "Must use UNVALIDATED to make bypass visible."
+            )
