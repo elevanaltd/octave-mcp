@@ -541,6 +541,18 @@ class Parser:
 
             # If we consumed colons, return as colon-joined path
             if len(parts) > 1:
+                # GH#85: Consume bracket annotation if present after colon-path value
+                # Examples: HERMES:API_TIMEOUT[note], MODULE:SUB[annotation]
+                # Must consume before returning so indentation tracking sees NEWLINE
+                if self.current().type == TokenType.LIST_START:
+                    bracket_depth = 1
+                    self.advance()  # Consume [
+                    while bracket_depth > 0 and self.current().type != TokenType.EOF:
+                        if self.current().type == TokenType.LIST_START:
+                            bracket_depth += 1
+                        elif self.current().type == TokenType.LIST_END:
+                            bracket_depth -= 1
+                        self.advance()
                 return ":".join(parts)
 
             # GH#66: Continue capturing consecutive identifiers as multi-word value
@@ -611,6 +623,21 @@ class Parser:
                         "column": start_column,
                     }
                 )
+
+            # GH#85: Consume bracket annotation if present after value
+            # Examples: DONE[annotation], PENDING[[nested,content]]
+            # Similar pattern to parse_section_marker() lines 285-310
+            # Must consume before returning so indentation tracking sees NEWLINE
+            if self.current().type == TokenType.LIST_START:
+                bracket_depth = 1
+                self.advance()  # Consume [
+
+                while bracket_depth > 0 and self.current().type != TokenType.EOF:
+                    if self.current().type == TokenType.LIST_START:
+                        bracket_depth += 1
+                    elif self.current().type == TokenType.LIST_END:
+                        bracket_depth -= 1
+                    self.advance()
 
             return result
 
