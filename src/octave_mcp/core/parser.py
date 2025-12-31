@@ -347,14 +347,26 @@ class Parser:
                 # Skip newlines
                 if self.current().type == TokenType.NEWLINE:
                     self.advance()
-                    # Reset indent tracking after newline
+                    # GH#81: After newline, reset indent tracking to 0
+                    # Next INDENT token will update it, or absence means column 0
                     current_line_indent = 0
                     continue
+
+                # GH#81: Check for implicit dedent before parsing child
+                # If current line has less indentation than section children expect,
+                # the next token is a sibling/ancestor, not a child
+                if current_line_indent < child_indent:
+                    break
 
                 # Parse child
                 child = self.parse_section(child_indent)
                 if child:
                     children.append(child)
+                    # GH#81: After parsing a child (especially nested blocks),
+                    # the recursive call may have consumed NEWLINEs. Reset indent
+                    # tracking so next iteration properly detects the current
+                    # line's indentation via INDENT token or implicit dedent.
+                    current_line_indent = 0
                 else:
                     # No valid child parsed, might be end of section
                     break
@@ -415,6 +427,11 @@ class Parser:
                 child_indent = self.current().value
                 self.advance()
 
+                # GH#81: Track current line's indentation to detect implicit dedent
+                # When NEWLINE is consumed without subsequent INDENT, the next token
+                # is at column 0 (implicit dedent). We must detect this and break.
+                current_line_indent = child_indent
+
                 while True:
                     # End conditions
                     if self.current().type in (TokenType.EOF, TokenType.ENVELOPE_END):
@@ -422,7 +439,8 @@ class Parser:
 
                     # Check indentation
                     if self.current().type == TokenType.INDENT:
-                        if self.current().value < child_indent:
+                        current_line_indent = self.current().value
+                        if current_line_indent < child_indent:
                             break  # Dedent, end of block
                         # Same or deeper level - consume and continue to parse
                         self.advance()
@@ -431,12 +449,26 @@ class Parser:
                     # Skip newlines
                     if self.current().type == TokenType.NEWLINE:
                         self.advance()
+                        # GH#81: After newline, reset indent tracking to 0
+                        # Next INDENT token will update it, or absence means column 0
+                        current_line_indent = 0
                         continue
+
+                    # GH#81: Check for implicit dedent before parsing child
+                    # If current line has less indentation than block children expect,
+                    # the next token is a sibling/ancestor, not a child
+                    if current_line_indent < child_indent:
+                        break
 
                     # Parse child
                     child = self.parse_section(child_indent)
                     if child:
                         children.append(child)
+                        # GH#81: After parsing a child (especially nested blocks),
+                        # the recursive call may have consumed NEWLINEs. Reset indent
+                        # tracking so next iteration properly detects the current
+                        # line's indentation via INDENT token or implicit dedent.
+                        current_line_indent = 0
                     elif self.current().type in (TokenType.NEWLINE, TokenType.INDENT):
                         # GH#64: parse_section consumed and warned about bare identifier,
                         # leaving us at NEWLINE/INDENT. Continue parsing remaining children.
