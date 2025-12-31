@@ -587,3 +587,266 @@ class TestWriteTool:
             # No .tmp files should remain
             tmp_files = [f for f in files if f.endswith(".tmp")]
             assert len(tmp_files) == 0
+
+
+class TestWriteToolI5SchemaSovereignty:
+    """Tests for I5 (Schema Sovereignty) requirement in octave_write.
+
+    North Star I5 states:
+    - A document processed without schema validation shall be marked as UNVALIDATED
+    - Schema-validated documents shall record the schema name and version used
+    - Schema bypass shall be visible, never silent
+
+    Current state: validation_status is "PENDING_INFRASTRUCTURE" which is a silent bypass.
+    Required state: validation_status must be "UNVALIDATED" to make bypass visible.
+    """
+
+    @pytest.mark.asyncio
+    async def test_i5_write_validation_status_is_unvalidated_on_success(self):
+        """I5: validation_status must be UNVALIDATED when no schema validator exists."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+            )
+
+            assert result["status"] == "success"
+            # I5 REQUIREMENT: Must be UNVALIDATED, not PENDING_INFRASTRUCTURE
+            assert result["validation_status"] == "UNVALIDATED", (
+                f"I5 violation: validation_status should be 'UNVALIDATED' to make bypass visible, "
+                f"but got '{result['validation_status']}'"
+            )
+
+    @pytest.mark.asyncio
+    async def test_i5_write_validation_status_is_unvalidated_on_error(self):
+        """I5: validation_status must be UNVALIDATED even on error responses."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Trigger error with path traversal
+            result = await tool.execute(
+                target_path=os.path.join(tmpdir, "../evil.oct.md"),
+                content="===TEST===\nKEY::value\n===END===",
+            )
+
+            assert result["status"] == "error"
+            # I5: Even error responses must have visible bypass status
+            assert result["validation_status"] == "UNVALIDATED", (
+                f"I5 violation: validation_status should be 'UNVALIDATED' even on error, "
+                f"but got '{result['validation_status']}'"
+            )
+
+    @pytest.mark.asyncio
+    async def test_i5_write_validation_status_not_pending_infrastructure(self):
+        """I5: Schema bypass must be visible, never silent.
+
+        PENDING_INFRASTRUCTURE implies "we'll get to it" - this is silent bypass.
+        UNVALIDATED explicitly states "this was not validated" - visible bypass.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nSTATUS::active\n===END===",
+            )
+
+            # Value must not be the silent PENDING_INFRASTRUCTURE placeholder
+            assert result["validation_status"] != "PENDING_INFRASTRUCTURE", (
+                "I5 violation: PENDING_INFRASTRUCTURE is a silent bypass. "
+                "Must use UNVALIDATED to make bypass visible."
+            )
+
+
+class TestWriteToolSchemaValidation:
+    """Tests for schema validation wiring in octave_write.
+
+    I5 North Star requirement:
+    - "Schema-validated documents shall record the schema name and version used"
+    - "Schema bypass shall be visible, never silent"
+
+    These tests verify that when a schema is provided, actual validation occurs.
+    """
+
+    @pytest.mark.asyncio
+    async def test_write_without_schema_returns_unvalidated(self):
+        """When no schema param provided, validation_status should be UNVALIDATED."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+                # No schema param
+            )
+
+            assert result["status"] == "success"
+            assert result["validation_status"] == "UNVALIDATED"
+
+    @pytest.mark.asyncio
+    async def test_write_with_unknown_schema_returns_unvalidated(self):
+        """When unknown schema provided, validation_status should be UNVALIDATED."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+                schema="NONEXISTENT_SCHEMA",
+            )
+
+            assert result["status"] == "success"
+            assert result["validation_status"] == "UNVALIDATED"
+
+    @pytest.mark.asyncio
+    async def test_write_with_meta_schema_valid_content_returns_validated(self):
+        """When META schema provided with valid content, should return VALIDATED.
+
+        I5: Schema-validated documents shall record the schema name and version used.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        # Valid META content with required fields (TYPE, VERSION)
+        valid_meta_content = """===TEST===
+META:
+  TYPE::"TEST_DOCUMENT"
+  VERSION::"1.0.0"
+  STATUS::ACTIVE
+---
+KEY::value
+===END==="""
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=valid_meta_content,
+                schema="META",
+            )
+
+            assert result["status"] == "success"
+            # I5: Must return VALIDATED when schema validates successfully
+            assert result["validation_status"] == "VALIDATED", (
+                f"I5 violation: Should be VALIDATED when META schema validates successfully, "
+                f"got '{result['validation_status']}'"
+            )
+            # I5: Schema name and version should be recorded
+            assert result.get("schema_name") == "META", "I5: schema_name should be recorded"
+            assert "schema_version" in result, "I5: schema_version should be recorded"
+
+    @pytest.mark.asyncio
+    async def test_write_with_meta_schema_invalid_content_returns_invalid(self):
+        """When META schema provided with invalid content, should return INVALID.
+
+        I5: Schema bypass shall be visible, never silent.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        # Invalid META content - missing required TYPE field
+        invalid_meta_content = """===TEST===
+META:
+  VERSION::"1.0.0"
+---
+KEY::value
+===END==="""
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=invalid_meta_content,
+                schema="META",
+            )
+
+            assert result["status"] == "success"  # Operation succeeded, content is invalid
+            # I5: Must return INVALID when schema validation fails
+            assert result["validation_status"] == "INVALID", (
+                f"I5 violation: Should be INVALID when META schema validation fails, "
+                f"got '{result['validation_status']}'"
+            )
+            # Should record schema info even on invalid
+            assert result.get("schema_name") == "META", "I5: schema_name should be recorded even on INVALID"
+
+    @pytest.mark.asyncio
+    async def test_write_with_meta_schema_missing_version_returns_invalid(self):
+        """META schema requires VERSION field - missing it should return INVALID."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        # Invalid META content - missing required VERSION field
+        invalid_meta_content = """===TEST===
+META:
+  TYPE::"TEST_DOCUMENT"
+---
+KEY::value
+===END==="""
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=invalid_meta_content,
+                schema="META",
+            )
+
+            assert result["status"] == "success"
+            assert (
+                result["validation_status"] == "INVALID"
+            ), f"META schema requires VERSION field, got '{result['validation_status']}'"
+
+    @pytest.mark.asyncio
+    async def test_write_schema_validation_errors_included_in_response(self):
+        """When validation fails, specific errors should be in response."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        # Content missing both TYPE and VERSION
+        invalid_content = """===TEST===
+META:
+  STATUS::ACTIVE
+---
+KEY::value
+===END==="""
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=invalid_content,
+                schema="META",
+            )
+
+            assert result["validation_status"] == "INVALID"
+            # Should have validation_errors with details about missing fields
+            errors = result.get("validation_errors", [])
+            assert len(errors) >= 1, "Should report at least one validation error for missing required fields"

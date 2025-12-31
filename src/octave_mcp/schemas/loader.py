@@ -8,6 +8,43 @@ from typing import Any
 
 from octave_mcp.core.parser import parse
 
+# TECHNICAL DEBT WARNING (v0.2.0):
+# ====================================
+# This hardcoded schema registry is temporary and will be replaced by dynamic registry in v0.3.0.
+# Current implementation: Static dict of builtin schemas for I5 compliance (Schema Sovereignty)
+# These match the schema files in schemas/builtin/*.oct.md
+# Gap 1 (Holographic Pattern Parsing) blocks full dynamic registry implementation
+# See: docs/implementation-roadmap.md (Gap 1, Phase 1 foundational work, 1-2 days)
+#
+# Critical-Engineer: consulted for Schema loading and registry architecture
+#
+BUILTIN_SCHEMA_DEFINITIONS: dict[str, dict[str, Any]] = {
+    "META": {
+        "name": "META",
+        "version": "1.0.0",
+        "META": {
+            "required": ["TYPE", "VERSION"],
+            "fields": {
+                "TYPE": {"type": "STRING"},
+                "VERSION": {"type": "STRING"},
+                "STATUS": {"type": "ENUM", "values": ["DRAFT", "ACTIVE", "DEPRECATED"]},
+            },
+        },
+    },
+}
+
+
+def get_builtin_schema(schema_name: str) -> dict[str, Any] | None:
+    """Get a builtin schema definition by name.
+
+    Args:
+        schema_name: Schema name (e.g., 'META', 'SESSION_LOG')
+
+    Returns:
+        Schema definition dict or None if not found
+    """
+    return BUILTIN_SCHEMA_DEFINITIONS.get(schema_name)
+
 
 def load_schema(schema_path: str | Path) -> dict[str, Any]:
     """Load schema from .oct.md file.

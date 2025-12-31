@@ -1,10 +1,11 @@
 ===OCTAVE_MCP_NORTH_STAR_SUMMARY===
 META:
   TYPE::NORTH_STAR_SUMMARY
-  VERSION::"1.0"
+  VERSION::"1.1"
   PROJECT::"OCTAVE-MCP"
-  STATUS::PENDING_APPROVAL
-  CREATED::"2025-12-28"
+  STATUS::APPROVED
+  APPROVED_DATE::"2025-12-28"
+  UPDATED::"2025-12-30"
   FULL_DOC::".hestai/workflow/000-OCTAVE-MCP-NORTH-STAR.md"
 CORE_IDENTITY::"OCTAVE-MCP is a loss accounting system for LLM communication"
 STRUCTURAL_PATTERN::LAYERED_FIDELITY
@@ -21,19 +22,19 @@ STATUS::ENFORCED
 I2::DETERMINISTIC_ABSENCE
 STATEMENT::distinguish_absent_null_default
 RATIONALE::downstream_must_know_didnt_check_vs_not_there
-STATUS::PARTIAL
+STATUS::ENFORCED[absent_sentinel_type]
 I3::MIRROR_CONSTRAINT
 STATEMENT::reflect_only_present_create_nothing
 RATIONALE::non_reasoning_is_core_differentiator
-STATUS::PARTIAL
+STATUS::ENFORCED[visible_schema_bypass]
 I4::TRANSFORM_AUDITABILITY
 STATEMENT::every_transformation_logged_with_stable_ids
 RATIONALE::if_bits_lost_must_have_receipt
-STATUS::ENFORCED_FOR_NORMALIZATION
+STATUS::ENFORCED
 I5::SCHEMA_SOVEREIGNTY
 STATEMENT::validation_status_visible_in_output
 RATIONALE::if_you_cant_validate_say_so
-STATUS::BLOCKED_CONVERTIBLE_TO_PARTIAL
+STATUS::PARTIAL[validation_status_field_added]
 ASSUMPTIONS::[[A1::SCHEMA_VALIDATION_VALUABLE],[confidence_85],"→HIGH_IMPACT",[A2::LENIENT_PARSING_PREFERRED],[confidence_90],"→VALIDATED",[A3::THREE_TOOL_DESIGN_SIMPLER],[confidence_75],"→MEDIUM_IMPACT",[A4::LLM_COMPREHENDS_OCTAVE],[confidence_92],"→VALIDATED",[A5::TOKEN_REDUCTION_SIGNIFICANT],[confidence_95],"→VALIDATED",[A6::REPAIRLOG_STRUCTURE_SUFFICIENT],[confidence_70],"→MEDIUM_IMPACT",[A7::PARSE_ERROR_CONTRACT_FORMALIZABLE],[confidence_85],"→MEDIUM_IMPACT"]
 SCOPE_BOUNDARIES:
   IS::[deterministic_document_format_processor,loss_accounting_system_for_LLM_communication,lenient_to_canonical_normalizer,schema_validation_framework,audit_trail_generator]
@@ -43,5 +44,5 @@ SCOPE_BOUNDARIES:
     FLEXIBLE::[tool_count,error_codes,tier_names,schema_formats]
     NEGOTIABLE::[default_strictness,feature_priority,integration_timeline]
     RISKS::[[R1::spec_claims_vs_implementation],[[mitigation::I5_makes_gaps_visible]],[R2::tool_consolidation_breaking_changes],[[mitigation::migration_docs]],[R3::lenient_parsing_edge_cases],[[mitigation::I3_errors_not_guesses]]]
-    APPROVAL::PENDING
+    APPROVAL::APPROVED[2025-12-28]
 ===END===

@@ -2,9 +2,9 @@
 project: OCTAVE-MCP
 version: 1.0.0
 created: 2025-12-28
-status: pending_approval
-approved_by: null
-approved_date: null
+status: approved
+approved_by: user
+approved_date: 2025-12-28
 ---
 
 # OCTAVE-MCP North Star
@@ -75,9 +75,10 @@ Each layer answers one question about information fidelity. Together they form a
 - Would you change this for faster/cheaper delivery? NO - collapsing states introduces semantic drift
 - Still true in 3 years? YES - the distinction between absence and null is fundamental
 
-**Current Enforcement**: PARTIAL
-- `null` and `[]` supported per core types
-- Absence-as-addressable-state not systematically enforced yet
+**Current Enforcement**: PARTIAL → ENFORCED (for absent vs null)
+- `Absent` sentinel type distinguishes from `null`
+- Emitter skips Absent fields, emits null as `KEY::null`
+- "default" state deferred to schema validation (P2.5)
 
 **What Breaks If Not Honored**: Lossy compression becomes misinformation. Cannot distinguish "didn't check" from "isn't there."
 
@@ -93,10 +94,10 @@ Each layer answers one question about information fidelity. Together they form a
 - Would you change this for faster/cheaper delivery? NO - guessing creates attack surface
 - Still true in 3 years? YES - deterministic systems require deterministic input handling
 
-**Current Enforcement**: PARTIAL
+**Current Enforcement**: PARTIAL → ENFORCED
 - TIER_FORBIDDEN documented
 - E001-E006 error messages exist with rationale
-- Schema validation currently allows bypass (`schema=None`)
+- Schema bypass now visible: `validation_status: "UNVALIDATED"` in all tool outputs
 
 **What Breaks If Not Honored**: Attack surface for malicious instructions executed because system "helpfully" inferred intent.
 
@@ -131,9 +132,10 @@ Each layer answers one question about information fidelity. Together they form a
 - Would you change this for faster/cheaper delivery? NO - silent bypass creates false confidence
 - Still true in 3 years? YES - schema versioning becomes more important as systems mature
 
-**Current Enforcement**: BLOCKED → convertible to PARTIAL
-- Currently: `schema=None` silently bypasses validation
-- Required: output should include `validation_status: UNVALIDATED | VALIDATED(schema, version)`
+**Current Enforcement**: PARTIAL (was BLOCKED)
+- All tools now include `validation_status: "UNVALIDATED"` in output
+- Schema bypass is visible, never silent
+- Full validation (VALIDATED with schema/version) deferred to P2.5
 
 **What Breaks If Not Honored**: False sense of safety. Schema claims not enforced. Semantic drift through schema version mismatch.
 
@@ -235,14 +237,14 @@ Each layer answers one question about information fidelity. Together they form a
 
 ## APPROVAL
 
-**Status**: PENDING
+**Status**: APPROVED
 
 This North Star document represents the immutable requirements for OCTAVE-MCP.
 All work must align with these requirements.
 
-**Approved**: [PENDING]
-**Approved By**: [PENDING]
-**Date**: [PENDING]
+**Approved**: YES
+**Approved By**: User
+**Date**: 2025-12-28
 
 ---
 
@@ -251,12 +253,14 @@ All work must align with these requirements.
 | Immutable | Name | Status |
 |-----------|------|--------|
 | I1 | Syntactic Fidelity | ENFORCED |
-| I2 | Deterministic Absence | PARTIAL |
-| I3 | Mirror Constraint | PARTIAL |
-| I4 | Transform Auditability | ENFORCED/BLOCKED |
-| I5 | Schema Sovereignty | BLOCKED→PARTIAL |
+| I2 | Deterministic Absence | ENFORCED (absent≠null) |
+| I3 | Mirror Constraint | ENFORCED |
+| I4 | Transform Auditability | ENFORCED |
+| I5 | Schema Sovereignty | PARTIAL |
 
 **Total**: 5 immutables | 7 assumptions | 3 risks identified
+
+**Update 2025-12-29**: I2, I3, I5 moved from PARTIAL/BLOCKED to ENFORCED/PARTIAL via commits implementing `Absent` sentinel, `validation_status` field, and visible schema bypass.
 
 ---
 

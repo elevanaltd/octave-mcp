@@ -286,3 +286,93 @@ DEPS::[lib1, lib2]
         assert "TESTS" not in parsed, "TESTS field should be filtered out in executive mode"
         assert "CI" not in parsed, "CI field should be filtered out in executive mode"
         assert "DEPS" not in parsed, "DEPS field should be filtered out in executive mode"
+
+
+class TestEjectToolI5SchemaSovereignty:
+    """Tests for I5 (Schema Sovereignty) requirement in octave_eject.
+
+    North Star I5 states:
+    - A document processed without schema validation shall be marked as UNVALIDATED
+    - Schema-validated documents shall record the schema name and version used
+    - Schema bypass shall be visible, never silent
+
+    Current state: eject.py does not include validation_status at all (silent omission).
+    Required state: validation_status must be explicitly UNVALIDATED.
+    """
+
+    @pytest.fixture
+    def eject_tool(self):
+        """Create EjectTool instance."""
+        return EjectTool()
+
+    @pytest.mark.asyncio
+    async def test_i5_eject_validation_status_present(self, eject_tool):
+        """I5: validation_status field must be present in eject output."""
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+
+STATUS::active
+===END==="""
+
+        result = await eject_tool.execute(content=content, schema="TEST", mode="canonical")
+
+        # I5: Field must be present (not silently omitted)
+        assert "validation_status" in result, (
+            "I5 violation: validation_status field must be present in eject output. "
+            "Silent omission is a form of silent bypass."
+        )
+
+    @pytest.mark.asyncio
+    async def test_i5_eject_validation_status_is_unvalidated(self, eject_tool):
+        """I5: validation_status must be UNVALIDATED when no schema validator exists."""
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+
+STATUS::active
+===END==="""
+
+        result = await eject_tool.execute(content=content, schema="TEST", mode="canonical")
+
+        # I5 REQUIREMENT: Must be UNVALIDATED, not PENDING_INFRASTRUCTURE or omitted
+        assert result.get("validation_status") == "UNVALIDATED", (
+            f"I5 violation: validation_status should be 'UNVALIDATED' to make bypass visible, "
+            f"but got '{result.get('validation_status', 'NOT PRESENT')}'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_i5_eject_validation_status_in_all_modes(self, eject_tool):
+        """I5: validation_status must be present in all projection modes."""
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+
+STATUS::active
+TESTS::passing
+===END==="""
+
+        modes = ["canonical", "authoring", "executive", "developer"]
+
+        for mode in modes:
+            result = await eject_tool.execute(content=content, schema="TEST", mode=mode)
+
+            assert "validation_status" in result, f"I5 violation: validation_status missing in mode '{mode}'"
+            assert result["validation_status"] == "UNVALIDATED", (
+                f"I5 violation: validation_status should be 'UNVALIDATED' in mode '{mode}', "
+                f"but got '{result['validation_status']}'"
+            )
+
+    @pytest.mark.asyncio
+    async def test_i5_eject_template_generation_has_validation_status(self, eject_tool):
+        """I5: Even template generation must include validation_status."""
+        result = await eject_tool.execute(content=None, schema="TEST")
+
+        # I5: Template generation also must declare validation status
+        assert (
+            "validation_status" in result
+        ), "I5 violation: validation_status must be present even in template generation"
+        assert result["validation_status"] == "UNVALIDATED", (
+            f"I5 violation: template generation validation_status should be 'UNVALIDATED', "
+            f"but got '{result['validation_status']}'"
+        )
