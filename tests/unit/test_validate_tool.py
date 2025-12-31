@@ -720,3 +720,46 @@ class TestValidateToolFilePathMode:
             # Error message should mention symlinks
             error_messages = " ".join(e.get("message", "") for e in result["errors"])
             assert "symlink" in error_messages.lower()
+
+    @pytest.mark.asyncio
+    async def test_file_path_with_symlinked_parent_returns_error(self):
+        """Test file_path with symlinked parent directory returns security error.
+
+        Security fix: Reject paths where ANY parent component is a symlink.
+        Example attack: /tmp/link/secret.oct.md where 'link' is a symlink to another directory.
+        This bypasses the final-component-only symlink check.
+        """
+        import os
+        import tempfile
+
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create real directory with secret file
+            real_dir = os.path.join(tmpdir, "real_dir")
+            os.makedirs(real_dir)
+            secret_file = os.path.join(real_dir, "secret.oct.md")
+            with open(secret_file, "w") as f:
+                f.write("===SECRET===\nSECRET::classified\n===END===")
+
+            # Create symlink to real_dir
+            link_dir = os.path.join(tmpdir, "link")
+            os.symlink(real_dir, link_dir)
+
+            # Try to access secret via symlinked parent: /tmp/link/secret.oct.md
+            attack_path = os.path.join(link_dir, "secret.oct.md")
+
+            result = await tool.execute(
+                file_path=attack_path,
+                schema="TEST",
+                fix=False,
+            )
+
+            # Should fail with E_PATH error for symlink traversal
+            assert result["status"] == "error"
+            assert any(e.get("code") == "E_PATH" for e in result["errors"])
+            # Error message should mention symlinks
+            error_messages = " ".join(e.get("message", "") for e in result["errors"])
+            assert "symlink" in error_messages.lower()

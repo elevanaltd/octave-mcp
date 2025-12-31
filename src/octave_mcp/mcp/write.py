@@ -137,10 +137,53 @@ class WriteTool(BaseTool):
         """
         path = Path(target_path)
 
-        # Check for path traversal
+        # Check for symlinks anywhere in path (security: prevent symlink-based exfiltration)
+        # This includes both the final component AND any parent directories
+        # Example attack: /tmp/link/secret.oct.md where 'link' is a symlink
+        #
+        # Strategy: Use resolve() to follow all symlinks and compare to original
+        # If they differ, a symlink was traversed. However, we need to handle
+        # system-level symlinks (like /var -> /private/var on macOS).
+        #
+        # Safe approach: Resolve both paths and compare. If they're different,
+        # check if the resolved path is still within an acceptable system location.
         try:
-            _ = path.resolve()
+            # Get absolute path (does not follow symlinks)
+            absolute = path.absolute()
 
+            # Resolve to canonical path (follows all symlinks)
+            resolved = absolute.resolve(strict=False)
+
+            # If paths differ after normalization, symlinks were involved
+            # Now check each component to see if it's a user-controlled symlink
+            if absolute != resolved:
+                # Walk the path to find which component is the symlink
+                current = Path("/")
+                for part in absolute.parts[1:]:  # Skip root
+                    current = current / part
+                    if current.exists() and current.is_symlink():
+                        # Found a symlink - check if it's a system symlink
+                        # System symlinks are typically in the first 2-3 components
+                        # and resolve to /private/* or other system paths
+                        symlink_depth = len(Path(current).parts)
+                        resolved_target = current.resolve()
+
+                        # Allow common system symlinks:
+                        # - /var -> /private/var (depth 1)
+                        # - /tmp -> /private/tmp (depth 1)
+                        # - /etc -> /private/etc (depth 1)
+                        if symlink_depth <= 2 and str(resolved_target).startswith("/private/"):
+                            # Likely system symlink, allow it
+                            continue
+
+                        # User-controlled symlink - reject
+                        return False, "Symlinks in path are not allowed for security reasons"
+
+        except Exception as e:
+            return False, f"Path resolution failed: {str(e)}"
+
+        # Check for path traversal (..)
+        try:
             # Check if path contains .. as a component (not substring)
             if any(part == ".." for part in path.parts):
                 return False, "Path traversal not allowed (..)"
