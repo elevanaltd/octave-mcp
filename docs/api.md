@@ -5,7 +5,8 @@ Complete API reference for the OCTAVE MCP server, including MCP tools, Python mo
 ## Table of Contents
 
 - [MCP Tools](#mcp-tools)
-  - [octave_ingest](#octave_ingest)
+  - [octave_validate](#octave_validate)
+  - [octave_write](#octave_write)
   - [octave_eject](#octave_eject)
 - [Python API](#python-api)
   - [Parser Module](#parser-module)
@@ -22,29 +23,40 @@ Complete API reference for the OCTAVE MCP server, including MCP tools, Python mo
 
 ## MCP Tools
 
-The OCTAVE MCP server exposes two tools for integration with MCP clients.
+The OCTAVE MCP server exposes three tools for integration with MCP clients.
 
-### octave_ingest
+### octave_validate
 
-Accept lenient OCTAVE input and produce canonical, validated output.
+Schema validation and parsing of OCTAVE content.
 
 #### Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `content` | string | Yes | - | Raw text or lenient OCTAVE to ingest |
+| `content` | string | No | - | OCTAVE content to validate (mutually exclusive with `file_path`) |
+| `file_path` | string | No | - | Path to OCTAVE file to validate (mutually exclusive with `content`) |
 | `schema` | string | Yes | - | Schema name for validation (e.g., `"DECISION_LOG"`) |
-| `tier` | string | No | `"LOSSLESS"` | Compression level: `"LOSSLESS"`, `"CONSERVATIVE"`, `"AGGRESSIVE"`, `"ULTRA"` |
-| `fix` | boolean | No | `false` | Enable TIER_REPAIR transformations |
-| `verbose` | boolean | No | `false` | Expose pipeline stages for debugging |
+| `fix` | boolean | No | `false` | If True, apply repairs to canonical output |
 
 #### Returns
 
 ```typescript
 {
   canonical: string;           // Normalized OCTAVE in strict format
-  repair_log: RepairEntry[];   // List of all transformations applied
+  valid: boolean;              // Whether document passed validation
   validation_errors: ValidationError[];  // Schema violations found
+  repair_log: RepairEntry[];   // List of all transformations applied
+}
+```
+
+#### ValidationError Type
+
+```typescript
+{
+  code: string;         // Error code (e.g., "UNKNOWN_FIELD", "TYPE_MISMATCH")
+  message: string;      // Human-readable description
+  path: string;         // Location in document (e.g., "DECISION.STATUS")
+  severity: "ERROR" | "WARNING";  // Error severity
 }
 ```
 
@@ -60,42 +72,29 @@ Accept lenient OCTAVE input and produce canonical, validated output.
 }
 ```
 
-#### ValidationError Type
-
-```typescript
-{
-  code: string;         // Error code (e.g., "UNKNOWN_FIELD", "TYPE_MISMATCH")
-  message: string;      // Human-readable description
-  path: string;         // Location in document (e.g., "DECISION.STATUS")
-  severity: "ERROR" | "WARNING";  // Error severity
-}
-```
-
 #### Example
 
 ```python
 import asyncio
 from mcp import Client
 
-async def ingest_example():
+async def validate_example():
     client = Client()
     await client.connect("octave-mcp-server")
 
     result = await client.call_tool(
-        "octave_ingest",
+        "octave_validate",
         {
             "content": 'DECISION:\n  ID::"DEC-001"\n  STATUS::"approved"',
-            "schema": "DECISION_LOG",
-            "fix": True,
-            "verbose": False
+            "schema": "DECISION_LOG"
         }
     )
 
+    print("Valid:", result["valid"])
     print("Canonical:", result["canonical"])
-    print("Repairs:", len(result["repair_log"]))
     print("Errors:", len(result["validation_errors"]))
 
-asyncio.run(ingest_example())
+asyncio.run(validate_example())
 ```
 
 #### Error Handling
@@ -103,10 +102,63 @@ asyncio.run(ingest_example())
 The tool returns errors in the `validation_errors` array rather than throwing exceptions. Always check this array:
 
 ```python
-result = await client.call_tool("octave_ingest", {...})
+result = await client.call_tool("octave_validate", {...})
 if result["validation_errors"]:
     for error in result["validation_errors"]:
         print(f"{error['severity']}: {error['message']} at {error['path']}")
+```
+
+---
+
+### octave_write
+
+Unified entry point for writing OCTAVE files. Handles creation (new files) and modification (existing files).
+
+#### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `target_path` | string | Yes | - | File path to write to |
+| `content` | string | No | - | Full content for new files or overwrites (mutually exclusive with `changes`) |
+| `changes` | object | No | - | Dictionary of field updates for existing files (mutually exclusive with `content`) |
+| `schema` | string | No | - | Schema name for validation |
+| `mutations` | object | No | - | META field overrides (applies to both modes) |
+| `base_hash` | string | No | - | Expected SHA-256 hash of existing file for consistency check (CAS) |
+
+#### Returns
+
+```typescript
+{
+  success: boolean;            // Whether write succeeded
+  path: string;                // Absolute path to written file
+  diff: string;                // Summary of changes made
+  canonical: string;           // Final canonical content
+}
+```
+
+#### Example: Creating a new file
+
+```python
+result = await client.call_tool(
+    "octave_write",
+    {
+        "target_path": "/path/to/decision.oct.md",
+        "content": 'DECISION:\n  ID::"DEC-001"\n  STATUS::"approved"',
+        "schema": "DECISION_LOG"
+    }
+)
+```
+
+#### Example: Modifying an existing file
+
+```python
+result = await client.call_tool(
+    "octave_write",
+    {
+        "target_path": "/path/to/decision.oct.md",
+        "changes": {"STATUS": "APPROVED", "REVIEWED_BY": "team-lead"}
+    }
+)
 ```
 
 ---

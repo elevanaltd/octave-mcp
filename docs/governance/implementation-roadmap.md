@@ -197,7 +197,7 @@ The OCTAVE MCP server has **strong foundations** (lexer, parser, emitter, canoni
 
 ### Gap 6: Compression Tier Logic
 
-**Current State**: Tier parameter accepted in octave_ingest but ignored
+**Current State**: Tier parameter accepted in octave_validate but ignored
 
 **What's Missing**:
 - Implement compression rules for each tier:

@@ -5,7 +5,7 @@ ACCEPTED
 
 ## Context
 
-The OCTAVE MCP server currently has a validation stub (`Validator(schema=None)`) that was identified as a P0 enforcement gap in the external assessment (docs/assessment-validation-gaps.md). The system can parse and emit OCTAVE syntax, but cannot validate document structure against schema requirements.
+The OCTAVE MCP server currently has a validation stub (`Validator(schema=None)`) that was identified as a P0 enforcement gap in the external assessment (docs/governance/assessment-validation-gaps.md). The system can parse and emit OCTAVE syntax, but cannot validate document structure against schema requirements.
 
 ### The Problem
 Without schema validation:
@@ -197,9 +197,9 @@ class Validator:
         return errors
 ```
 
-#### 4. Ingest Tool Wiring (UPDATE)
+#### 4. `octave_validate` Tool Wiring (UPDATE)
 ```python
-# src/octave_mcp/mcp/ingest.py (update existing)
+# src/octave_mcp/mcp/validate.py (update existing)
 
 async def execute(self, **kwargs: Any) -> dict[str, Any]:
     # ... existing code ...
@@ -463,7 +463,7 @@ specs/schemas/builtin/AGENT_OUTPUT.oct.md   (~30 lines)
 src/octave_mcp/core/schema_extractor.py     (~150 lines)
 src/octave_mcp/core/schema_loader.py        (~100 lines)
 src/octave_mcp/core/validator.py            (~80 lines UPDATE)
-src/octave_mcp/mcp/ingest.py                (~20 lines UPDATE)
+src/octave_mcp/mcp/validate.py              (~20 lines UPDATE)
 ```
 
 ### Tests
@@ -477,7 +477,7 @@ tests/e2e/test_schema_enforcement.py        (~50 lines)
 
 ## Success Criteria
 
-✅ `octave_ingest(content, schema="SESSION_LOG")` loads schema from file
+✅ `octave_validate(content, schema="SESSION_LOG")` loads schema from file
 ✅ Validation BLOCKS on missing required fields (REQ constraint)
 ✅ Validation BLOCKS on enum violations (ENUM[A,B] constraint)
 ✅ Validation BLOCKS on regex mismatches (REGEX[pattern] constraint)
@@ -497,7 +497,7 @@ tests/e2e/test_schema_enforcement.py        (~50 lines)
 - ADR-001: Configurability and Modularity Architecture
 
 ### External Assessment
-- `docs/assessment-validation-gaps.md` - Identified validation stub as P0 gap
+- `docs/governance/assessment-validation-gaps.md` - Identified validation stub as P0 gap
 
 ## Alignment with OCTAVE Specification
 
