@@ -1,6 +1,6 @@
 """CLI entry point for OCTAVE tools.
 
-Stub for P1.7: cli_implementation
+Aligned with MCP tools per Issue #51.
 """
 
 import click
@@ -44,17 +44,44 @@ def _ast_to_dict(doc):
     return result
 
 
+def _block_to_markdown(block, lines, level=3):
+    """Convert Block to Markdown recursively.
+
+    CRS-FIX #2: Complete implementation that processes nested block children.
+
+    Args:
+        block: Block node
+        lines: Output lines list (mutated)
+        level: Heading level
+    """
+    from octave_mcp.core.ast_nodes import Assignment, Block
+
+    for child in block.children:
+        if isinstance(child, Assignment):
+            lines.append(f"- **{child.key}**: {child.value}")
+        elif isinstance(child, Block):
+            lines.append(f"{'#' * level} {child.key}")
+            lines.append("")
+            _block_to_markdown(child, lines, level + 1)
+
+
 def _ast_to_markdown(doc):
-    """Convert AST Document to Markdown format."""
+    """Convert AST Document to Markdown format.
+
+    CRS-FIX #2: Complete implementation that processes nested block children,
+    matching the MCP octave_eject tool behavior.
+    """
     from octave_mcp.core.ast_nodes import Assignment, Block
 
     lines = [f"# {doc.name}", ""]
+
     if doc.meta:
         lines.append("## META")
         lines.append("")
         for key, value in doc.meta.items():
             lines.append(f"- **{key}**: {value}")
         lines.append("")
+
     for section in doc.sections:
         if isinstance(section, Assignment):
             lines.append(f"**{section.key}**: {section.value}")
@@ -62,12 +89,13 @@ def _ast_to_markdown(doc):
         elif isinstance(section, Block):
             lines.append(f"## {section.key}")
             lines.append("")
+            _block_to_markdown(section, lines, level=3)
+
     return "\n".join(lines)
 
 
 @cli.command()
 @click.argument("file", type=click.Path(exists=True))
-@click.option("--schema", help="Schema name for validation or template generation")
 @click.option(
     "--mode",
     type=click.Choice(["canonical", "authoring", "executive", "developer"]),
@@ -81,7 +109,7 @@ def _ast_to_markdown(doc):
     default="octave",
     help="Output format",
 )
-def eject(file: str, schema: str | None, mode: str, output_format: str):
+def eject(file: str, mode: str, output_format: str):
     """Eject OCTAVE to projected format.
 
     Matches MCP octave_eject tool. Supports projection modes:
@@ -91,6 +119,9 @@ def eject(file: str, schema: str | None, mode: str, output_format: str):
     - developer: TESTS, CI, DEPS only (lossy)
 
     Output formats: octave (default), json, yaml, markdown.
+
+    Note: --schema option is not available in CLI eject (file-based).
+    Schema is only meaningful for MCP template generation.
     """
     import json as json_module
 
@@ -148,6 +179,11 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
     from octave_mcp.core.repair import repair
     from octave_mcp.core.validator import Validator
     from octave_mcp.schemas.loader import get_builtin_schema
+
+    # CRS-FIX #4: XOR enforcement - exactly ONE input source
+    if file is not None and use_stdin:
+        click.echo("Error: Cannot provide both FILE and --stdin", err=True)
+        raise SystemExit(1)
 
     # Get content from file or stdin
     if use_stdin:
@@ -237,68 +273,64 @@ def write(
     - Use --content or --stdin for full content mode
     - Use --changes for delta updates to existing files
 
+    Exactly ONE of --content, --stdin, or --changes must be provided.
+
     Exit code 0 on success, 1 on failure.
     """
-    import hashlib
     import json as json_module
     import sys
-    from pathlib import Path
 
     from octave_mcp.core.ast_nodes import Assignment
     from octave_mcp.core.emitter import emit
+    from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
     from octave_mcp.core.parser import parse
     from octave_mcp.core.validator import Validator
     from octave_mcp.schemas.loader import get_builtin_schema
 
-    target_path = Path(file)
+    # CRS-FIX #3: XOR enforcement - exactly ONE input source
+    # Count how many input sources are provided
+    input_sources = sum([content is not None, use_stdin, changes is not None])
 
-    # Get content from options or stdin
-    if use_stdin:
-        content = sys.stdin.read()
-
-    # Validate that either content or changes is provided
-    if content is None and changes is None:
+    if input_sources == 0:
         click.echo("Error: Must provide --content, --stdin, or --changes", err=True)
         raise SystemExit(1)
 
-    if content is not None and changes is not None:
-        click.echo("Error: Cannot provide both --content and --changes", err=True)
+    if input_sources > 1:
+        click.echo(
+            "Error: Cannot provide multiple input sources (use exactly ONE of --content, --stdin, or --changes)",
+            err=True,
+        )
         raise SystemExit(1)
+
+    # CRS-FIX #5: Security validation
+    path_valid, path_error = validate_octave_path(file)
+    if not path_valid:
+        click.echo(f"Error: {path_error}", err=True)
+        raise SystemExit(1)
+
+    # Get content from stdin if requested
+    if use_stdin:
+        content = sys.stdin.read()
 
     try:
         # Handle content mode (create/overwrite)
         if content is not None:
-            # Check base hash if provided and file exists
-            if base_hash and target_path.exists():
-                existing_content = target_path.read_text(encoding="utf-8")
-                current_hash = hashlib.sha256(existing_content.encode("utf-8")).hexdigest()
-                if current_hash != base_hash:
-                    click.echo(
-                        f"Error: Hash mismatch (expected {base_hash[:8]}..., got {current_hash[:8]}...)", err=True
-                    )
-                    raise SystemExit(1)
-
             # Parse and emit canonical form
             doc = parse(content)
             canonical_content = emit(doc)
 
         else:
             # Handle changes mode (delta update)
+            from pathlib import Path
+
+            target_path = Path(file)
+
             if not target_path.exists():
                 click.echo("Error: File does not exist - changes mode requires existing file", err=True)
                 raise SystemExit(1)
 
             # Read existing file
             original_content = target_path.read_text(encoding="utf-8")
-
-            # Check base hash if provided
-            if base_hash:
-                current_hash = hashlib.sha256(original_content.encode("utf-8")).hexdigest()
-                if current_hash != base_hash:
-                    click.echo(
-                        f"Error: Hash mismatch (expected {base_hash[:8]}..., got {current_hash[:8]}...)", err=True
-                    )
-                    raise SystemExit(1)
 
             # Parse existing content
             doc = parse(original_content)
@@ -337,16 +369,16 @@ def write(
                 else:
                     validation_status = "VALIDATED"
 
-        # Write file
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(canonical_content, encoding="utf-8")
+        # CRS-FIX #5: Use atomic write with security checks
+        write_result = atomic_write_octave(file, canonical_content, base_hash)
 
-        # Compute hash
-        canonical_hash = hashlib.sha256(canonical_content.encode("utf-8")).hexdigest()
+        if write_result["status"] == "error":
+            click.echo(f"Error: {write_result['error']}", err=True)
+            raise SystemExit(1)
 
         # Output success information
-        click.echo(f"path: {target_path}")
-        click.echo(f"canonical_hash: {canonical_hash}")
+        click.echo(f"path: {write_result['path']}")
+        click.echo(f"canonical_hash: {write_result['canonical_hash']}")
         click.echo(f"validation_status: {validation_status}")
 
     except SystemExit:

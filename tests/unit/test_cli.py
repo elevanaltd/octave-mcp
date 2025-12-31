@@ -145,6 +145,31 @@ META:
         # Should indicate no schema validation was performed
         assert "UNVALIDATED" in result.output or "Valid" in result.output
 
+    def test_validate_rejects_file_and_stdin_together(self, tmp_path):
+        """CRS-FIX #4: Should reject FILE + --stdin with clear error.
+
+        Exactly ONE input source must be provided.
+        """
+        octave_file = tmp_path / "test.oct.md"
+        octave_file.write_text(
+            """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+        )
+
+        runner = CliRunner()
+        content = """===STDIN===
+META:
+  TYPE::"TEST"
+===END==="""
+        # Both FILE and --stdin provided - should error
+        result = runner.invoke(cli, ["validate", str(octave_file), "--stdin"], input=content)
+        assert result.exit_code == 1
+        # Should have clear error message
+        assert "cannot" in result.output.lower() or "error" in result.output.lower()
+
 
 class TestEjectCommand:
     """Test eject command aligned with MCP octave_eject (Issue #51)."""
@@ -261,8 +286,13 @@ CI::"Green"
         assert result.exit_code == 0
         # Developer mode keeps TESTS, CI, DEPS
 
-    def test_eject_with_schema(self, tmp_path):
-        """Should accept --schema option."""
+    def test_eject_schema_option_does_not_exist(self, tmp_path):
+        """CRS-FIX #1: --schema option should NOT exist on eject command.
+
+        The --schema option was declared but never used in CLI eject.
+        For CLI eject (file-based), schema is only meaningful for MCP template generation.
+        Since CLI always operates on existing files, --schema serves no purpose.
+        """
         octave_file = tmp_path / "test.oct.md"
         octave_file.write_text(
             """===TEST===
@@ -273,8 +303,37 @@ META:
         )
 
         runner = CliRunner()
+        # --schema should not be a valid option
         result = runner.invoke(cli, ["eject", str(octave_file), "--schema", "META"])
+        # Click returns exit code 2 for unknown options
+        assert result.exit_code == 2
+        assert "no such option" in result.output.lower() or "Error" in result.output
+
+    def test_eject_markdown_includes_block_children(self, tmp_path):
+        """CRS-FIX #2: Markdown output should include nested block children.
+
+        The CLI _ast_to_markdown was incomplete - it didn't recursively
+        process block children like the MCP version does.
+        """
+        octave_file = tmp_path / "test.oct.md"
+        octave_file.write_text(
+            """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+
+SECTION:
+  FIELD1::"value1"
+  FIELD2::"value2"
+===END==="""
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["eject", str(octave_file), "--format", "markdown"])
         assert result.exit_code == 0
+        # Should contain the nested field names (not just the section header)
+        assert "FIELD1" in result.output
+        assert "FIELD2" in result.output
 
 
 class TestWriteCommand:
@@ -391,3 +450,132 @@ META:
         assert result.exit_code == 0
         # Should include hash in output
         assert "canonical_hash" in result.output or len(result.output.strip()) >= 32
+
+    def test_write_rejects_stdin_and_content_together(self, tmp_path):
+        """CRS-FIX #3: Should reject --stdin + --content with clear error.
+
+        Exactly ONE of: --content, --stdin, --changes must be provided.
+        """
+        target_file = tmp_path / "xor.oct.md"
+        content = """===XOR===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+
+        runner = CliRunner()
+        # Both --stdin and --content provided - should error
+        result = runner.invoke(cli, ["write", str(target_file), "--content", content, "--stdin"], input=content)
+        assert result.exit_code == 1
+        # Should have clear error message
+        assert "cannot" in result.output.lower() or "error" in result.output.lower()
+
+    def test_write_rejects_stdin_and_changes_together(self, tmp_path):
+        """CRS-FIX #3: Should reject --stdin + --changes with clear error."""
+        target_file = tmp_path / "xor.oct.md"
+        target_file.write_text(
+            """===XOR===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+        )
+        changes = '{"META.VERSION": "2.0"}'
+        stdin_content = """===STDIN===
+META:
+  TYPE::"TEST"
+===END==="""
+
+        runner = CliRunner()
+        # Both --stdin and --changes provided - should error
+        result = runner.invoke(cli, ["write", str(target_file), "--changes", changes, "--stdin"], input=stdin_content)
+        assert result.exit_code == 1
+        assert "cannot" in result.output.lower() or "error" in result.output.lower()
+
+    def test_write_rejects_content_and_changes_together(self, tmp_path):
+        """CRS-FIX #3: Should reject --content + --changes with clear error."""
+        target_file = tmp_path / "xor.oct.md"
+        target_file.write_text(
+            """===XOR===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+        )
+        content = """===NEW===
+META:
+  TYPE::"TEST"
+  VERSION::"2.0"
+===END==="""
+        changes = '{"META.VERSION": "2.0"}'
+
+        runner = CliRunner()
+        # Both --content and --changes provided - should error
+        result = runner.invoke(cli, ["write", str(target_file), "--content", content, "--changes", changes])
+        assert result.exit_code == 1
+        assert "cannot" in result.output.lower() or "error" in result.output.lower()
+
+
+class TestWriteSecurityCommand:
+    """CRS-FIX #5: Test write command security protections."""
+
+    def test_write_rejects_symlink_target(self, tmp_path):
+        """Should reject writing to symlink targets (security).
+
+        Prevents symlink-based attacks where attacker creates symlink
+        pointing to sensitive file outside expected directory.
+        """
+        import os
+
+        # Create a real file
+        real_file = tmp_path / "real.oct.md"
+        real_file.write_text("existing content")
+
+        # Create a symlink to it
+        symlink_file = tmp_path / "link.oct.md"
+        os.symlink(real_file, symlink_file)
+
+        content = """===SYMLINK===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["write", str(symlink_file), "--content", content])
+        # Should reject symlink with error
+        assert result.exit_code == 1
+        assert "symlink" in result.output.lower() or "error" in result.output.lower()
+
+    def test_write_rejects_path_traversal(self, tmp_path):
+        """Should reject paths with .. traversal (security)."""
+        # Try to write outside tmp_path using ..
+        target_file = tmp_path / ".." / "escape.oct.md"
+
+        content = """===ESCAPE===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["write", str(target_file), "--content", content])
+        # Should reject path traversal
+        assert result.exit_code == 1
+        assert "traversal" in result.output.lower() or "error" in result.output.lower()
+
+    def test_write_rejects_invalid_extension(self, tmp_path):
+        """Should reject files with invalid extensions (security)."""
+        target_file = tmp_path / "evil.py"
+
+        content = """===EVIL===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["write", str(target_file), "--content", content])
+        # Should reject invalid extension
+        assert result.exit_code == 1
+        assert "extension" in result.output.lower() or "error" in result.output.lower()
