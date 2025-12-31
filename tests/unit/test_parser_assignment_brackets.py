@@ -120,3 +120,86 @@ TASK:
         assert len(task.children) == 2
         assert task.children[0].key == "PHASE"
         assert task.children[1].key == "STATUS"
+
+
+class TestColonPathBracketAnnotations:
+    """Test bracket annotations after colon-path values (GH#85 PR review fix)."""
+
+    def test_colon_path_value_with_bracket_annotation(self):
+        """Bracket annotations after colon-path values should not break indentation.
+
+        GH#85: The bracket consumption logic was placed AFTER the colon-path early return,
+        making it unreachable for values like PHASE:SUB[note].
+        """
+        content = """===TEST===
+BLOCK:
+  TASKS:
+    task_1::PHASE:SUB[note]
+    task_2::DONE
+===END===
+"""
+        doc = parse(content)
+
+        block = doc.sections[0]
+        assert block.key == "BLOCK"
+
+        tasks = block.children[0]
+        assert tasks.key == "TASKS"
+
+        # CRITICAL: Both tasks must be children of TASKS
+        assert len(tasks.children) == 2, (
+            f"Expected 2 children (task_1 and task_2), got {len(tasks.children)}: " f"{[c.key for c in tasks.children]}"
+        )
+        assert tasks.children[0].key == "task_1"
+        assert tasks.children[1].key == "task_2"
+
+    def test_nested_colon_path_with_bracket(self):
+        """Multi-level colon paths with brackets."""
+        content = """===TEST===
+CONFIG:
+  SETTING::MODULE:SUB:COMPONENT[v2]
+  NEXT::VALUE
+===END===
+"""
+        doc = parse(content)
+
+        config = doc.sections[0]
+        assert len(config.children) == 2, (
+            f"Expected 2 children (SETTING and NEXT), got {len(config.children)}: "
+            f"{[c.key for c in config.children]}"
+        )
+        assert config.children[0].key == "SETTING"
+        assert config.children[1].key == "NEXT"
+
+    def test_colon_path_with_nested_brackets(self):
+        """Colon paths with nested bracket content."""
+        content = """===TEST===
+WORKFLOW:
+  PHASE::D0:DISCOVERY[[exploration,analysis]]
+  STATUS::active
+===END===
+"""
+        doc = parse(content)
+
+        workflow = doc.sections[0]
+        assert len(workflow.children) == 2, (
+            f"Expected 2 children (PHASE and STATUS), got {len(workflow.children)}: "
+            f"{[c.key for c in workflow.children]}"
+        )
+        assert workflow.children[0].key == "PHASE"
+        assert workflow.children[1].key == "STATUS"
+
+    def test_colon_path_empty_bracket(self):
+        """Colon paths with empty bracket annotation."""
+        content = """===TEST===
+DATA:
+  REF::NAMESPACE:KEY[]
+  OTHER::value
+===END===
+"""
+        doc = parse(content)
+
+        data = doc.sections[0]
+        assert len(data.children) == 2
+        assert data.children[0].key == "REF"
+        assert data.children[1].key == "OTHER"
