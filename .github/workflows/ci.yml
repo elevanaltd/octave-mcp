@@ -307,10 +307,7 @@ jobs:
             STATUS::"active"
           EOF
 
-          # Test ingest
-          octave ingest test.oct.md
-
-          # Test validate
+          # Test validate (replaces deprecated ingest per Issue #51)
           octave validate test.oct.md
 
           # Test eject
