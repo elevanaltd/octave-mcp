@@ -210,6 +210,31 @@ META:
         assert "META" in output
         assert output["META"]["TYPE"] == "TEST"
 
+    def test_eject_json_format_with_meta_list(self, tmp_path):
+        """Should serialize META with ListValue correctly to JSON.
+
+        Regression test for META serialization bug: ListValue/InlineMap in META
+        were copied verbatim without conversion, causing json.dumps to fail with
+        "Object of type ListValue is not JSON serializable".
+        """
+        octave_file = tmp_path / "test.oct.md"
+        octave_file.write_text(
+            """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+  TAGS::[a, b, c]
+===END==="""
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["eject", str(octave_file), "--format", "json"])
+        assert result.exit_code == 0, f"Command failed: {result.output}"
+        # Should output valid JSON without serialization error
+        output = json.loads(result.output)
+        assert "META" in output
+        assert output["META"]["TAGS"] == ["a", "b", "c"]
+
     def test_eject_yaml_format(self, tmp_path):
         """Should eject file in YAML format when --format yaml."""
         octave_file = tmp_path / "test.oct.md"

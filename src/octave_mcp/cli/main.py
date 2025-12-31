@@ -35,7 +35,7 @@ def _ast_to_dict(doc):
 
     result = {}
     if doc.meta:
-        result["META"] = doc.meta
+        result["META"] = {k: convert_value(v) for k, v in doc.meta.items()}
     for section in doc.sections:
         if isinstance(section, Assignment):
             result[section.key] = convert_value(section.value)

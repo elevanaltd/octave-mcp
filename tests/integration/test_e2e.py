@@ -1,7 +1,7 @@
 """End-to-end integration tests for OCTAVE MCP (B3 Phase).
 
 Tests complete workflows across the system:
-- Full ingest→eject pipeline
+- Full validate→eject pipeline (ingest deprecated per Issue #51)
 - CLI commands working together
 - MCP server tool chain
 - Cross-component integration
@@ -119,8 +119,12 @@ DATA::[1,2,3]
 class TestCLIIntegration:
     """Test CLI commands working together."""
 
-    def test_cli_ingest_produces_valid_output(self, tmp_path):
-        """CLI ingest produces valid canonical output."""
+    def test_cli_validate_produces_valid_output(self, tmp_path):
+        """CLI validate produces valid canonical output.
+
+        Note: The deprecated 'ingest' command was removed per Issue #51.
+        Use 'validate' instead, which provides the same canonicalization.
+        """
         from click.testing import CliRunner
 
         from octave_mcp.cli.main import cli
@@ -135,8 +139,8 @@ TYPE :: "demo"
 ===END==="""
         )
 
-        # Run ingest
-        result = runner.invoke(cli, ["ingest", str(input_file), "--schema", "TEST"])
+        # Run validate (replacement for deprecated ingest)
+        result = runner.invoke(cli, ["validate", str(input_file), "--schema", "TEST"])
 
         # Should succeed
         assert result.exit_code == 0
@@ -146,7 +150,11 @@ TYPE :: "demo"
         assert " :: " not in output  # Whitespace removed
 
     def test_cli_eject_different_modes(self, tmp_path):
-        """CLI eject works with different projection modes."""
+        """CLI eject works with different projection modes.
+
+        Note: --schema option was removed from CLI eject per Issue #51.
+        Schema is only meaningful for MCP template generation.
+        """
         from click.testing import CliRunner
 
         from octave_mcp.cli.main import cli
@@ -165,9 +173,9 @@ STATUS::active
 ===END==="""
         )
 
-        # Test different modes
+        # Test different modes (without --schema, which was removed per Issue #51)
         for mode in ["canonical", "authoring"]:
-            result = runner.invoke(cli, ["eject", str(input_file), "--schema", "TEST", "--mode", mode])
+            result = runner.invoke(cli, ["eject", str(input_file), "--mode", mode])
 
             assert result.exit_code == 0
             assert len(result.output) > 0
