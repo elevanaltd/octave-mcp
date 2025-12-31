@@ -112,6 +112,9 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
+    env:
+      # Strip 'v' prefix from tag name (v0.2.0 -> 0.2.0) for PyPI version
+      PYPI_VERSION: ${{ github.ref_name }}
 
     steps:
       - name: Set up Python
@@ -119,12 +122,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Extract version number
+        run: |
+          # Strip 'v' prefix if present (v0.2.0 -> 0.2.0)
+          VERSION="${PYPI_VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Using PyPI version: $VERSION"
+
       - name: Wait for package to be available
         run: |
           # Wait up to 5 minutes for package to propagate
           for i in {1..30}; do
-            if pip index versions octave-mcp | grep -q "${{ github.ref_name }}"; then
-              echo "Package version ${{ github.ref_name }} is available on PyPI"
+            if pip index versions octave-mcp | grep -q "$VERSION"; then
+              echo "Package version $VERSION is available on PyPI"
               exit 0
             fi
             echo "Waiting for package to be available (attempt $i/30)..."
@@ -135,12 +145,12 @@ jobs:
 
       - name: Install from PyPI
         run: |
-          pip install octave-mcp==${{ github.ref_name }}
+          pip install octave-mcp==$VERSION
 
       - name: Verify installation
         run: |
           octave --version
-          python -c "import octave_mcp; assert octave_mcp.__version__ == '${{ github.ref_name }}'"
+          python -c "import octave_mcp; assert octave_mcp.__version__ == '$VERSION'"
 
   create-github-release-notes:
     name: Update GitHub Release Notes
@@ -149,10 +159,20 @@ jobs:
     if: github.event_name == 'release'
     permissions:
       contents: write
+    env:
+      # Strip 'v' prefix from tag name for PyPI URLs
+      PYPI_VERSION: ${{ github.ref_name }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Extract version number
+        id: version
+        run: |
+          # Strip 'v' prefix if present (v0.2.0 -> 0.2.0)
+          VERSION="${PYPI_VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Update release notes
         uses: softprops/action-gh-release@v2
@@ -163,7 +183,7 @@ jobs:
 
             Install from PyPI:
             ```bash
-            pip install octave-mcp==${{ github.ref_name }}
+            pip install octave-mcp==${{ steps.version.outputs.version }}
             ```
 
             ## Documentation
@@ -175,4 +195,4 @@ jobs:
 
             ## PyPI
 
-            View on PyPI: https://pypi.org/project/octave-mcp/${{ github.ref_name }}/
+            View on PyPI: https://pypi.org/project/octave-mcp/${{ steps.version.outputs.version }}/
