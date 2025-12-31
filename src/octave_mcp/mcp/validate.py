@@ -39,6 +39,10 @@ class ValidateTool(BaseTool):
         """
         path = Path(target_path)
 
+        # Check for symlinks (security: prevent symlink-based exfiltration)
+        if path.exists() and path.is_symlink():
+            return False, "Symlinks are not allowed for security reasons"
+
         # Check for path traversal
         try:
             _ = path.resolve()

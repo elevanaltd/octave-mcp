@@ -683,3 +683,40 @@ class TestValidateToolFilePathMode:
         assert "file_path" not in schema.get("required", [])
         # content should also be optional now
         assert "content" not in schema.get("required", [])
+
+    @pytest.mark.asyncio
+    async def test_file_path_with_symlink_returns_security_error(self):
+        """Test file_path with symlink target returns security error.
+
+        Security fix: Symlinks are rejected to prevent exfiltration attacks.
+        Example: attacker creates leak.oct.md → secret.txt and tries to validate it.
+        """
+        import os
+        import tempfile
+
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a secret file
+            secret_file = os.path.join(tmpdir, "secret.txt")
+            with open(secret_file, "w") as f:
+                f.write("THIS IS SECRET")
+
+            # Create symlink with valid OCTAVE extension
+            symlink_path = os.path.join(tmpdir, "leak.oct.md")
+            os.symlink(secret_file, symlink_path)
+
+            result = await tool.execute(
+                file_path=symlink_path,
+                schema="TEST",
+                fix=False,
+            )
+
+            # Should fail with E_PATH error for symlink
+            assert result["status"] == "error"
+            assert any(e.get("code") == "E_PATH" for e in result["errors"])
+            # Error message should mention symlinks
+            error_messages = " ".join(e.get("message", "") for e in result["errors"])
+            assert "symlink" in error_messages.lower()
