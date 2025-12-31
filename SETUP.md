@@ -86,7 +86,8 @@ pytest --cov=octave_mcp
 │   ├── mcp/                    # MCP server implementation
 │   │   ├── server.py          # MCP server entry point
 │   │   ├── base_tool.py       # Base MCP tool class
-│   │   ├── ingest.py          # octave_ingest tool
+│   │   ├── validate.py        # octave_validate tool
+│   │   ├── write.py           # octave_write tool
 │   │   └── eject.py           # octave_eject tool
 │   └── schemas/                # Schema management
 │       ├── loader.py          # Schema loading

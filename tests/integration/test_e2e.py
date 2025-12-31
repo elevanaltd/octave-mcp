@@ -199,42 +199,39 @@ class TestMCPServerToolChain:
     """Test MCP server tool chain integration."""
 
     @pytest.mark.asyncio
-    async def test_ingest_then_eject_via_mcp(self):
-        """Call ingest then eject via MCP tools."""
+    async def test_validate_then_eject_via_mcp(self):
+        """Call validate then eject via MCP tools."""
         from mcp.types import CallToolRequest
 
         from octave_mcp.mcp.server import create_server
 
         server = create_server()
 
-        # First: ingest lenient content
+        # First: validate lenient content
         lenient_content = """===TEST===
 TYPE :: "demo"
 STATUS :: active
 ===END==="""
 
-        ingest_request = CallToolRequest(
+        validate_request = CallToolRequest(
             method="tools/call",
-            params={"name": "octave_ingest", "arguments": {"content": lenient_content, "schema": "TEST"}},
+            params={"name": "octave_validate", "arguments": {"content": lenient_content, "schema": "TEST"}},
         )
 
         from mcp.types import CallToolRequest as CallToolRequestType
 
-        ingest_handler = server.request_handlers.get(CallToolRequestType)
-        ingest_result = await ingest_handler(ingest_request)
+        validate_handler = server.request_handlers.get(CallToolRequestType)
+        validate_result = await validate_handler(validate_request)
 
-        assert ingest_result.root.content is not None
+        assert validate_result.root.content is not None
 
-        # Extract canonical content from ingest result
-        ingest_output = ingest_result.root.content[0].text
+        # Extract canonical content from validate result
+        validate_output = validate_result.root.content[0].text
 
         # Parse to find canonical output
-        # Result may be JSON with canonical field
-        try:
-            parsed = json.loads(ingest_output)
-            canonical_content = parsed.get("canonical", ingest_output)
-        except json.JSONDecodeError:
-            canonical_content = ingest_output
+        # Result is JSON with canonical field
+        parsed = json.loads(validate_output)
+        canonical_content = parsed.get("canonical", validate_output)
 
         # Second: eject the canonical content
         eject_request = CallToolRequest(
@@ -269,9 +266,10 @@ FIELD_A::value_a
 FIELD_B::value_b
 ===END==="""
 
-        # Ingest
+        # Validate
         request = CallToolRequest(
-            method="tools/call", params={"name": "octave_ingest", "arguments": {"content": original, "schema": "TEST"}}
+            method="tools/call",
+            params={"name": "octave_validate", "arguments": {"content": original, "schema": "TEST"}},
         )
 
         from mcp.types import CallToolRequest as CallToolRequestType
@@ -408,7 +406,7 @@ DATA::value
 
         request = CallToolRequest(
             method="tools/call",
-            params={"name": "octave_ingest", "arguments": {"content": invalid_content, "schema": "TEST"}},
+            params={"name": "octave_validate", "arguments": {"content": invalid_content, "schema": "TEST"}},
         )
 
         from mcp.types import CallToolRequest as CallToolRequestType

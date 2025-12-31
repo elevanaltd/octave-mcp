@@ -26,22 +26,19 @@ See the [protocol specs in `specs/`](specs/README.oct.md) for the precise operat
 
 `octave-mcp` bundles the OCTAVE tooling as MCP tools and a CLI.
 
-### Available via CLI and MCP
+### Available via CLI
 
-- **`octave ingest`** – normalize lenient OCTAVE to canonical form, validate against schemas, and log every change.
-- **`octave eject`** – project canonical OCTAVE into multiple views (canonical, authoring, executive, developer) and formats (OCTAVE, JSON, YAML, Markdown) with declared loss tiers.
-- **`octave validate`** – validate OCTAVE against schemas without modifying files.
+- **`octave ingest`** - normalize lenient OCTAVE to canonical form, validate against schemas, and log every change.
+- **`octave eject`** - project canonical OCTAVE into multiple views (canonical, authoring, executive, developer) and formats (OCTAVE, JSON, YAML, Markdown) with declared loss tiers.
+- **`octave validate`** - validate OCTAVE against schemas without modifying files.
 
-### Available via MCP only (LLM agents)
+### Available via MCP (3 tools)
 
-- **`octave create`** – normalize and write new OCTAVE documents to disk.
-- **`octave amend`** – read, modify, normalize, and write OCTAVE documents (with optional hash-based consistency checking).
-
-These write tools are MCP-only because they're designed for **LLM agents to modify files programmatically**. Humans typically use `octave ingest` to prepare new documents for storage.
+- **`octave_validate`** - schema validation and parsing of OCTAVE content
+- **`octave_write`** - unified file creation and modification (content mode OR changes mode with optional hash-based consistency checking)
+- **`octave_eject`** - format projection (octave, json, yaml, markdown) with declared loss tiers
 
 These tools make it easy for LLMs to emit minimal intent while relying on deterministic mechanics for structure and safety. If the LLM were replaced by a plain text emitter, OCTAVE would still provide value.
-
-> **Future consolidation ([#51](https://github.com/elevanaltd/octave-mcp/issues/51))**: The 4 MCP tools will be consolidated into 3 (`octave validate`, `octave write`, `octave eject`) for cleaner orthogonal concerns. `octave write` will auto-detect new vs. existing files, merging the `create`/`amend` distinction.
 
 ## When OCTAVE helps
 

@@ -121,10 +121,11 @@ pytest --cov-report=html     # Generate coverage report
 
 ## MCP Server Integration
 
-The package provides `octave_ingest` and `octave_eject` MCP tools:
+The package provides three MCP tools:
 
-- **ingest**: Lenient input → canonical OCTAVE + validation
-- **eject**: Canonical OCTAVE → projected views (executive, developer, etc.)
+- **octave_validate**: Schema validation and parsing of OCTAVE content
+- **octave_write**: Unified file creation and modification (content mode OR changes mode)
+- **octave_eject**: Format projection (octave, json, yaml, markdown)
 
 Configure with `./setup-mcp.sh` for Claude Desktop, Claude Code, Codex, or Gemini.
 
