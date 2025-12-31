@@ -315,28 +315,34 @@ class TestValidateToolI5SchemaSovereignty:
     """
 
     @pytest.mark.asyncio
-    async def test_i5_validation_status_is_unvalidated_when_no_validator(self):
-        """I5: validation_status must be UNVALIDATED when no schema validator exists.
+    async def test_i5_validation_status_reflects_schema_validation_result(self):
+        """I5: validation_status reflects actual schema validation.
 
         The North Star requires: "Schema bypass shall be visible, never silent."
-        PENDING_INFRASTRUCTURE is a silent bypass - UNVALIDATED is visible.
+        Now that schema validation is implemented:
+        - VALIDATED = schema found and validation passed
+        - INVALID = schema found and validation failed
+        - UNVALIDATED = schema not found (bypass is visible)
         """
         from octave_mcp.mcp.validate import ValidateTool
 
         tool = ValidateTool()
 
+        # Content without META block validates against META schema
+        # (no META block = no required META fields to check)
         result = await tool.execute(
             content="===TEST===\nKEY::value\n===END===",
-            schema="META",  # Schema provided but no validator implemented
+            schema="META",
             fix=False,
         )
 
         assert result["status"] == "success"
-        # I5 REQUIREMENT: Must be UNVALIDATED, not PENDING_INFRASTRUCTURE
-        assert result["validation_status"] == "UNVALIDATED", (
-            f"I5 violation: validation_status should be 'UNVALIDATED' to make bypass visible, "
-            f"but got '{result['validation_status']}'"
+        # META schema is found and document validates (no META block = no constraints)
+        assert result["validation_status"] == "VALIDATED", (
+            f"I5: Should be VALIDATED when META schema validates content, " f"but got '{result['validation_status']}'"
         )
+        # Schema info should be recorded
+        assert result.get("schema_name") == "META"
 
     @pytest.mark.asyncio
     async def test_i5_validation_status_field_always_present(self):
@@ -375,3 +381,161 @@ class TestValidateToolI5SchemaSovereignty:
         assert result["validation_status"] != "PENDING_INFRASTRUCTURE", (
             "I5 violation: PENDING_INFRASTRUCTURE is a silent bypass. " "Must use UNVALIDATED to make bypass visible."
         )
+
+
+class TestValidateToolSchemaValidation:
+    """Tests for schema validation wiring in octave_validate.
+
+    I5 North Star requirement:
+    - "Schema-validated documents shall record the schema name and version used"
+    - "Schema bypass shall be visible, never silent"
+
+    These tests verify that when a schema is provided, actual validation occurs.
+    """
+
+    @pytest.mark.asyncio
+    async def test_validate_without_schema_returns_unvalidated(self):
+        """When no schema param provided, validation_status should be UNVALIDATED.
+
+        Note: Current tool requires schema param, so this tests with unknown schema.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Use an unknown schema name - should result in UNVALIDATED (schema not found)
+        result = await tool.execute(
+            content="===TEST===\nKEY::value\n===END===",
+            schema="NONEXISTENT_SCHEMA",
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+        assert result["validation_status"] == "UNVALIDATED"
+        # Should NOT have schema_name/schema_version when unvalidated
+        assert result.get("schema_name") is None or "schema_name" not in result
+
+    @pytest.mark.asyncio
+    async def test_validate_with_meta_schema_valid_content_returns_validated(self):
+        """When META schema provided with valid content, should return VALIDATED.
+
+        I5: Schema-validated documents shall record the schema name and version used.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Valid META content with required fields (TYPE, VERSION)
+        valid_meta_content = """===TEST===
+META:
+  TYPE::"TEST_DOCUMENT"
+  VERSION::"1.0.0"
+  STATUS::ACTIVE
+---
+KEY::value
+===END==="""
+
+        result = await tool.execute(
+            content=valid_meta_content,
+            schema="META",
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+        # I5: Must return VALIDATED when schema validates successfully
+        assert result["validation_status"] == "VALIDATED", (
+            f"I5 violation: Should be VALIDATED when META schema validates successfully, "
+            f"got '{result['validation_status']}'"
+        )
+        # I5: Schema name and version should be recorded
+        assert result.get("schema_name") == "META", "I5: schema_name should be recorded"
+        assert "schema_version" in result, "I5: schema_version should be recorded"
+
+    @pytest.mark.asyncio
+    async def test_validate_with_meta_schema_invalid_content_returns_invalid(self):
+        """When META schema provided with invalid content, should return INVALID.
+
+        I5: Schema bypass shall be visible, never silent.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Invalid META content - missing required TYPE field
+        invalid_meta_content = """===TEST===
+META:
+  VERSION::"1.0.0"
+---
+KEY::value
+===END==="""
+
+        result = await tool.execute(
+            content=invalid_meta_content,
+            schema="META",
+            fix=False,
+        )
+
+        assert result["status"] == "success"  # Operation succeeded, content is invalid
+        # I5: Must return INVALID when schema validation fails
+        assert result["validation_status"] == "INVALID", (
+            f"I5 violation: Should be INVALID when META schema validation fails, "
+            f"got '{result['validation_status']}'"
+        )
+        # Should record schema info even on invalid
+        assert result.get("schema_name") == "META", "I5: schema_name should be recorded even on INVALID"
+        # Should include validation errors
+        assert (
+            "validation_errors" in result or len(result.get("warnings", [])) > 0
+        ), "I5: validation_errors should be included when INVALID"
+
+    @pytest.mark.asyncio
+    async def test_validate_with_meta_schema_missing_version_returns_invalid(self):
+        """META schema requires VERSION field - missing it should return INVALID."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Invalid META content - missing required VERSION field
+        invalid_meta_content = """===TEST===
+META:
+  TYPE::"TEST_DOCUMENT"
+---
+KEY::value
+===END==="""
+
+        result = await tool.execute(
+            content=invalid_meta_content,
+            schema="META",
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+        assert (
+            result["validation_status"] == "INVALID"
+        ), f"META schema requires VERSION field, got '{result['validation_status']}'"
+
+    @pytest.mark.asyncio
+    async def test_validate_schema_validation_errors_included_in_response(self):
+        """When validation fails, specific errors should be in response."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Content missing both TYPE and VERSION
+        invalid_content = """===TEST===
+META:
+  STATUS::ACTIVE
+---
+KEY::value
+===END==="""
+
+        result = await tool.execute(
+            content=invalid_content,
+            schema="META",
+            fix=False,
+        )
+
+        assert result["validation_status"] == "INVALID"
+        # Should have validation_errors with details about missing fields
+        errors = result.get("validation_errors", result.get("warnings", []))
+        assert len(errors) >= 1, "Should report at least one validation error for missing required fields"

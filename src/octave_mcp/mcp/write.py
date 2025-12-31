@@ -21,7 +21,9 @@ from octave_mcp.core.ast_nodes import Assignment
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.lexer import tokenize
 from octave_mcp.core.parser import parse
+from octave_mcp.core.validator import Validator
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
+from octave_mcp.schemas.loader import get_builtin_schema
 
 # Sentinel for DELETE operation in tri-state changes
 DELETE_SENTINEL = {"$op": "DELETE"}
@@ -282,7 +284,10 @@ class WriteTool(BaseTool):
             - corrections: List of corrections applied
             - diff: Compact diff of changes
             - errors: List of errors (on failure)
-            - validation_status: VALIDATED | UNVALIDATED | PENDING_INFRASTRUCTURE
+            - validation_status: VALIDATED | UNVALIDATED | INVALID
+            - schema_name: Schema name used (when VALIDATED or INVALID)
+            - schema_version: Schema version used (when VALIDATED or INVALID)
+            - validation_errors: List of schema validation errors (when INVALID)
         """
         # Validate and extract parameters
         params = self.validate_parameters(kwargs)
@@ -291,7 +296,7 @@ class WriteTool(BaseTool):
         changes = params.get("changes")
         mutations = params.get("mutations")
         base_hash = params.get("base_hash")
-        _ = params.get("schema")  # Reserved for P2.5
+        schema_name = params.get("schema")
 
         # Initialize result with unified envelope per D2 design
         # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
@@ -303,7 +308,7 @@ class WriteTool(BaseTool):
             "corrections": [],
             "diff": "",
             "errors": [],
-            "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
+            "validation_status": "UNVALIDATED",  # I5: Explicit bypass until validated
         }
 
         # STEP 1: Validate path
@@ -467,6 +472,36 @@ class WriteTool(BaseTool):
         # Apply mutations (if any)
         if mutations:
             canonical_content = self._apply_mutations(canonical_content, mutations)
+
+        # Schema Validation (I5 Schema Sovereignty)
+        if schema_name:
+            schema_def = get_builtin_schema(schema_name)
+
+            if schema_def is not None:
+                # Schema found - perform validation
+                # I5: "Schema-validated documents shall record the schema name and version used"
+                result["schema_name"] = schema_def.get("name", schema_name)
+                result["schema_version"] = schema_def.get("version", "unknown")
+
+                # Use the validator with the schema definition
+                validator = Validator(schema=schema_def)
+                validation_errors = validator.validate(doc, strict=False)
+
+                if validation_errors:
+                    # I5: Schema validation failed - mark as INVALID
+                    result["validation_status"] = "INVALID"
+                    result["validation_errors"] = [
+                        {
+                            "code": err.code,
+                            "message": err.message,
+                            "field": err.field_path,
+                        }
+                        for err in validation_errors
+                    ]
+                else:
+                    # I5: Schema validation passed - mark as VALIDATED
+                    result["validation_status"] = "VALIDATED"
+            # else: schema not found - remain UNVALIDATED (bypass is visible)
 
         # WRITE FILE (atomic + symlink-safe)
         try:
