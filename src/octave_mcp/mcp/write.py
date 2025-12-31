@@ -137,10 +137,53 @@ class WriteTool(BaseTool):
         """
         path = Path(target_path)
 
-        # Check for path traversal
+        # Check for symlinks anywhere in path (security: prevent symlink-based exfiltration)
+        # This includes both the final component AND any parent directories
+        # Example attack: /tmp/link/secret.oct.md where 'link' is a symlink
+        #
+        # Strategy: Use resolve() to follow all symlinks and compare to original
+        # If they differ, a symlink was traversed. However, we need to handle
+        # system-level symlinks (like /var -> /private/var on macOS).
+        #
+        # Safe approach: Resolve both paths and compare. If they're different,
+        # check if the resolved path is still within an acceptable system location.
         try:
-            _ = path.resolve()
+            # Get absolute path (does not follow symlinks)
+            absolute = path.absolute()
 
+            # Resolve to canonical path (follows all symlinks)
+            resolved = absolute.resolve(strict=False)
+
+            # If paths differ after normalization, symlinks were involved
+            # Now check each component to see if it's a user-controlled symlink
+            if absolute != resolved:
+                # Walk the path to find which component is the symlink
+                current = Path("/")
+                for part in absolute.parts[1:]:  # Skip root
+                    current = current / part
+                    if current.exists() and current.is_symlink():
+                        # Found a symlink - check if it's a system symlink
+                        # System symlinks are typically in the first 2-3 components
+                        # and resolve to /private/* or other system paths
+                        symlink_depth = len(Path(current).parts)
+                        resolved_target = current.resolve()
+
+                        # Allow common system symlinks:
+                        # - /var -> /private/var (depth 1)
+                        # - /tmp -> /private/tmp (depth 1)
+                        # - /etc -> /private/etc (depth 1)
+                        if symlink_depth <= 2 and str(resolved_target).startswith("/private/"):
+                            # Likely system symlink, allow it
+                            continue
+
+                        # User-controlled symlink - reject
+                        return False, "Symlinks in path are not allowed for security reasons"
+
+        except Exception as e:
+            return False, f"Path resolution failed: {str(e)}"
+
+        # Check for path traversal (..)
+        try:
             # Check if path contains .. as a component (not substring)
             if any(part == ".." for part in path.parts):
                 return False, "Path traversal not allowed (..)"
@@ -199,7 +242,7 @@ class WriteTool(BaseTool):
         return corrections
 
     def _apply_changes(self, doc: Any, changes: dict[str, Any]) -> Any:
-        """Apply changes to AST document with tri-state semantics.
+        """Apply changes to AST document with tri-state and dot-notation semantics.
 
         Args:
             doc: Parsed AST document
@@ -209,15 +252,39 @@ class WriteTool(BaseTool):
                 - Key present with None: Set field to null/empty
                 - Key present with value: Update field to new value
 
+                Dot-notation support for nested updates:
+                - "META.STATUS": "ACTIVE" -> updates doc.meta["STATUS"]
+                - "META.NEW_FIELD": "value" -> adds field to doc.meta
+                - "META.FIELD": {"$op": "DELETE"} -> removes field from doc.meta
+                - "META": {...} -> replaces entire doc.meta block
+
         Returns:
             Modified document
         """
         for key, new_value in changes.items():
-            if _is_delete_sentinel(new_value):
-                # I2: DELETE sentinel - remove field entirely
+            # Check for dot-notation: META.FIELD
+            if key.startswith("META."):
+                # Extract the field name after "META."
+                field_name = key[5:]  # Remove "META." prefix
+                if _is_delete_sentinel(new_value):
+                    # Delete field from doc.meta
+                    if field_name in doc.meta:
+                        del doc.meta[field_name]
+                else:
+                    # Update or add field in doc.meta
+                    doc.meta[field_name] = new_value
+            elif key == "META" and isinstance(new_value, dict):
+                # Replace entire META block with new dict
+                if not _is_delete_sentinel(new_value):
+                    doc.meta = new_value.copy()
+                else:
+                    # DELETE sentinel on META clears the entire block
+                    doc.meta = {}
+            elif _is_delete_sentinel(new_value):
+                # I2: DELETE sentinel - remove field entirely from sections
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
             else:
-                # Update or set to null
+                # Update or set to null in sections
                 found = False
                 for section in doc.sections:
                     if isinstance(section, Assignment) and section.key == key:
