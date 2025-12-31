@@ -612,6 +612,21 @@ class Parser:
                     }
                 )
 
+            # GH#85: Consume bracket annotation if present after value
+            # Examples: DONE[annotation], PENDING[[nested,content]]
+            # Similar pattern to parse_section_marker() lines 285-310
+            # Must consume before returning so indentation tracking sees NEWLINE
+            if self.current().type == TokenType.LIST_START:
+                bracket_depth = 1
+                self.advance()  # Consume [
+
+                while bracket_depth > 0 and self.current().type != TokenType.EOF:
+                    if self.current().type == TokenType.LIST_START:
+                        bracket_depth += 1
+                    elif self.current().type == TokenType.LIST_END:
+                        bracket_depth -= 1
+                    self.advance()
+
             return result
 
         elif token.type == TokenType.FLOW:
