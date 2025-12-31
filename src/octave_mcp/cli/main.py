@@ -1,6 +1,6 @@
 """CLI entry point for OCTAVE tools.
 
-Stub for P1.7: cli_implementation
+Aligned with MCP tools per Issue #51.
 """
 
 import click
@@ -13,74 +13,382 @@ def cli():
     pass
 
 
+def _ast_to_dict(doc):
+    """Convert AST Document to dictionary for JSON/YAML export."""
+    from octave_mcp.core.ast_nodes import Assignment, Block, InlineMap, ListValue
+
+    def convert_value(value):
+        if isinstance(value, ListValue):
+            return [convert_value(item) for item in value.items]
+        elif isinstance(value, InlineMap):
+            return {k: convert_value(v) for k, v in value.pairs.items()}
+        return value
+
+    def convert_block(block):
+        result = {}
+        for child in block.children:
+            if isinstance(child, Assignment):
+                result[child.key] = convert_value(child.value)
+            elif isinstance(child, Block):
+                result[child.key] = convert_block(child)
+        return result
+
+    result = {}
+    if doc.meta:
+        result["META"] = {k: convert_value(v) for k, v in doc.meta.items()}
+    for section in doc.sections:
+        if isinstance(section, Assignment):
+            result[section.key] = convert_value(section.value)
+        elif isinstance(section, Block):
+            result[section.key] = convert_block(section)
+    return result
+
+
+def _block_to_markdown(block, lines, level=3):
+    """Convert Block to Markdown recursively.
+
+    CRS-FIX #2: Complete implementation that processes nested block children.
+
+    Args:
+        block: Block node
+        lines: Output lines list (mutated)
+        level: Heading level
+    """
+    from octave_mcp.core.ast_nodes import Assignment, Block
+
+    for child in block.children:
+        if isinstance(child, Assignment):
+            lines.append(f"- **{child.key}**: {child.value}")
+        elif isinstance(child, Block):
+            lines.append(f"{'#' * level} {child.key}")
+            lines.append("")
+            _block_to_markdown(child, lines, level + 1)
+
+
+def _ast_to_markdown(doc):
+    """Convert AST Document to Markdown format.
+
+    CRS-FIX #2: Complete implementation that processes nested block children,
+    matching the MCP octave_eject tool behavior.
+    """
+    from octave_mcp.core.ast_nodes import Assignment, Block
+
+    lines = [f"# {doc.name}", ""]
+
+    if doc.meta:
+        lines.append("## META")
+        lines.append("")
+        for key, value in doc.meta.items():
+            lines.append(f"- **{key}**: {value}")
+        lines.append("")
+
+    for section in doc.sections:
+        if isinstance(section, Assignment):
+            lines.append(f"**{section.key}**: {section.value}")
+            lines.append("")
+        elif isinstance(section, Block):
+            lines.append(f"## {section.key}")
+            lines.append("")
+            _block_to_markdown(section, lines, level=3)
+
+    return "\n".join(lines)
+
+
 @cli.command()
 @click.argument("file", type=click.Path(exists=True))
-@click.option("--schema", help="Schema name for validation")
-@click.option("--fix", is_flag=True, help="Apply TIER_REPAIR fixes")
-@click.option("--verbose", is_flag=True, help="Show pipeline stages")
-def ingest(file: str, schema: str | None, fix: bool, verbose: bool):
-    """Ingest lenient OCTAVE and emit canonical."""
-    from octave_mcp.core.emitter import emit
+@click.option(
+    "--mode",
+    type=click.Choice(["canonical", "authoring", "executive", "developer"]),
+    default="canonical",
+    help="Projection mode",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["octave", "json", "yaml", "markdown"]),
+    default="octave",
+    help="Output format",
+)
+def eject(file: str, mode: str, output_format: str):
+    """Eject OCTAVE to projected format.
+
+    Matches MCP octave_eject tool. Supports projection modes:
+    - canonical: Full document (default)
+    - authoring: Lenient format
+    - executive: STATUS, RISKS, DECISIONS only (lossy)
+    - developer: TESTS, CI, DEPS only (lossy)
+
+    Output formats: octave (default), json, yaml, markdown.
+
+    Note: --schema option is not available in CLI eject (file-based).
+    Schema is only meaningful for MCP template generation.
+    """
+    import json as json_module
+
+    import yaml as yaml_module
+
     from octave_mcp.core.parser import parse
+    from octave_mcp.core.projector import project
 
     with open(file) as f:
         content = f.read()
 
     try:
+        # Parse content to AST
         doc = parse(content)
+
+        # Project to desired mode
+        result = project(doc, mode=mode)
+
+        # Convert to requested output format
+        if output_format == "json":
+            data = _ast_to_dict(result.filtered_doc)
+            output = json_module.dumps(data, indent=2, ensure_ascii=False)
+        elif output_format == "yaml":
+            data = _ast_to_dict(result.filtered_doc)
+            output = yaml_module.dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
+        elif output_format == "markdown":
+            output = _ast_to_markdown(result.filtered_doc)
+        else:  # octave
+            output = result.output
+
+        click.echo(output)
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True), required=False)
+@click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
+@click.option("--schema", help="Schema name for validation (e.g., 'META', 'SESSION_LOG')")
+@click.option("--fix", is_flag=True, help="Apply repairs to output")
+def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
+    """Validate OCTAVE against schema.
+
+    Matches MCP octave_validate tool. Returns validation_status:
+    VALIDATED (schema passed), UNVALIDATED (no schema), or INVALID (schema failed).
+
+    Exit code 0 on success, 1 on validation failure.
+    """
+    import sys
+
+    from octave_mcp.core.emitter import emit
+    from octave_mcp.core.parser import parse
+    from octave_mcp.core.repair import repair
+    from octave_mcp.core.validator import Validator
+    from octave_mcp.schemas.loader import get_builtin_schema
+
+    # CRS-FIX #4: XOR enforcement - exactly ONE input source
+    if file is not None and use_stdin:
+        click.echo("Error: Cannot provide both FILE and --stdin", err=True)
+        raise SystemExit(1)
+
+    # Get content from file or stdin
+    if use_stdin:
+        content = sys.stdin.read()
+    elif file:
+        with open(file) as f:
+            content = f.read()
+    else:
+        click.echo("Error: Must provide FILE or --stdin", err=True)
+        raise SystemExit(1)
+
+    try:
+        # Parse content
+        doc = parse(content)
+
+        # Determine validation status
+        validation_status = "UNVALIDATED"
+        validation_errors: list = []
+
+        if schema:
+            schema_def = get_builtin_schema(schema)
+            if schema_def is not None:
+                validator = Validator(schema=schema_def)
+                validation_errors = validator.validate(doc, strict=False)
+                if validation_errors:
+                    validation_status = "INVALID"
+                else:
+                    validation_status = "VALIDATED"
+            else:
+                # Schema not found - remain UNVALIDATED
+                validator = Validator(schema=None)
+                validation_errors = validator.validate(doc, strict=False)
+        else:
+            # No schema specified - basic validation only
+            validator = Validator(schema=None)
+            validation_errors = validator.validate(doc, strict=False)
+
+        # Apply repairs if requested
+        if fix and validation_errors:
+            doc, repair_log = repair(doc, validation_errors, fix=True)
+            # Re-validate after repairs
+            if schema:
+                schema_def = get_builtin_schema(schema)
+                validator = Validator(schema=schema_def)
+                validation_errors = validator.validate(doc, strict=False)
+                if not validation_errors:
+                    validation_status = "VALIDATED"
+
+        # Output canonical form
         canonical = emit(doc)
         click.echo(canonical)
+
+        # Output validation status
+        click.echo(f"\nvalidation_status: {validation_status}")
+
+        # If INVALID, output errors and exit with code 1
+        if validation_status == "INVALID":
+            for error in validation_errors:
+                click.echo(f"  {error.code}: {error.message}", err=True)
+            raise SystemExit(1)
+
+    except SystemExit:
+        raise
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
-        raise click.Abort() from e
+        raise SystemExit(1) from e
 
 
 @cli.command()
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--schema", help="Schema name for validation")
-@click.option("--mode", type=click.Choice(["canonical", "authoring", "executive", "developer"]), default="canonical")
-def eject(file: str, schema: str | None, mode: str):
-    """Eject OCTAVE to projected format."""
+@click.argument("file", type=click.Path())
+@click.option("--content", help="Full OCTAVE content to write")
+@click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
+@click.option("--changes", help="JSON string of field changes for existing files")
+@click.option("--base-hash", help="Expected SHA-256 hash for CAS consistency check")
+@click.option("--schema", help="Schema name for validation before write")
+def write(
+    file: str,
+    content: str | None,
+    use_stdin: bool,
+    changes: str | None,
+    base_hash: str | None,
+    schema: str | None,
+):
+    """Write OCTAVE file with validation.
+
+    Matches MCP octave_write tool. Unified write operation:
+    - Use --content or --stdin for full content mode
+    - Use --changes for delta updates to existing files
+
+    Exactly ONE of --content, --stdin, or --changes must be provided.
+
+    Exit code 0 on success, 1 on failure.
+    """
+    import json as json_module
+    import sys
+
+    from octave_mcp.core.ast_nodes import Assignment
     from octave_mcp.core.emitter import emit
+    from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
     from octave_mcp.core.parser import parse
+    from octave_mcp.core.validator import Validator
+    from octave_mcp.schemas.loader import get_builtin_schema
 
-    with open(file) as f:
-        content = f.read()
+    # CRS-FIX #3: XOR enforcement - exactly ONE input source
+    # Count how many input sources are provided
+    input_sources = sum([content is not None, use_stdin, changes is not None])
+
+    if input_sources == 0:
+        click.echo("Error: Must provide --content, --stdin, or --changes", err=True)
+        raise SystemExit(1)
+
+    if input_sources > 1:
+        click.echo(
+            "Error: Cannot provide multiple input sources (use exactly ONE of --content, --stdin, or --changes)",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    # CRS-FIX #5: Security validation
+    path_valid, path_error = validate_octave_path(file)
+    if not path_valid:
+        click.echo(f"Error: {path_error}", err=True)
+        raise SystemExit(1)
+
+    # Get content from stdin if requested
+    if use_stdin:
+        content = sys.stdin.read()
 
     try:
-        doc = parse(content)
-        output = emit(doc)  # For now, just emit canonical
-        click.echo(output)
-    except Exception as e:
-        click.echo(f"Error: {e}", err=True)
-        raise click.Abort() from e
+        # Handle content mode (create/overwrite)
+        if content is not None:
+            # Parse and emit canonical form
+            doc = parse(content)
+            canonical_content = emit(doc)
 
-
-@cli.command()
-@click.argument("file", type=click.Path(exists=True))
-@click.option("--schema", help="Schema name for validation")
-@click.option("--strict", is_flag=True, help="Strict mode (reject unknown fields)")
-def validate(file: str, schema: str | None, strict: bool):
-    """Validate OCTAVE against schema."""
-    from octave_mcp.core.parser import parse
-    from octave_mcp.core.validator import validate as validate_doc
-
-    with open(file) as f:
-        content = f.read()
-
-    try:
-        doc = parse(content)
-        errors = validate_doc(doc, strict=strict)
-
-        if errors:
-            for error in errors:
-                click.echo(f"{error.code}: {error.message}", err=True)
-            raise click.Abort()
         else:
-            click.echo("Valid")
+            # Handle changes mode (delta update)
+            from pathlib import Path
+
+            target_path = Path(file)
+
+            if not target_path.exists():
+                click.echo("Error: File does not exist - changes mode requires existing file", err=True)
+                raise SystemExit(1)
+
+            # Read existing file
+            original_content = target_path.read_text(encoding="utf-8")
+
+            # Parse existing content
+            doc = parse(original_content)
+
+            # Apply changes (changes is guaranteed to be non-None in this branch)
+            assert changes is not None
+            changes_dict = json_module.loads(changes)
+            for key, value in changes_dict.items():
+                if key.startswith("META."):
+                    field_name = key[5:]
+                    doc.meta[field_name] = value
+                elif key == "META" and isinstance(value, dict):
+                    doc.meta = value.copy()
+                else:
+                    # Update or add field in sections
+                    found = False
+                    for section in doc.sections:
+                        if isinstance(section, Assignment) and section.key == key:
+                            section.value = value
+                            found = True
+                            break
+                    if not found:
+                        doc.sections.append(Assignment(key=key, value=value))
+
+            canonical_content = emit(doc)
+
+        # Schema validation if requested
+        validation_status = "UNVALIDATED"
+        if schema:
+            schema_def = get_builtin_schema(schema)
+            if schema_def is not None:
+                validator = Validator(schema=schema_def)
+                validation_errors = validator.validate(doc, strict=False)
+                if validation_errors:
+                    validation_status = "INVALID"
+                else:
+                    validation_status = "VALIDATED"
+
+        # CRS-FIX #5: Use atomic write with security checks
+        write_result = atomic_write_octave(file, canonical_content, base_hash)
+
+        if write_result["status"] == "error":
+            click.echo(f"Error: {write_result['error']}", err=True)
+            raise SystemExit(1)
+
+        # Output success information
+        click.echo(f"path: {write_result['path']}")
+        click.echo(f"canonical_hash: {write_result['canonical_hash']}")
+        click.echo(f"validation_status: {validation_status}")
+
+    except SystemExit:
+        raise
+    except json_module.JSONDecodeError as e:
+        click.echo(f"Error: Invalid JSON in --changes: {e}", err=True)
+        raise SystemExit(1) from e
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
-        raise click.Abort() from e
+        raise SystemExit(1) from e
 
 
 if __name__ == "__main__":
