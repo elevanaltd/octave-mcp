@@ -199,7 +199,7 @@ class WriteTool(BaseTool):
         return corrections
 
     def _apply_changes(self, doc: Any, changes: dict[str, Any]) -> Any:
-        """Apply changes to AST document with tri-state semantics.
+        """Apply changes to AST document with tri-state and dot-notation semantics.
 
         Args:
             doc: Parsed AST document
@@ -209,15 +209,39 @@ class WriteTool(BaseTool):
                 - Key present with None: Set field to null/empty
                 - Key present with value: Update field to new value
 
+                Dot-notation support for nested updates:
+                - "META.STATUS": "ACTIVE" -> updates doc.meta["STATUS"]
+                - "META.NEW_FIELD": "value" -> adds field to doc.meta
+                - "META.FIELD": {"$op": "DELETE"} -> removes field from doc.meta
+                - "META": {...} -> replaces entire doc.meta block
+
         Returns:
             Modified document
         """
         for key, new_value in changes.items():
-            if _is_delete_sentinel(new_value):
-                # I2: DELETE sentinel - remove field entirely
+            # Check for dot-notation: META.FIELD
+            if key.startswith("META."):
+                # Extract the field name after "META."
+                field_name = key[5:]  # Remove "META." prefix
+                if _is_delete_sentinel(new_value):
+                    # Delete field from doc.meta
+                    if field_name in doc.meta:
+                        del doc.meta[field_name]
+                else:
+                    # Update or add field in doc.meta
+                    doc.meta[field_name] = new_value
+            elif key == "META" and isinstance(new_value, dict):
+                # Replace entire META block with new dict
+                if not _is_delete_sentinel(new_value):
+                    doc.meta = new_value.copy()
+                else:
+                    # DELETE sentinel on META clears the entire block
+                    doc.meta = {}
+            elif _is_delete_sentinel(new_value):
+                # I2: DELETE sentinel - remove field entirely from sections
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
             else:
-                # Update or set to null
+                # Update or set to null in sections
                 found = False
                 for section in doc.sections:
                     if isinstance(section, Assignment) and section.key == key:

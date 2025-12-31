@@ -850,3 +850,287 @@ KEY::value
             # Should have validation_errors with details about missing fields
             errors = result.get("validation_errors", [])
             assert len(errors) >= 1, "Should report at least one validation error for missing required fields"
+
+
+class TestWriteToolDotNotationChanges:
+    """Tests for dot-notation path support in changes mode.
+
+    Dot-notation allows updating nested fields:
+    - "META.STATUS": "ACTIVE" -> updates doc.meta["STATUS"]
+    - "META.NEW_FIELD": "value" -> adds field to doc.meta
+    - "META.FIELD": {"$op": "DELETE"} -> removes field from doc.meta
+    - "META": {...} -> replaces entire META block (existing behavior)
+    - Top-level keys still work (regression)
+    """
+
+    @pytest.mark.asyncio
+    async def test_dot_notation_updates_meta_field(self):
+        """Test dot notation updates existing META field in META block."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+  STATUS::DRAFT
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Update META.STATUS using dot notation
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META.STATUS": "ACTIVE"},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify META.STATUS was updated WITHIN the META block
+            with open(target_path) as f:
+                content = f.read()
+                # ACTIVE should appear in META block (after META:, before ---)
+                lines = content.split("\n")
+                in_meta = False
+                found_active_in_meta = False
+                for line in lines:
+                    if line.strip().startswith("META:"):
+                        in_meta = True
+                    elif line.strip() == "---":
+                        in_meta = False
+                    elif in_meta and "STATUS" in line and "ACTIVE" in line:
+                        found_active_in_meta = True
+
+                assert found_active_in_meta, f"ACTIVE should be in META block, not as top-level key. Got:\n{content}"
+                # DRAFT should be gone (replaced by ACTIVE)
+                assert "DRAFT" not in content
+                # TYPE should be preserved
+                assert "TEST_DOC" in content
+                # Should NOT have 'META.STATUS' as literal key
+                assert "META.STATUS::" not in content
+
+    @pytest.mark.asyncio
+    async def test_dot_notation_adds_new_meta_field(self):
+        """Test dot notation adds new META field in META block."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Add new META.VERSION field using dot notation
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META.VERSION": "1.0.0"},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify new field was added WITHIN the META block
+            with open(target_path) as f:
+                content = f.read()
+                # VERSION should appear in META block (after META:, before ---)
+                lines = content.split("\n")
+                in_meta = False
+                found_version_in_meta = False
+                for line in lines:
+                    if line.strip().startswith("META:"):
+                        in_meta = True
+                    elif line.strip() == "---":
+                        in_meta = False
+                    elif in_meta and "VERSION" in line and "1.0.0" in line:
+                        found_version_in_meta = True
+
+                assert found_version_in_meta, f"VERSION should be in META block, not as top-level key. Got:\n{content}"
+                # TYPE should be preserved
+                assert "TEST_DOC" in content
+                # Should NOT have 'META.VERSION' as literal key
+                assert "META.VERSION::" not in content
+
+    @pytest.mark.asyncio
+    async def test_dot_notation_deletes_meta_field(self):
+        """Test dot notation deletes META field with DELETE sentinel."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block with DEPRECATED field
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+  DEPRECATED::old_stuff
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Delete META.DEPRECATED using dot notation + DELETE sentinel
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META.DEPRECATED": {"$op": "DELETE"}},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify field was deleted
+            with open(target_path) as f:
+                content = f.read()
+                assert "DEPRECATED" not in content
+                # TYPE should be preserved
+                assert "TEST_DOC" in content
+
+    @pytest.mark.asyncio
+    async def test_meta_dict_replaces_entire_block(self):
+        """Test META={...} replaces entire META block (not dot notation)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+  OLD_FIELD::should_be_gone
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Replace entire META block
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META": {"TYPE": "NEW_DOC", "VERSION": "2.0"}},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify META was replaced
+            with open(target_path) as f:
+                content = f.read()
+                # New fields should be present
+                assert "NEW_DOC" in content or "TYPE" in content
+                assert "2.0" in content or "VERSION" in content
+                # Old field should be gone (replaced)
+                assert "OLD_FIELD" not in content
+                # Should NOT have malformed dict syntax
+                assert "{'TYPE'" not in content
+
+    @pytest.mark.asyncio
+    async def test_top_level_changes_still_work_regression(self):
+        """Test top-level changes still work (regression test)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with top-level assignment
+            initial = """===TEST===
+KEY::old_value
+OTHER::preserved
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Update top-level KEY
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"KEY": "new_value"},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify update worked
+            with open(target_path) as f:
+                content = f.read()
+                assert "new_value" in content
+                assert "preserved" in content
+
+    @pytest.mark.asyncio
+    async def test_dot_notation_multiple_meta_fields(self):
+        """Test dot notation can update multiple META fields at once."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+  STATUS::DRAFT
+  VERSION::"0.1"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Update multiple META fields at once
+            result = await tool.execute(
+                target_path=target_path,
+                changes={
+                    "META.STATUS": "ACTIVE",
+                    "META.VERSION": "1.0.0",
+                },
+            )
+
+            assert result["status"] == "success"
+
+            # Verify updates are in META block
+            with open(target_path) as f:
+                content = f.read()
+                # Both updates should be in META block
+                lines = content.split("\n")
+                in_meta = False
+                found_active = False
+                found_version = False
+                for line in lines:
+                    if line.strip().startswith("META:"):
+                        in_meta = True
+                    elif line.strip() == "---":
+                        in_meta = False
+                    elif in_meta:
+                        if "STATUS" in line and "ACTIVE" in line:
+                            found_active = True
+                        if "VERSION" in line and "1.0.0" in line:
+                            found_version = True
+
+                assert found_active, f"ACTIVE should be in META block. Got:\n{content}"
+                assert found_version, f"1.0.0 should be in META block. Got:\n{content}"
+                # Old values should be gone
+                assert "DRAFT" not in content
+                assert "0.1" not in content
+                # TYPE should be preserved
+                assert "TEST_DOC" in content
+                # Should NOT have literal META.* keys
+                assert "META.STATUS::" not in content
+                assert "META.VERSION::" not in content

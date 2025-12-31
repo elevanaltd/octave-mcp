@@ -32,11 +32,16 @@ class TestValidateTool:
         tool = ValidateTool()
         schema = tool.get_input_schema()
 
-        # Required parameters
+        # Required parameters (schema is required, content/file_path are XOR)
         assert "content" in schema["properties"]
+        assert "file_path" in schema["properties"]
         assert "schema" in schema["properties"]
-        assert "content" in schema["required"]
         assert "schema" in schema["required"]
+
+        # content and file_path are XOR - neither is required in schema
+        # (validation happens in execute method)
+        assert "content" not in schema.get("required", [])
+        assert "file_path" not in schema.get("required", [])
 
         # Optional parameters
         assert "fix" in schema["properties"]
@@ -539,3 +544,142 @@ KEY::value
         # Should have validation_errors with details about missing fields
         errors = result.get("validation_errors", result.get("warnings", []))
         assert len(errors) >= 1, "Should report at least one validation error for missing required fields"
+
+
+class TestValidateToolFilePathMode:
+    """Tests for file_path mode in octave_validate.
+
+    file_path provides XOR alternative to content parameter:
+    - file_path XOR content (one required, not both)
+    - file_path reads file then processes as content
+    - Returns E_INPUT for XOR violations, E_FILE for missing file, E_READ for read errors
+    """
+
+    @pytest.mark.asyncio
+    async def test_file_path_mode_reads_and_validates(self):
+        """Test file_path mode reads file and validates content."""
+        import os
+        import tempfile
+
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create test file
+            with open(file_path, "w") as f:
+                f.write("===TEST===\nKEY::value\n===END===")
+
+            result = await tool.execute(
+                file_path=file_path,
+                schema="TEST",
+                fix=False,
+            )
+
+            # Should succeed and return canonical content
+            assert result["status"] == "success"
+            assert "canonical" in result
+            assert "===TEST===" in result["canonical"]
+
+    @pytest.mark.asyncio
+    async def test_file_path_with_nonexistent_file_returns_e_file(self):
+        """Test file_path with non-existent file returns E_FILE error."""
+        import tempfile
+
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            nonexistent = f"{tmpdir}/nonexistent.oct.md"
+
+            result = await tool.execute(
+                file_path=nonexistent,
+                schema="TEST",
+                fix=False,
+            )
+
+            # Should fail with E_FILE error
+            assert result["status"] == "error"
+            assert any(e.get("code") == "E_FILE" for e in result["errors"])
+
+    @pytest.mark.asyncio
+    async def test_both_file_path_and_content_returns_e_input(self):
+        """Test providing both file_path and content returns E_INPUT error."""
+        import os
+        import tempfile
+
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create test file
+            with open(file_path, "w") as f:
+                f.write("===TEST===\nKEY::value\n===END===")
+
+            result = await tool.execute(
+                file_path=file_path,
+                content="===OTHER===\nOTHER::value\n===END===",
+                schema="TEST",
+                fix=False,
+            )
+
+            # Should fail with E_INPUT - XOR violation
+            assert result["status"] == "error"
+            assert any(e.get("code") == "E_INPUT" for e in result["errors"])
+            # Error message should mention mutual exclusivity
+            error_messages = " ".join(e.get("message", "") for e in result["errors"])
+            assert "file_path" in error_messages.lower() or "content" in error_messages.lower()
+
+    @pytest.mark.asyncio
+    async def test_neither_file_path_nor_content_returns_e_input(self):
+        """Test providing neither file_path nor content returns E_INPUT error."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        result = await tool.execute(
+            schema="TEST",
+            fix=False,
+        )
+
+        # Should fail with E_INPUT - must provide one
+        assert result["status"] == "error"
+        assert any(e.get("code") == "E_INPUT" for e in result["errors"])
+
+    @pytest.mark.asyncio
+    async def test_content_mode_still_works_regression(self):
+        """Test content mode continues to work (regression test)."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        result = await tool.execute(
+            content="===TEST===\nKEY::value\n===END===",
+            schema="TEST",
+            fix=False,
+        )
+
+        # Content mode should still work
+        assert result["status"] == "success"
+        assert "canonical" in result
+
+    @pytest.mark.asyncio
+    async def test_file_path_schema_shows_in_input_schema(self):
+        """Test file_path parameter appears in input schema."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        schema = tool.get_input_schema()
+
+        # file_path should be in properties
+        assert "file_path" in schema["properties"]
+        # file_path should be optional (content is XOR alternative)
+        assert "file_path" not in schema.get("required", [])
+        # content should also be optional now
+        assert "content" not in schema.get("required", [])
