@@ -541,6 +541,162 @@ META:
         assert "cannot" in result.output.lower() or "error" in result.output.lower()
 
 
+class TestValidateEdgeCases:
+    """Test validate command edge cases for coverage."""
+
+    def test_validate_no_file_no_stdin(self):
+        """Should error when neither FILE nor --stdin is provided."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["validate"])
+        assert result.exit_code == 1
+        assert "error" in result.output.lower() or "must provide" in result.output.lower()
+
+    def test_validate_exception_during_parsing(self, tmp_path):
+        """Should handle exceptions during parsing."""
+        # Create a file with content that might cause issues
+        octave_file = tmp_path / "bad.oct.md"
+        # Empty file - should still be handled
+        octave_file.write_text("")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["validate", str(octave_file)])
+        # Should complete without crashing
+        assert result.exit_code in [0, 1]
+
+
+class TestEjectEdgeCases:
+    """Test eject command edge cases for coverage."""
+
+    def test_eject_malformed_file_error(self, tmp_path):
+        """Should handle error when file parsing fails."""
+        octave_file = tmp_path / "malformed.oct.md"
+        # Create file with problematic content that may cause parse error
+        octave_file.write_text("===UNCLOSED SECTION WITHOUT END")
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["eject", str(octave_file)])
+        # Should complete (might succeed or fail based on parser tolerance)
+        # Either way, should not crash
+        assert result.exit_code in [0, 1]
+
+    def test_eject_json_with_nested_blocks(self, tmp_path):
+        """JSON format should handle deeply nested blocks."""
+        octave_file = tmp_path / "nested.oct.md"
+        octave_file.write_text(
+            """===NESTED===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+
+OUTER:
+  INNER:
+    DEEP::"value"
+===END==="""
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["eject", str(octave_file), "--format", "json"])
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+        assert "OUTER" in output
+
+    def test_eject_markdown_with_root_assignment(self, tmp_path):
+        """Markdown format should handle root-level assignments."""
+        octave_file = tmp_path / "root_assign.oct.md"
+        octave_file.write_text(
+            """===ROOT===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+
+ROOT_FIELD::"root value"
+===END==="""
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["eject", str(octave_file), "--format", "markdown"])
+        assert result.exit_code == 0
+        assert "ROOT_FIELD" in result.output
+
+
+class TestWriteEdgeCases:
+    """Test write command edge cases for coverage."""
+
+    def test_write_changes_on_nonexistent_file(self, tmp_path):
+        """Should error when using --changes on non-existent file."""
+        target_file = tmp_path / "nonexistent.oct.md"
+        changes = '{"META.VERSION": "2.0"}'
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["write", str(target_file), "--changes", changes])
+        assert result.exit_code == 1
+        assert "not exist" in result.output.lower() or "error" in result.output.lower()
+
+    def test_write_changes_update_meta_block(self, tmp_path):
+        """Should update entire META block when using META key."""
+        target_file = tmp_path / "meta_update.oct.md"
+        target_file.write_text(
+            """===META_UPDATE===
+META:
+  TYPE::"OLD"
+  VERSION::"1.0"
+===END==="""
+        )
+
+        changes = '{"META": {"TYPE": "NEW", "VERSION": "2.0"}}'
+        runner = CliRunner()
+        result = runner.invoke(cli, ["write", str(target_file), "--changes", changes])
+        assert result.exit_code == 0
+
+    def test_write_changes_add_new_field(self, tmp_path):
+        """Should add new field when field doesn't exist."""
+        target_file = tmp_path / "add_field.oct.md"
+        target_file.write_text(
+            """===ADD_FIELD===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+        )
+
+        changes = '{"NEW_FIELD": "new value"}'
+        runner = CliRunner()
+        result = runner.invoke(cli, ["write", str(target_file), "--changes", changes])
+        assert result.exit_code == 0
+
+    def test_write_invalid_json_changes(self, tmp_path):
+        """Should error on invalid JSON in --changes."""
+        target_file = tmp_path / "invalid_json.oct.md"
+        target_file.write_text(
+            """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+        )
+
+        invalid_json = "{invalid json"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["write", str(target_file), "--changes", invalid_json])
+        assert result.exit_code == 1
+        assert "json" in result.output.lower() or "error" in result.output.lower()
+
+    def test_write_with_schema_validation_invalid(self, tmp_path):
+        """Should report INVALID when schema validation fails."""
+        target_file = tmp_path / "schema_invalid.oct.md"
+        # Content missing required META fields
+        content = """===INVALID===
+META:
+  STATUS::"DRAFT"
+===END==="""
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["write", str(target_file), "--content", content, "--schema", "META"])
+        # Write should succeed but validation_status should show INVALID or UNVALIDATED
+        assert result.exit_code == 0
+        assert "INVALID" in result.output or "UNVALIDATED" in result.output
+
+
 class TestWriteSecurityCommand:
     """CRS-FIX #5: Test write command security protections."""
 

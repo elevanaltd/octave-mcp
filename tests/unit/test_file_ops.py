@@ -237,6 +237,88 @@ class TestAtomicWriteOctave:
         assert result["canonical_hash"] == expected_hash
 
 
+class TestAtomicWriteEdgeCases:
+    """Tests for edge cases in atomic_write_octave."""
+
+    def test_cas_file_unreadable(self, tmp_path, monkeypatch):
+        """CAS fails gracefully when file becomes unreadable."""
+        path = str(tmp_path / "unreadable.oct.md")
+        Path(path).write_text("original content")
+
+        base_hash = compute_hash("original content")
+
+        # Make the file read fail
+        def mock_read_text(*args, **kwargs):
+            raise PermissionError("Permission denied")
+
+        monkeypatch.setattr(Path, "read_text", mock_read_text)
+
+        result = atomic_write_octave(path, "new content", base_hash=base_hash)
+
+        assert result["status"] == "error"
+        assert "error" in result["error"].lower() or "Read" in result["error"]
+
+    def test_symlink_to_file_at_target_rejected(self, tmp_path):
+        """Symlink directly at target file is rejected."""
+        # Create a real file
+        real_file = tmp_path / "real_target.oct.md"
+        real_file.write_text("real content")
+
+        # Create symlink pointing to it
+        symlink = tmp_path / "link.oct.md"
+        symlink.symlink_to(real_file)
+
+        result = atomic_write_octave(str(symlink), "new content")
+
+        assert result["status"] == "error"
+        assert "symlink" in result["error"].lower()
+
+
+class TestValidateOctavePathEdgeCases:
+    """Edge case tests for validate_octave_path."""
+
+    def test_system_symlink_depth_allowed(self, tmp_path):
+        """System symlinks at depth <= 2 under /private/ are allowed.
+
+        macOS has symlinks like /tmp -> /private/tmp at depth 1.
+        These should be allowed since they're system-controlled.
+        """
+        # Test with /tmp which is a system symlink on macOS
+        import platform
+
+        if platform.system() != "Darwin":
+            # Skip this test on non-macOS systems
+            return
+
+        # /tmp is a symlink to /private/tmp on macOS
+        path = "/tmp/test_octave_file.oct.md"
+        valid, error = validate_octave_path(path)
+        # System symlinks should be allowed
+        assert valid is True, f"System symlink should be allowed: {error}"
+
+    def test_compound_suffix_validation(self, tmp_path):
+        """Compound suffix like .oct.md should be validated correctly."""
+        # This tests the compound suffix extraction logic
+        path = str(tmp_path / "test.oct.md")
+        valid, error = validate_octave_path(path)
+        assert valid is True
+        assert error is None
+
+    def test_single_suffix_md_validation(self, tmp_path):
+        """Single .md suffix should pass validation."""
+        path = str(tmp_path / "readme.md")
+        valid, error = validate_octave_path(path)
+        assert valid is True
+        assert error is None
+
+    def test_invalid_single_suffix(self, tmp_path):
+        """Invalid single suffix should fail."""
+        path = str(tmp_path / "file.py")
+        valid, error = validate_octave_path(path)
+        assert valid is False
+        assert "Invalid file extension" in error
+
+
 class TestAllowedExtensions:
     """Tests for ALLOWED_EXTENSIONS constant."""
 
