@@ -7,12 +7,84 @@ Parses lexer tokens into AST with:
 - Whitespace normalization around ::
 - Nested block structure with indentation
 - META block extraction
+- YAML frontmatter stripping (Issue #91)
 """
 
 from typing import Any
 
 from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, Section
 from octave_mcp.core.lexer import Token, TokenType, tokenize
+
+
+def _strip_yaml_frontmatter(content: str) -> tuple[str, str | None]:
+    """Strip YAML frontmatter from document content.
+
+    YAML frontmatter is a block at the start of a document delimited by --- markers.
+    This is commonly used in HestAI agent definitions and other markdown-like files.
+
+    Issue #91: The OCTAVE lexer does not recognize YAML syntax (parentheses, etc.)
+    so frontmatter must be stripped before tokenization.
+
+    Issue #91 Rework: Performance and line number preservation fixes:
+    - Fast path: Check content.startswith("---") BEFORE splitting (O(1) vs O(N))
+    - Line offset: Replace frontmatter with equivalent newlines to preserve line numbers
+
+    Args:
+        content: Raw document content
+
+    Returns:
+        Tuple of (content_without_frontmatter, raw_frontmatter_or_none)
+        When frontmatter is stripped, the returned content has the frontmatter
+        replaced with newlines to preserve line number mapping.
+
+    Example:
+        >>> content = '''---
+        ... name: Agent (Specialist)
+        ... ---
+        ...
+        ... ===DOC===
+        ... META::value
+        ... ===END==='''
+        >>> stripped, frontmatter = _strip_yaml_frontmatter(content)
+        >>> '(' in stripped
+        False
+        >>> 'Agent (Specialist)' in frontmatter
+        True
+    """
+    # Fast path: check first chars before splitting (true O(1) for non-frontmatter files)
+    # This avoids O(N) split operation for the majority of files without frontmatter
+    # Issue #91 Rework: Standard YAML frontmatter MUST start at column 0, line 1.
+    # No lstrip() fallback - that creates O(N) string copy even for non-frontmatter.
+    if not content.startswith("---"):
+        return content, None
+
+    lines = content.split("\n")
+
+    # Check if document starts with YAML frontmatter marker
+    if not lines or lines[0].strip() != "---":
+        return content, None
+
+    # Find the closing --- marker
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            # Found closing marker
+            # Extract frontmatter (excluding the --- markers themselves)
+            frontmatter_lines = lines[1:i]
+            raw_frontmatter = "\n".join(frontmatter_lines)
+
+            # Issue #91 Rework: Replace frontmatter with newlines to preserve line numbers
+            # Frontmatter occupies lines 0 through i (inclusive of closing marker)
+            # We need (i + 1) newlines to keep remaining content at correct line numbers
+            frontmatter_line_count = i + 1
+            padding = "\n" * frontmatter_line_count
+            remaining_lines = lines[i + 1 :]
+            stripped_content = padding + "\n".join(remaining_lines)
+
+            return stripped_content, raw_frontmatter
+
+    # No closing marker found - treat entire content as non-frontmatter
+    return content, None
+
 
 # Unified set of operators valid in expression contexts (GH#62, GH#65)
 # This replaces ad-hoc inline operator checks in parse_flow_expression.
@@ -831,13 +903,23 @@ def parse(content: str | list[Token]) -> Document:
     Raises:
         ParserError: On syntax errors
     """
+    raw_frontmatter: str | None = None
+
     if isinstance(content, str):
-        tokens, _ = tokenize(content)
+        # Issue #91: Strip YAML frontmatter before tokenization
+        # YAML frontmatter contains characters (parentheses, etc.) that the lexer rejects
+        stripped_content, raw_frontmatter = _strip_yaml_frontmatter(content)
+        tokens, _ = tokenize(stripped_content)
     else:
         tokens = content
 
     parser = Parser(tokens)
-    return parser.parse_document()
+    doc = parser.parse_document()
+
+    # Preserve frontmatter in Document AST for I4 auditability
+    doc.raw_frontmatter = raw_frontmatter
+
+    return doc
 
 
 def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict]]:
@@ -868,14 +950,21 @@ def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict
     Raises:
         ParserError: On syntax errors
     """
+    raw_frontmatter: str | None = None
+
     if isinstance(content, str):
-        tokens, lexer_repairs = tokenize(content)
+        # Issue #91: Strip YAML frontmatter before tokenization
+        stripped_content, raw_frontmatter = _strip_yaml_frontmatter(content)
+        tokens, lexer_repairs = tokenize(stripped_content)
     else:
         tokens = content
         lexer_repairs = []
 
     parser = Parser(tokens)
     doc = parser.parse_document()
+
+    # Preserve frontmatter in Document AST for I4 auditability
+    doc.raw_frontmatter = raw_frontmatter
 
     # Combine lexer repairs and parser warnings
     # Lexer repairs are about ASCII normalization

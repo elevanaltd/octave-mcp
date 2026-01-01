@@ -106,12 +106,21 @@ class Section(ASTNode):
 
 @dataclass
 class Document(ASTNode):
-    """Top-level OCTAVE document with envelope."""
+    """Top-level OCTAVE document with envelope.
+
+    Attributes:
+        name: Document envelope name (e.g., "MY_DOC" from ===MY_DOC===)
+        meta: Parsed META block as dictionary
+        sections: List of parsed sections (Assignment, Block, Section)
+        has_separator: True if document contains --- separator
+        raw_frontmatter: YAML frontmatter content if present (Issue #91)
+    """
 
     name: str = "INFERRED"
     meta: dict[str, Any] = field(default_factory=dict)
     sections: list[ASTNode] = field(default_factory=list)
     has_separator: bool = False
+    raw_frontmatter: str | None = None
 
 
 @dataclass

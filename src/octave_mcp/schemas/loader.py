@@ -1,23 +1,26 @@
-"""Schema loader (P1.11).
+"""Schema loader (P1.11) - Enhanced with holographic pattern parsing (Issue #93).
 
-Parse .oct.md schema files into Schema objects for validator consumption.
+Parse .oct.md schema files into SchemaDefinition objects for validator consumption.
+
+This module provides:
+- load_schema(): Load schema from file path, returns SchemaDefinition
+- load_schema_by_name(): Load schema by name from search paths
+- get_schema_search_paths(): Get list of schema search paths
+- get_builtin_schema(): Get builtin schema definition by name
+- load_builtin_schemas(): Load all builtin schemas
 """
 
 from pathlib import Path
 from typing import Any
 
 from octave_mcp.core.parser import parse
+from octave_mcp.core.schema_extractor import (
+    SchemaDefinition,
+    extract_schema_from_document,
+)
 
-# TECHNICAL DEBT WARNING (v0.2.0):
-# ====================================
-# This hardcoded schema registry is temporary and will be replaced by dynamic registry in v0.3.0.
-# Current implementation: Static dict of builtin schemas for I5 compliance (Schema Sovereignty)
-# These match the schema files in schemas/builtin/*.oct.md
-# Gap 1 (Holographic Pattern Parsing) blocks full dynamic registry implementation
-# See: docs/implementation-roadmap.md (Gap 1, Phase 1 foundational work, 1-2 days)
-#
-# Critical-Engineer: consulted for Schema loading and registry architecture
-#
+# BUILTIN_SCHEMA_DEFINITIONS maintained for backwards compatibility
+# These provide fallback schemas when schema files are not available
 BUILTIN_SCHEMA_DEFINITIONS: dict[str, dict[str, Any]] = {
     "META": {
         "name": "META",
@@ -46,55 +49,113 @@ def get_builtin_schema(schema_name: str) -> dict[str, Any] | None:
     return BUILTIN_SCHEMA_DEFINITIONS.get(schema_name)
 
 
-def load_schema(schema_path: str | Path) -> dict[str, Any]:
-    """Load schema from .oct.md file.
+def get_schema_search_paths() -> list[Path]:
+    """Get list of paths to search for schema files.
 
-    DEFERRED: Full schema loading requires holographic pattern parser.
-    See docs/implementation-roadmap.md Gap 1 (Holographic Pattern Parsing).
-    Estimated: 1-2 days, Phase 1 foundational work
+    Returns paths in priority order:
+    1. specs/schemas/ in project root
+    2. schemas/builtin/ in package directory
 
-    Once Gap 1 is complete, this will:
-    - Parse holographic patterns: ["example"∧CONSTRAINT→§TARGET]
-    - Extract constraint chains: REQ∧ENUM[A,B]∧REGEX["pattern"]
-    - Build complete schema definition for validator
-    - Support POLICY blocks with VERSION, UNKNOWN_FIELDS, TARGETS
+    Returns:
+        List of Path objects for schema search directories
+    """
+    paths: list[Path] = []
 
-    Current implementation: Returns minimal schema stub (META fields only)
+    # 1. specs/schemas/ relative to current working directory
+    specs_dir = Path.cwd() / "specs" / "schemas"
+    if specs_dir.exists():
+        paths.append(specs_dir)
+
+    # 2. schemas/builtin/ in package directory
+    builtin_dir = Path(__file__).parent / "builtin"
+    if builtin_dir.exists():
+        paths.append(builtin_dir)
+
+    return paths
+
+
+def load_schema(schema_path: str | Path) -> SchemaDefinition:
+    """Load schema from .oct.md file using holographic pattern parsing.
+
+    Issue #93: This now uses the holographic pattern parser to extract
+    complete schema definitions including:
+    - Field definitions with holographic patterns
+    - Constraint chains (REQ, OPT, ENUM, REGEX, etc.)
+    - Extraction targets (section markers)
+    - POLICY blocks with VERSION, UNKNOWN_FIELDS, TARGETS
 
     Args:
         schema_path: Path to schema file
 
     Returns:
-        Schema dictionary for validator (minimal stub until Gap 1 complete)
+        SchemaDefinition with parsed fields, constraints, and policy
+
+    Raises:
+        FileNotFoundError: If schema file doesn't exist
     """
-    with open(schema_path) as f:
+    path = Path(schema_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Schema file not found: {schema_path}")
+
+    with open(path) as f:
         content = f.read()
 
     # Parse schema document
     doc = parse(content)
 
-    # Extract schema definition
-    schema: dict[str, Any] = {}
-
-    # MINIMAL STUB: Return basic structure only
-    # Cannot parse holographic patterns without Gap 1 infrastructure
-    if doc.meta:
-        schema["META"] = {"fields": {}, "required": []}
+    # Extract schema definition using holographic pattern parser
+    schema = extract_schema_from_document(doc)
 
     return schema
 
 
-def load_builtin_schemas() -> dict[str, dict[str, Any]]:
-    """Load all builtin schemas.
+def load_schema_by_name(schema_name: str) -> SchemaDefinition | None:
+    """Load schema by name from search paths.
+
+    Searches for schema files in priority order:
+    1. {search_path}/{schema_name.lower()}.oct.md
+    2. {search_path}/{schema_name}.oct.md
+
+    Args:
+        schema_name: Schema name (e.g., 'META', 'SESSION_LOG')
 
     Returns:
-        Dictionary of schema name -> schema definition
+        SchemaDefinition if found, None otherwise
     """
-    schemas = {}
+    search_paths = get_schema_search_paths()
 
-    # Load META schema
+    # Try different filename patterns
+    patterns = [
+        f"{schema_name.lower()}.oct.md",
+        f"{schema_name}.oct.md",
+    ]
+
+    for search_path in search_paths:
+        for pattern in patterns:
+            schema_file = search_path / pattern
+            if schema_file.exists():
+                return load_schema(schema_file)
+
+    return None
+
+
+def load_builtin_schemas() -> dict[str, SchemaDefinition]:
+    """Load all builtin schemas from schemas/builtin/ directory.
+
+    Returns:
+        Dictionary of schema name -> SchemaDefinition
+    """
+    schemas: dict[str, SchemaDefinition] = {}
+
+    # Load from builtin directory
     builtin_dir = Path(__file__).parent / "builtin"
-    if (builtin_dir / "meta.oct.md").exists():
-        schemas["META"] = load_schema(builtin_dir / "meta.oct.md")
+    if builtin_dir.exists():
+        for schema_file in builtin_dir.glob("*.oct.md"):
+            try:
+                schema = load_schema(schema_file)
+                schemas[schema.name] = schema
+            except Exception:
+                # Skip files that fail to parse
+                pass
 
     return schemas
