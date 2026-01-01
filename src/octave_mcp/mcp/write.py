@@ -373,6 +373,7 @@ class WriteTool(BaseTool):
         canonical_bytes: int,
         original_metrics: StructuralMetrics | None,
         canonical_metrics: StructuralMetrics | None,
+        content_changed: bool = False,
     ) -> str:
         """Generate structural diff from pre-computed metrics.
 
@@ -384,11 +385,15 @@ class WriteTool(BaseTool):
             canonical_bytes: Byte length of canonical content
             original_metrics: Pre-computed metrics from original document (or None)
             canonical_metrics: Pre-computed metrics from canonical document (or None)
+            content_changed: Whether content differs (for I4 auditability when
+                byte count and structure are identical but values differ)
 
         Returns:
             Structural diff summary with warning codes for significant changes
         """
-        if original_bytes == canonical_bytes and original_metrics == canonical_metrics:
+        # I4 Auditability: Must report changes even when byte count and structure
+        # are identical but content values differ (e.g., KEY::foo -> KEY::bar)
+        if not content_changed and original_bytes == canonical_bytes and original_metrics == canonical_metrics:
             return "No changes"
 
         # Build structural summary with warnings
@@ -738,11 +743,14 @@ class WriteTool(BaseTool):
 
         # Build success response
         result["canonical_hash"] = canonical_hash
+        # I4 Auditability: Detect content changes even when byte count/structure identical
+        content_changed = original_content != canonical_content
         result["diff"] = self._generate_diff(
             len(original_content),
             len(canonical_content),
             original_metrics,
             canonical_metrics,
+            content_changed=content_changed,
         )
 
         return result

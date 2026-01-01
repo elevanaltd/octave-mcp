@@ -1358,3 +1358,60 @@ KEY::new
             assert "diff" in result
             # Diff should not just be empty or "No changes" for real changes
             assert result["diff"], "diff field should contain structural summary"
+
+    def test_generate_diff_detects_value_change_same_length(self):
+        """Test _generate_diff reports changes when content differs but length/structure same.
+
+        Regression test for Issue #92: When content changes but preserves byte count
+        and structural metrics (e.g., KEY::foo -> KEY::bar), _generate_diff must NOT
+        return "No changes". This violates I4 (Auditability) - all changes must be
+        visible in the diff.
+
+        Root cause: The original implementation only checked byte counts and
+        structural metrics, missing actual content comparison.
+
+        Fix: Add content_changed parameter that the caller computes and passes in.
+        """
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+
+        tool = WriteTool()
+
+        # Original and canonical have SAME byte count and SAME structure
+        # but DIFFERENT content values
+        original = "===TEST===\nKEY::foo\n===END==="
+        canonical = "===TEST===\nKEY::bar\n===END==="
+
+        # Verify byte counts are identical (the bug condition)
+        assert len(original) == len(canonical), "Test setup: byte counts must be equal"
+
+        # Verify structural metrics are identical (the bug condition)
+        original_doc = parse(original)
+        canonical_doc = parse(canonical)
+        original_metrics = extract_structural_metrics(original_doc)
+        canonical_metrics = extract_structural_metrics(canonical_doc)
+
+        assert original_metrics.sections == canonical_metrics.sections
+        assert original_metrics.blocks == canonical_metrics.blocks
+        assert original_metrics.assignments == canonical_metrics.assignments
+
+        # The content HAS changed (foo -> bar)
+        content_changed = original != canonical
+        assert content_changed, "Test setup: content must differ"
+
+        # Call _generate_diff with content_changed=True
+        diff = tool._generate_diff(
+            len(original),
+            len(canonical),
+            original_metrics,
+            canonical_metrics,
+            content_changed=True,
+        )
+
+        # I4 REQUIREMENT: Must NOT return "No changes" when content changed
+        assert diff != "No changes", (
+            "I4 violation: _generate_diff returned 'No changes' even though content "
+            "changed from 'foo' to 'bar'. Diff should indicate content was modified."
+        )
+        # Should indicate bytes AND that content changed
+        assert "bytes" in diff.lower() or "->" in diff, f"Diff should include byte count info, got: {diff}"
