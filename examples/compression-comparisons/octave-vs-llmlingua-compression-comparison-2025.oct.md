@@ -33,7 +33,7 @@ CORE_DIFFERENCES:
 
   OCTAVE_APPROACH:
     METHOD::"Manual schema engineering"
-    SYNTAX::["::" for assignment, "->" for progression, "+_VERSUS_" for relationships]
+    SYNTAX::["::" for assignment, "→/->" for progression, "⊕/+" for synthesis, "⇌/vs" for tension]
     STRENGTH::CLARITY[every_value_labeled]
     WEAKNESS::EFFICIENCY[key_overhead_adds_tokens]
     USE_CASE::"Structured configs, knowledge representation"
@@ -164,10 +164,10 @@ IMPROVEMENT_RECOMMENDATIONS:
       FUNCTION::"Convert natural text → OCTAVE schema"
 
     SYMBOL_FAMILIARITY:
-      REPLACE::[
-        "->" WITH "->",
-        "+" WITH "+",
-        "_VERSUS_" WITH "vs"
+      CANONICAL::[
+        "→" or "->" for flow,
+        "⊕" or "+" for synthesis,
+        "⇌" or "vs" for tension
       ]
 
     ERROR_TOLERANCE:

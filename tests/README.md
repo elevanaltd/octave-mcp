@@ -39,10 +39,10 @@ CURRENT_STATE::HUBRIS->NEMESIS
 ### Test 3: Operator Usage
 **Prompt**: "Show the tension between system reliability and feature delivery speed"
 
-**Expected**: Correct use of _VERSUS_ operator
+**Expected**: Correct use of ⇌ (or 'vs') tension operator
 ```octave
 ===TENSION_ANALYSIS===
-CORE_CONFLICT::RELIABILITY _VERSUS_ SPEED
+CORE_CONFLICT::RELIABILITY⇌SPEED
 IMPACT::TECHNICAL_DEBT
 ===END===
 ```
@@ -106,7 +106,7 @@ For each test response:
 
 3. **Operator Check**: Ensure correct usage
    - `+` only for synthesis
-   - `_VERSUS_` only for tension
+   - `⇌` or `vs` for binary tension (cannot chain)
    - `->` only inside lists
 
 ## Success Criteria
