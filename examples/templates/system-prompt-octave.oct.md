@@ -17,7 +17,7 @@ OCTAVE_FORMATTING (RULE_OF_FIVE):
   4_OPERATORS:
     FLOW::"Use FLOW::[START->MIDDLE->END] for sequence (progression is list-only)"
     SYNTHESIS::"Use ATHENA+HERMES to combine elements"
-    TENSION::"Use SPEED _VERSUS_ RELIABILITY to express trade-offs"
+    TENSION::"Use Speed⇌Quality or Speed vs Quality to express binary trade-offs (cannot chain)"
   5_STRUCTURE::"Start with ===TITLE=== and end with ===END==="
 
 STRUCTURE::"Start with ===TITLE=== and end with ===END==="
@@ -36,8 +36,8 @@ EXAMPLE_PATTERNS:
     CAUSALITY::[DB_LOCK->QUERY_BACKUP->CPU_SPIKE->TIMEOUT]
 
   STRATEGIC_PATTERN:
-    // Strategic pattern
-    TENSION::PERFORMANCE _VERSUS_ CONSISTENCY
+    // Strategic pattern (binary tension)
+    TENSION::PERFORMANCE⇌CONSISTENCY
     FORCES:
       CHRONOS::DEADLINE_PRESSURE
       HUBRIS::OVERCONFIDENT_ARCHITECTURE

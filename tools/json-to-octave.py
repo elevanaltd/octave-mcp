@@ -52,7 +52,8 @@ def format_value(value):
         if "progression" in value:
             return "[" + "->".join(str(v) for v in value["progression"]) + "]"
         if "tension" in value:
-            return f"{value['tension'][0]} _VERSUS_ {value['tension'][1]}"
+            # v5.1.0: Use canonical Unicode ⇌ for tension operator
+            return f"{value['tension'][0]}⇌{value['tension'][1]}"
         if "synthesis" in value:
             return "+".join(str(v) for v in value["synthesis"])
 

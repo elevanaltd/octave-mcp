@@ -134,11 +134,11 @@ class OctaveValidator:
                     f"Line {line_num}: Constraint operator '&' can only be used inside brackets (e.g., [\"value\"&REQ&REGEX->§TARGET])."
                 )
 
-            # Check for tension operator _VERSUS_ (cannot be chained)
-            if "_VERSUS_" in scan_line:
-                versus_count = scan_line.count("_VERSUS_")
-                if versus_count > 1:
-                    self.errors.append(f"Line {line_num}: Tension operator '_VERSUS_' cannot be chained.")
+            # Check for tension operator ⇌ or vs (cannot be chained, binary only)
+            # v5.1.0 spec: tension is ⇌ (Unicode) with ASCII alias 'vs' (word boundaries required)
+            tension_count = scan_line.count("⇌") + len(re.findall(r"\bvs\b", scan_line))
+            if tension_count > 1:
+                self.errors.append(f"Line {line_num}: Tension operator '⇌'/'vs' cannot be chained (binary only).")
 
             # Normalize/validate target selector: allow '#TARGET' form and canonical '§TARGET'
             if "-> #".lower() in scan_line.lower() or re.search(r"->\s*#", scan_line):

@@ -73,9 +73,9 @@ COMPRESSION_RULES:
     EXAMPLE::AUTO_SCALE[MECH::"Kubernetes HPA with custom metrics"]
 
   RULE:TENSION_EXPLICIT:
-    MANDATE::"Trade-offs use _VERSUS_ operator"
-    FORMAT::FORCE1 _VERSUS_ FORCE2
-    EXAMPLE::PERFORMANCE _VERSUS_ COST
+    MANDATE::"Trade-offs use ⇌ operator (or 'vs' with word boundaries)"
+    FORMAT::FORCE1⇌FORCE2
+    EXAMPLE::PERFORMANCE⇌COST
 
   RULE:SYNTHESIS_COMBINATION:
     MANDATE::"Integrations use + operator"
@@ -105,7 +105,7 @@ STRUCTURE_TEMPLATES:
   TENSION_PATTERN:
     CORE:
       CHALLENGE::description
-      TENSION::FORCE1 _VERSUS_ FORCE2
+      TENSION::FORCE1⇌FORCE2
       RESOLUTION::DOMAIN1+DOMAIN2[approach]
 
   SYSTEM_PATTERN:
@@ -150,7 +150,7 @@ EXAMPLE_TRANSFORMATIONS:
     CORE:
       TRIGGER::VIRAL_SPIKE[100x_traffic]
       CASCADE::[DETECT->AUTO_SCALE->MAINTAIN_SLA->AUTO_SHRINK]
-      TENSION::PERFORMANCE _VERSUS_ COST
+      TENSION::PERFORMANCE⇌COST
       SYNTHESIS::HEPHAESTUS+ATHENA[MECH::"Kubernetes HPA with predictive scaling"]
       PATTERN::PROMETHEAN[BECAUSE::"Brings fire of elastic infrastructure to static world"]
       SUCCESS::[<500ms_latency, zero_downtime, optimized_spend]
@@ -182,7 +182,7 @@ QUALITY_MARKERS:
     "All key concepts mapped to PANTHEON",
     "BECAUSE chains preserve reasoning",
     "MECH grounds abstractions",
-    "Tensions explicit with _VERSUS_",
+    "Tensions explicit with ⇌",
     "10-20x compression achieved"
   ]
 
