@@ -327,3 +327,137 @@ class TestHolographicPatternToString:
         assert "REQ" in result
         # No section marker when target is None
         assert "§" not in result or result.endswith("]")
+
+    def test_holographic_pattern_to_string_with_list_example(self):
+        """Should convert pattern with list example to string."""
+        from octave_mcp.core.holographic import HolographicPattern
+
+        pattern = HolographicPattern(example=["item1", "item2"], constraints=None, target=None)
+        result = pattern.to_string()
+        assert "[" in result
+        assert "item1" in result
+        assert "item2" in result
+
+    def test_holographic_pattern_to_string_with_bool_true(self):
+        """Should convert pattern with boolean True to string."""
+        from octave_mcp.core.holographic import HolographicPattern
+
+        pattern = HolographicPattern(example=True, constraints=None, target=None)
+        result = pattern.to_string()
+        assert "true" in result
+
+    def test_holographic_pattern_to_string_with_bool_false(self):
+        """Should convert pattern with boolean False to string."""
+        from octave_mcp.core.holographic import HolographicPattern
+
+        pattern = HolographicPattern(example=False, constraints=None, target=None)
+        result = pattern.to_string()
+        assert "false" in result
+
+    def test_holographic_pattern_to_string_with_null(self):
+        """Should convert pattern with None example to string."""
+        from octave_mcp.core.holographic import HolographicPattern
+
+        pattern = HolographicPattern(example=None, constraints=None, target=None)
+        result = pattern.to_string()
+        assert "null" in result
+
+    def test_holographic_pattern_to_string_with_numeric_example(self):
+        """Should convert pattern with numeric example to string."""
+        from octave_mcp.core.holographic import HolographicPattern
+
+        pattern = HolographicPattern(example=42, constraints=None, target=None)
+        result = pattern.to_string()
+        assert "42" in result
+
+    def test_holographic_pattern_to_string_with_nested_list(self):
+        """Should convert pattern with list containing non-strings to string."""
+        from octave_mcp.core.holographic import HolographicPattern
+
+        pattern = HolographicPattern(example=[1, 2, 3], constraints=None, target=None)
+        result = pattern.to_string()
+        assert "[1,2,3]" in result
+
+
+class TestParseHolographicPatternEdgeCases:
+    """Test edge cases in holographic pattern parsing."""
+
+    def test_parse_pattern_with_boolean_true_example(self):
+        """Should parse pattern with boolean true example."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern("[true∧REQ→§SELF]")
+        assert pattern.example is True
+
+    def test_parse_pattern_with_boolean_false_example(self):
+        """Should parse pattern with boolean false example."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern("[false∧REQ→§SELF]")
+        assert pattern.example is False
+
+    def test_parse_pattern_with_null_example(self):
+        """Should parse pattern with null example."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern("[null∧OPT→§SELF]")
+        assert pattern.example is None
+
+    def test_parse_pattern_with_float_example(self):
+        """Should parse pattern with float example."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern("[3.14∧REQ→§SELF]")
+        assert pattern.example == 3.14
+
+    def test_parse_pattern_with_scientific_notation(self):
+        """Should parse pattern with scientific notation example."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern("[1e10∧REQ→§SELF]")
+        assert pattern.example == 1e10
+
+    def test_parse_pattern_with_empty_list(self):
+        """Should parse pattern with empty list example."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern("[[]∧OPT→§SELF]")
+        assert pattern.example == []
+
+    def test_parse_pattern_with_nested_list(self):
+        """Should parse pattern with nested list example."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern('[["a", ["b", "c"]]∧REQ→§SELF]')
+        assert pattern.example == ["a", ["b", "c"]]
+
+    def test_parse_pattern_with_ascii_arrow(self):
+        """Should parse pattern with ASCII arrow variant (->§)."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern('["example"∧REQ->§SELF]')
+        assert pattern.example == "example"
+        assert pattern.target == "SELF"
+
+    def test_parse_pattern_target_only_no_constraints(self):
+        """Should parse pattern with target but no constraints."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern('["value"→§SELF]')
+        assert pattern.example == "value"
+        assert pattern.constraints is None
+        assert pattern.target == "SELF"
+
+    def test_parse_pattern_with_invalid_constraint_raises_error(self):
+        """Should raise error for invalid constraint."""
+        from octave_mcp.core.holographic import HolographicPatternError, parse_holographic_pattern
+
+        with pytest.raises(HolographicPatternError):
+            parse_holographic_pattern('["example"∧INVALID_CONSTRAINT_XYZ→§SELF]')
+
+    def test_parse_pattern_with_unquoted_string_example(self):
+        """Should parse pattern with unquoted string as raw value."""
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern("[rawvalue∧REQ→§SELF]")
+        assert pattern.example == "rawvalue"
