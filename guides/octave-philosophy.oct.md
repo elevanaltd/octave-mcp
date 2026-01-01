@@ -3,11 +3,11 @@ META:
   TYPE::GUIDE
   VERSION::"1.0"
   PURPOSE::"Anti-patterns and quality principles for effective OCTAVE"
-GOLDEN_RULE:
+§1::GOLDEN_RULE
   LITMUS::"If your OCTAVE were a database schema, would it have foreign keys?"
   MEANING::"Flat lists provide information. Relationship networks provide understanding."
   MANDATE::"Show how elements connect, influence, depend"
-SEVEN_DEADLY_SMELLS:
+§2::SEVEN_DEADLY_SMELLS
   ISOLATED_LISTS:
     SYMPTOM::"Array items without explicit relationships"
     IMPACT::"LLM knows WHAT, not HOW they connect"
@@ -36,7 +36,7 @@ SEVEN_DEADLY_SMELLS:
     SYMPTOM::"Mandatory mixed with optional"
     IMPACT::"Ambiguous boundaries"
     FIX::"Separate MANDATORY and OPTIONAL sections"
-AUTHORING_CHECKLIST:
+§3::AUTHORING_CHECKLIST
   BEFORE::["relationships?","mandatory_vs_optional?","simplest_example?"]
   DURING::["remove_50_percent_words?","explicit_keys?","examples>descriptions?"]
   AFTER::["works_without_metaphors?","drawable_diagram?","all_0.DEF_referenced?"]
