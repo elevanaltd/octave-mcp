@@ -1226,18 +1226,22 @@ BLOCK:
 
     def test_generate_diff_no_changes(self):
         """Test _generate_diff() returns 'No changes' for identical documents."""
-        from octave_mcp.mcp.write import WriteTool
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
 
         tool = WriteTool()
 
         content = "===TEST===\nKEY::value\n===END==="
-        diff = tool._generate_diff(content, content)
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+        diff = tool._generate_diff(len(content), len(content), metrics, metrics)
 
         assert diff == "No changes", f"Expected 'No changes', got '{diff}'"
 
     def test_generate_diff_detects_section_marker_removal(self):
         """Test _generate_diff() detects section marker removal (W_STRUCT_001)."""
-        from octave_mcp.mcp.write import WriteTool
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
 
         tool = WriteTool()
 
@@ -1257,7 +1261,12 @@ KEY::value
 OTHER::value
 ===END==="""
 
-        diff = tool._generate_diff(original, canonical)
+        original_doc = parse(original)
+        canonical_doc = parse(canonical)
+        original_metrics = extract_structural_metrics(original_doc)
+        canonical_metrics = extract_structural_metrics(canonical_doc)
+
+        diff = tool._generate_diff(len(original), len(canonical), original_metrics, canonical_metrics)
 
         # Should contain warning code W_STRUCT_001 for section marker loss
         assert "W_STRUCT_001" in diff, f"Expected W_STRUCT_001 warning, got: {diff}"
@@ -1265,7 +1274,8 @@ OTHER::value
 
     def test_generate_diff_detects_assignment_reduction(self):
         """Test _generate_diff() detects assignment count reduction (W_STRUCT_003)."""
-        from octave_mcp.mcp.write import WriteTool
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
 
         tool = WriteTool()
 
@@ -1280,26 +1290,38 @@ KEY3::value3
 KEY1::value1
 ===END==="""
 
-        diff = tool._generate_diff(original, canonical)
+        original_doc = parse(original)
+        canonical_doc = parse(canonical)
+        original_metrics = extract_structural_metrics(original_doc)
+        canonical_metrics = extract_structural_metrics(canonical_doc)
+
+        diff = tool._generate_diff(len(original), len(canonical), original_metrics, canonical_metrics)
 
         # Should contain warning code W_STRUCT_003 for assignment reduction
         assert "W_STRUCT_003" in diff, f"Expected W_STRUCT_003 warning, got: {diff}"
 
     def test_generate_diff_structural_summary_format(self):
         """Test structural summary format in _generate_diff() response."""
-        from octave_mcp.mcp.write import WriteTool
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
 
         tool = WriteTool()
 
+        # Use content with different byte lengths to trigger non-"No changes" path
         original = """===TEST===
-KEY::old
+KEY::old_value_here
 ===END==="""
 
         canonical = """===TEST===
 KEY::new
 ===END==="""
 
-        diff = tool._generate_diff(original, canonical)
+        original_doc = parse(original)
+        canonical_doc = parse(canonical)
+        original_metrics = extract_structural_metrics(original_doc)
+        canonical_metrics = extract_structural_metrics(canonical_doc)
+
+        diff = tool._generate_diff(len(original), len(canonical), original_metrics, canonical_metrics)
 
         # Diff should include structural metrics (byte count at minimum)
         assert "bytes" in diff.lower() or "->" in diff, f"Expected structural info in diff: {diff}"
