@@ -179,3 +179,79 @@ TESTS::pytest_suite
 
         # Should keep TESTS
         assert "TESTS::pytest_suite" in result.output
+
+
+class TestProjectionEdgeCases:
+    """Test edge cases in projection for coverage."""
+
+    def test_authoring_mode_not_lossy(self):
+        """Authoring mode should not be lossy (same as canonical for now)."""
+        doc = parse("===TEST===\nKEY::value\n===END===")
+        result = project(doc, "authoring")
+        assert result.lossy is False
+        assert len(result.fields_omitted) == 0
+
+    def test_unknown_mode_defaults_to_canonical(self):
+        """Unknown mode should default to canonical."""
+        doc = parse("===TEST===\nKEY::value\n===END===")
+        result = project(doc, "unknown_mode")
+        assert result.lossy is False
+        assert len(result.fields_omitted) == 0
+        assert "KEY::value" in result.output
+
+    def test_executive_mode_with_nested_kept_field(self):
+        """Executive mode keeps nested STATUS within a parent block."""
+        content = """===TEST===
+PARENT:
+  STATUS::ACTIVE
+  OTHER::data
+===END==="""
+        doc = parse(content)
+        result = project(doc, "executive")
+        # STATUS is nested within PARENT, which is not in keep set
+        # But STATUS itself is in keep set, so it should be kept
+        assert "STATUS::ACTIVE" in result.output
+
+    def test_developer_mode_with_deeply_nested_children(self):
+        """Developer mode preserves deeply nested children of kept field."""
+        content = """===TEST===
+TESTS:
+  UNIT:
+    COVERAGE::90
+    PASSING::true
+===END==="""
+        doc = parse(content)
+        result = project(doc, "developer")
+        # All children of TESTS should be preserved
+        assert "TESTS:" in result.output
+        assert "UNIT:" in result.output
+        assert "COVERAGE::90" in result.output
+        assert "PASSING::true" in result.output
+
+    def test_projection_returns_filtered_doc(self):
+        """Projection result should include filtered_doc for serialization."""
+        content = """===TEST===
+STATUS::ACTIVE
+TESTS::suite
+===END==="""
+        doc = parse(content)
+        result = project(doc, "executive")
+        # filtered_doc should be a Document object
+        assert result.filtered_doc is not None
+        assert hasattr(result.filtered_doc, "sections")
+
+    def test_executive_mode_reports_omitted_fields(self):
+        """Executive mode should report which fields are omitted."""
+        doc = parse("===TEST===\nSTATUS::ACTIVE\n===END===")
+        result = project(doc, "executive")
+        assert "TESTS" in result.fields_omitted
+        assert "CI" in result.fields_omitted
+        assert "DEPS" in result.fields_omitted
+
+    def test_developer_mode_reports_omitted_fields(self):
+        """Developer mode should report which fields are omitted."""
+        doc = parse("===TEST===\nTESTS::suite\n===END===")
+        result = project(doc, "developer")
+        assert "STATUS" in result.fields_omitted
+        assert "RISKS" in result.fields_omitted
+        assert "DECISIONS" in result.fields_omitted

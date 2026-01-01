@@ -231,3 +231,126 @@ class TestI2AbsentHandling:
         a1 = Absent()
         a2 = Absent()
         assert a1 is a2
+
+
+class TestEmitterEdgeCases:
+    """Test edge cases in emitter for coverage."""
+
+    def test_emit_empty_string_value(self):
+        """Empty string needs quotes to be valid."""
+        doc = Document(name="TEST", sections=[Assignment(key="EMPTY", value="")])
+        result = emit(doc)
+        assert 'EMPTY::""' in result
+
+    def test_emit_boolean_values(self):
+        """Boolean values emit as true/false."""
+        doc = Document(
+            name="TEST",
+            sections=[
+                Assignment(key="TRUE_VAL", value=True),
+                Assignment(key="FALSE_VAL", value=False),
+            ],
+        )
+        result = emit(doc)
+        assert "TRUE_VAL::true" in result
+        assert "FALSE_VAL::false" in result
+
+    def test_emit_null_value(self):
+        """None emits as null."""
+        doc = Document(name="TEST", sections=[Assignment(key="NULL_VAL", value=None)])
+        result = emit(doc)
+        assert "NULL_VAL::null" in result
+
+    def test_emit_numeric_values(self):
+        """Numeric values emit directly."""
+        doc = Document(
+            name="TEST",
+            sections=[
+                Assignment(key="INT_VAL", value=42),
+                Assignment(key="FLOAT_VAL", value=3.14),
+            ],
+        )
+        result = emit(doc)
+        assert "INT_VAL::42" in result
+        assert "FLOAT_VAL::3.14" in result
+
+    def test_emit_unknown_type_fallback(self):
+        """Unknown types fall back to str()."""
+
+        class CustomType:
+            def __str__(self):
+                return "CUSTOM_VALUE"
+
+        doc = Document(name="TEST", sections=[Assignment(key="CUSTOM", value=CustomType())])
+        result = emit(doc)
+        assert "CUSTOM::CUSTOM_VALUE" in result
+
+    def test_emit_reserved_words_quoted(self):
+        """Reserved words (true, false, null, vs) need quotes."""
+        doc = Document(
+            name="TEST",
+            sections=[
+                Assignment(key="VAL1", value="true"),
+                Assignment(key="VAL2", value="false"),
+                Assignment(key="VAL3", value="null"),
+                Assignment(key="VAL4", value="vs"),
+            ],
+        )
+        result = emit(doc)
+        assert 'VAL1::"true"' in result
+        assert 'VAL2::"false"' in result
+        assert 'VAL3::"null"' in result
+        assert 'VAL4::"vs"' in result
+
+    def test_emit_string_with_special_chars(self):
+        """Strings with special chars need escaping."""
+        doc = Document(
+            name="TEST",
+            sections=[
+                Assignment(key="NEWLINE", value="line1\nline2"),
+                Assignment(key="TAB", value="col1\tcol2"),
+                Assignment(key="QUOTE", value='say "hello"'),
+            ],
+        )
+        result = emit(doc)
+        assert "\\n" in result
+        assert "\\t" in result
+        assert '\\"' in result
+
+    def test_emit_inline_map(self):
+        """InlineMap emits as [key::val]."""
+        inline_map = InlineMap(pairs={"key": "value"})
+        doc = Document(name="TEST", sections=[Assignment(key="MAP", value=inline_map)])
+        result = emit(doc)
+        assert "MAP::[key::value]" in result
+
+    def test_emit_absent_in_document_sections(self):
+        """Absent values in document sections are skipped."""
+        doc = Document(
+            name="TEST",
+            sections=[
+                Assignment(key="PRESENT", value="here"),
+                Assignment(key="ABSENT", value=Absent()),
+            ],
+        )
+        result = emit(doc)
+        assert "PRESENT::here" in result
+        assert "ABSENT" not in result
+
+    def test_emit_absent_in_block_children(self):
+        """Absent values in Block children are skipped."""
+        doc = Document(
+            name="TEST",
+            sections=[
+                Block(
+                    key="BLOCK",
+                    children=[
+                        Assignment(key="PRESENT", value="here"),
+                        Assignment(key="ABSENT", value=Absent()),
+                    ],
+                )
+            ],
+        )
+        result = emit(doc)
+        assert "PRESENT::here" in result
+        assert "ABSENT" not in result
