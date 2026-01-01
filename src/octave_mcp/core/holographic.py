@@ -212,21 +212,33 @@ def _find_constraint_start(content: str) -> int:
 def _find_target_start(content: str) -> int:
     """Find the position of →§ that starts the target.
 
+    Handles nested brackets and quoted strings properly to avoid matching
+    →§ inside example values (Issue #93).
+
     Args:
         content: Pattern content
 
     Returns:
         Position of → before §, or -1 if not found
     """
-    # Look for →§ pattern
-    pos = content.find("→§")
-    if pos != -1:
-        return pos
+    depth = 0
+    in_quotes = False
 
-    # Also check for ->§ ASCII variant
-    pos = content.find("->§")
-    if pos != -1:
-        return pos
+    for i, char in enumerate(content):
+        if char == '"' and (i == 0 or content[i - 1] != "\\"):
+            in_quotes = not in_quotes
+        elif not in_quotes:
+            if char == "[":
+                depth += 1
+            elif char == "]":
+                depth -= 1
+            elif depth == 0:
+                # Check for →§ (Unicode arrow)
+                if content[i : i + 2] == "→§":
+                    return i
+                # Check for ->§ (ASCII variant)
+                if content[i : i + 3] == "->§":
+                    return i
 
     return -1
 

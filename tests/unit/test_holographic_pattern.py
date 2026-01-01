@@ -267,6 +267,25 @@ class TestParseHolographicPatternErrors:
         with pytest.raises(HolographicPatternError):
             parse_holographic_pattern("[∧REQ→§SELF]")
 
+    def test_parse_pattern_with_arrow_in_example(self):
+        """Target detection must ignore arrow-section inside quoted example (Issue #93).
+
+        The pattern ["x->§y"∧REQ->§SELF] has two occurrences of ->§:
+        1. Inside the quoted example "x->§y" - should be IGNORED
+        2. After the constraint REQ - the REAL target delimiter
+
+        Expected result:
+        - example: "x->§y" (the quoted string with arrow inside)
+        - constraints: [REQ]
+        - target: "SELF"
+        """
+        from octave_mcp.core.holographic import parse_holographic_pattern
+
+        pattern = parse_holographic_pattern('["x→§y"∧REQ→§SELF]')
+        assert pattern.example == "x→§y"
+        assert pattern.target == "SELF"
+        assert len(pattern.constraints.constraints) == 1
+
 
 class TestHolographicPatternToString:
     """Test HolographicPattern.to_string() for round-trip validation."""
