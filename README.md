@@ -2,8 +2,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-178%20passing-brightgreen.svg)]()
-[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-706%20passing-brightgreen.svg)]()
+[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)]()
 
 This repository ships the **OCTAVE MCP Server**—a Model Context Protocol implementation that exposes the OCTAVE document protocol as deterministic tools. The MCP layer is delivery plumbing; the value is the OCTAVE protocol itself.
 
@@ -32,11 +32,12 @@ See the [protocol specs in `specs/`](specs/README.oct.md) for the precise operat
 - **`octave eject`** - project canonical OCTAVE into multiple views (canonical, authoring, executive, developer) and formats (OCTAVE, JSON, YAML, Markdown) with declared loss tiers.
 - **`octave validate`** - validate OCTAVE against schemas without modifying files.
 
-### Available via MCP (3 tools)
+### Available via MCP (4 tools)
 
 - **`octave_validate`** - schema validation and parsing of OCTAVE content
 - **`octave_write`** - unified file creation and modification (content mode OR changes mode with optional hash-based consistency checking)
 - **`octave_eject`** - format projection (octave, json, yaml, markdown) with declared loss tiers
+- **`octave_debate_to_octave`** - convert debate-hall-mcp JSON transcripts to OCTAVE format
 
 These tools make it easy for LLMs to emit minimal intent while relying on deterministic mechanics for structure and safety. If the LLM were replaced by a plain text emitter, OCTAVE would still provide value.
 
