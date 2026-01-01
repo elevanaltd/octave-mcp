@@ -1134,3 +1134,205 @@ KEY::value
                 # Should NOT have literal META.* keys
                 assert "META.STATUS::" not in content
                 assert "META.VERSION::" not in content
+
+
+class TestStructuralMetrics:
+    """Tests for structural metrics extraction (Issue #92).
+
+    The _generate_diff() function needs to report structural changes between
+    input and output documents. This test class verifies the metrics extraction
+    and structural diff functionality.
+    """
+
+    def test_extract_structural_metrics_counts_sections(self):
+        """Test extract_structural_metrics() counts sections correctly."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import extract_structural_metrics
+
+        # Document with 2 numbered sections
+        content = """===TEST===
+
+\u00a71::FIRST_SECTION
+  KEY1::value1
+
+\u00a72::SECOND_SECTION
+  KEY2::value2
+
+===END==="""
+
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+
+        assert metrics.sections == 2, f"Expected 2 sections, got {metrics.sections}"
+
+    def test_extract_structural_metrics_counts_section_markers(self):
+        """Test extract_structural_metrics() identifies section markers."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import extract_structural_metrics
+
+        # Document with section markers
+        content = """===DOC===
+
+\u00a71::CORE
+  RULE::one
+
+\u00a72::SECONDARY
+  RULE::two
+
+===END==="""
+
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+
+        # section_markers tracks the section IDs found
+        assert "1" in metrics.section_markers
+        assert "2" in metrics.section_markers
+
+    def test_extract_structural_metrics_counts_blocks(self):
+        """Test extract_structural_metrics() counts blocks correctly."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import extract_structural_metrics
+
+        # Document with 2 blocks
+        content = """===TEST===
+OUTER_BLOCK:
+  INNER_KEY::value
+SECOND_BLOCK:
+  ANOTHER_KEY::value
+===END==="""
+
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+
+        assert metrics.blocks == 2, f"Expected 2 blocks, got {metrics.blocks}"
+
+    def test_extract_structural_metrics_counts_assignments(self):
+        """Test extract_structural_metrics() counts assignments correctly."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import extract_structural_metrics
+
+        # Document with 3 assignments (including nested)
+        content = """===TEST===
+TOP::value1
+BLOCK:
+  NESTED::value2
+  ANOTHER::value3
+===END==="""
+
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+
+        assert metrics.assignments == 3, f"Expected 3 assignments, got {metrics.assignments}"
+
+    def test_generate_diff_no_changes(self):
+        """Test _generate_diff() returns 'No changes' for identical documents."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        content = "===TEST===\nKEY::value\n===END==="
+        diff = tool._generate_diff(content, content)
+
+        assert diff == "No changes", f"Expected 'No changes', got '{diff}'"
+
+    def test_generate_diff_detects_section_marker_removal(self):
+        """Test _generate_diff() detects section marker removal (W_STRUCT_001)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        original = """===TEST===
+
+\u00a71::FIRST
+  KEY::value
+
+\u00a72::SECOND
+  OTHER::value
+
+===END==="""
+
+        # Canonical form after some operation removes section markers
+        canonical = """===TEST===
+KEY::value
+OTHER::value
+===END==="""
+
+        diff = tool._generate_diff(original, canonical)
+
+        # Should contain warning code W_STRUCT_001 for section marker loss
+        assert "W_STRUCT_001" in diff, f"Expected W_STRUCT_001 warning, got: {diff}"
+        assert "section" in diff.lower(), f"Expected 'section' in diff message: {diff}"
+
+    def test_generate_diff_detects_assignment_reduction(self):
+        """Test _generate_diff() detects assignment count reduction (W_STRUCT_003)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        original = """===TEST===
+KEY1::value1
+KEY2::value2
+KEY3::value3
+===END==="""
+
+        # Fewer assignments in output
+        canonical = """===TEST===
+KEY1::value1
+===END==="""
+
+        diff = tool._generate_diff(original, canonical)
+
+        # Should contain warning code W_STRUCT_003 for assignment reduction
+        assert "W_STRUCT_003" in diff, f"Expected W_STRUCT_003 warning, got: {diff}"
+
+    def test_generate_diff_structural_summary_format(self):
+        """Test structural summary format in _generate_diff() response."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        original = """===TEST===
+KEY::old
+===END==="""
+
+        canonical = """===TEST===
+KEY::new
+===END==="""
+
+        diff = tool._generate_diff(original, canonical)
+
+        # Diff should include structural metrics (byte count at minimum)
+        assert "bytes" in diff.lower() or "->" in diff, f"Expected structural info in diff: {diff}"
+
+    @pytest.mark.asyncio
+    async def test_octave_write_includes_structural_diff(self):
+        """Test that octave_write response envelope contains structural diff."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with sections
+            original = """===TEST===
+
+\u00a71::SECTION_ONE
+  KEY::value
+
+===END==="""
+
+            with open(target_path, "w") as f:
+                f.write(original)
+
+            # Modify via changes
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"KEY": "new_value"},
+            )
+
+            assert result["status"] == "success"
+            # diff field should contain structural information
+            assert "diff" in result
+            # Diff should not just be empty or "No changes" for real changes
+            assert result["diff"], "diff field should contain structural summary"
