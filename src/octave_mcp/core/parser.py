@@ -503,6 +503,89 @@ class Parser:
             return token.value
 
         elif token.type == TokenType.NUMBER:
+            # GH#87: Check if NUMBER is followed by IDENTIFIER (e.g., 123_suffix)
+            # If so, coalesce into multi-word string value (same pattern as IDENTIFIER path)
+            next_token = self.peek()
+            if next_token.type == TokenType.IDENTIFIER:
+                # NUMBER followed by IDENTIFIER - coalesce as multi-word value
+                # Track start position for I4 audit
+                start_line = token.line
+                start_column = token.column
+
+                # Use raw lexeme for NUMBER to preserve format (e.g., 1e10)
+                word_parts = [_token_to_str(token)]
+                self.advance()  # Consume NUMBER
+
+                # Accumulate following IDENTIFIER/NUMBER tokens (like IDENTIFIER path)
+                while self.current().type in (TokenType.IDENTIFIER, TokenType.NUMBER):
+                    # Check if next token after this is an operator
+                    if self.peek().type in EXPRESSION_OPERATORS:
+                        # Include this token and parse rest as expression
+                        word_parts.append(_token_to_str(self.current()))
+                        self.advance()
+                        # Continue with flow expression parsing
+                        expr_parts = [" ".join(word_parts)]
+                        while (
+                            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER)
+                            or self.current().type in EXPRESSION_OPERATORS
+                        ):
+                            if self.current().type in EXPRESSION_OPERATORS:
+                                expr_parts.append(self.current().value)
+                                self.advance()
+                            elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER):
+                                expr_parts.append(_token_to_str(self.current()))
+                                self.advance()
+                            else:
+                                break
+                        # I4 Audit: Emit warning for NUMBER+IDENTIFIER coalescing in expression
+                        self.warnings.append(
+                            {
+                                "type": "lenient_parse",
+                                "subtype": "multi_word_coalesce",
+                                "original": word_parts,
+                                "result": " ".join(word_parts),
+                                "context": "number_identifier_expression",
+                                "line": start_line,
+                                "column": start_column,
+                            }
+                        )
+                        return "".join(str(p) for p in expr_parts)
+
+                    # Just another word/number in the multi-word value
+                    word_parts.append(_token_to_str(self.current()))
+                    self.advance()
+
+                # Join words with spaces
+                result = " ".join(word_parts)
+
+                # GH#87 I4 Audit: Emit warning for NUMBER+IDENTIFIER coalescing
+                # Per I4: "If bits lost must have receipt" - this is lenient parsing
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "multi_word_coalesce",
+                        "original": word_parts,
+                        "result": result,
+                        "context": "number_identifier",
+                        "line": start_line,
+                        "column": start_column,
+                    }
+                )
+
+                # Consume bracket annotation if present (like IDENTIFIER path)
+                if self.current().type == TokenType.LIST_START:
+                    bracket_depth = 1
+                    self.advance()  # Consume [
+                    while bracket_depth > 0 and self.current().type != TokenType.EOF:
+                        if self.current().type == TokenType.LIST_START:
+                            bracket_depth += 1
+                        elif self.current().type == TokenType.LIST_END:
+                            bracket_depth -= 1
+                        self.advance()
+
+                return result
+
+            # Standalone NUMBER - return numeric value as before
             self.advance()
             return token.value
 
