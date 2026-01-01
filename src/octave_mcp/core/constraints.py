@@ -5,7 +5,8 @@ Implements constraint chain evaluation with 11 constraint types:
 - OPT: Optional field (can be missing)
 - CONST[X]: Constant value (must equal X)
 - ENUM[a,b,c]: Enumerated values (must be one of list, supports prefix matching)
-- TYPE(X): Type check (STRING|NUMBER|LIST|BOOLEAN)
+- TYPE[X]: Type check (STRING|NUMBER|LIST|BOOLEAN) - preferred lexer-compatible syntax
+- TYPE(X): Type check legacy syntax (works with direct ConstraintChain.parse() only)
 - REGEX[pat]: Pattern matching
 - DIR: Directory path validation
 - APPEND_ONLY: List append semantics
@@ -759,8 +760,12 @@ class ConstraintChain:
                 values_str = part[5:-1]
                 values = [_parse_atom(v.strip()) for v in values_str.split(",")]
                 constraints.append(EnumConstraint(allowed_values=values))
+            elif part.startswith("TYPE[") and part.endswith("]"):
+                # Extract type from TYPE[STRING] (square brackets for lexer compatibility)
+                type_str = part[5:-1]
+                constraints.append(TypeConstraint(expected_type=type_str))
             elif part.startswith("TYPE(") and part.endswith(")"):
-                # Extract type from TYPE(STRING)
+                # Legacy: TYPE(STRING) with parentheses (kept for direct ConstraintChain.parse() calls)
                 type_str = part[5:-1]
                 constraints.append(TypeConstraint(expected_type=type_str))
             elif part.startswith("REGEX[") and part.endswith("]"):

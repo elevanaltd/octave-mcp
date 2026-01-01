@@ -244,7 +244,7 @@ def _list_value_to_pattern_string(list_value: Any) -> str:
             # Parameterized constraints (complete with brackets)
             elif any(
                 item.startswith(prefix)
-                for prefix in ("ENUM[", "TYPE(", "REGEX[", "CONST[", "RANGE[", "MAX_LENGTH[", "MIN_LENGTH[")
+                for prefix in ("ENUM[", "TYPE[", "TYPE(", "REGEX[", "CONST[", "RANGE[", "MAX_LENGTH[", "MIN_LENGTH[")
             ):
                 parts.append(item)
             # Example value - needs quoting if it doesn't look like an operator

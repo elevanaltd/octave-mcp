@@ -4,6 +4,7 @@ Provides the MCP server with OCTAVE tools:
 - octave_validate (schema validation and repair)
 - octave_write (unified file writing: creation and amendment)
 - octave_eject (projection to different modes/formats)
+- octave_debate_to_octave (debate transcript conversion - Issue #52)
 """
 
 import asyncio
@@ -14,6 +15,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
+from octave_mcp.mcp.debate_convert import DebateConvertTool
 from octave_mcp.mcp.eject import EjectTool
 from octave_mcp.mcp.validate import ValidateTool
 from octave_mcp.mcp.write import WriteTool
@@ -31,6 +33,7 @@ def create_server() -> Server:
     validate_tool = ValidateTool()
     write_tool = WriteTool()
     eject_tool = EjectTool()
+    debate_convert_tool = DebateConvertTool()
 
     @server.list_tools()
     async def handle_list_tools() -> list[Tool]:
@@ -50,6 +53,11 @@ def create_server() -> Server:
                 name=eject_tool.get_name(),
                 description=eject_tool.get_description(),
                 inputSchema=eject_tool.get_input_schema(),
+            ),
+            Tool(
+                name=debate_convert_tool.get_name(),
+                description=debate_convert_tool.get_description(),
+                inputSchema=debate_convert_tool.get_input_schema(),
             ),
         ]
 
@@ -77,6 +85,8 @@ def create_server() -> Server:
             result = await write_tool.execute(**arguments)
         elif name == "octave_eject":
             result = await eject_tool.execute(**arguments)
+        elif name == "octave_debate_to_octave":
+            result = await debate_convert_tool.execute(**arguments)
         else:
             raise ValueError(f"Unknown tool: {name}")
 
