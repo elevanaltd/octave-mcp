@@ -97,6 +97,59 @@ class Parser:
         while self.current().type in (TokenType.NEWLINE, TokenType.COMMENT):
             self.advance()
 
+    def _consume_bracket_annotation(self, capture: bool = False) -> str | None:
+        """Consume bracket annotation [content] if present.
+
+        Handles nested brackets properly. Used for:
+        - Section annotations: §0::META[schema_hints,versioning]
+        - Colon-path annotations: HERMES:API_TIMEOUT[note]
+        - Value annotations: DONE[annotation], PENDING[[nested,content]]
+
+        Args:
+            capture: If True, capture and return the annotation content.
+                    If False, just skip the bracket block.
+
+        Returns:
+            Captured annotation string if capture=True and brackets present,
+            None otherwise.
+        """
+        if self.current().type != TokenType.LIST_START:
+            return None
+
+        bracket_depth = 1
+        self.advance()  # Consume [
+
+        if not capture:
+            # Fast path: just skip without capturing
+            while bracket_depth > 0 and self.current().type != TokenType.EOF:
+                if self.current().type == TokenType.LIST_START:
+                    bracket_depth += 1
+                elif self.current().type == TokenType.LIST_END:
+                    bracket_depth -= 1
+                self.advance()
+            return None
+
+        # Capture mode: collect tokens for annotation string
+        annotation_tokens: list[str] = []
+
+        while bracket_depth > 0 and self.current().type != TokenType.EOF:
+            if self.current().type == TokenType.LIST_START:
+                bracket_depth += 1
+                annotation_tokens.append("[")
+            elif self.current().type == TokenType.LIST_END:
+                bracket_depth -= 1
+                if bracket_depth > 0:  # Don't include the final ]
+                    annotation_tokens.append("]")
+            elif self.current().type == TokenType.IDENTIFIER:
+                annotation_tokens.append(self.current().value)
+            elif self.current().type == TokenType.COMMA:
+                annotation_tokens.append(",")
+            elif self.current().type == TokenType.STRING:
+                annotation_tokens.append(f'"{self.current().value}"')
+            self.advance()
+
+        return "".join(annotation_tokens) if annotation_tokens else None
+
     def parse_document(self) -> Document:
         """Parse a complete OCTAVE document."""
         doc = Document()
@@ -281,32 +334,7 @@ class Parser:
 
         # Capture optional bracket annotation tail [...]
         # Example: §0::META[schema_hints,versioning]
-        annotation = None
-        if self.current().type == TokenType.LIST_START:
-            # Consume [ and capture content until matching ]
-            bracket_depth = 1
-            annotation_tokens = []
-            self.advance()  # Consume [
-
-            while bracket_depth > 0 and self.current().type != TokenType.EOF:
-                if self.current().type == TokenType.LIST_START:
-                    bracket_depth += 1
-                    annotation_tokens.append("[")
-                elif self.current().type == TokenType.LIST_END:
-                    bracket_depth -= 1
-                    if bracket_depth > 0:  # Don't include the final ]
-                        annotation_tokens.append("]")
-                elif self.current().type == TokenType.IDENTIFIER:
-                    annotation_tokens.append(self.current().value)
-                elif self.current().type == TokenType.COMMA:
-                    annotation_tokens.append(",")
-                elif self.current().type == TokenType.STRING:
-                    annotation_tokens.append(f'"{self.current().value}"')
-                self.advance()
-
-            # Join tokens to create annotation string
-            if annotation_tokens:
-                annotation = "".join(annotation_tokens)
+        annotation = self._consume_bracket_annotation(capture=True)
 
         self.skip_whitespace()
 
@@ -573,15 +601,7 @@ class Parser:
                 )
 
                 # Consume bracket annotation if present (like IDENTIFIER path)
-                if self.current().type == TokenType.LIST_START:
-                    bracket_depth = 1
-                    self.advance()  # Consume [
-                    while bracket_depth > 0 and self.current().type != TokenType.EOF:
-                        if self.current().type == TokenType.LIST_START:
-                            bracket_depth += 1
-                        elif self.current().type == TokenType.LIST_END:
-                            bracket_depth -= 1
-                        self.advance()
+                self._consume_bracket_annotation(capture=False)
 
                 return result
 
@@ -627,15 +647,7 @@ class Parser:
                 # GH#85: Consume bracket annotation if present after colon-path value
                 # Examples: HERMES:API_TIMEOUT[note], MODULE:SUB[annotation]
                 # Must consume before returning so indentation tracking sees NEWLINE
-                if self.current().type == TokenType.LIST_START:
-                    bracket_depth = 1
-                    self.advance()  # Consume [
-                    while bracket_depth > 0 and self.current().type != TokenType.EOF:
-                        if self.current().type == TokenType.LIST_START:
-                            bracket_depth += 1
-                        elif self.current().type == TokenType.LIST_END:
-                            bracket_depth -= 1
-                        self.advance()
+                self._consume_bracket_annotation(capture=False)
                 return ":".join(parts)
 
             # GH#66: Continue capturing consecutive identifiers as multi-word value
@@ -709,18 +721,8 @@ class Parser:
 
             # GH#85: Consume bracket annotation if present after value
             # Examples: DONE[annotation], PENDING[[nested,content]]
-            # Similar pattern to parse_section_marker() lines 285-310
             # Must consume before returning so indentation tracking sees NEWLINE
-            if self.current().type == TokenType.LIST_START:
-                bracket_depth = 1
-                self.advance()  # Consume [
-
-                while bracket_depth > 0 and self.current().type != TokenType.EOF:
-                    if self.current().type == TokenType.LIST_START:
-                        bracket_depth += 1
-                    elif self.current().type == TokenType.LIST_END:
-                        bracket_depth -= 1
-                    self.advance()
+            self._consume_bracket_annotation(capture=False)
 
             return result
 
