@@ -72,10 +72,10 @@ While models do not spontaneously adopt the OCTAVE *format* in their responses, 
 
 A rigorous, multi-stage testing process was conducted to determine the optimal operator syntax for OCTAVE (carried forward into v4), prioritizing toolchain compatibility and semantic clarity. Initial tests revealed that Unicode (`⊕`) and simple ASCII Math (`*`) operators had critical flaws. A final design and validation phase selected a hybrid "Pragmatic ASCII" set.
 
-**Final Operators (v4):**
-- **Synthesis:** `+`
-- **Tension:** `_VERSUS_`
-- **Progression:** `->`
+**Final Operators (v5.1.0):**
+- **Synthesis:** `⊕` (or `+` ASCII alias)
+- **Tension:** `⇌` (or `vs` ASCII alias with word boundaries)
+- **Progression:** `→` (or `->` ASCII alias)
 
 **Result:** This operator set is empirically proven to be the most robust and practical choice, ensuring maximum compatibility and clarity across all development and documentation contexts, especially in toolchains like XML where alternatives failed.
 
