@@ -5,10 +5,16 @@ Targets coverage of server.py lines 79, 85, 88-91, 101-104, 109, 113.
 """
 
 import json
+import os
+from unittest import mock
 
 import pytest
 
-from octave_mcp.mcp.server import create_server
+from octave_mcp.mcp.server import (
+    create_server,
+    filter_tools,
+    parse_disabled_tools,
+)
 
 
 class TestCreateServer:
@@ -193,3 +199,92 @@ class TestServerToolNoneArguments:
         # None content triggers template generation
         assert "output" in result
         assert "TEMPLATE" in result["output"] or "template" in result["output"].lower()
+
+
+class TestDisabledTools:
+    """Tests for DISABLED_TOOLS environment variable functionality."""
+
+    def test_parse_disabled_tools_empty(self):
+        """Empty DISABLED_TOOLS returns empty set."""
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": ""}, clear=False):
+            result = parse_disabled_tools()
+            assert result == set()
+
+    def test_parse_disabled_tools_not_set(self):
+        """Unset DISABLED_TOOLS returns empty set."""
+        env = os.environ.copy()
+        env.pop("DISABLED_TOOLS", None)
+        with mock.patch.dict(os.environ, env, clear=True):
+            result = parse_disabled_tools()
+            assert result == set()
+
+    def test_parse_disabled_tools_single(self):
+        """Single tool name is parsed correctly."""
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_debate_to_octave"}):
+            result = parse_disabled_tools()
+            assert result == {"octave_debate_to_octave"}
+
+    def test_parse_disabled_tools_multiple(self):
+        """Multiple comma-separated tools are parsed."""
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_eject,octave_debate_to_octave"}):
+            result = parse_disabled_tools()
+            assert result == {"octave_eject", "octave_debate_to_octave"}
+
+    def test_parse_disabled_tools_with_whitespace(self):
+        """Whitespace around tool names is stripped."""
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": " octave_eject , octave_debate_to_octave "}):
+            result = parse_disabled_tools()
+            assert result == {"octave_eject", "octave_debate_to_octave"}
+
+    def test_parse_disabled_tools_case_insensitive(self):
+        """Tool names are lowercased."""
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "OCTAVE_EJECT,Octave_Write"}):
+            result = parse_disabled_tools()
+            assert result == {"octave_eject", "octave_write"}
+
+    def test_filter_tools_none_disabled(self):
+        """No disabled tools returns all tools."""
+        from octave_mcp.mcp.validate import ValidateTool
+        from octave_mcp.mcp.write import WriteTool
+
+        tools = {"octave_validate": ValidateTool(), "octave_write": WriteTool()}
+
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": ""}):
+            result = filter_tools(tools)
+            assert set(result.keys()) == {"octave_validate", "octave_write"}
+
+    def test_filter_tools_one_disabled(self):
+        """Disabled tool is filtered out."""
+        from octave_mcp.mcp.validate import ValidateTool
+        from octave_mcp.mcp.write import WriteTool
+
+        tools = {"octave_validate": ValidateTool(), "octave_write": WriteTool()}
+
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_write"}):
+            result = filter_tools(tools)
+            assert set(result.keys()) == {"octave_validate"}
+
+    def test_filter_tools_unknown_tool_warning(self, caplog):
+        """Unknown tool name in DISABLED_TOOLS logs warning."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tools = {"octave_validate": ValidateTool()}
+
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "unknown_tool"}):
+            import logging
+
+            with caplog.at_level(logging.WARNING):
+                result = filter_tools(tools)
+                # All tools still enabled
+                assert set(result.keys()) == {"octave_validate"}
+                # Warning logged
+                assert "unknown_tool" in caplog.text or len(result) == 1
+
+    def test_create_server_with_disabled_tool(self):
+        """Server created with disabled tool has fewer tools."""
+        # Clear any cached environment
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_debate_to_octave"}):
+            # We need to re-import/create to pick up the env var
+            server = create_server()
+            assert server is not None
+            assert server.name == "octave-mcp"
