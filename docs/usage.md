@@ -15,7 +15,7 @@ This guide provides detailed examples and workflows for using the OCTAVE MCP ser
 
 ### Prerequisites
 
-- Python 3.12 or higher
+- Python 3.11 or higher
 - pip package manager
 
 ### Installation
