@@ -4,12 +4,11 @@ Provides the MCP server with OCTAVE tools:
 - octave_validate (schema validation and repair)
 - octave_write (unified file writing: creation and amendment)
 - octave_eject (projection to different modes/formats)
-- octave_debate_to_octave (debate transcript conversion - Issue #52)
 
 Environment Variables:
 - DISABLED_TOOLS: Comma-separated list of tools to disable.
-  Available tools: octave_validate, octave_write, octave_eject, octave_debate_to_octave
-  Example: DISABLED_TOOLS=octave_debate_to_octave
+  Available tools: octave_validate, octave_write, octave_eject
+  Example: DISABLED_TOOLS=octave_eject
 """
 
 import asyncio
@@ -24,7 +23,6 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from octave_mcp.mcp.base_tool import BaseTool
-from octave_mcp.mcp.debate_convert import DebateConvertTool
 from octave_mcp.mcp.eject import EjectTool
 from octave_mcp.mcp.validate import ValidateTool
 from octave_mcp.mcp.write import WriteTool
@@ -90,7 +88,6 @@ def create_server() -> Server:
         "octave_validate": ValidateTool(),
         "octave_write": WriteTool(),
         "octave_eject": EjectTool(),
-        "octave_debate_to_octave": DebateConvertTool(),
     }
 
     # Apply DISABLED_TOOLS filter

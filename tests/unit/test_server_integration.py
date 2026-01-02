@@ -4,7 +4,6 @@ Tests the server creation and tool routing functionality.
 Targets coverage of server.py lines 79, 85, 88-91, 101-104, 109, 113.
 """
 
-import json
 import os
 from unittest import mock
 
@@ -36,15 +35,14 @@ class TestServerToolRouting:
         return create_server()
 
     @pytest.mark.asyncio
-    async def test_list_tools_returns_four_tools(self, server):
-        """list_tools returns all four registered tools."""
+    async def test_list_tools_returns_three_tools(self, server):
+        """list_tools returns all three registered tools."""
         # Verify server is created successfully
         # The actual tool registration is verified through direct tool imports
         assert server is not None
         assert server.name == "octave-mcp"
 
-        # Verify all four tool classes are properly imported and available
-        from octave_mcp.mcp.debate_convert import DebateConvertTool
+        # Verify all three tool classes are properly imported and available
         from octave_mcp.mcp.eject import EjectTool
         from octave_mcp.mcp.validate import ValidateTool
         from octave_mcp.mcp.write import WriteTool
@@ -52,7 +50,6 @@ class TestServerToolRouting:
         assert ValidateTool().get_name() == "octave_validate"
         assert WriteTool().get_name() == "octave_write"
         assert EjectTool().get_name() == "octave_eject"
-        assert DebateConvertTool().get_name() == "octave_debate_to_octave"
 
     @pytest.mark.asyncio
     async def test_validate_tool_routing(self, server):
@@ -69,11 +66,6 @@ class TestServerToolRouting:
     @pytest.mark.asyncio
     async def test_eject_tool_routing(self, server):
         """octave_eject tool is routed correctly."""
-        assert server.name == "octave-mcp"
-
-    @pytest.mark.asyncio
-    async def test_debate_convert_tool_routing(self, server):
-        """octave_debate_to_octave tool is routed correctly."""
         assert server.name == "octave-mcp"
 
 
@@ -136,32 +128,6 @@ META:
         assert "lossy" in result
 
     @pytest.mark.asyncio
-    async def test_debate_convert_tool_execution(self):
-        """Debate convert tool can be executed through server infrastructure."""
-        from octave_mcp.mcp.debate_convert import DebateConvertTool
-
-        tool = DebateConvertTool()
-        debate_json = json.dumps(
-            {
-                "thread_id": "test-001",
-                "topic": "Test Debate",
-                "mode": "fixed",
-                "status": "closed",
-                "participants": ["Wind", "Wall", "Door"],
-                "turns": [
-                    {"role": "Wind", "content": "Test turn 1"},
-                    {"role": "Wall", "content": "Test turn 2"},
-                ],
-                "synthesis": "Test synthesis",
-            }
-        )
-
-        result = await tool.execute(debate_json=debate_json)
-
-        assert result.get("status") == "success"
-        assert "output" in result
-
-    @pytest.mark.asyncio
     async def test_unknown_tool_not_handled(self):
         """Unknown tool name should not be valid."""
         # This verifies that the server only handles known tool names
@@ -220,21 +186,21 @@ class TestDisabledTools:
 
     def test_parse_disabled_tools_single(self):
         """Single tool name is parsed correctly."""
-        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_debate_to_octave"}):
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_eject"}):
             result = parse_disabled_tools()
-            assert result == {"octave_debate_to_octave"}
+            assert result == {"octave_eject"}
 
     def test_parse_disabled_tools_multiple(self):
         """Multiple comma-separated tools are parsed."""
-        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_eject,octave_debate_to_octave"}):
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_eject,octave_validate"}):
             result = parse_disabled_tools()
-            assert result == {"octave_eject", "octave_debate_to_octave"}
+            assert result == {"octave_eject", "octave_validate"}
 
     def test_parse_disabled_tools_with_whitespace(self):
         """Whitespace around tool names is stripped."""
-        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": " octave_eject , octave_debate_to_octave "}):
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": " octave_eject , octave_validate "}):
             result = parse_disabled_tools()
-            assert result == {"octave_eject", "octave_debate_to_octave"}
+            assert result == {"octave_eject", "octave_validate"}
 
     def test_parse_disabled_tools_case_insensitive(self):
         """Tool names are lowercased."""
@@ -283,7 +249,7 @@ class TestDisabledTools:
     def test_create_server_with_disabled_tool(self):
         """Server created with disabled tool has fewer tools."""
         # Clear any cached environment
-        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_debate_to_octave"}):
+        with mock.patch.dict(os.environ, {"DISABLED_TOOLS": "octave_eject"}):
             # We need to re-import/create to pick up the env var
             server = create_server()
             assert server is not None
