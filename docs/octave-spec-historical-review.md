@@ -1,9 +1,10 @@
 ---
 title: "OCTAVE v5.1.0 Specification Review"
-date: 2026-01-01
+date: 2026-01-02
 reviewer: Claude Opus 4.5
 status: complete
 scope: Comprehensive comparison against historical versions
+context: GREENFIELD - no existing users, no backwards compatibility required
 ---
 
 # OCTAVE Specification Historical Review
@@ -12,11 +13,12 @@ scope: Comprehensive comparison against historical versions
 
 OCTAVE v5.1.0 represents a significant maturation of the format, with clear operator precedence, explicit mode distinction (DATA vs SCHEMA), and production-ready implementation. However, the spec omits valuable content from earlier versions that would improve user adoption and completeness.
 
+**Context:** This is a greenfield project with no existing users. Historical versions are reference material only - there are no backwards compatibility constraints.
+
 **Key Findings:**
 - v5.1.0 is technically rigorous but lacks onboarding material
-- Several useful features from older specs are undocumented
+- Several useful features from older specs are undocumented (design decisions needed)
 - Compression tier rules are specified but not implemented
-- Missing migration guidance from earlier versions
 
 ---
 
@@ -211,24 +213,18 @@ framework.translation (HRM):
 
 ## Inconsistencies and Clarifications Needed
 
-### 1. Tension Operator Symbol Change
-- v4 archive: `_VERSUS_` (ASCII decorated keyword)
-- v5.1.0: `⇌` (Unicode) or `vs` (ASCII)
-
-The change to `vs` with boundary rules is better, but migration guidance is needed.
-
-### 2. File Extension Ambiguity
+### 1. File Extension Ambiguity
 - Old specs: `.octave.txt`
 - Current: `.oct.md` (from extensions list, but not explicitly stated)
 
 **Recommendation:** Clarify canonical extension
 
-### 3. Compression Tier Implementation Gap
+### 2. Compression Tier Implementation Gap
 The data spec §1b defines LOSSLESS/CONSERVATIVE/AGGRESSIVE/ULTRA tiers with rules, but `IMPLEMENTATION_NOTES` explicitly states: "compression tier selection is not implemented in the server."
 
 This creates a spec-implementation mismatch.
 
-### 4. ASSEMBLY Rules Clarity
+### 3. ASSEMBLY Rules Clarity
 Core §1 mentions:
 ```
 ASSEMBLY::when_profiles_concatenated[core+schema+data]→only_final_===END===_terminates
@@ -236,7 +232,7 @@ ASSEMBLY::when_profiles_concatenated[core+schema+data]→only_final_===END===_te
 
 But doesn't explain when/why profiles would be concatenated.
 
-### 5. Block Inheritance Pattern
+### 4. Block Inheritance Pattern
 The SCHEMA example shows:
 ```
 BLOCK_INHERITANCE_PATTERN:
@@ -257,12 +253,6 @@ The `[→§TARGET]` on a block key needs more explanation.
 3. **Split specification** - Must read two files to understand basics
 4. **SCHEMA mode complexity** - Holographic containers are advanced
 
-### For Existing Users
-
-1. **No migration guide** from v4 or earlier v5.x
-2. **Operator changes** (`_VERSUS_` → `vs`) unexplained
-3. **Feature removals** not documented (confidence scores, delta updates)
-
 ### For Tool Builders
 
 1. **No formal grammar** (BNF/EBNF)
@@ -271,35 +261,46 @@ The `[→§TARGET]` on a block key needs more explanation.
 
 ---
 
-## Recommendations
+## Recommendations (Greenfield Priority)
 
-### Immediate Actions (Add to Current Spec)
+Since this is greenfield, recommendations are prioritized by value to new adopters, not migration concerns.
 
-1. **Add validation checklist** to core spec §6 (NEVER section)
-2. **Add file extension specification** - recommend `.oct.md`
-3. **Define confidence score syntax** if still supported
-4. **Clarify ASSEMBLY rules** with concrete example
+### Immediate: Spec Completeness
 
-### Near-Term Additions
+| # | Item | Action | Location |
+|---|------|--------|----------|
+| 1 | File extension | Specify `.oct.md` as canonical | core spec §1 |
+| 2 | Validation checklist | Add simple checklist | core spec §6 |
+| 3 | ASSEMBLY rules | Clarify with example | core spec §1 |
+| 4 | Block inheritance | Document `[→§TARGET]` pattern | core spec §5 |
 
-5. **Create octave-quick-start.md** with:
-   - Minimal viable document example
-   - Step-by-step creation guide
-   - When to use / when not to use
+### Near-Term: Adoption Material
 
-6. **Add implementation tiers** to data spec
+| # | Item | Action | Deliverable |
+|---|------|--------|-------------|
+| 5 | Quick start guide | Create minimal examples + when to use/not use | `docs/octave-quick-start.md` |
+| 6 | Implementation tiers | Add Simple→Standard→Complex→Advanced | data spec §1 |
+| 7 | Pattern library | Define or explicitly omit mythological patterns | data spec (new section) |
 
-7. **Document migration from v4** including:
-   - `_VERSUS_` → `vs` change
-   - Envelope differences
-   - Removed features
+### Design Decisions Required
 
-### Longer-Term
+These features existed in old specs. Decision needed: adopt, modify, or explicitly omit.
 
-8. **Formal grammar** in BNF/EBNF
-9. **JSON schema** for interoperability
-10. **Test vector suite** for parser compliance
-11. **Online validator** tool
+| Feature | Old Behavior | Decision Needed |
+|---------|--------------|-----------------|
+| Confidence scores | `PTN:NAME[0.95]` | Include in v5.1? |
+| Delta updates | `DELTA:` / `CTX:REF-123` | Include in v5.1? |
+| Component aliasing | Formal rules for `(ALIAS)` | Formalize or leave implicit? |
+| Ultra-compact format | `CMP:` single-line | Include in v5.1? |
+| JSON mapping | Interop schema | Define or defer? |
+
+### Longer-Term: Tooling
+
+| # | Item | Purpose |
+|---|------|---------|
+| 8 | Formal grammar (BNF/EBNF) | Parser implementers |
+| 9 | JSON schema | Tooling integration |
+| 10 | Test vector suite | Parser compliance |
 
 ---
 
@@ -327,11 +328,85 @@ The `[→§TARGET]` on a block key needs more explanation.
 
 ## Conclusion
 
-OCTAVE v5.1.0 is a technically sound specification with clear implementation in the codebase. However, it has traded user accessibility for technical precision. The spec would benefit significantly from:
+OCTAVE v5.1.0 is a technically sound specification with clear implementation in the codebase. For a greenfield project, the main gaps are:
 
-1. Onboarding material (quick start, tiers)
-2. Feature completeness (confidence scores, patterns)
-3. Migration guidance
-4. Formal grammar and test vectors
+1. **Onboarding material** (quick start, tiers) - critical for adoption
+2. **Design decisions** on historical features (confidence scores, patterns, aliases)
+3. **Formal grammar and test vectors** - for tool builders
 
 The bones are good. The documentation needs flesh.
+
+---
+
+## Appendix: Review Prompt
+
+To review and implement these recommendations in depth, use the following prompt:
+
+```
+I need to review and implement the OCTAVE v5.1.0 spec improvements identified in
+docs/octave-spec-historical-review.md. This is a greenfield project with no existing users.
+
+Please work through the following systematically:
+
+## PHASE 1: Immediate Spec Completeness
+
+For each item, read the relevant spec section and propose concrete changes:
+
+1. **File extension** (core spec §1)
+   - Review: specs/octave-5-llm-core.oct.md
+   - Add explicit statement that `.oct.md` is the canonical extension
+
+2. **Validation checklist** (core spec §6)
+   - Review: specs/octave-5-llm-core.oct.md NEVER section
+   - Add a simple validation checklist based on the one from thymos OCTAVE.md
+
+3. **ASSEMBLY rules** (core spec §1)
+   - Review: specs/octave-5-llm-core.oct.md ENVELOPE section
+   - Clarify when/why profiles are concatenated with a concrete example
+
+4. **Block inheritance** (core spec §5)
+   - Review: specs/octave-5-llm-core.oct.md SCHEMA section
+   - Document the `[→§TARGET]` pattern on block keys
+
+## PHASE 2: Design Decisions
+
+For each feature, I need a recommendation with rationale:
+
+1. **Confidence scores** - Should `PTN:NAME[0.95]` syntax be included?
+   - Pro: Useful for uncertainty representation
+   - Con: Adds complexity, not currently implemented
+
+2. **Delta updates** - Should `DELTA:` / `CTX:REF-123` be included?
+   - Pro: Efficient for incremental communication
+   - Con: Adds state management complexity
+
+3. **Component aliasing** - Formalize `(ALIAS)` rules or leave implicit?
+   - Current: Examples show it but no formal rules
+
+4. **Ultra-compact format** - Include `CMP:` single-line format?
+   - Pro: Maximum token efficiency
+   - Con: Reduces readability, adds parsing complexity
+
+5. **Mythological patterns** - Include pattern library or explicitly omit?
+   - Options: Include definitions, reference external doc, or state "user-defined only"
+
+## PHASE 3: Adoption Material
+
+Create `docs/octave-quick-start.md` with:
+- Minimal viable DATA mode document
+- Minimal viable SCHEMA mode document
+- Step-by-step creation guide
+- "When to use OCTAVE" and "When NOT to use OCTAVE" sections
+- Link to full specs for details
+
+## PHASE 4: Implementation Tiers
+
+Add to specs/octave-5-llm-data.oct.md:
+- Tier 1 (Simple): Single section, basic key::value
+- Tier 2 (Standard): Multiple sections with relationships
+- Tier 3 (Complex): Full document with patterns and constraints
+- Tier 4 (Advanced): SCHEMA mode with holographic containers
+
+For each phase, show me the proposed changes before applying them.
+Commit each phase separately with appropriate commit messages.
+```
