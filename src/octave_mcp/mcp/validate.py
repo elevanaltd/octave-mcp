@@ -14,8 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from octave_mcp.core.emitter import emit
-from octave_mcp.core.lexer import tokenize
-from octave_mcp.core.parser import parse
+from octave_mcp.core.parser import parse_with_warnings
 from octave_mcp.core.repair import repair
 from octave_mcp.core.validator import Validator
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
@@ -248,24 +247,24 @@ class ValidateTool(BaseTool):
             "routing_log": [],  # I4: Target routing audit trail (Issue #103)
         }
 
-        # STAGE 1: Tokenize with ASCII normalization
+        # STAGE 1+2: Parse with frontmatter handling and collect repairs
+        # Issue #91 CE Fix: Use parse_with_warnings() as single authority for:
+        # 1. Strip YAML frontmatter internally
+        # 2. Tokenize stripped content
+        # 3. Parse into AST
+        # 4. Return combined lexer_repairs + parser warnings with correct positions
+        # This eliminates positional divergence from separate tokenize/parse calls
         try:
-            tokens, tokenize_repairs = tokenize(content)
+            doc, parse_repairs = parse_with_warnings(content)
+            result["repairs"].extend(parse_repairs)
         except Exception as e:
             result["status"] = "error"
-            result["errors"].append({"code": "E_TOKENIZE", "message": f"Tokenization error: {str(e)}"})
-            result["canonical"] = content  # Return original on error
-            return result
-
-        # Track normalization repairs from tokenization
-        result["repairs"].extend(tokenize_repairs)
-
-        # STAGE 2: Parse (build AST with envelope inference)
-        try:
-            doc = parse(content)
-        except Exception as e:
-            result["status"] = "error"
-            result["errors"].append({"code": "E_PARSE", "message": f"Parse error: {str(e)}"})
+            # Check if it's a tokenization or parse error
+            error_msg = str(e)
+            if "E005" in error_msg or "Unexpected character" in error_msg:
+                result["errors"].append({"code": "E_TOKENIZE", "message": f"Tokenization error: {error_msg}"})
+            else:
+                result["errors"].append({"code": "E_PARSE", "message": f"Parse error: {error_msg}"})
             result["canonical"] = content  # Return original on error
             return result
 
