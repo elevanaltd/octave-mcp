@@ -28,6 +28,35 @@ COMMENTS:://[line_start_or_after_value]
 ASSEMBLY::when_profiles_concatenated[core+schema+data]→only_final_===END===_terminates
 ASSEMBLY_RULE::omit_separator_in_assembled_profiles[only_standalone_documents]
 
+// ASSEMBLY EXAMPLE (Issue #108):
+// When injecting OCTAVE profiles into agent context, concatenate them.
+// Each profile omits its ===END=== except the final one.
+//
+// STANDALONE (single file):
+//   ===CORE===
+//   META:
+//     TYPE::LLM_PROFILE
+//   ---
+//   §1::CONTENT
+//   ===END===
+//
+// ASSEMBLED (core+schema injected together):
+//   ===CORE===
+//   META:
+//     TYPE::LLM_PROFILE
+//   §1::CONTENT
+//   ===SCHEMA===
+//   META:
+//     TYPE::LLM_PROFILE
+//   §1::DEFINITIONS
+//   ===END===
+//
+// USE_CASES::[
+//   agent_context_injection[core+schema+data_profiles],
+//   specification_layering[base_spec+extensions],
+//   multi_part_documents[header+body+footer]
+// ]
+
 §2::OPERATORS
 
 // LAYER 1: STRUCTURAL (statement/field level, not expressions)
@@ -109,6 +138,38 @@ ERRORS::[
   ∧_outside_brackets,
   chained_tension[A⇌B⇌C],
   vs_without_boundaries[SpeedvsQuality]
+]
+
+§6b::VALIDATION_CHECKLIST
+// Quick validation checklist for OCTAVE documents (Issue #107)
+ENVELOPE::[
+  ✓_starts_with_===NAME===,
+  ✓_META_block_with_TYPE_and_VERSION,
+  ✓_ends_with_===END===
+]
+STRUCTURE::[
+  ✓_2_space_indent_per_level,
+  ✓_no_tabs_anywhere,
+  ✓_keys_unique_per_block,
+  ✓_no_whitespace_around_::
+]
+OPERATORS::[
+  ✓_::_for_assignment,
+  ✓_:_for_blocks,
+  ✓_→_for_flow[or_->],
+  ✓_⇌_for_tension[or_vs_with_spaces],
+  ✓_∧_only_inside_brackets
+]
+TYPES::[
+  ✓_true_false_lowercase,
+  ✓_null_lowercase,
+  ✓_strings_quoted_if_special_chars,
+  ✓_lists_use_square_brackets
+]
+SCHEMA_MODE::[
+  ✓_holographic_pattern_in_brackets,
+  ✓_constraints_before_target,
+  ✓_target_uses_§_prefix
 ]
 
 §7::CANONICAL_EXAMPLES
