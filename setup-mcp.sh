@@ -185,7 +185,7 @@ ensure_venv_exists() {
         # Try uv first (faster), fall back to python3 -m venv
         # Note: uv venv doesn't include pip by default, but uv pip install works without it
         if command -v uv &> /dev/null; then
-            uv venv --python 3.12 "$script_dir/$VENV_PATH" || uv venv "$script_dir/$VENV_PATH"
+            uv venv --python 3.11 "$script_dir/$VENV_PATH" || uv venv "$script_dir/$VENV_PATH"
         else
             python3 -m venv "$script_dir/$VENV_PATH"
         fi

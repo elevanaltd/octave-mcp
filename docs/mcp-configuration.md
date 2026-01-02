@@ -41,10 +41,10 @@ octave-mcp-server --help
 
 ### 2. Verify Python Environment
 
-The server requires Python 3.12 or higher:
+The server requires Python 3.11 or higher:
 
 ```bash
-python --version  # Should show 3.12+
+python --version  # Should show 3.11+
 ```
 
 ### 3. Check PATH
@@ -363,7 +363,7 @@ octave-mcp-server
 
 - **Not in PATH:** Add Python bin directory to PATH (see [Prerequisites](#prerequisites))
 - **Not installed:** Run `pip install octave-mcp`
-- **Wrong Python version:** Ensure Python 3.12+ with `python --version`
+- **Wrong Python version:** Ensure Python 3.11+ with `python --version`
 
 ### Issue: Tools Not Appearing
 
@@ -491,7 +491,7 @@ octave validate document.oct.md --schema DECISION_LOG --verbose
 
 - **Large documents:** Split into smaller schemas or use projection modes
 - **Debug logging:** Disable with `OCTAVE_LOG_LEVEL=ERROR`
-- **Upgrade Python:** Use Python 3.12+ for better performance
+- **Upgrade Python:** Use Python 3.11+ (3.12+ recommended for better performance)
 
 ---
 
