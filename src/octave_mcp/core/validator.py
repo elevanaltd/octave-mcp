@@ -35,12 +35,21 @@ class Validator:
         self.schema = schema or {}
         self.errors: list[ValidationError] = []
 
-    def validate(self, doc: Document, strict: bool = False) -> list[ValidationError]:
+    def validate(
+        self,
+        doc: Document,
+        strict: bool = False,
+        section_schemas: dict[str, SchemaDefinition] | None = None,
+    ) -> list[ValidationError]:
         """Validate document against schema.
 
         Args:
             doc: Document AST
             strict: If True, reject unknown fields
+            section_schemas: Optional dict mapping section names to SchemaDefinition.
+                            When provided, sections with matching keys will be validated
+                            against their schema's constraints. Sections without a
+                            matching entry are skipped (I5: schema sovereignty).
 
         Returns:
             List of validation errors (empty if valid)
@@ -53,7 +62,13 @@ class Validator:
 
         # Validate sections
         for section in doc.sections:
-            self._validate_section(section, strict)
+            # Look up schema for this section by key (if section has a key attribute)
+            section_schema = None
+            if section_schemas is not None:
+                section_key = getattr(section, "key", None)
+                if section_key is not None:
+                    section_schema = section_schemas.get(section_key)
+            self._validate_section(section, strict, section_schema)
 
         return self.errors
 
@@ -220,16 +235,22 @@ class Validator:
             )
 
 
-def validate(doc: Document, schema: dict[str, Any] | None = None, strict: bool = False) -> list[ValidationError]:
+def validate(
+    doc: Document,
+    schema: dict[str, Any] | None = None,
+    strict: bool = False,
+    section_schemas: dict[str, SchemaDefinition] | None = None,
+) -> list[ValidationError]:
     """Validate document against schema.
 
     Args:
         doc: Document AST
         schema: Schema definition (optional)
         strict: Reject unknown fields if True
+        section_schemas: Optional dict mapping section names to SchemaDefinition
 
     Returns:
         List of validation errors
     """
     validator = Validator(schema)
-    return validator.validate(doc, strict)
+    return validator.validate(doc, strict, section_schemas)
