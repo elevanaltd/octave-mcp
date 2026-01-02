@@ -170,6 +170,7 @@ class ValidateTool(BaseTool):
             "warnings": [],
             "errors": errors,
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass on error
+            "routing_log": [],  # I4: Always include routing_log for consistency
         }
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
@@ -192,6 +193,7 @@ class ValidateTool(BaseTool):
             - schema_name: Schema name used (when VALIDATED or INVALID)
             - schema_version: Schema version used (when VALIDATED or INVALID)
             - validation_errors: List of schema validation errors (when INVALID)
+            - routing_log: Target routing audit trail (I4 compliance, Issue #103)
         """
         # Validate and extract parameters
         params = self.validate_parameters(kwargs)
@@ -243,6 +245,7 @@ class ValidateTool(BaseTool):
             "warnings": [],
             "errors": [],
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass until validated
+            "routing_log": [],  # I4: Target routing audit trail (Issue #103)
         }
 
         # STAGE 1: Tokenize with ASCII normalization
@@ -313,6 +316,10 @@ class ValidateTool(BaseTool):
                         for err in validation_errors
                     ]
                 )
+
+        # I4 (Discoverable Artifact Persistence): Expose routing_log in output
+        # "If not written and addressable -> didn't happen" - Issue #103
+        result["routing_log"] = validator.routing_log.to_dict()
 
         # STAGE 4: Repair (if fix=True)
         if fix:
