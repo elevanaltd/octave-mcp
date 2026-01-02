@@ -50,7 +50,7 @@ META:
   RULE_1::"Preserve CAUSALITY (X→Y because Z)"
   RULE_2::"Drop stopwords (the, is, a, of)"
   RULE_3::"One example per 200 tokens of abstraction"
-  RULE_4::"Explicit Tradeoffs (GAIN _VERSUS_ LOSS)"
+  RULE_4::"Explicit Tradeoffs (GAIN⇌LOSS or GAIN vs LOSS)"
   RULE_5::"Use Mythological Encoding if complexity demands it"
 
 §4::ANTI_PATTERNS

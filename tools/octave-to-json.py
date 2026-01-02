@@ -58,8 +58,12 @@ def octave_to_json(content):
                 parsed_value = None
             elif re.match(r"^-?\d+(\.\d+)?([eE][+-]?\d+)?$", value_str):
                 parsed_value = float(value_str) if "." in value_str or "e" in value_str.lower() else int(value_str)
-            elif "_VERSUS_" in value_str:
-                parts = value_str.split("_VERSUS_")
+            # v5.1.0: Detect tension operator ⇌ or ' vs ' (word-bounded)
+            elif "⇌" in value_str or re.search(r"\s+vs\s+", value_str):
+                if "⇌" in value_str:
+                    parts = value_str.split("⇌")
+                else:
+                    parts = re.split(r"\s+vs\s+", value_str)
                 parsed_value = {"tension": [parts[0].strip(), parts[1].strip()]}
             elif "~" in value_str and not value_str.startswith('"'):
                 parsed_value = {"concatenation": [v.strip() for v in value_str.split("~")]}

@@ -34,9 +34,9 @@ The test successfully validated that a core set of mythological patterns are uni
 The following elements demonstrated high comprehension rates across the model pool and are recommended for asterisk validation.
 
 1.  **Semantic Operators** (100% comprehension):
-    - `+` consistently interpreted as synthesis/cooperation/combination.
-    - `_VERSUS_` consistently interpreted as conflict/tension/opposition.
-    - `->` understood as progression/transformation.
+    - `+` (now `⊕`) consistently interpreted as synthesis/cooperation/combination.
+    - `_VERSUS_` (now `⇌`/`vs`) consistently interpreted as conflict/tension/opposition.
+    - `->` (now `→`) understood as progression/transformation.
 
 2.  **Basic Mythological References** (90%+ recognition):
     - **Domains**: ZEUS, ATHENA, APOLLO, HERMES.
@@ -54,7 +54,7 @@ The following elements demonstrated high comprehension rates across the model po
 ### Recommendation
 Based on these results, it is recommended to **mark these elements as empirically validated in the canonical v4 spec (`specs/octave-4.oct.md`)** (e.g., with asterisks `*` or an equivalent notation) to indicate they have been tested for universal LLM comprehension without context:
 
--   All **SEMANTIC_OPERATORS** (`+`, `_VERSUS_`, `->`).
+-   All **SEMANTIC_OPERATORS** (`⊕`/`+`, `⇌`/`vs`, `→`/`->`).
 -   A core set of **DOMAINS** including `ZEUS`, `ATHENA`, `APOLLO`, `HERMES`.
 -   A core set of **PATTERNS** including `PROMETHEAN`, `ICARIAN`, `SISYPHEAN`.
 

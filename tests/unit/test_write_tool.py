@@ -850,3 +850,568 @@ KEY::value
             # Should have validation_errors with details about missing fields
             errors = result.get("validation_errors", [])
             assert len(errors) >= 1, "Should report at least one validation error for missing required fields"
+
+
+class TestWriteToolDotNotationChanges:
+    """Tests for dot-notation path support in changes mode.
+
+    Dot-notation allows updating nested fields:
+    - "META.STATUS": "ACTIVE" -> updates doc.meta["STATUS"]
+    - "META.NEW_FIELD": "value" -> adds field to doc.meta
+    - "META.FIELD": {"$op": "DELETE"} -> removes field from doc.meta
+    - "META": {...} -> replaces entire META block (existing behavior)
+    - Top-level keys still work (regression)
+    """
+
+    @pytest.mark.asyncio
+    async def test_dot_notation_updates_meta_field(self):
+        """Test dot notation updates existing META field in META block."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+  STATUS::DRAFT
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Update META.STATUS using dot notation
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META.STATUS": "ACTIVE"},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify META.STATUS was updated WITHIN the META block
+            with open(target_path) as f:
+                content = f.read()
+                # ACTIVE should appear in META block (after META:, before ---)
+                lines = content.split("\n")
+                in_meta = False
+                found_active_in_meta = False
+                for line in lines:
+                    if line.strip().startswith("META:"):
+                        in_meta = True
+                    elif line.strip() == "---":
+                        in_meta = False
+                    elif in_meta and "STATUS" in line and "ACTIVE" in line:
+                        found_active_in_meta = True
+
+                assert found_active_in_meta, f"ACTIVE should be in META block, not as top-level key. Got:\n{content}"
+                # DRAFT should be gone (replaced by ACTIVE)
+                assert "DRAFT" not in content
+                # TYPE should be preserved
+                assert "TEST_DOC" in content
+                # Should NOT have 'META.STATUS' as literal key
+                assert "META.STATUS::" not in content
+
+    @pytest.mark.asyncio
+    async def test_dot_notation_adds_new_meta_field(self):
+        """Test dot notation adds new META field in META block."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Add new META.VERSION field using dot notation
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META.VERSION": "1.0.0"},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify new field was added WITHIN the META block
+            with open(target_path) as f:
+                content = f.read()
+                # VERSION should appear in META block (after META:, before ---)
+                lines = content.split("\n")
+                in_meta = False
+                found_version_in_meta = False
+                for line in lines:
+                    if line.strip().startswith("META:"):
+                        in_meta = True
+                    elif line.strip() == "---":
+                        in_meta = False
+                    elif in_meta and "VERSION" in line and "1.0.0" in line:
+                        found_version_in_meta = True
+
+                assert found_version_in_meta, f"VERSION should be in META block, not as top-level key. Got:\n{content}"
+                # TYPE should be preserved
+                assert "TEST_DOC" in content
+                # Should NOT have 'META.VERSION' as literal key
+                assert "META.VERSION::" not in content
+
+    @pytest.mark.asyncio
+    async def test_dot_notation_deletes_meta_field(self):
+        """Test dot notation deletes META field with DELETE sentinel."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block with DEPRECATED field
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+  DEPRECATED::old_stuff
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Delete META.DEPRECATED using dot notation + DELETE sentinel
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META.DEPRECATED": {"$op": "DELETE"}},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify field was deleted
+            with open(target_path) as f:
+                content = f.read()
+                assert "DEPRECATED" not in content
+                # TYPE should be preserved
+                assert "TEST_DOC" in content
+
+    @pytest.mark.asyncio
+    async def test_meta_dict_replaces_entire_block(self):
+        """Test META={...} replaces entire META block (not dot notation)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+  OLD_FIELD::should_be_gone
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Replace entire META block
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META": {"TYPE": "NEW_DOC", "VERSION": "2.0"}},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify META was replaced
+            with open(target_path) as f:
+                content = f.read()
+                # New fields should be present
+                assert "NEW_DOC" in content or "TYPE" in content
+                assert "2.0" in content or "VERSION" in content
+                # Old field should be gone (replaced)
+                assert "OLD_FIELD" not in content
+                # Should NOT have malformed dict syntax
+                assert "{'TYPE'" not in content
+
+    @pytest.mark.asyncio
+    async def test_top_level_changes_still_work_regression(self):
+        """Test top-level changes still work (regression test)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with top-level assignment
+            initial = """===TEST===
+KEY::old_value
+OTHER::preserved
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Update top-level KEY
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"KEY": "new_value"},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify update worked
+            with open(target_path) as f:
+                content = f.read()
+                assert "new_value" in content
+                assert "preserved" in content
+
+    @pytest.mark.asyncio
+    async def test_dot_notation_multiple_meta_fields(self):
+        """Test dot notation can update multiple META fields at once."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+  STATUS::DRAFT
+  VERSION::"0.1"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Update multiple META fields at once
+            result = await tool.execute(
+                target_path=target_path,
+                changes={
+                    "META.STATUS": "ACTIVE",
+                    "META.VERSION": "1.0.0",
+                },
+            )
+
+            assert result["status"] == "success"
+
+            # Verify updates are in META block
+            with open(target_path) as f:
+                content = f.read()
+                # Both updates should be in META block
+                lines = content.split("\n")
+                in_meta = False
+                found_active = False
+                found_version = False
+                for line in lines:
+                    if line.strip().startswith("META:"):
+                        in_meta = True
+                    elif line.strip() == "---":
+                        in_meta = False
+                    elif in_meta:
+                        if "STATUS" in line and "ACTIVE" in line:
+                            found_active = True
+                        if "VERSION" in line and "1.0.0" in line:
+                            found_version = True
+
+                assert found_active, f"ACTIVE should be in META block. Got:\n{content}"
+                assert found_version, f"1.0.0 should be in META block. Got:\n{content}"
+                # Old values should be gone
+                assert "DRAFT" not in content
+                assert "0.1" not in content
+                # TYPE should be preserved
+                assert "TEST_DOC" in content
+                # Should NOT have literal META.* keys
+                assert "META.STATUS::" not in content
+                assert "META.VERSION::" not in content
+
+
+class TestStructuralMetrics:
+    """Tests for structural metrics extraction (Issue #92).
+
+    The _generate_diff() function needs to report structural changes between
+    input and output documents. This test class verifies the metrics extraction
+    and structural diff functionality.
+    """
+
+    def test_extract_structural_metrics_counts_sections(self):
+        """Test extract_structural_metrics() counts sections correctly."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import extract_structural_metrics
+
+        # Document with 2 numbered sections
+        content = """===TEST===
+
+\u00a71::FIRST_SECTION
+  KEY1::value1
+
+\u00a72::SECOND_SECTION
+  KEY2::value2
+
+===END==="""
+
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+
+        assert metrics.sections == 2, f"Expected 2 sections, got {metrics.sections}"
+
+    def test_extract_structural_metrics_counts_section_markers(self):
+        """Test extract_structural_metrics() identifies section markers."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import extract_structural_metrics
+
+        # Document with section markers
+        content = """===DOC===
+
+\u00a71::CORE
+  RULE::one
+
+\u00a72::SECONDARY
+  RULE::two
+
+===END==="""
+
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+
+        # section_markers tracks the section IDs found
+        assert "1" in metrics.section_markers
+        assert "2" in metrics.section_markers
+
+    def test_extract_structural_metrics_counts_blocks(self):
+        """Test extract_structural_metrics() counts blocks correctly."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import extract_structural_metrics
+
+        # Document with 2 blocks
+        content = """===TEST===
+OUTER_BLOCK:
+  INNER_KEY::value
+SECOND_BLOCK:
+  ANOTHER_KEY::value
+===END==="""
+
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+
+        assert metrics.blocks == 2, f"Expected 2 blocks, got {metrics.blocks}"
+
+    def test_extract_structural_metrics_counts_assignments(self):
+        """Test extract_structural_metrics() counts assignments correctly."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import extract_structural_metrics
+
+        # Document with 3 assignments (including nested)
+        content = """===TEST===
+TOP::value1
+BLOCK:
+  NESTED::value2
+  ANOTHER::value3
+===END==="""
+
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+
+        assert metrics.assignments == 3, f"Expected 3 assignments, got {metrics.assignments}"
+
+    def test_generate_diff_no_changes(self):
+        """Test _generate_diff() returns 'No changes' for identical documents."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+
+        tool = WriteTool()
+
+        content = "===TEST===\nKEY::value\n===END==="
+        doc = parse(content)
+        metrics = extract_structural_metrics(doc)
+        diff = tool._generate_diff(len(content), len(content), metrics, metrics)
+
+        assert diff == "No changes", f"Expected 'No changes', got '{diff}'"
+
+    def test_generate_diff_detects_section_marker_removal(self):
+        """Test _generate_diff() detects section marker removal (W_STRUCT_001)."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+
+        tool = WriteTool()
+
+        original = """===TEST===
+
+\u00a71::FIRST
+  KEY::value
+
+\u00a72::SECOND
+  OTHER::value
+
+===END==="""
+
+        # Canonical form after some operation removes section markers
+        canonical = """===TEST===
+KEY::value
+OTHER::value
+===END==="""
+
+        original_doc = parse(original)
+        canonical_doc = parse(canonical)
+        original_metrics = extract_structural_metrics(original_doc)
+        canonical_metrics = extract_structural_metrics(canonical_doc)
+
+        diff = tool._generate_diff(len(original), len(canonical), original_metrics, canonical_metrics)
+
+        # Should contain warning code W_STRUCT_001 for section marker loss
+        assert "W_STRUCT_001" in diff, f"Expected W_STRUCT_001 warning, got: {diff}"
+        assert "section" in diff.lower(), f"Expected 'section' in diff message: {diff}"
+
+    def test_generate_diff_detects_assignment_reduction(self):
+        """Test _generate_diff() detects assignment count reduction (W_STRUCT_003)."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+
+        tool = WriteTool()
+
+        original = """===TEST===
+KEY1::value1
+KEY2::value2
+KEY3::value3
+===END==="""
+
+        # Fewer assignments in output
+        canonical = """===TEST===
+KEY1::value1
+===END==="""
+
+        original_doc = parse(original)
+        canonical_doc = parse(canonical)
+        original_metrics = extract_structural_metrics(original_doc)
+        canonical_metrics = extract_structural_metrics(canonical_doc)
+
+        diff = tool._generate_diff(len(original), len(canonical), original_metrics, canonical_metrics)
+
+        # Should contain warning code W_STRUCT_003 for assignment reduction
+        assert "W_STRUCT_003" in diff, f"Expected W_STRUCT_003 warning, got: {diff}"
+
+    def test_generate_diff_structural_summary_format(self):
+        """Test structural summary format in _generate_diff() response."""
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+
+        tool = WriteTool()
+
+        # Use content with different byte lengths to trigger non-"No changes" path
+        original = """===TEST===
+KEY::old_value_here
+===END==="""
+
+        canonical = """===TEST===
+KEY::new
+===END==="""
+
+        original_doc = parse(original)
+        canonical_doc = parse(canonical)
+        original_metrics = extract_structural_metrics(original_doc)
+        canonical_metrics = extract_structural_metrics(canonical_doc)
+
+        diff = tool._generate_diff(len(original), len(canonical), original_metrics, canonical_metrics)
+
+        # Diff should include structural metrics (byte count at minimum)
+        assert "bytes" in diff.lower() or "->" in diff, f"Expected structural info in diff: {diff}"
+
+    @pytest.mark.asyncio
+    async def test_octave_write_includes_structural_diff(self):
+        """Test that octave_write response envelope contains structural diff."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with sections
+            original = """===TEST===
+
+\u00a71::SECTION_ONE
+  KEY::value
+
+===END==="""
+
+            with open(target_path, "w") as f:
+                f.write(original)
+
+            # Modify via changes
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"KEY": "new_value"},
+            )
+
+            assert result["status"] == "success"
+            # diff field should contain structural information
+            assert "diff" in result
+            # Diff should not just be empty or "No changes" for real changes
+            assert result["diff"], "diff field should contain structural summary"
+
+    def test_generate_diff_detects_value_change_same_length(self):
+        """Test _generate_diff reports changes when content differs but length/structure same.
+
+        Regression test for Issue #92: When content changes but preserves byte count
+        and structural metrics (e.g., KEY::foo -> KEY::bar), _generate_diff must NOT
+        return "No changes". This violates I4 (Auditability) - all changes must be
+        visible in the diff.
+
+        Root cause: The original implementation only checked byte counts and
+        structural metrics, missing actual content comparison.
+
+        Fix: Add content_changed parameter that the caller computes and passes in.
+        """
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+
+        tool = WriteTool()
+
+        # Original and canonical have SAME byte count and SAME structure
+        # but DIFFERENT content values
+        original = "===TEST===\nKEY::foo\n===END==="
+        canonical = "===TEST===\nKEY::bar\n===END==="
+
+        # Verify byte counts are identical (the bug condition)
+        assert len(original) == len(canonical), "Test setup: byte counts must be equal"
+
+        # Verify structural metrics are identical (the bug condition)
+        original_doc = parse(original)
+        canonical_doc = parse(canonical)
+        original_metrics = extract_structural_metrics(original_doc)
+        canonical_metrics = extract_structural_metrics(canonical_doc)
+
+        assert original_metrics.sections == canonical_metrics.sections
+        assert original_metrics.blocks == canonical_metrics.blocks
+        assert original_metrics.assignments == canonical_metrics.assignments
+
+        # The content HAS changed (foo -> bar)
+        content_changed = original != canonical
+        assert content_changed, "Test setup: content must differ"
+
+        # Call _generate_diff with content_changed=True
+        diff = tool._generate_diff(
+            len(original),
+            len(canonical),
+            original_metrics,
+            canonical_metrics,
+            content_changed=True,
+        )
+
+        # I4 REQUIREMENT: Must NOT return "No changes" when content changed
+        assert diff != "No changes", (
+            "I4 violation: _generate_diff returned 'No changes' even though content "
+            "changed from 'foo' to 'bar'. Diff should indicate content was modified."
+        )
+        # Should indicate bytes AND that content changed
+        assert "bytes" in diff.lower() or "->" in diff, f"Diff should include byte count info, got: {diff}"

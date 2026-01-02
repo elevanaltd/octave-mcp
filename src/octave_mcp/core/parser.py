@@ -7,12 +7,84 @@ Parses lexer tokens into AST with:
 - Whitespace normalization around ::
 - Nested block structure with indentation
 - META block extraction
+- YAML frontmatter stripping (Issue #91)
 """
 
 from typing import Any
 
 from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, Section
 from octave_mcp.core.lexer import Token, TokenType, tokenize
+
+
+def _strip_yaml_frontmatter(content: str) -> tuple[str, str | None]:
+    """Strip YAML frontmatter from document content.
+
+    YAML frontmatter is a block at the start of a document delimited by --- markers.
+    This is commonly used in HestAI agent definitions and other markdown-like files.
+
+    Issue #91: The OCTAVE lexer does not recognize YAML syntax (parentheses, etc.)
+    so frontmatter must be stripped before tokenization.
+
+    Issue #91 Rework: Performance and line number preservation fixes:
+    - Fast path: Check content.startswith("---") BEFORE splitting (O(1) vs O(N))
+    - Line offset: Replace frontmatter with equivalent newlines to preserve line numbers
+
+    Args:
+        content: Raw document content
+
+    Returns:
+        Tuple of (content_without_frontmatter, raw_frontmatter_or_none)
+        When frontmatter is stripped, the returned content has the frontmatter
+        replaced with newlines to preserve line number mapping.
+
+    Example:
+        >>> content = '''---
+        ... name: Agent (Specialist)
+        ... ---
+        ...
+        ... ===DOC===
+        ... META::value
+        ... ===END==='''
+        >>> stripped, frontmatter = _strip_yaml_frontmatter(content)
+        >>> '(' in stripped
+        False
+        >>> 'Agent (Specialist)' in frontmatter
+        True
+    """
+    # Fast path: check first chars before splitting (true O(1) for non-frontmatter files)
+    # This avoids O(N) split operation for the majority of files without frontmatter
+    # Issue #91 Rework: Standard YAML frontmatter MUST start at column 0, line 1.
+    # No lstrip() fallback - that creates O(N) string copy even for non-frontmatter.
+    if not content.startswith("---"):
+        return content, None
+
+    lines = content.split("\n")
+
+    # Check if document starts with YAML frontmatter marker
+    if not lines or lines[0].strip() != "---":
+        return content, None
+
+    # Find the closing --- marker
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            # Found closing marker
+            # Extract frontmatter (excluding the --- markers themselves)
+            frontmatter_lines = lines[1:i]
+            raw_frontmatter = "\n".join(frontmatter_lines)
+
+            # Issue #91 Rework: Replace frontmatter with newlines to preserve line numbers
+            # Frontmatter occupies lines 0 through i (inclusive of closing marker)
+            # We need (i + 1) newlines to keep remaining content at correct line numbers
+            frontmatter_line_count = i + 1
+            padding = "\n" * frontmatter_line_count
+            remaining_lines = lines[i + 1 :]
+            stripped_content = padding + "\n".join(remaining_lines)
+
+            return stripped_content, raw_frontmatter
+
+    # No closing marker found - treat entire content as non-frontmatter
+    return content, None
+
 
 # Unified set of operators valid in expression contexts (GH#62, GH#65)
 # This replaces ad-hoc inline operator checks in parse_flow_expression.
@@ -96,6 +168,59 @@ class Parser:
         """Skip newlines and comments."""
         while self.current().type in (TokenType.NEWLINE, TokenType.COMMENT):
             self.advance()
+
+    def _consume_bracket_annotation(self, capture: bool = False) -> str | None:
+        """Consume bracket annotation [content] if present.
+
+        Handles nested brackets properly. Used for:
+        - Section annotations: §0::META[schema_hints,versioning]
+        - Colon-path annotations: HERMES:API_TIMEOUT[note]
+        - Value annotations: DONE[annotation], PENDING[[nested,content]]
+
+        Args:
+            capture: If True, capture and return the annotation content.
+                    If False, just skip the bracket block.
+
+        Returns:
+            Captured annotation string if capture=True and brackets present,
+            None otherwise.
+        """
+        if self.current().type != TokenType.LIST_START:
+            return None
+
+        bracket_depth = 1
+        self.advance()  # Consume [
+
+        if not capture:
+            # Fast path: just skip without capturing
+            while bracket_depth > 0 and self.current().type != TokenType.EOF:
+                if self.current().type == TokenType.LIST_START:
+                    bracket_depth += 1
+                elif self.current().type == TokenType.LIST_END:
+                    bracket_depth -= 1
+                self.advance()
+            return None
+
+        # Capture mode: collect tokens for annotation string
+        annotation_tokens: list[str] = []
+
+        while bracket_depth > 0 and self.current().type != TokenType.EOF:
+            if self.current().type == TokenType.LIST_START:
+                bracket_depth += 1
+                annotation_tokens.append("[")
+            elif self.current().type == TokenType.LIST_END:
+                bracket_depth -= 1
+                if bracket_depth > 0:  # Don't include the final ]
+                    annotation_tokens.append("]")
+            elif self.current().type == TokenType.IDENTIFIER:
+                annotation_tokens.append(self.current().value)
+            elif self.current().type == TokenType.COMMA:
+                annotation_tokens.append(",")
+            elif self.current().type == TokenType.STRING:
+                annotation_tokens.append(f'"{self.current().value}"')
+            self.advance()
+
+        return "".join(annotation_tokens) if annotation_tokens else None
 
     def parse_document(self) -> Document:
         """Parse a complete OCTAVE document."""
@@ -281,32 +406,7 @@ class Parser:
 
         # Capture optional bracket annotation tail [...]
         # Example: §0::META[schema_hints,versioning]
-        annotation = None
-        if self.current().type == TokenType.LIST_START:
-            # Consume [ and capture content until matching ]
-            bracket_depth = 1
-            annotation_tokens = []
-            self.advance()  # Consume [
-
-            while bracket_depth > 0 and self.current().type != TokenType.EOF:
-                if self.current().type == TokenType.LIST_START:
-                    bracket_depth += 1
-                    annotation_tokens.append("[")
-                elif self.current().type == TokenType.LIST_END:
-                    bracket_depth -= 1
-                    if bracket_depth > 0:  # Don't include the final ]
-                        annotation_tokens.append("]")
-                elif self.current().type == TokenType.IDENTIFIER:
-                    annotation_tokens.append(self.current().value)
-                elif self.current().type == TokenType.COMMA:
-                    annotation_tokens.append(",")
-                elif self.current().type == TokenType.STRING:
-                    annotation_tokens.append(f'"{self.current().value}"')
-                self.advance()
-
-            # Join tokens to create annotation string
-            if annotation_tokens:
-                annotation = "".join(annotation_tokens)
+        annotation = self._consume_bracket_annotation(capture=True)
 
         self.skip_whitespace()
 
@@ -347,14 +447,26 @@ class Parser:
                 # Skip newlines
                 if self.current().type == TokenType.NEWLINE:
                     self.advance()
-                    # Reset indent tracking after newline
+                    # GH#81: After newline, reset indent tracking to 0
+                    # Next INDENT token will update it, or absence means column 0
                     current_line_indent = 0
                     continue
+
+                # GH#81: Check for implicit dedent before parsing child
+                # If current line has less indentation than section children expect,
+                # the next token is a sibling/ancestor, not a child
+                if current_line_indent < child_indent:
+                    break
 
                 # Parse child
                 child = self.parse_section(child_indent)
                 if child:
                     children.append(child)
+                    # GH#81: After parsing a child (especially nested blocks),
+                    # the recursive call may have consumed NEWLINEs. Reset indent
+                    # tracking so next iteration properly detects the current
+                    # line's indentation via INDENT token or implicit dedent.
+                    current_line_indent = 0
                 else:
                     # No valid child parsed, might be end of section
                     break
@@ -415,6 +527,11 @@ class Parser:
                 child_indent = self.current().value
                 self.advance()
 
+                # GH#81: Track current line's indentation to detect implicit dedent
+                # When NEWLINE is consumed without subsequent INDENT, the next token
+                # is at column 0 (implicit dedent). We must detect this and break.
+                current_line_indent = child_indent
+
                 while True:
                     # End conditions
                     if self.current().type in (TokenType.EOF, TokenType.ENVELOPE_END):
@@ -422,7 +539,8 @@ class Parser:
 
                     # Check indentation
                     if self.current().type == TokenType.INDENT:
-                        if self.current().value < child_indent:
+                        current_line_indent = self.current().value
+                        if current_line_indent < child_indent:
                             break  # Dedent, end of block
                         # Same or deeper level - consume and continue to parse
                         self.advance()
@@ -431,12 +549,26 @@ class Parser:
                     # Skip newlines
                     if self.current().type == TokenType.NEWLINE:
                         self.advance()
+                        # GH#81: After newline, reset indent tracking to 0
+                        # Next INDENT token will update it, or absence means column 0
+                        current_line_indent = 0
                         continue
+
+                    # GH#81: Check for implicit dedent before parsing child
+                    # If current line has less indentation than block children expect,
+                    # the next token is a sibling/ancestor, not a child
+                    if current_line_indent < child_indent:
+                        break
 
                     # Parse child
                     child = self.parse_section(child_indent)
                     if child:
                         children.append(child)
+                        # GH#81: After parsing a child (especially nested blocks),
+                        # the recursive call may have consumed NEWLINEs. Reset indent
+                        # tracking so next iteration properly detects the current
+                        # line's indentation via INDENT token or implicit dedent.
+                        current_line_indent = 0
                     elif self.current().type in (TokenType.NEWLINE, TokenType.INDENT):
                         # GH#64: parse_section consumed and warned about bare identifier,
                         # leaving us at NEWLINE/INDENT. Continue parsing remaining children.
@@ -471,6 +603,81 @@ class Parser:
             return token.value
 
         elif token.type == TokenType.NUMBER:
+            # GH#87: Check if NUMBER is followed by IDENTIFIER (e.g., 123_suffix)
+            # If so, coalesce into multi-word string value (same pattern as IDENTIFIER path)
+            next_token = self.peek()
+            if next_token.type == TokenType.IDENTIFIER:
+                # NUMBER followed by IDENTIFIER - coalesce as multi-word value
+                # Track start position for I4 audit
+                start_line = token.line
+                start_column = token.column
+
+                # Use raw lexeme for NUMBER to preserve format (e.g., 1e10)
+                word_parts = [_token_to_str(token)]
+                self.advance()  # Consume NUMBER
+
+                # Accumulate following IDENTIFIER/NUMBER tokens (like IDENTIFIER path)
+                while self.current().type in (TokenType.IDENTIFIER, TokenType.NUMBER):
+                    # Check if next token after this is an operator
+                    if self.peek().type in EXPRESSION_OPERATORS:
+                        # Include this token and parse rest as expression
+                        word_parts.append(_token_to_str(self.current()))
+                        self.advance()
+                        # Continue with flow expression parsing
+                        expr_parts = [" ".join(word_parts)]
+                        while (
+                            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER)
+                            or self.current().type in EXPRESSION_OPERATORS
+                        ):
+                            if self.current().type in EXPRESSION_OPERATORS:
+                                expr_parts.append(self.current().value)
+                                self.advance()
+                            elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER):
+                                expr_parts.append(_token_to_str(self.current()))
+                                self.advance()
+                            else:
+                                break
+                        # I4 Audit: Emit warning for NUMBER+IDENTIFIER coalescing in expression
+                        self.warnings.append(
+                            {
+                                "type": "lenient_parse",
+                                "subtype": "multi_word_coalesce",
+                                "original": word_parts,
+                                "result": " ".join(word_parts),
+                                "context": "number_identifier_expression",
+                                "line": start_line,
+                                "column": start_column,
+                            }
+                        )
+                        return "".join(str(p) for p in expr_parts)
+
+                    # Just another word/number in the multi-word value
+                    word_parts.append(_token_to_str(self.current()))
+                    self.advance()
+
+                # Join words with spaces
+                result = " ".join(word_parts)
+
+                # GH#87 I4 Audit: Emit warning for NUMBER+IDENTIFIER coalescing
+                # Per I4: "If bits lost must have receipt" - this is lenient parsing
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "multi_word_coalesce",
+                        "original": word_parts,
+                        "result": result,
+                        "context": "number_identifier",
+                        "line": start_line,
+                        "column": start_column,
+                    }
+                )
+
+                # Consume bracket annotation if present (like IDENTIFIER path)
+                self._consume_bracket_annotation(capture=False)
+
+                return result
+
+            # Standalone NUMBER - return numeric value as before
             self.advance()
             return token.value
 
@@ -509,6 +716,10 @@ class Parser:
 
             # If we consumed colons, return as colon-joined path
             if len(parts) > 1:
+                # GH#85: Consume bracket annotation if present after colon-path value
+                # Examples: HERMES:API_TIMEOUT[note], MODULE:SUB[annotation]
+                # Must consume before returning so indentation tracking sees NEWLINE
+                self._consume_bracket_annotation(capture=False)
                 return ":".join(parts)
 
             # GH#66: Continue capturing consecutive identifiers as multi-word value
@@ -579,6 +790,11 @@ class Parser:
                         "column": start_column,
                     }
                 )
+
+            # GH#85: Consume bracket annotation if present after value
+            # Examples: DONE[annotation], PENDING[[nested,content]]
+            # Must consume before returning so indentation tracking sees NEWLINE
+            self._consume_bracket_annotation(capture=False)
 
             return result
 
@@ -687,13 +903,23 @@ def parse(content: str | list[Token]) -> Document:
     Raises:
         ParserError: On syntax errors
     """
+    raw_frontmatter: str | None = None
+
     if isinstance(content, str):
-        tokens, _ = tokenize(content)
+        # Issue #91: Strip YAML frontmatter before tokenization
+        # YAML frontmatter contains characters (parentheses, etc.) that the lexer rejects
+        stripped_content, raw_frontmatter = _strip_yaml_frontmatter(content)
+        tokens, _ = tokenize(stripped_content)
     else:
         tokens = content
 
     parser = Parser(tokens)
-    return parser.parse_document()
+    doc = parser.parse_document()
+
+    # Preserve frontmatter in Document AST for I4 auditability
+    doc.raw_frontmatter = raw_frontmatter
+
+    return doc
 
 
 def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict]]:
@@ -724,14 +950,21 @@ def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict
     Raises:
         ParserError: On syntax errors
     """
+    raw_frontmatter: str | None = None
+
     if isinstance(content, str):
-        tokens, lexer_repairs = tokenize(content)
+        # Issue #91: Strip YAML frontmatter before tokenization
+        stripped_content, raw_frontmatter = _strip_yaml_frontmatter(content)
+        tokens, lexer_repairs = tokenize(stripped_content)
     else:
         tokens = content
         lexer_repairs = []
 
     parser = Parser(tokens)
     doc = parser.parse_document()
+
+    # Preserve frontmatter in Document AST for I4 auditability
+    doc.raw_frontmatter = raw_frontmatter
 
     # Combine lexer repairs and parser warnings
     # Lexer repairs are about ASCII normalization

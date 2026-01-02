@@ -262,3 +262,135 @@ META:
         # When E004 is implemented, validator should check if §UNKNOWN can be resolved
         # For now, just parse successfully
         assert doc.name == "TEST"
+
+
+class TestYAMLFrontmatter:
+    """Test YAML frontmatter handling (Issue #91)."""
+
+    def test_parse_yaml_frontmatter_with_parentheses(self):
+        """Should parse document with YAML frontmatter containing parentheses.
+
+        Issue #91: Lexer fails on parentheses in YAML frontmatter.
+        YAML frontmatter is a common pattern in HestAI agent definitions.
+        """
+        content = """---
+name: Ideator (PATHOS Specialist)
+description: Creative exploration agent
+---
+
+===TEST===
+META:
+  TYPE::TEST
+===END==="""
+        doc = parse(content)
+        assert doc is not None
+        assert doc.name == "TEST"
+        assert doc.meta.get("TYPE") == "TEST"
+        # Frontmatter should be preserved in raw_frontmatter field
+        assert doc.raw_frontmatter is not None
+        assert "Ideator (PATHOS Specialist)" in doc.raw_frontmatter
+
+    def test_parse_yaml_frontmatter_with_brackets(self):
+        """Should parse YAML frontmatter with square brackets."""
+        content = """---
+tags: [alpha, beta, gamma]
+options: ["option1", "option2"]
+---
+
+===TEST===
+KEY::value
+===END==="""
+        doc = parse(content)
+        assert doc is not None
+        assert doc.name == "TEST"
+        assert doc.raw_frontmatter is not None
+        assert "[alpha, beta, gamma]" in doc.raw_frontmatter
+
+    def test_parse_yaml_frontmatter_with_colons(self):
+        """Should parse YAML frontmatter with colons in values."""
+        content = """---
+url: "https://example.com:8080/path"
+time: "10:30:00"
+---
+
+===TEST===
+META:
+  TYPE::SPEC
+===END==="""
+        doc = parse(content)
+        assert doc is not None
+        assert doc.name == "TEST"
+        assert doc.raw_frontmatter is not None
+        assert "https://example.com:8080" in doc.raw_frontmatter
+
+    def test_parse_yaml_frontmatter_with_special_chars(self):
+        """Should parse YAML frontmatter with various special characters."""
+        content = """---
+pattern: "regex: ^[a-z]+$"
+symbols: "@#$%^&*"
+---
+
+===TEST===
+DATA::value
+===END==="""
+        doc = parse(content)
+        assert doc is not None
+        assert doc.name == "TEST"
+
+    def test_parse_without_yaml_frontmatter(self):
+        """Should parse document without YAML frontmatter (no regression)."""
+        content = """===TEST===
+META:
+  TYPE::TEST
+KEY::value
+===END==="""
+        doc = parse(content)
+        assert doc is not None
+        assert doc.name == "TEST"
+        # No frontmatter should result in None or empty string
+        assert doc.raw_frontmatter is None or doc.raw_frontmatter == ""
+
+    def test_parse_yaml_frontmatter_inferred_envelope(self):
+        """Should handle YAML frontmatter with inferred envelope."""
+        content = """---
+name: Agent Definition
+version: 1.0
+---
+
+META:
+  TYPE::AGENT
+KEY::value"""
+        doc = parse(content)
+        assert doc is not None
+        assert doc.name == "INFERRED"
+        assert doc.raw_frontmatter is not None
+        assert "Agent Definition" in doc.raw_frontmatter
+
+    def test_parse_yaml_frontmatter_line_numbers(self):
+        """Line numbers in AST must match original source lines.
+
+        Issue #91 Rework: When YAML frontmatter is stripped, line numbers
+        must be preserved. The frontmatter should be replaced with equivalent
+        newlines so token/node .line values match the original source.
+        """
+        content = """---
+name: Test
+---
+
+===DOC===
+KEY::value
+===END==="""
+        doc = parse(content)
+        # ===DOC=== is on line 5 in original (1-indexed)
+        # Frontmatter: lines 1-3 (---, name: Test, ---)
+        # Blank line: line 4
+        # ===DOC===: line 5
+        # KEY::value: line 6
+        # ===END===: line 7
+        assert doc is not None
+        assert doc.name == "DOC"
+        # Verify assignment KEY::value has correct line number (line 6)
+        assert len(doc.sections) > 0
+        first_section = doc.sections[0]
+        # The section should report line 6 from the original source
+        assert first_section.line == 6, f"Expected line 6, got {first_section.line}"

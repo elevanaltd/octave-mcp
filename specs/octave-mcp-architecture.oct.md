@@ -7,8 +7,8 @@ META:
   DATE::"2025-12-22"
   OCTAVE_VERSION::"5.1.0"
   PURPOSE::MCP_server_architecture_for_OCTAVE_productization
-  IMPLEMENTATION_NOTES::"MCP tools (octave_ingest 200 LOC, octave_eject 110 LOC), canonicalization rules, and projection modes IMPLEMENTED. Constraint validation, repair logic (fix=true), target routing, and schema policy PLANNED."
-  IMPLEMENTATION_REF::[src/octave_mcp/mcp/ingest.py,src/octave_mcp/mcp/eject.py,src/octave_mcp/core/lexer.py,src/octave_mcp/core/projector.py]
+  IMPLEMENTATION_NOTES::"MCP tools (octave_validate, octave_write, octave_eject), canonicalization rules, and projection modes IMPLEMENTED. Constraint validation, repair logic (fix=true), target routing, and schema policy PLANNED."
+  IMPLEMENTATION_REF::[src/octave_mcp/mcp/validate.py,src/octave_mcp/mcp/write.py,src/octave_mcp/mcp/eject.py,src/octave_mcp/core/lexer.py,src/octave_mcp/core/projector.py]
   CRITICAL_GAPS::[constraint_validation,target_routing,repair_logic,builtin_schema_loading,error_message_formatting]
 
 ---
@@ -178,30 +178,47 @@ REQUIREMENTS::[
 
 §7::MCP_TOOL_SURFACE
 
-// Two primitives. Pipeline exposed via verbose option.
+// Three tools: validate, write, eject. Orthogonal concerns.
 
-TOOL_INGEST:
-  NAME::octave_ingest
-  PURPOSE::bring_information_into_system_safely
+TOOL_VALIDATE:
+  NAME::octave_validate
+  PURPOSE::schema_validation_and_parsing_of_OCTAVE_content
 
   PARAMETERS:
-    CONTENT::["raw text or lenient OCTAVE"∧REQ]
+    CONTENT::["OCTAVE content to validate"∧OPT∧mutually_exclusive_with_FILE_PATH]
+    FILE_PATH::["path to OCTAVE file to validate"∧OPT∧mutually_exclusive_with_CONTENT]
     SCHEMA::["DECISION_LOG"∧REQ∧validates_against_schema_repo]
-    TIER::["AGGRESSIVE"∧OPT∧ENUM[LOSSLESS,CONSERVATIVE,AGGRESSIVE,ULTRA]→compression]
-    FIX::[false∧OPT∧BOOLEAN→enable_TIER_REPAIR]
-    VERBOSE::[false∧OPT∧BOOLEAN→expose_pipeline_stages]
+    FIX::[false∧OPT∧BOOLEAN→apply_repairs_to_canonical_output]
 
   RETURNS:
     CANONICAL::["===DOC===\n..."∧REQ→validated_OCTAVE]
-    REPAIRS::[[...]∧REQ→transformation_log_always_present]
-    WARNINGS::[[...]∧OPT→validation_warnings]
-    STAGES::[{...}∧OPT→only_if_verbose=true]
+    VALID::[true∧REQ∧BOOLEAN→whether_document_passed_validation]
+    VALIDATION_ERRORS::[[...]∧REQ→schema_violations_found]
+    REPAIR_LOG::[[...]∧REQ→transformation_log_always_present]
 
   PIPELINE::[PREPARSE→PARSE→NORMALIZE→VALIDATE→REPAIR(if_fix)→VALIDATE]
 
+TOOL_WRITE:
+  NAME::octave_write
+  PURPOSE::unified_file_creation_and_modification
+
+  PARAMETERS:
+    TARGET_PATH::["file path to write to"∧REQ]
+    CONTENT::["full content for new files or overwrites"∧OPT∧mutually_exclusive_with_CHANGES]
+    CHANGES::["dictionary of field updates for existing files"∧OPT∧mutually_exclusive_with_CONTENT]
+    SCHEMA::["DECISION_LOG"∧OPT∧for_validation]
+    MUTATIONS::["META field overrides"∧OPT∧applies_to_both_modes]
+    BASE_HASH::["SHA-256 hash for consistency check (CAS)"∧OPT]
+
+  RETURNS:
+    SUCCESS::[true∧REQ∧BOOLEAN→whether_write_succeeded]
+    PATH::["absolute path to written file"∧REQ]
+    DIFF::["summary of changes made"∧REQ]
+    CANONICAL::["final canonical content"∧REQ]
+
 TOOL_EJECT:
   NAME::octave_eject
-  PURPOSE::present_information_out_of_system_appropriately
+  PURPOSE::format_projection_with_declared_loss_tiers
 
   PARAMETERS:
     CONTENT::["canonical OCTAVE"∧OPT→null_for_template_generation]
@@ -301,7 +318,8 @@ PHASE_1[core_library]:
 PHASE_2[mcp_server]:
   COMPONENTS::[
     wrap_library_as_MCP_tools,
-    octave_ingest_tool,
+    octave_validate_tool,
+    octave_write_tool,
     octave_eject_tool,
     schema_repository[builtin+custom]
   ]
@@ -401,7 +419,7 @@ ALIGNMENT::[
 ]
 
 MAPPING::[
-  OCTAVE_MCP::octave_ingest|octave_eject,
+  OCTAVE_MCP::octave_validate|octave_write|octave_eject,
   HESTAI_MCP::document_submit|context_update
 ]
 

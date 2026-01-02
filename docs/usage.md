@@ -188,23 +188,24 @@ Most MCP clients (like Claude Desktop) start the server automatically based on c
 
 ### Available MCP Tools
 
-The server exposes two tools: `octave_ingest` and `octave_eject`.
+The server exposes three tools: `octave_validate`, `octave_write`, and `octave_eject`.
 
-#### `octave_ingest` Tool
+#### `octave_validate` Tool
 
-**Purpose:** Accept lenient OCTAVE and produce canonical output with validation.
+**Purpose:** Schema validation and parsing of OCTAVE content.
 
 **Parameters:**
-- `content` (required): Raw text or lenient OCTAVE
+- `content` (optional): OCTAVE content to validate (mutually exclusive with `file_path`)
+- `file_path` (optional): Path to OCTAVE file to validate (mutually exclusive with `content`)
 - `schema` (required): Schema name for validation (e.g., `"DECISION_LOG"`)
-- `tier` (optional): Compression level - `"LOSSLESS"`, `"CONSERVATIVE"`, `"AGGRESSIVE"`, `"ULTRA"`
-- `fix` (optional): Enable schema-driven repairs - `true` or `false`
-- `verbose` (optional): Expose pipeline stages - `true` or `false`
+- `fix` (optional): Apply repairs to canonical output - `true` or `false`
 
 **Returns:**
 ```json
 {
   "canonical": "DECISION:\n  ID::\"DEC-001\"\n  STATUS::APPROVED\n",
+  "valid": true,
+  "validation_errors": [],
   "repair_log": [
     {
       "tier": "NORMALIZATION",
@@ -213,8 +214,7 @@ The server exposes two tools: `octave_ingest` and `octave_eject`.
       "canonical": "STATUS::APPROVED",
       "reason": "Enum casefold"
     }
-  ],
-  "validation_errors": []
+  ]
 }
 ```
 
@@ -229,18 +229,51 @@ async def main():
     await client.connect("octave-mcp-server")
 
     result = await client.call_tool(
-        "octave_ingest",
+        "octave_validate",
         {
             "content": 'DECISION:\n  ID::"DEC-001"\n  STATUS::"approved"',
-            "schema": "DECISION_LOG",
-            "fix": True,
-            "verbose": False
+            "schema": "DECISION_LOG"
         }
     )
 
-    print(result["canonical"])
+    print("Valid:", result["valid"])
+    print("Canonical:", result["canonical"])
 
 asyncio.run(main())
+```
+
+#### `octave_write` Tool
+
+**Purpose:** Unified entry point for writing OCTAVE files. Handles creation and modification.
+
+**Parameters:**
+- `target_path` (required): File path to write to
+- `content` (optional): Full content for new files or overwrites
+- `changes` (optional): Dictionary of field updates for existing files
+- `schema` (optional): Schema name for validation
+- `mutations` (optional): META field overrides
+
+**Example:**
+
+```python
+# Create new file
+result = await client.call_tool(
+    "octave_write",
+    {
+        "target_path": "/path/to/decision.oct.md",
+        "content": 'DECISION:\n  ID::"DEC-001"\n  STATUS::"approved"',
+        "schema": "DECISION_LOG"
+    }
+)
+
+# Modify existing file
+result = await client.call_tool(
+    "octave_write",
+    {
+        "target_path": "/path/to/decision.oct.md",
+        "changes": {"STATUS": "APPROVED"}
+    }
+)
 ```
 
 #### `octave_eject` Tool
@@ -412,11 +445,11 @@ echo "All documents validated and normalized"
 **Goal:** Use OCTAVE for structured communication between AI agents.
 
 ```python
-from octave_mcp.mcp.ingest import IngestTool
+from octave_mcp.mcp.validate import ValidateTool
 from octave_mcp.mcp.eject import EjectTool
 
 async def agent_communication():
-    ingest = IngestTool()
+    validate = ValidateTool()
     eject = EjectTool()
 
     # Agent A creates a task
@@ -429,7 +462,7 @@ async def agent_communication():
     """
 
     # Normalize and validate
-    result = await ingest.execute(
+    result = await validate.execute(
         content=task,
         schema="TASK",
         fix=True
@@ -449,7 +482,7 @@ async def agent_communication():
     """
 
     # Normalize response
-    result = await ingest.execute(
+    result = await validate.execute(
         content=response,
         schema="TASK_RESULT",
         fix=True
@@ -473,7 +506,7 @@ pip install octave-mcp
 pip install -e .
 ```
 
-### Issue: "Unknown tool: octave_ingest"
+### Issue: "Unknown tool: octave_validate"
 
 **Cause:** MCP server not properly configured in client.
 

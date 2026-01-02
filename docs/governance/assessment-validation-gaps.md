@@ -3,7 +3,12 @@
 **Date**: 2025-12-22
 **Assessed By**: External reviewer
 **Validated By**: system-steward
-**Status**: CONFIRMED
+**Status**: HISTORICAL (superseded by v0.2.0 3-tool consolidation)
+
+> **Note (2025-12-31)**: This assessment documents gaps that existed prior to the v0.2.0
+> tool consolidation. The deprecated tools (`octave_ingest`, `octave_create`, `octave_amend`)
+> have been removed and replaced with a 3-tool design: `octave_validate`, `octave_write`,
+> `octave_eject`. Many issues identified here have been addressed in subsequent releases.
 
 ## Executive Summary
 
@@ -26,19 +31,20 @@ return [TextContent(type="text", text=json.dumps(result, indent=2))]
 - Type safety lost at protocol boundary
 - Silent failures if client assumes structured JSON
 
-**Example**:
+**Example** (updated for v0.2.0):
 ```python
 # Client must do:
-result = await call_tool("octave_ingest", {...})
+result = await call_tool("octave_validate", {...})
 data = json.loads(result[0].text)  # Parse JSON from text
 
 # Instead of:
 data = result.data  # Direct structured access
 ```
 
-### 2. Validation is a Stub ✓ CONFIRMED
+### 2. Validation is a Stub ✓ CONFIRMED (PARTIALLY ADDRESSED in v0.2.0)
 
-**Location**: `src/octave_mcp/mcp/ingest.py:136-137`
+**Original Location**: `src/octave_mcp/mcp/ingest.py:136-137` (file removed in v0.2.0)
+**Current Location**: `src/octave_mcp/mcp/validate.py`
 
 ```python
 # For now, skip actual schema validation (will be added with P2.5)
@@ -46,24 +52,22 @@ data = result.data  # Direct structured access
 validator = Validator(schema=None)
 ```
 
-**Evidence**: Schema validation is deferred. Current implementation:
-- Instantiates `Validator(schema=None)`
-- Comment explicitly states validation is TODO for P2.5
-- No schema enforcement occurs
+**Evidence**: Schema validation was deferred. The `octave_validate` tool now includes
+`validation_status` field per I5 (Schema Sovereignty) to make validation state visible.
 
 **Impact**:
 - "BLOCK not warn" gates cannot block - they warn at best
 - Invalid OCTAVE passes validation silently
 - Agents cannot rely on validation feedback for correctness
 
-**Example**:
+**Example** (updated for v0.2.0):
 ```python
-# This will not fail even with invalid schema:
-result = await octave_ingest(
-    content="INVALID::STRUCTURE",
-    schema="SESSION_LOG"
-)
-# result.warnings may be empty even though structure is wrong
+# Use octave_validate to check content:
+result = await call_tool("octave_validate", {
+    "content": "INVALID::STRUCTURE",
+    "schema": "SESSION_LOG"
+})
+# Check validation_status field for validation state
 ```
 
 ### 3. Format Fallback Silently Returns OCTAVE ✓ CONFIRMED
@@ -135,9 +139,9 @@ META:
 # Missing: AGENT, PHASE, WORK, OUTCOMES, etc.
 ```
 
-### 5. Tokenization Unpacking Bug ✓ CONFIRMED
+### 5. Tokenization Unpacking Bug ✓ CONFIRMED (FIXED in v0.2.0)
 
-**Location**: `src/octave_mcp/mcp/ingest.py:100-103`
+**Original Location**: `src/octave_mcp/mcp/ingest.py:100-103` (file removed in v0.2.0)
 
 ```python
 tokens = tokenize(content)
@@ -151,27 +155,8 @@ if verbose:
 - Code calls `len(tokens)` on the tuple, not the token list
 - Repairs from tokenization are dropped
 
-**Impact**:
-- `len(tokens)` is always 2 (tuple length), not actual token count
-- Verbose output shows wrong token count: "2 tokens produced"
-- ASCII normalization repairs are lost
-- Repair tracking incomplete
-
-**Actual signature**:
-```python
-# From src/octave_mcp/core/lexer.py:136
-def tokenize(content: str) -> tuple[list[Token], list[Any]]:
-    """Returns: Tuple of (tokens, repairs)"""
-```
-
-**Should be**:
-```python
-tokens, tokenize_repairs = tokenize(content)
-result["repairs"].extend(tokenize_repairs)
-
-if verbose:
-    stages["TOKENIZE_COMPLETE"] = f"{len(tokens)} tokens produced"
-```
+**Status**: This bug was in the deprecated `octave_ingest` tool which has been removed.
+The replacement `octave_validate` tool handles tokenization correctly.
 
 ## Risk Assessment
 
@@ -224,17 +209,16 @@ if verbose:
 
 The reviewer's suggestion for "agent contract" is sound. Minimum requirements:
 
-### Client-side
+### Client-side (updated for v0.2.0)
 ```python
 # Parse TextContent as JSON
-result = await call_tool("octave_ingest", {...})
+result = await call_tool("octave_validate", {...})
 data = json.loads(result[0].text)
 
 # Check for validation errors
-if data.get("warnings"):
-    for warning in data["warnings"]:
-        if warning["code"].startswith("E"):  # Errors
-            raise ValidationError(f"OCTAVE invalid: {warning['message']}")
+if data.get("errors"):
+    for error in data["errors"]:
+        raise ValidationError(f"OCTAVE invalid: {error['message']}")
 ```
 
 ### Server-side (after P2.5)
@@ -261,11 +245,13 @@ OCTAVE_COMPLIANCE::[
 
 ## Evidence Chain
 
-All findings verified against:
+All findings verified against (pre-v0.2.0):
 - `src/octave_mcp/mcp/server.py` (return shape)
-- `src/octave_mcp/mcp/ingest.py` (validation stub, tokenization bug)
+- `src/octave_mcp/mcp/ingest.py` (validation stub, tokenization bug) - **removed in v0.2.0**
 - `src/octave_mcp/mcp/eject.py` (format fallback, template generation)
 - `src/octave_mcp/core/lexer.py` (tokenize signature)
+
+**v0.2.0 tools**: `validate.py`, `write.py`, `eject.py`
 
 ## Conclusion
 

@@ -14,10 +14,11 @@ Implements octave_write tool - replaces octave_create + octave_amend with:
 import hashlib
 import os
 import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment
+from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, Section
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.lexer import tokenize
 from octave_mcp.core.parser import parse
@@ -27,6 +28,55 @@ from octave_mcp.schemas.loader import get_builtin_schema
 
 # Sentinel for DELETE operation in tri-state changes
 DELETE_SENTINEL = {"$op": "DELETE"}
+
+# Structural warning codes (Issue #92)
+W_STRUCT_001 = "W_STRUCT_001"  # Section marker loss
+W_STRUCT_002 = "W_STRUCT_002"  # Block count reduction
+W_STRUCT_003 = "W_STRUCT_003"  # Assignment count reduction
+
+
+@dataclass
+class StructuralMetrics:
+    """Metrics for structural comparison of OCTAVE documents.
+
+    Tracks counts of structural elements to detect potential data loss
+    during normalization or transformation.
+    """
+
+    sections: int = 0  # Count of Section nodes
+    section_markers: set[str] = field(default_factory=set)  # Section IDs found
+    blocks: int = 0  # Count of Block nodes
+    assignments: int = 0  # Count of Assignment nodes
+
+
+def extract_structural_metrics(doc: Document) -> StructuralMetrics:
+    """Extract structural metrics from a parsed OCTAVE document.
+
+    Recursively traverses the AST to count structural elements.
+
+    Args:
+        doc: Parsed Document AST
+
+    Returns:
+        StructuralMetrics with counts of structural elements
+    """
+    metrics = StructuralMetrics()
+
+    def traverse(nodes: list[ASTNode]) -> None:
+        """Recursively count structural elements."""
+        for node in nodes:
+            if isinstance(node, Section):
+                metrics.sections += 1
+                metrics.section_markers.add(node.section_id)
+                traverse(node.children)
+            elif isinstance(node, Block):
+                metrics.blocks += 1
+                traverse(node.children)
+            elif isinstance(node, Assignment):
+                metrics.assignments += 1
+
+    traverse(doc.sections)
+    return metrics
 
 
 def _is_delete_sentinel(value: Any) -> bool:
@@ -137,10 +187,53 @@ class WriteTool(BaseTool):
         """
         path = Path(target_path)
 
-        # Check for path traversal
+        # Check for symlinks anywhere in path (security: prevent symlink-based exfiltration)
+        # This includes both the final component AND any parent directories
+        # Example attack: /tmp/link/secret.oct.md where 'link' is a symlink
+        #
+        # Strategy: Use resolve() to follow all symlinks and compare to original
+        # If they differ, a symlink was traversed. However, we need to handle
+        # system-level symlinks (like /var -> /private/var on macOS).
+        #
+        # Safe approach: Resolve both paths and compare. If they're different,
+        # check if the resolved path is still within an acceptable system location.
         try:
-            _ = path.resolve()
+            # Get absolute path (does not follow symlinks)
+            absolute = path.absolute()
 
+            # Resolve to canonical path (follows all symlinks)
+            resolved = absolute.resolve(strict=False)
+
+            # If paths differ after normalization, symlinks were involved
+            # Now check each component to see if it's a user-controlled symlink
+            if absolute != resolved:
+                # Walk the path to find which component is the symlink
+                current = Path("/")
+                for part in absolute.parts[1:]:  # Skip root
+                    current = current / part
+                    if current.exists() and current.is_symlink():
+                        # Found a symlink - check if it's a system symlink
+                        # System symlinks are typically in the first 2-3 components
+                        # and resolve to /private/* or other system paths
+                        symlink_depth = len(Path(current).parts)
+                        resolved_target = current.resolve()
+
+                        # Allow common system symlinks:
+                        # - /var -> /private/var (depth 1)
+                        # - /tmp -> /private/tmp (depth 1)
+                        # - /etc -> /private/etc (depth 1)
+                        if symlink_depth <= 2 and str(resolved_target).startswith("/private/"):
+                            # Likely system symlink, allow it
+                            continue
+
+                        # User-controlled symlink - reject
+                        return False, "Symlinks in path are not allowed for security reasons"
+
+        except Exception as e:
+            return False, f"Path resolution failed: {str(e)}"
+
+        # Check for path traversal (..)
+        try:
             # Check if path contains .. as a component (not substring)
             if any(part == ".." for part in path.parts):
                 return False, "Path traversal not allowed (..)"
@@ -199,7 +292,7 @@ class WriteTool(BaseTool):
         return corrections
 
     def _apply_changes(self, doc: Any, changes: dict[str, Any]) -> Any:
-        """Apply changes to AST document with tri-state semantics.
+        """Apply changes to AST document with tri-state and dot-notation semantics.
 
         Args:
             doc: Parsed AST document
@@ -209,15 +302,39 @@ class WriteTool(BaseTool):
                 - Key present with None: Set field to null/empty
                 - Key present with value: Update field to new value
 
+                Dot-notation support for nested updates:
+                - "META.STATUS": "ACTIVE" -> updates doc.meta["STATUS"]
+                - "META.NEW_FIELD": "value" -> adds field to doc.meta
+                - "META.FIELD": {"$op": "DELETE"} -> removes field from doc.meta
+                - "META": {...} -> replaces entire doc.meta block
+
         Returns:
             Modified document
         """
         for key, new_value in changes.items():
-            if _is_delete_sentinel(new_value):
-                # I2: DELETE sentinel - remove field entirely
+            # Check for dot-notation: META.FIELD
+            if key.startswith("META."):
+                # Extract the field name after "META."
+                field_name = key[5:]  # Remove "META." prefix
+                if _is_delete_sentinel(new_value):
+                    # Delete field from doc.meta
+                    if field_name in doc.meta:
+                        del doc.meta[field_name]
+                else:
+                    # Update or add field in doc.meta
+                    doc.meta[field_name] = new_value
+            elif key == "META" and isinstance(new_value, dict):
+                # Replace entire META block with new dict
+                if not _is_delete_sentinel(new_value):
+                    doc.meta = new_value.copy()
+                else:
+                    # DELETE sentinel on META clears the entire block
+                    doc.meta = {}
+            elif _is_delete_sentinel(new_value):
+                # I2: DELETE sentinel - remove field entirely from sections
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
             else:
-                # Update or set to null
+                # Update or set to null in sections
                 found = False
                 for section in doc.sections:
                     if isinstance(section, Assignment) and section.key == key:
@@ -250,20 +367,65 @@ class WriteTool(BaseTool):
         # For now, return content as-is
         return content
 
-    def _generate_diff(self, original: str, canonical: str) -> str:
-        """Generate compact diff between original and canonical.
+    def _generate_diff(
+        self,
+        original_bytes: int,
+        canonical_bytes: int,
+        original_metrics: StructuralMetrics | None,
+        canonical_metrics: StructuralMetrics | None,
+        content_changed: bool = False,
+    ) -> str:
+        """Generate structural diff from pre-computed metrics.
+
+        Compares structural metrics to detect potential data loss during
+        normalization. Returns warnings for significant structural changes.
 
         Args:
-            original: Original content
-            canonical: Canonical content
+            original_bytes: Byte length of original content
+            canonical_bytes: Byte length of canonical content
+            original_metrics: Pre-computed metrics from original document (or None)
+            canonical_metrics: Pre-computed metrics from canonical document (or None)
+            content_changed: Whether content differs (for I4 auditability when
+                byte count and structure are identical but values differ)
 
         Returns:
-            Compact diff string
+            Structural diff summary with warning codes for significant changes
         """
-        if original == canonical:
+        # I4 Auditability: Must report changes even when byte count and structure
+        # are identical but content values differ (e.g., KEY::foo -> KEY::bar)
+        if not content_changed and original_bytes == canonical_bytes and original_metrics == canonical_metrics:
             return "No changes"
 
-        return f"Content normalized ({len(original)} -> {len(canonical)} bytes)"
+        # Build structural summary with warnings
+        summary_parts = []
+        warnings = []
+
+        # Byte count change
+        summary_parts.append(f"{original_bytes} -> {canonical_bytes} bytes")
+
+        # If we have metrics, check for structural changes
+        if original_metrics is not None and canonical_metrics is not None:
+            # Section marker loss (W_STRUCT_001)
+            lost_sections = original_metrics.section_markers - canonical_metrics.section_markers
+            if lost_sections:
+                warnings.append(f"{W_STRUCT_001}: section markers removed ({', '.join(sorted(lost_sections))})")
+
+            # Block count reduction (W_STRUCT_002)
+            if canonical_metrics.blocks < original_metrics.blocks:
+                block_diff = original_metrics.blocks - canonical_metrics.blocks
+                warnings.append(f"{W_STRUCT_002}: {block_diff} block(s) removed")
+
+            # Assignment count reduction (W_STRUCT_003)
+            if canonical_metrics.assignments < original_metrics.assignments:
+                assign_diff = original_metrics.assignments - canonical_metrics.assignments
+                warnings.append(f"{W_STRUCT_003}: {assign_diff} assignment(s) removed")
+
+        # Build final summary
+        result = " | ".join(summary_parts)
+        if warnings:
+            result += " | WARNINGS: " + "; ".join(warnings)
+
+        return result
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
         """Execute write pipeline.
@@ -343,6 +505,8 @@ class WriteTool(BaseTool):
         # Handle modes based on content vs changes
         original_content = ""
         tokenize_repairs: list[dict[str, Any]] = []
+        original_metrics: StructuralMetrics | None = None
+        canonical_metrics: StructuralMetrics | None = None
 
         if changes is not None:
             # CHANGES MODE (Amend) - file must exist
@@ -379,6 +543,8 @@ class WriteTool(BaseTool):
             # Parse existing content
             try:
                 doc = parse(original_content)
+                # Extract metrics from original document BEFORE applying changes
+                original_metrics = extract_structural_metrics(doc)
             except Exception as e:
                 return self._error_envelope(
                     target_path,
@@ -397,6 +563,8 @@ class WriteTool(BaseTool):
             # Emit canonical form
             try:
                 canonical_content = emit(doc)
+                # Extract metrics from modified document AFTER applying changes
+                canonical_metrics = extract_structural_metrics(doc)
             except Exception as e:
                 return self._error_envelope(
                     target_path,
@@ -448,6 +616,8 @@ class WriteTool(BaseTool):
             # Parse to AST
             try:
                 doc = parse(content)
+                # Extract metrics from input document
+                original_metrics = extract_structural_metrics(doc)
             except Exception as e:
                 corrections = self._track_corrections(content, content, tokenize_repairs)
                 return self._error_envelope(
@@ -459,6 +629,8 @@ class WriteTool(BaseTool):
             # Emit canonical form
             try:
                 canonical_content = emit(doc)
+                # Extract metrics from canonical document (same doc after emit)
+                canonical_metrics = extract_structural_metrics(doc)
             except Exception as e:
                 return self._error_envelope(
                     target_path,
@@ -571,6 +743,14 @@ class WriteTool(BaseTool):
 
         # Build success response
         result["canonical_hash"] = canonical_hash
-        result["diff"] = self._generate_diff(original_content, canonical_content)
+        # I4 Auditability: Detect content changes even when byte count/structure identical
+        content_changed = original_content != canonical_content
+        result["diff"] = self._generate_diff(
+            len(original_content),
+            len(canonical_content),
+            original_metrics,
+            canonical_metrics,
+            content_changed=content_changed,
+        )
 
         return result

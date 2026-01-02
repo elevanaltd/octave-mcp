@@ -84,7 +84,7 @@ class BaseTool(ABC):
         """Get the tool name.
 
         Returns:
-            Tool name (e.g., "octave_ingest")
+            Tool name (e.g., "octave_validate")
         """
         pass
 

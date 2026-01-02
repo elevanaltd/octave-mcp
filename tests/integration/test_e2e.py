@@ -1,7 +1,7 @@
 """End-to-end integration tests for OCTAVE MCP (B3 Phase).
 
 Tests complete workflows across the system:
-- Full ingest→eject pipeline
+- Full validate→eject pipeline (ingest deprecated per Issue #51)
 - CLI commands working together
 - MCP server tool chain
 - Cross-component integration
@@ -119,8 +119,12 @@ DATA::[1,2,3]
 class TestCLIIntegration:
     """Test CLI commands working together."""
 
-    def test_cli_ingest_produces_valid_output(self, tmp_path):
-        """CLI ingest produces valid canonical output."""
+    def test_cli_validate_produces_valid_output(self, tmp_path):
+        """CLI validate produces valid canonical output.
+
+        Note: The deprecated 'ingest' command was removed per Issue #51.
+        Use 'validate' instead, which provides the same canonicalization.
+        """
         from click.testing import CliRunner
 
         from octave_mcp.cli.main import cli
@@ -135,8 +139,8 @@ TYPE :: "demo"
 ===END==="""
         )
 
-        # Run ingest
-        result = runner.invoke(cli, ["ingest", str(input_file), "--schema", "TEST"])
+        # Run validate (replacement for deprecated ingest)
+        result = runner.invoke(cli, ["validate", str(input_file), "--schema", "TEST"])
 
         # Should succeed
         assert result.exit_code == 0
@@ -146,7 +150,11 @@ TYPE :: "demo"
         assert " :: " not in output  # Whitespace removed
 
     def test_cli_eject_different_modes(self, tmp_path):
-        """CLI eject works with different projection modes."""
+        """CLI eject works with different projection modes.
+
+        Note: --schema option was removed from CLI eject per Issue #51.
+        Schema is only meaningful for MCP template generation.
+        """
         from click.testing import CliRunner
 
         from octave_mcp.cli.main import cli
@@ -165,9 +173,9 @@ STATUS::active
 ===END==="""
         )
 
-        # Test different modes
+        # Test different modes (without --schema, which was removed per Issue #51)
         for mode in ["canonical", "authoring"]:
-            result = runner.invoke(cli, ["eject", str(input_file), "--schema", "TEST", "--mode", mode])
+            result = runner.invoke(cli, ["eject", str(input_file), "--mode", mode])
 
             assert result.exit_code == 0
             assert len(result.output) > 0
@@ -199,42 +207,39 @@ class TestMCPServerToolChain:
     """Test MCP server tool chain integration."""
 
     @pytest.mark.asyncio
-    async def test_ingest_then_eject_via_mcp(self):
-        """Call ingest then eject via MCP tools."""
+    async def test_validate_then_eject_via_mcp(self):
+        """Call validate then eject via MCP tools."""
         from mcp.types import CallToolRequest
 
         from octave_mcp.mcp.server import create_server
 
         server = create_server()
 
-        # First: ingest lenient content
+        # First: validate lenient content
         lenient_content = """===TEST===
 TYPE :: "demo"
 STATUS :: active
 ===END==="""
 
-        ingest_request = CallToolRequest(
+        validate_request = CallToolRequest(
             method="tools/call",
-            params={"name": "octave_ingest", "arguments": {"content": lenient_content, "schema": "TEST"}},
+            params={"name": "octave_validate", "arguments": {"content": lenient_content, "schema": "TEST"}},
         )
 
         from mcp.types import CallToolRequest as CallToolRequestType
 
-        ingest_handler = server.request_handlers.get(CallToolRequestType)
-        ingest_result = await ingest_handler(ingest_request)
+        validate_handler = server.request_handlers.get(CallToolRequestType)
+        validate_result = await validate_handler(validate_request)
 
-        assert ingest_result.root.content is not None
+        assert validate_result.root.content is not None
 
-        # Extract canonical content from ingest result
-        ingest_output = ingest_result.root.content[0].text
+        # Extract canonical content from validate result
+        validate_output = validate_result.root.content[0].text
 
         # Parse to find canonical output
-        # Result may be JSON with canonical field
-        try:
-            parsed = json.loads(ingest_output)
-            canonical_content = parsed.get("canonical", ingest_output)
-        except json.JSONDecodeError:
-            canonical_content = ingest_output
+        # Result is JSON with canonical field
+        parsed = json.loads(validate_output)
+        canonical_content = parsed.get("canonical", validate_output)
 
         # Second: eject the canonical content
         eject_request = CallToolRequest(
@@ -269,9 +274,10 @@ FIELD_A::value_a
 FIELD_B::value_b
 ===END==="""
 
-        # Ingest
+        # Validate
         request = CallToolRequest(
-            method="tools/call", params={"name": "octave_ingest", "arguments": {"content": original, "schema": "TEST"}}
+            method="tools/call",
+            params={"name": "octave_validate", "arguments": {"content": original, "schema": "TEST"}},
         )
 
         from mcp.types import CallToolRequest as CallToolRequestType
@@ -408,7 +414,7 @@ DATA::value
 
         request = CallToolRequest(
             method="tools/call",
-            params={"name": "octave_ingest", "arguments": {"content": invalid_content, "schema": "TEST"}},
+            params={"name": "octave_validate", "arguments": {"content": invalid_content, "schema": "TEST"}},
         )
 
         from mcp.types import CallToolRequest as CallToolRequestType
