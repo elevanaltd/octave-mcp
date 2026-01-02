@@ -765,6 +765,200 @@ class TestValidateToolFilePathMode:
             assert "symlink" in error_messages.lower()
 
 
+class TestValidateToolGap7ResponseStructure:
+    """Tests for Gap 7: Response structure compliance with spec (octave-mcp-architecture.oct.md Section 7).
+
+    SPEC REQUIREMENTS:
+    - CANONICAL: string (REQ) - already present
+    - VALID: boolean (REQ) - MISSING, must add
+    - VALIDATION_ERRORS: array (REQ) - CONDITIONAL, should always be present (empty if no errors)
+    - REPAIR_LOG: array (REQ) - MISNAMED as 'repairs', add as alias
+
+    TDD: RED phase - these tests define expected behavior from spec.
+    """
+
+    @pytest.mark.asyncio
+    async def test_validate_returns_valid_boolean_true(self):
+        """Gap 7: valid doc should return valid=True.
+
+        Spec: VALID::[true|REQ|BOOLEAN->whether_document_passed_validation]
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Valid META document with required fields
+        valid_content = """===TEST===
+META:
+  TYPE::"TEST_DOCUMENT"
+  VERSION::"1.0.0"
+===END==="""
+
+        result = await tool.execute(
+            content=valid_content,
+            schema="META",
+            fix=False,
+        )
+
+        # Gap 7 requirement: 'valid' boolean field must be present
+        assert "valid" in result, "Gap 7: 'valid' boolean field missing from response"
+        assert isinstance(result["valid"], bool), "Gap 7: 'valid' must be a boolean"
+        assert result["valid"] is True, "Gap 7: valid document should return valid=True"
+
+    @pytest.mark.asyncio
+    async def test_validate_returns_valid_boolean_false(self):
+        """Gap 7: invalid doc should return valid=False.
+
+        Spec: VALID::[true|REQ|BOOLEAN->whether_document_passed_validation]
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Invalid META document - missing required TYPE field
+        invalid_content = """===TEST===
+META:
+  VERSION::"1.0.0"
+===END==="""
+
+        result = await tool.execute(
+            content=invalid_content,
+            schema="META",
+            fix=False,
+        )
+
+        # Gap 7 requirement: 'valid' boolean field must be present
+        assert "valid" in result, "Gap 7: 'valid' boolean field missing from response"
+        assert isinstance(result["valid"], bool), "Gap 7: 'valid' must be a boolean"
+        assert result["valid"] is False, "Gap 7: invalid document should return valid=False"
+
+    @pytest.mark.asyncio
+    async def test_validate_returns_repair_log_field(self):
+        """Gap 7: repair_log field present with same data as repairs.
+
+        Spec: REPAIR_LOG::[[...]|REQ->transformation_log_always_present]
+        Current: 'repairs' field exists, need 'repair_log' as spec-compliant alias
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Content with ASCII operators that will be normalized
+        content = """===TEST===
+FLOW::A -> B
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST",
+            fix=False,
+        )
+
+        # Gap 7 requirement: 'repair_log' field must be present
+        assert "repair_log" in result, "Gap 7: 'repair_log' field missing from response"
+        assert isinstance(result["repair_log"], list), "Gap 7: 'repair_log' must be an array"
+
+        # Backward compat: 'repairs' should still exist
+        assert "repairs" in result, "Gap 7: 'repairs' field should remain for backward compatibility"
+
+        # Both should contain same data
+        assert (
+            result["repair_log"] == result["repairs"]
+        ), "Gap 7: 'repair_log' and 'repairs' should contain identical data"
+
+    @pytest.mark.asyncio
+    async def test_validate_returns_validation_errors_always_present(self):
+        """Gap 7: validation_errors field always present (empty array when no errors).
+
+        Spec: VALIDATION_ERRORS::[[...]|REQ->schema_violations_found]
+        The spec says REQ, so it should always be present even if empty.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Valid document - no validation errors expected
+        valid_content = """===TEST===
+META:
+  TYPE::"TEST_DOCUMENT"
+  VERSION::"1.0.0"
+===END==="""
+
+        result = await tool.execute(
+            content=valid_content,
+            schema="META",
+            fix=False,
+        )
+
+        # Gap 7 requirement: 'validation_errors' field must always be present
+        assert "validation_errors" in result, (
+            "Gap 7: 'validation_errors' field missing from response - "
+            "spec requires it always present (empty array if no errors)"
+        )
+        assert isinstance(result["validation_errors"], list), "Gap 7: 'validation_errors' must be an array"
+        # For valid doc, should be empty
+        assert result["validation_errors"] == [], "Gap 7: valid document should have empty validation_errors array"
+
+    @pytest.mark.asyncio
+    async def test_validate_error_envelope_has_gap7_fields(self):
+        """Gap 7: Error envelopes should also include the required fields.
+
+        When validation fails at input level (XOR violation, file not found, etc.),
+        the error envelope should still have valid=False, repair_log=[], validation_errors=[].
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Trigger error by providing neither content nor file_path
+        result = await tool.execute(
+            schema="TEST",
+            fix=False,
+        )
+
+        assert result["status"] == "error"
+        # Gap 7: Even error envelopes should have these fields
+        assert "valid" in result, "Gap 7: 'valid' field missing from error envelope"
+        assert result["valid"] is False, "Gap 7: error envelope should have valid=False"
+
+        assert "repair_log" in result, "Gap 7: 'repair_log' field missing from error envelope"
+        assert isinstance(result["repair_log"], list), "Gap 7: error envelope repair_log must be array"
+
+        assert "validation_errors" in result, "Gap 7: 'validation_errors' field missing from error envelope"
+        assert isinstance(result["validation_errors"], list), "Gap 7: error envelope validation_errors must be array"
+
+    @pytest.mark.asyncio
+    async def test_validate_valid_correlates_with_validation_status(self):
+        """Gap 7: 'valid' boolean should correlate with validation_status.
+
+        - valid=True when validation_status=="VALIDATED"
+        - valid=False when validation_status in ["INVALID", "UNVALIDATED"] or on error
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Test VALIDATED case
+        valid_content = """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=valid_content,
+            schema="META",
+            fix=False,
+        )
+
+        if result["validation_status"] == "VALIDATED":
+            assert result["valid"] is True, "Gap 7: valid should be True when validation_status is VALIDATED"
+        elif result["validation_status"] in ["INVALID", "UNVALIDATED"]:
+            assert (
+                result["valid"] is False
+            ), f"Gap 7: valid should be False when validation_status is {result['validation_status']}"
+
+
 class TestValidateToolYAMLFrontmatter:
     """Tests for YAML frontmatter handling in octave_validate (Issue #91).
 
@@ -893,3 +1087,162 @@ META:
         # Should continue to work as before
         assert result["status"] == "success"
         assert result["validation_status"] == "VALIDATED"
+
+
+class TestValidateToolSpecCodeMapping:
+    """Tests for Gap_6: Error message spec_code field mapping.
+
+    The spec defines error codes E001-E007 in specs/octave-mcp-architecture.oct.md section 8.
+    The implementation uses E_TOKENIZE and E_PARSE as wrapper codes.
+    This test class verifies that when core errors (E001-E007) are caught,
+    the original spec_code is preserved in the error dict.
+
+    Spec Error Codes:
+    - E001: Single colon assignment not allowed
+    - E002: Schema selector required
+    - E003: Cannot auto-fill missing required field
+    - E004: Cannot infer routing target
+    - E005: Tabs not allowed
+    - E006: Ambiguous enum match
+    - E007: Unknown field not allowed
+    """
+
+    @pytest.mark.asyncio
+    async def test_validate_single_colon_error_has_spec_code(self):
+        """E001: Single colon error should include spec_code='E001' in error dict.
+
+        The spec (section 8) defines:
+        E001: "Single colon assignment not allowed. Use KEY::value (double colon)."
+
+        When the parser detects single colon assignment, it raises E001.
+        The validate tool wraps this in E_PARSE, but should preserve spec_code.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Content with single colon assignment (E001 violation)
+        content = """===TEST===
+KEY: value
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST",
+            fix=False,
+        )
+
+        # Should fail with parse error
+        assert result["status"] == "error"
+        assert len(result["errors"]) >= 1
+
+        # Find the error (should be E_PARSE wrapping E001)
+        error = result["errors"][0]
+        assert error["code"] == "E_PARSE", f"Expected E_PARSE wrapper, got {error['code']}"
+
+        # Gap_6 fix: spec_code should be present and contain 'E001'
+        assert "spec_code" in error, f"Gap_6 violation: spec_code field missing from error dict. " f"Error: {error}"
+        assert error["spec_code"] == "E001", (
+            f"Gap_6: Expected spec_code='E001' for single colon error, " f"got spec_code='{error.get('spec_code')}'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_tab_error_has_spec_code(self):
+        """E005: Tab character error should include spec_code='E005' in error dict.
+
+        The spec (section 8) defines:
+        E005: "Tabs not allowed. Use 2 spaces for indentation."
+
+        When the lexer detects tabs, it raises E005.
+        The validate tool wraps this in E_TOKENIZE, but should preserve spec_code.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Content with tab character (E005 violation)
+        content = "===TEST===\n\tKEY::value\n===END==="
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST",
+            fix=False,
+        )
+
+        # Should fail with tokenization error
+        assert result["status"] == "error"
+        assert len(result["errors"]) >= 1
+
+        # Find the error (should be E_TOKENIZE wrapping E005)
+        error = result["errors"][0]
+        assert error["code"] == "E_TOKENIZE", f"Expected E_TOKENIZE wrapper, got {error['code']}"
+
+        # Gap_6 fix: spec_code should be present and contain 'E005'
+        assert "spec_code" in error, f"Gap_6 violation: spec_code field missing from error dict. " f"Error: {error}"
+        assert error["spec_code"] == "E005", (
+            f"Gap_6: Expected spec_code='E005' for tab error, " f"got spec_code='{error.get('spec_code')}'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_non_spec_error_has_no_spec_code(self):
+        """Non-spec errors (E_INPUT, E_FILE, etc.) should not have spec_code field.
+
+        Only errors that wrap core spec errors (E001-E007) should have spec_code.
+        Implementation-specific errors like E_INPUT have no spec equivalent.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Trigger E_INPUT error by providing neither content nor file_path
+        result = await tool.execute(
+            schema="TEST",
+            fix=False,
+        )
+
+        # Should fail with E_INPUT
+        assert result["status"] == "error"
+        assert len(result["errors"]) >= 1
+
+        error = result["errors"][0]
+        assert error["code"] == "E_INPUT"
+
+        # E_INPUT has no spec equivalent, so spec_code should be absent or None
+        assert error.get("spec_code") is None, (
+            f"E_INPUT should not have spec_code (no spec equivalent), " f"but got spec_code='{error.get('spec_code')}'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_spec_code_extracted_from_error_message(self):
+        """Verify spec_code is correctly extracted from core error message.
+
+        The core lexer/parser embed the error code in the message like:
+        "E005: Tabs are not allowed..."
+
+        The validate tool should extract this code into spec_code field.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Use unexpected character to trigger E005
+        content = "===TEST===\n(invalid)\n===END==="
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST",
+            fix=False,
+        )
+
+        # Should fail
+        assert result["status"] == "error"
+        assert len(result["errors"]) >= 1
+
+        error = result["errors"][0]
+        # Should be E_TOKENIZE or E_PARSE depending on where error occurs
+        assert error["code"] in ["E_TOKENIZE", "E_PARSE"]
+
+        # The error message should contain the spec code
+        # And spec_code field should be populated
+        if "E005" in error.get("message", ""):
+            assert error.get("spec_code") == "E005"

@@ -10,6 +10,7 @@ Implements octave_validate tool - replaces octave_ingest with:
 Pipeline: PARSE -> NORMALIZE -> VALIDATE -> REPAIR(if fix) -> EMIT
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,30 @@ from octave_mcp.core.repair import repair
 from octave_mcp.core.validator import Validator
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 from octave_mcp.schemas.loader import get_builtin_schema
+
+# Gap_6: Regex pattern to extract spec error codes (E001-E007) from error messages
+# The core lexer/parser embed codes like "E005 at line 2, column 1: ..."
+SPEC_CODE_PATTERN = re.compile(r"\b(E00[1-7])\b")
+
+
+def _extract_spec_code(error_message: str) -> str | None:
+    """Extract spec error code (E001-E007) from error message.
+
+    Gap_6 fix: The core lexer/parser embed spec codes in error messages like:
+    "E005 at line 2, column 1: Tabs are not allowed..."
+    "E001 at line 2, column 4: Single colon assignment detected..."
+
+    This function extracts the spec code so it can be preserved in the
+    error dict alongside the wrapper code (E_TOKENIZE, E_PARSE).
+
+    Args:
+        error_message: The error message from lexer/parser exception
+
+    Returns:
+        The spec code (e.g., "E005") if found, None otherwise
+    """
+    match = SPEC_CODE_PATTERN.search(error_message)
+    return match.group(1) if match else None
 
 
 class ValidateTool(BaseTool):
@@ -160,15 +185,19 @@ class ValidateTool(BaseTool):
             content: Original content to return in canonical (on error)
 
         Returns:
-            Complete error envelope with all required fields per D2 design
+            Complete error envelope with all required fields per spec Section 7
         """
+        repairs: list[dict[str, Any]] = []
         return {
             "status": "error",
             "canonical": content,
-            "repairs": [],
+            "repairs": repairs,
+            "repair_log": repairs,  # Gap 7: Spec-compliant alias (same reference)
             "warnings": [],
             "errors": errors,
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass on error
+            "valid": False,  # Gap 7: Boolean derived from validation_status
+            "validation_errors": [],  # Gap 7: Always present per spec Section 7
             "routing_log": [],  # I4: Always include routing_log for consistency
         }
 
@@ -234,16 +263,23 @@ class ValidateTool(BaseTool):
         # At this point content is guaranteed to be a string
         assert content is not None
 
-        # Initialize result with unified envelope per D2 design
+        # Initialize repairs list - used by both 'repairs' and 'repair_log' (Gap 7 spec compliance)
+        repairs_list: list[dict[str, Any]] = []
+
+        # Initialize result with unified envelope per D2 design and spec Section 7
         # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
         # "Schema bypass shall be visible, never silent" - North Star I5
+        # Gap 7: Added 'valid', 'repair_log', 'validation_errors' per spec Section 7
         result: dict[str, Any] = {
             "status": "success",
             "canonical": "",
-            "repairs": [],
+            "repairs": repairs_list,
+            "repair_log": repairs_list,  # Gap 7: Spec-compliant alias (same reference)
             "warnings": [],
             "errors": [],
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass until validated
+            "valid": False,  # Gap 7: Boolean derived from validation_status (updated later)
+            "validation_errors": [],  # Gap 7: Always present per spec Section 7
             "routing_log": [],  # I4: Target routing audit trail (Issue #103)
         }
 
@@ -261,10 +297,26 @@ class ValidateTool(BaseTool):
             result["status"] = "error"
             # Check if it's a tokenization or parse error
             error_msg = str(e)
+
+            # Gap_6: Extract spec code (E001-E007) from error message if present
+            spec_code = _extract_spec_code(error_msg)
+
             if "E005" in error_msg or "Unexpected character" in error_msg:
-                result["errors"].append({"code": "E_TOKENIZE", "message": f"Tokenization error: {error_msg}"})
+                error_dict: dict[str, Any] = {
+                    "code": "E_TOKENIZE",
+                    "message": f"Tokenization error: {error_msg}",
+                }
             else:
-                result["errors"].append({"code": "E_PARSE", "message": f"Parse error: {error_msg}"})
+                error_dict = {
+                    "code": "E_PARSE",
+                    "message": f"Parse error: {error_msg}",
+                }
+
+            # Gap_6: Add spec_code if extracted (only for core errors)
+            if spec_code is not None:
+                error_dict["spec_code"] = spec_code
+
+            result["errors"].append(error_dict)
             result["canonical"] = content  # Return original on error
             return result
 
@@ -285,6 +337,7 @@ class ValidateTool(BaseTool):
             if validation_errors:
                 # I5: Schema validation failed - mark as INVALID
                 result["validation_status"] = "INVALID"
+                result["valid"] = False  # Gap 7: Boolean correlates with validation_status
                 result["validation_errors"] = [
                     {
                         "code": err.code,
@@ -298,6 +351,8 @@ class ValidateTool(BaseTool):
             else:
                 # I5: Schema validation passed - mark as VALIDATED
                 result["validation_status"] = "VALIDATED"
+                result["valid"] = True  # Gap 7: Boolean correlates with validation_status
+                # Gap 7: validation_errors always present (empty when valid)
         else:
             # Schema not found - remain UNVALIDATED
             # I5: "Schema bypass shall be visible, never silent"
