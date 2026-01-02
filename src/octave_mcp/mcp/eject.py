@@ -29,9 +29,9 @@ def _ast_to_dict(doc: Document) -> dict[str, Any]:
     """
     result: dict[str, Any] = {}
 
-    # Add META if present
+    # Add META if present, converting any AST types (e.g., ListValue) to native Python
     if doc.meta:
-        result["META"] = doc.meta
+        result["META"] = {k: _convert_value(v) for k, v in doc.meta.items()}
 
     # Convert sections
     for section in doc.sections:
