@@ -5,20 +5,76 @@ Provides the MCP server with OCTAVE tools:
 - octave_write (unified file writing: creation and amendment)
 - octave_eject (projection to different modes/formats)
 - octave_debate_to_octave (debate transcript conversion - Issue #52)
+
+Environment Variables:
+- DISABLED_TOOLS: Comma-separated list of tools to disable.
+  Available tools: octave_validate, octave_write, octave_eject, octave_debate_to_octave
+  Example: DISABLED_TOOLS=octave_debate_to_octave
 """
 
 import asyncio
 import json
+import logging
+import os
 from typing import Any
 
+from dotenv import load_dotenv
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
+from octave_mcp.mcp.base_tool import BaseTool
 from octave_mcp.mcp.debate_convert import DebateConvertTool
 from octave_mcp.mcp.eject import EjectTool
 from octave_mcp.mcp.validate import ValidateTool
 from octave_mcp.mcp.write import WriteTool
+
+# Load environment variables from .env file
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+
+def parse_disabled_tools() -> set[str]:
+    """Parse DISABLED_TOOLS environment variable.
+
+    Returns:
+        Set of lowercase tool names to disable
+    """
+    disabled_str = os.getenv("DISABLED_TOOLS", "").strip()
+    if not disabled_str:
+        return set()
+    return {t.strip().lower() for t in disabled_str.split(",") if t.strip()}
+
+
+def filter_tools(all_tools: dict[str, BaseTool]) -> dict[str, BaseTool]:
+    """Filter tools based on DISABLED_TOOLS environment variable.
+
+    Args:
+        all_tools: Dictionary mapping tool names to tool instances
+
+    Returns:
+        Filtered dictionary with disabled tools removed
+    """
+    disabled = parse_disabled_tools()
+    if not disabled:
+        return all_tools
+
+    # Validate disabled tool names
+    unknown = disabled - set(all_tools.keys())
+    if unknown:
+        logger.warning(f"Unknown tools in DISABLED_TOOLS: {sorted(unknown)}")
+
+    # Filter out disabled tools
+    enabled = {}
+    for name, tool in all_tools.items():
+        if name.lower() in disabled:
+            logger.info(f"Tool '{name}' disabled via DISABLED_TOOLS")
+        else:
+            enabled[name] = tool
+
+    logger.info(f"Active tools: {sorted(enabled.keys())}")
+    return enabled
 
 
 def create_server() -> Server:
@@ -29,36 +85,27 @@ def create_server() -> Server:
     """
     server = Server("octave-mcp")
 
-    # Initialize tools
-    validate_tool = ValidateTool()
-    write_tool = WriteTool()
-    eject_tool = EjectTool()
-    debate_convert_tool = DebateConvertTool()
+    # Initialize all tools
+    all_tools: dict[str, BaseTool] = {
+        "octave_validate": ValidateTool(),
+        "octave_write": WriteTool(),
+        "octave_eject": EjectTool(),
+        "octave_debate_to_octave": DebateConvertTool(),
+    }
+
+    # Apply DISABLED_TOOLS filter
+    tools = filter_tools(all_tools)
 
     @server.list_tools()
     async def handle_list_tools() -> list[Tool]:
         """List available tools."""
         return [
             Tool(
-                name=validate_tool.get_name(),
-                description=validate_tool.get_description(),
-                inputSchema=validate_tool.get_input_schema(),
-            ),
-            Tool(
-                name=write_tool.get_name(),
-                description=write_tool.get_description(),
-                inputSchema=write_tool.get_input_schema(),
-            ),
-            Tool(
-                name=eject_tool.get_name(),
-                description=eject_tool.get_description(),
-                inputSchema=eject_tool.get_input_schema(),
-            ),
-            Tool(
-                name=debate_convert_tool.get_name(),
-                description=debate_convert_tool.get_description(),
-                inputSchema=debate_convert_tool.get_input_schema(),
-            ),
+                name=tool.get_name(),
+                description=tool.get_description(),
+                inputSchema=tool.get_input_schema(),
+            )
+            for tool in tools.values()
         ]
 
     @server.call_tool()
@@ -73,22 +120,18 @@ def create_server() -> Server:
             List of TextContent with results
 
         Raises:
-            ValueError: If tool name is unknown
+            ValueError: If tool name is unknown or disabled
         """
         if arguments is None:
             arguments = {}
 
         # Route to appropriate tool
-        if name == "octave_validate":
-            result = await validate_tool.execute(**arguments)
-        elif name == "octave_write":
-            result = await write_tool.execute(**arguments)
-        elif name == "octave_eject":
-            result = await eject_tool.execute(**arguments)
-        elif name == "octave_debate_to_octave":
-            result = await debate_convert_tool.execute(**arguments)
-        else:
+        if name not in tools:
+            if name in all_tools:
+                raise ValueError(f"Tool '{name}' is disabled via DISABLED_TOOLS")
             raise ValueError(f"Unknown tool: {name}")
+
+        result = await tools[name].execute(**arguments)
 
         # Return result as TextContent
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
