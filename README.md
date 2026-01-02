@@ -34,12 +34,11 @@ The CLI mirrors the MCP tools for use in shell pipelines, CI/CD, and local workf
 - **`octave write`** - write OCTAVE files with validation (content mode or delta changes mode).
 - **`octave eject`** - project OCTAVE into views (canonical, authoring, executive, developer) and formats (OCTAVE, JSON, YAML, Markdown).
 
-### Available via MCP (4 tools)
+### Available via MCP (3 tools)
 
 - **`octave_validate`** - schema validation and parsing of OCTAVE content
 - **`octave_write`** - unified file creation and modification (content mode OR changes mode with optional hash-based consistency checking)
 - **`octave_eject`** - format projection (octave, json, yaml, markdown) with declared loss tiers
-- **`octave_debate_to_octave`** - convert debate-hall-mcp JSON transcripts to OCTAVE format
 
 These tools make it easy for LLMs to emit minimal intent while relying on deterministic mechanics for structure and safety. If the LLM were replaced by a plain text emitter, OCTAVE would still provide value.
 
