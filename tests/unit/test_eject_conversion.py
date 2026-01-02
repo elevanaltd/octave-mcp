@@ -142,6 +142,34 @@ class TestAstToDict:
         assert result["META"] == {"TYPE": "TEST", "VERSION": "1.0"}
         assert result["STATUS"] == "active"
 
+    def test_ast_to_dict_with_meta_list_values(self):
+        """Document with META containing ListValue objects is properly converted.
+
+        BUG REPRODUCTION: When _apply_changes stores ListValue in doc.meta,
+        _ast_to_dict must convert it to a native Python list for JSON serialization.
+        Without the fix, json.dumps fails with:
+            TypeError: Object of type ListValue is not JSON serializable
+        """
+        import json
+
+        # Simulate what _apply_changes does when processing META.TAGS changes
+        list_value = ListValue(items=["alpha", "beta", "gamma"])
+        doc = Document(
+            name="TEST",
+            meta={"TYPE": "TEST", "VERSION": "1.0", "TAGS": list_value},
+            sections=[Assignment(key="STATUS", value="active")],
+        )
+        result = _ast_to_dict(doc)
+
+        # META values must be native Python types (list, not ListValue)
+        assert result["META"]["TAGS"] == ["alpha", "beta", "gamma"]
+
+        # Critical: must be JSON serializable without TypeError
+        json_output = json.dumps(result)
+        assert "alpha" in json_output
+        assert "beta" in json_output
+        assert "gamma" in json_output
+
     def test_ast_to_dict_without_meta(self):
         """Document without META is converted without META key."""
         doc = Document(

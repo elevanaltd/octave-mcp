@@ -1073,6 +1073,126 @@ OTHER::preserved
                 assert "preserved" in content
 
     @pytest.mark.asyncio
+    async def test_changes_mode_meta_dot_notation_list_produces_valid_octave(self):
+        """Test META dot-notation list values emit valid OCTAVE syntax.
+
+        CRS BLOCKING BUG: META dot-notation updates bypass normalization.
+
+        ROOT CAUSE:
+        - write.py::doc.meta[field_name] = new_value (line 338-347)
+        - emitter.py::emit_meta() uses emit_value(value)
+        - emitter.py::unknown types -> return str(value) -> "['alpha', 'beta']"
+
+        REQUIREMENT:
+        - META.TAGS with ["alpha", "beta"] must emit as [alpha,beta] (valid OCTAVE)
+        - NOT ['alpha', 'beta'] (Python str(list) - INVALID OCTAVE)
+
+        I1 (Syntactic Fidelity): All values must emit canonical OCTAVE syntax.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Update META.TAGS using dot notation with a LIST value
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META.TAGS": ["alpha", "beta"]},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify the output is VALID OCTAVE syntax
+            with open(target_path) as f:
+                content = f.read()
+
+                # MUST have valid OCTAVE list syntax: [alpha,beta]
+                # MUST NOT have Python list str() syntax: ['alpha', 'beta']
+                assert "['alpha', 'beta']" not in content, (
+                    f"BUG: META dot-notation produced invalid OCTAVE syntax. "
+                    f"Found Python str(list) instead of OCTAVE list. Content:\n{content}"
+                )
+                assert '["alpha", "beta"]' not in content, (
+                    f"BUG: META dot-notation produced invalid OCTAVE syntax. "
+                    f"Found Python repr(list) instead of OCTAVE list. Content:\n{content}"
+                )
+                # Should contain valid OCTAVE list (with or without quotes on items)
+                # Valid forms: [alpha,beta] or ["alpha","beta"]
+                assert "TAGS::" in content, f"TAGS field should be present. Content:\n{content}"
+                # The emitted value should be parseable - check for opening bracket
+                lines = content.split("\n")
+                for line in lines:
+                    if "TAGS::" in line:
+                        # Extract value after ::
+                        value_part = line.split("::", 1)[1].strip()
+                        # Should start with [ and end with ] (valid list)
+                        assert value_part.startswith(
+                            "["
+                        ), f"TAGS value should be a list starting with [, got: {value_part}"
+                        assert value_part.endswith("]"), f"TAGS value should be a list ending with ], got: {value_part}"
+                        # Should NOT have Python string quotes around list items
+                        # Valid: [alpha,beta] or ["alpha","beta"]
+                        # Invalid: ['alpha', 'beta'] (Python repr)
+                        assert (
+                            "'" not in value_part or value_part.count("'") == 0
+                        ), f"TAGS value has Python-style single quotes (invalid OCTAVE): {value_part}"
+                        break
+
+    @pytest.mark.asyncio
+    async def test_changes_mode_meta_full_replacement_list_produces_valid_octave(self):
+        """Test full META block replacement with lists emits valid OCTAVE.
+
+        Companion test to ensure full META replacement also normalizes lists.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create file with META block
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Replace entire META block with a dict containing a list
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META": {"TYPE": "NEW_DOC", "TAGS": ["one", "two", "three"]}},
+            )
+
+            assert result["status"] == "success"
+
+            # Verify the output is VALID OCTAVE syntax
+            with open(target_path) as f:
+                content = f.read()
+
+                # MUST NOT have Python list syntax
+                assert (
+                    "['one', 'two', 'three']" not in content
+                ), f"BUG: Full META replacement produced invalid OCTAVE. Content:\n{content}"
+                # Should have valid OCTAVE list
+                assert "TAGS::" in content
+
+    @pytest.mark.asyncio
     async def test_dot_notation_multiple_meta_fields(self):
         """Test dot notation can update multiple META fields at once."""
         from octave_mcp.mcp.write import WriteTool

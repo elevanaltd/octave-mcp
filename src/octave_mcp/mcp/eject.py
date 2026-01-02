@@ -29,9 +29,9 @@ def _ast_to_dict(doc: Document) -> dict[str, Any]:
     """
     result: dict[str, Any] = {}
 
-    # Add META if present
+    # Add META if present, converting any AST types (e.g., ListValue) to native Python
     if doc.meta:
-        result["META"] = doc.meta
+        result["META"] = {k: _convert_value(v) for k, v in doc.meta.items()}
 
     # Convert sections
     for section in doc.sections:
@@ -80,6 +80,31 @@ def _convert_block(block: Block) -> dict[str, Any]:
     return result
 
 
+def _format_markdown_value(value: Any) -> str:
+    """Format an AST value for markdown output.
+
+    I3 (Mirror Constraint): Reflect only present data, create nothing.
+    Python internals (like ListValue.__repr__) must not leak into output.
+
+    Args:
+        value: AST value node
+
+    Returns:
+        Human-readable string representation for markdown
+    """
+    if isinstance(value, ListValue):
+        # Format list items, recursively formatting nested values
+        items = [_format_markdown_value(item) for item in value.items]
+        return ", ".join(str(item) for item in items)
+    elif isinstance(value, InlineMap):
+        # Format inline map as key: value pairs
+        pairs = [f"{k}: {_format_markdown_value(v)}" for k, v in value.pairs.items()]
+        return ", ".join(pairs)
+    else:
+        # Regular values are stringified directly
+        return str(value)
+
+
 def _ast_to_markdown(doc: Document) -> str:
     """Convert AST Document to Markdown format.
 
@@ -100,13 +125,15 @@ def _ast_to_markdown(doc: Document) -> str:
         lines.append("## META")
         lines.append("")
         for key, value in doc.meta.items():
-            lines.append(f"- **{key}**: {value}")
+            # I3: Format values to avoid exposing Python internals
+            lines.append(f"- **{key}**: {_format_markdown_value(value)}")
         lines.append("")
 
     # Add sections
     for section in doc.sections:
         if isinstance(section, Assignment):
-            lines.append(f"**{section.key}**: {section.value}")
+            # I3: Format values to avoid exposing Python internals
+            lines.append(f"**{section.key}**: {_format_markdown_value(section.value)}")
             lines.append("")
         elif isinstance(section, Block):
             lines.append(f"## {section.key}")
@@ -126,7 +153,8 @@ def _block_to_markdown(block: Block, lines: list[str], level: int = 3) -> None:
     """
     for child in block.children:
         if isinstance(child, Assignment):
-            lines.append(f"- **{child.key}**: {child.value}")
+            # I3: Format values to avoid exposing Python internals
+            lines.append(f"- **{child.key}**: {_format_markdown_value(child.value)}")
         elif isinstance(child, Block):
             lines.append(f"{'#' * level} {child.key}")
             lines.append("")

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, Section
+from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, ListValue, Section
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.lexer import tokenize
 from octave_mcp.core.parser import parse
@@ -89,6 +89,28 @@ def _is_delete_sentinel(value: Any) -> bool:
         True if value is the DELETE sentinel
     """
     return isinstance(value, dict) and value.get("$op") == "DELETE"
+
+
+def _normalize_value_for_ast(value: Any) -> Any:
+    """Normalize a Python value to an AST-compatible type.
+
+    I1 (Syntactic Fidelity): Ensures values are properly typed for emission.
+
+    Python lists must be wrapped in ListValue to emit correct OCTAVE syntax.
+    Without this, str(list) produces "['a', 'b']" which is invalid OCTAVE.
+
+    Args:
+        value: Python value from changes dict
+
+    Returns:
+        AST-compatible value (ListValue for lists, original for others)
+    """
+    if isinstance(value, list):
+        # Recursively normalize list items
+        normalized_items = [_normalize_value_for_ast(item) for item in value]
+        return ListValue(items=normalized_items)
+    # Other types (str, int, bool, None, etc.) are handled by emit_value directly
+    return value
 
 
 class WriteTool(BaseTool):
@@ -322,11 +344,15 @@ class WriteTool(BaseTool):
                         del doc.meta[field_name]
                 else:
                     # Update or add field in doc.meta
-                    doc.meta[field_name] = new_value
+                    # I1 (Syntactic Fidelity): Normalize Python values to AST types
+                    # Without this, Python lists emit as "['a', 'b']" instead of "[a,b]"
+                    doc.meta[field_name] = _normalize_value_for_ast(new_value)
             elif key == "META" and isinstance(new_value, dict):
                 # Replace entire META block with new dict
                 if not _is_delete_sentinel(new_value):
-                    doc.meta = new_value.copy()
+                    # I1 (Syntactic Fidelity): Normalize all values in META block
+                    # Without this, Python lists emit as "['a', 'b']" instead of "[a,b]"
+                    doc.meta = {k: _normalize_value_for_ast(v) for k, v in new_value.items()}
                 else:
                     # DELETE sentinel on META clears the entire block
                     doc.meta = {}
@@ -335,17 +361,19 @@ class WriteTool(BaseTool):
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
             else:
                 # Update or set to null in sections
+                # I1 (Syntactic Fidelity): Normalize Python values to AST types
+                normalized_value = _normalize_value_for_ast(new_value)
                 found = False
                 for section in doc.sections:
                     if isinstance(section, Assignment) and section.key == key:
-                        section.value = new_value
+                        section.value = normalized_value
                         found = True
                         break
 
                 # If not found and not deleting, add new field
                 if not found:
-                    # Create new assignment node
-                    new_assignment = Assignment(key=key, value=new_value)
+                    # Create new assignment node with normalized value
+                    new_assignment = Assignment(key=key, value=normalized_value)
                     doc.sections.append(new_assignment)
 
         return doc
