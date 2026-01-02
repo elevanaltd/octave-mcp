@@ -8,7 +8,6 @@ Complete API reference for the OCTAVE MCP server, including MCP tools, Python mo
   - [octave_validate](#octave_validate)
   - [octave_write](#octave_write)
   - [octave_eject](#octave_eject)
-  - [octave_debate_to_octave](#octave_debate_to_octave)
 - [Python API](#python-api)
   - [Parser Module](#parser-module)
   - [Emitter Module](#emitter-module)
@@ -24,7 +23,7 @@ Complete API reference for the OCTAVE MCP server, including MCP tools, Python mo
 
 ## MCP Tools
 
-The OCTAVE MCP server exposes four tools for integration with MCP clients.
+The OCTAVE MCP server exposes three tools for integration with MCP clients.
 
 ### octave_validate
 
@@ -237,70 +236,6 @@ result = await client.call_tool(
     }
 )
 # Returns a template with all required fields
-```
-
----
-
-### octave_debate_to_octave
-
-Convert debate-hall-mcp JSON transcripts to structured OCTAVE format.
-
-#### Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `debate_json` | string | Yes | - | Debate transcript as JSON string or dict |
-| `include_metrics` | boolean | No | `false` | Include compression metrics in response |
-
-#### Expected Input Fields
-
-The debate JSON should contain:
-- `thread_id`: Unique identifier for the debate
-- `topic`: What the debate is about
-- `mode`: "fixed" or "mediated"
-- `status`: "active", "synthesis", or "closed"
-- `participants`: List of roles (Wind, Wall, Door)
-- `turns`: List of turn records with role, content, cognition
-- `synthesis`: Final synthesis (optional)
-
-#### Returns
-
-```typescript
-{
-  status: "success" | "error";
-  output: string;               // OCTAVE-formatted debate transcript
-  metrics?: {                   // Only if include_metrics=true
-    original_size_bytes: number;
-    compressed_size_bytes: number;
-    compression_ratio: number;
-    elements_before: number;
-    elements_after: number;
-  };
-}
-```
-
-#### Example
-
-```python
-result = await client.call_tool(
-    "octave_debate_to_octave",
-    {
-        "debate_json": json.dumps({
-            "thread_id": "debate-001",
-            "topic": "Architecture Decision",
-            "mode": "fixed",
-            "status": "closed",
-            "participants": ["Wind", "Wall", "Door"],
-            "turns": [
-                {"role": "Wind", "content": "Explore possibilities", "cognition": "PATHOS"},
-                {"role": "Wall", "content": "Consider constraints", "cognition": "ETHOS"},
-                {"role": "Door", "content": "Synthesize solution", "cognition": "LOGOS"}
-            ],
-            "synthesis": "Final integrated decision"
-        }),
-        "include_metrics": True
-    }
-)
 ```
 
 ---

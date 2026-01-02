@@ -43,10 +43,9 @@ class TestMCPServer:
         assert "octave_validate" in tool_names
         assert "octave_write" in tool_names
         assert "octave_eject" in tool_names
-        assert "octave_debate_to_octave" in tool_names
 
-        # Total: 4 tools (validate, write, eject, debate_to_octave)
-        assert len(tool_names) == 4
+        # Total: 3 tools (validate, write, eject)
+        assert len(tool_names) == 3
 
     @pytest.mark.asyncio
     async def test_eject_tool_has_required_params(self, server):
