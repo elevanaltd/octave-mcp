@@ -763,3 +763,133 @@ class TestValidateToolFilePathMode:
             # Error message should mention symlinks
             error_messages = " ".join(e.get("message", "") for e in result["errors"])
             assert "symlink" in error_messages.lower()
+
+
+class TestValidateToolYAMLFrontmatter:
+    """Tests for YAML frontmatter handling in octave_validate (Issue #91).
+
+    Issue #91: ValidateTool calls tokenize(content) directly, bypassing
+    the parser's _strip_yaml_frontmatter() function. This causes E005 errors
+    when YAML frontmatter contains parentheses or other special characters.
+
+    The parser.py module already handles this correctly (lines 19-86, 911),
+    but validate.py calls tokenize() at line 253 without stripping frontmatter.
+    """
+
+    @pytest.mark.asyncio
+    async def test_validate_with_yaml_frontmatter_parentheses(self):
+        """Issue #91: YAML frontmatter with parentheses should not fail.
+
+        The YAML frontmatter pattern is common in HestAI agent definitions:
+        ---
+        name: Ideator (PATHOS Specialist)
+        description: Creative exploration agent
+        ---
+
+        The lexer does not recognize parentheses, so frontmatter must be
+        stripped before tokenization.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        content = """---
+name: Ideator (PATHOS Specialist)
+description: Creative exploration agent
+---
+===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+        )
+
+        # Should succeed, not raise E005 error for parentheses
+        assert result["status"] == "success", (
+            f"Issue #91: YAML frontmatter with parentheses failed. " f"Errors: {result.get('errors', [])}"
+        )
+        # Should have valid canonical output
+        assert "===TEST===" in result["canonical"]
+        assert "===END===" in result["canonical"]
+
+    @pytest.mark.asyncio
+    async def test_validate_with_yaml_frontmatter_brackets(self):
+        """Issue #91: YAML frontmatter with square brackets should not fail."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        content = """---
+name: Agent
+tags: [alpha, beta, gamma]
+---
+===DOC===
+KEY::value
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST",
+            fix=False,
+        )
+
+        # Should succeed without E005 errors
+        assert result["status"] == "success", (
+            f"Issue #91: YAML frontmatter with brackets failed. " f"Errors: {result.get('errors', [])}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_with_yaml_frontmatter_special_chars(self):
+        """Issue #91: YAML frontmatter with various special chars should not fail."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        content = """---
+name: Test Agent (v1.0)
+url: https://example.com:8080/path
+regex: ^[a-z]+$
+math: 2 + 2 = 4
+---
+===DOC===
+FIELD::value
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST",
+            fix=False,
+        )
+
+        # Should succeed without tokenization errors
+        assert result["status"] == "success", (
+            f"Issue #91: YAML frontmatter with special chars failed. " f"Errors: {result.get('errors', [])}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_without_yaml_frontmatter_still_works(self):
+        """Regression test: Documents without YAML frontmatter should still work."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        content = """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+        )
+
+        # Should continue to work as before
+        assert result["status"] == "success"
+        assert result["validation_status"] == "VALIDATED"
