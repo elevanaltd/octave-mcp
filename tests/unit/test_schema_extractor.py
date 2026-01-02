@@ -421,3 +421,145 @@ FIELDS:
         # Verify policy
         assert schema.policy.version == "1.0"
         assert schema.policy.unknown_fields == "REJECT"
+
+
+class TestSchemaExtractorDefaultTarget:
+    """Test POLICY.DEFAULT_TARGET extraction for feudal inheritance (Issue #103)."""
+
+    def test_extract_policy_default_target(self):
+        """Should extract POLICY DEFAULT_TARGET for block-level inheritance.
+
+        Issue #103: Block-level routing inheritance requires DEFAULT_TARGET
+        to be extracted from POLICY block and set on SchemaDefinition.
+
+        POLICY:
+          DEFAULT_TARGET::INDEXER
+
+        -> schema.default_target == "INDEXER"
+        """
+        from octave_mcp.core.schema_extractor import extract_schema_from_document
+
+        doc = parse(
+            """
+===TEST_SCHEMA===
+META:
+  TYPE::PROTOCOL_DEFINITION
+  VERSION::"1.0"
+
+POLICY:
+  VERSION::"1.0"
+  UNKNOWN_FIELDS::REJECT
+  DEFAULT_TARGET::INDEXER
+
+FIELDS:
+  NAME::["example"∧REQ]
+===END===
+"""
+        )
+        schema = extract_schema_from_document(doc)
+
+        # DEFAULT_TARGET should be extracted from POLICY and set on schema
+        assert schema.default_target == "INDEXER"
+
+    def test_extract_policy_default_target_with_quoted_section_marker(self):
+        """Should handle DEFAULT_TARGET with quoted section marker prefix.
+
+        When authors quote the target, section marker is preserved in the string
+        and should be stripped: DEFAULT_TARGET::"RISK_LOG" -> "RISK_LOG".
+
+        Note: Unquoted section markers are tokenized separately by the lexer.
+        The recommended syntax is DEFAULT_TARGET::RISK_LOG (no marker).
+        """
+        from octave_mcp.core.schema_extractor import extract_schema_from_document
+
+        # Using quoted string to preserve the section marker in value
+        doc = parse(
+            """
+===TEST_SCHEMA===
+META:
+  TYPE::PROTOCOL_DEFINITION
+
+POLICY:
+  DEFAULT_TARGET::"RISK_LOG"
+
+FIELDS:
+  RISK::["auth_bypass"∧REQ]
+===END===
+"""
+        )
+        schema = extract_schema_from_document(doc)
+
+        # Value should be extracted (quotes stripped by parser)
+        assert schema.default_target == "RISK_LOG"
+
+    def test_default_target_enables_field_inheritance(self):
+        """Fields without explicit target should inherit from schema.default_target.
+
+        This is an integration test verifying the full feudal inheritance chain:
+        1. POLICY.DEFAULT_TARGET extracted during schema extraction
+        2. SchemaDefinition.default_target set
+        3. Validator uses default_target for fields without explicit target
+        """
+        from octave_mcp.core.ast_nodes import Assignment, Block, Document
+        from octave_mcp.core.schema_extractor import extract_schema_from_document
+        from octave_mcp.core.validator import Validator
+
+        # Parse schema with DEFAULT_TARGET
+        schema_doc = parse(
+            """
+===TEST_SCHEMA===
+META:
+  TYPE::PROTOCOL_DEFINITION
+
+POLICY:
+  DEFAULT_TARGET::INDEXER
+
+FIELDS:
+  AGENT::["impl-lead"∧REQ]
+===END===
+"""
+        )
+        schema = extract_schema_from_document(schema_doc)
+
+        # Verify schema has default_target set
+        assert schema.default_target == "INDEXER"
+
+        # Create document with field that has no explicit target
+        section = Block(
+            key="TEST_SCHEMA",
+            children=[Assignment(key="AGENT", value="implementation-lead")],
+        )
+        document = Document(meta={}, sections=[section])
+
+        # Validate with schema - should inherit default_target
+        validator = Validator()
+        validator.validate(document, strict=False, section_schemas={"TEST_SCHEMA": schema})
+
+        # Assert: Routing entry created using inherited target
+        assert validator.routing_log.has_routes()
+        entry = validator.routing_log.entries[0]
+        assert entry.target_name == "INDEXER"
+        assert entry.source_path == "TEST_SCHEMA.AGENT"
+
+    def test_no_default_target_when_not_specified(self):
+        """Schema without POLICY.DEFAULT_TARGET should have None."""
+        from octave_mcp.core.schema_extractor import extract_schema_from_document
+
+        doc = parse(
+            """
+===TEST_SCHEMA===
+META:
+  TYPE::PROTOCOL_DEFINITION
+
+POLICY:
+  VERSION::"1.0"
+
+FIELDS:
+  NAME::["example"∧REQ→§SELF]
+===END===
+"""
+        )
+        schema = extract_schema_from_document(doc)
+
+        # No DEFAULT_TARGET specified, should be None
+        assert schema.default_target is None

@@ -7,6 +7,7 @@ Validates AST against schema definitions with:
 - Regex pattern validation
 - Unknown field detection
 - Constraint chain evaluation
+- Target routing with audit trail (Issue #103)
 """
 
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from typing import Any
 
 from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document
 from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
+from octave_mcp.core.routing import RoutingLog, compute_value_hash
 from octave_mcp.core.schema_extractor import SchemaDefinition
 
 
@@ -34,6 +36,7 @@ class Validator:
         """Initialize validator with optional schema."""
         self.schema = schema or {}
         self.errors: list[ValidationError] = []
+        self.routing_log: RoutingLog = RoutingLog()
 
     def validate(
         self,
@@ -55,6 +58,7 @@ class Validator:
             List of validation errors (empty if valid)
         """
         self.errors = []
+        self.routing_log = RoutingLog()  # Reset routing log for each validation
 
         # Validate META if schema defines it
         if "META" in self.schema and doc.meta:
@@ -119,8 +123,7 @@ class Validator:
         Validates:
         - Holographic patterns: ["example"∧CONSTRAINT→§TARGET]
         - Constraint chains: REQ∧ENUM[A,B]∧REGEX["^[a-z]+$"]
-
-        Note: Target routing validation deferred to Issue #103.
+        - Target routing with audit trail (Issue #103)
         """
         # I5: Schema-less sections skip content validation
         if section_schema is None:
@@ -136,10 +139,15 @@ class Validator:
             if isinstance(child, Assignment):
                 present_fields[child.key] = child.value
 
+        # Get block-level default target (feudal inheritance)
+        default_target = getattr(section_schema, "default_target", None)
+
         # Validate each field defined in schema
         for field_name, field_def in section_schema.fields.items():
             # Check if field is present
             value = present_fields.get(field_name)
+            field_path = f"{section.key}.{field_name}"
+            constraint_passed = True
 
             # Evaluate constraints if pattern exists
             if field_def.pattern and field_def.pattern.constraints:
@@ -150,7 +158,7 @@ class Validator:
                         ValidationError(
                             code="E003",
                             message=f"Field '{field_name}' is required but missing",
-                            field_path=f"{section.key}.{field_name}",
+                            field_path=field_path,
                         )
                     )
                     continue
@@ -160,7 +168,8 @@ class Validator:
                     continue
 
                 # Evaluate full constraint chain
-                result = field_def.pattern.constraints.evaluate(value=value, path=f"{section.key}.{field_name}")
+                result = field_def.pattern.constraints.evaluate(value=value, path=field_path)
+                constraint_passed = result.valid
 
                 # Convert constraint errors to validator errors
                 for error in result.errors:
@@ -170,6 +179,22 @@ class Validator:
                             message=error.message,
                             field_path=error.path,
                         )
+                    )
+
+            # Target routing with audit trail (Issue #103)
+            # Feudal inheritance: child explicit target overrides parent block target
+            if field_def.pattern:
+                target = field_def.pattern.target  # Child's explicit target
+                if target is None:
+                    target = default_target  # Inherit from parent if no explicit
+
+                if target is not None and value is not None:
+                    # Log routing entry for audit trail (I4 compliance)
+                    self.routing_log.add(
+                        source_path=field_path,
+                        target_name=target,
+                        value_hash=compute_value_hash(value),
+                        constraint_passed=constraint_passed,
                     )
 
     def _validate_type(self, field: str, value: Any, field_schema: dict[str, Any]) -> None:

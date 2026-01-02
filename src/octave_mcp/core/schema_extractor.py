@@ -68,24 +68,28 @@ class SchemaDefinition:
         version: Schema version (from META block)
         policy: POLICY block configuration
         fields: Dictionary of field name -> FieldDefinition
+        default_target: Block-level default target for feudal inheritance (Issue #103)
     """
 
     name: str
     version: str | None = None
     policy: PolicyDefinition = field(default_factory=PolicyDefinition)
     fields: dict[str, FieldDefinition] = field(default_factory=dict)
+    default_target: str | None = None
 
 
-def _extract_policy(sections: list[Any]) -> PolicyDefinition:
+def _extract_policy(sections: list[Any]) -> tuple[PolicyDefinition, str | None]:
     """Extract POLICY block from document sections.
 
     Args:
         sections: List of document sections (Assignment, Block, Section)
 
     Returns:
-        PolicyDefinition with extracted settings
+        Tuple of (PolicyDefinition, default_target).
+        default_target is extracted from POLICY.DEFAULT_TARGET for feudal inheritance.
     """
     policy = PolicyDefinition()
+    default_target: str | None = None
 
     for section in sections:
         if isinstance(section, Block) and section.key == "POLICY":
@@ -98,8 +102,14 @@ def _extract_policy(sections: list[Any]) -> PolicyDefinition:
                     elif child.key == "TARGETS":
                         # Parse targets list, stripping section markers
                         policy.targets = _parse_targets(child.value)
+                    elif child.key == "DEFAULT_TARGET":
+                        # Extract default target, stripping section marker if present
+                        target_value = str(child.value)
+                        if target_value.startswith("§"):
+                            target_value = target_value[1:]
+                        default_target = target_value
 
-    return policy
+    return policy, default_target
 
 
 def _parse_targets(value: Any) -> list[str]:
@@ -341,8 +351,8 @@ def extract_schema_from_document(doc: Document) -> SchemaDefinition:
     if doc.meta and "VERSION" in doc.meta:
         version = str(doc.meta["VERSION"]).strip('"')
 
-    # Extract POLICY block
-    policy = _extract_policy(doc.sections)
+    # Extract POLICY block and default_target (Issue #103: feudal inheritance)
+    policy, default_target = _extract_policy(doc.sections)
 
     # Extract FIELDS block
     fields = _extract_fields(doc.sections)
@@ -352,4 +362,5 @@ def extract_schema_from_document(doc: Document) -> SchemaDefinition:
         version=version,
         policy=policy,
         fields=fields,
+        default_target=default_target,
     )
