@@ -394,3 +394,119 @@ KEY::value
         first_section = doc.sections[0]
         # The section should report line 6 from the original source
         assert first_section.line == 6, f"Expected line 6, got {first_section.line}"
+
+
+class TestSectionTargetParsing:
+    """Test § section marker parsing in value positions (Gap 9).
+
+    Bug: parse_value() missing TokenType.SECTION case causes '§INDEXER'
+    to be parsed as just '§', orphaning the identifier.
+    """
+
+    def test_parse_section_target_value(self):
+        """Should parse TARGET::§INDEXER as value='§INDEXER'.
+
+        Gap 9 bug: SECTION token falls through to else clause,
+        returns just '§', orphans IDENTIFIER.
+        """
+        content = """===TEST===
+TARGET::§INDEXER
+===END==="""
+        doc = parse(content)
+
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "TARGET"
+        # Bug: Currently returns '§', should return '§INDEXER'
+        assert assignment.value == "§INDEXER"
+
+    def test_parse_section_target_ascii_alias(self):
+        """Should parse TARGET::#INDEXER as value='§INDEXER'.
+
+        The # is an ASCII alias for § section marker.
+        Should normalize to canonical § in parsed value.
+        """
+        content = """===TEST===
+TARGET::#INDEXER
+===END==="""
+        doc = parse(content)
+
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "TARGET"
+        # Should normalize # to § and concatenate with identifier
+        assert assignment.value == "§INDEXER"
+
+    def test_parse_section_in_list(self):
+        """Should parse list items [§INDEXER, §SELF] correctly.
+
+        Section markers inside lists should be fully captured
+        with their following identifiers.
+        """
+        content = """===TEST===
+TARGETS::[§INDEXER, §SELF]
+===END==="""
+        doc = parse(content)
+
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "TARGETS"
+        assert isinstance(assignment.value, ListValue)
+        # Bug: Currently would return ['§', '§'], should return ['§INDEXER', '§SELF']
+        assert len(assignment.value.items) == 2
+        assert assignment.value.items[0] == "§INDEXER"
+        assert assignment.value.items[1] == "§SELF"
+
+    def test_parse_bare_section_marker(self):
+        """Should handle bare § without following identifier.
+
+        Edge case: Just § alone (no identifier) should return '§'.
+        """
+        content = """===TEST===
+VALUE::§
+===END==="""
+        doc = parse(content)
+
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "VALUE"
+        # Bare § should return just '§'
+        assert assignment.value == "§"
+
+    def test_parse_section_with_number_suffix(self):
+        """Should parse §1::NAME in value position.
+
+        Section markers can have numeric suffixes like §1, §2b, etc.
+        """
+        content = """===TEST===
+REF::§1
+===END==="""
+        doc = parse(content)
+
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "REF"
+        # Should capture § followed by number
+        assert assignment.value == "§1"
+
+    def test_parse_section_in_flow_expression(self):
+        """Should handle § in flow expressions like A->§TARGET.
+
+        Section markers can appear in flow expressions.
+        """
+        content = """===TEST===
+ROUTE::START->§DESTINATION
+===END==="""
+        doc = parse(content)
+
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "ROUTE"
+        # Flow expression should capture section marker with identifier
+        assert "§DESTINATION" in assignment.value

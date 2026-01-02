@@ -802,6 +802,27 @@ class Parser:
             # Flow expression starting with operator like →B→C
             return self.parse_flow_expression()
 
+        elif token.type == TokenType.SECTION:
+            # Gap 9 fix: Handle § section marker in value position
+            # Examples: TARGET::§INDEXER, TARGETS::[§A, §B], REF::§1
+            # The SECTION token contains '§' (canonical form, even if # was typed)
+            section_marker = str(token.value)  # Always '§'
+            self.advance()
+
+            # Check for following IDENTIFIER or NUMBER
+            next_token = self.current()
+            if next_token.type == TokenType.IDENTIFIER:
+                # §IDENTIFIER pattern (e.g., §INDEXER)
+                section_marker += next_token.value
+                self.advance()
+            elif next_token.type == TokenType.NUMBER:
+                # §NUMBER pattern (e.g., §1, §2)
+                section_marker += _token_to_str(next_token)
+                self.advance()
+            # else: bare § marker, return as-is
+
+            return section_marker
+
         else:
             # Try to consume as bare word
             value = str(token.value)
@@ -871,17 +892,33 @@ class Parser:
         Uses EXPRESSION_OPERATORS set for unified operator handling (GH#62, GH#65).
         This ensures all expression operators (FLOW, SYNTHESIS, AT, CONCAT, TENSION,
         CONSTRAINT, ALTERNATIVE) are properly captured in expressions.
+
+        Gap 9 fix: Also handles SECTION tokens (§) in flow expressions.
+        Example: START->§DESTINATION should capture '§DESTINATION' as single unit.
         """
         parts = []
 
         # Collect all parts of expression using unified EXPRESSION_OPERATORS set
+        # Gap 9: Include SECTION token type in valid expression components
         while (
-            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING)
+            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.SECTION)
             or self.current().type in EXPRESSION_OPERATORS
         ):
             if self.current().type in EXPRESSION_OPERATORS:
                 parts.append(self.current().value)
                 self.advance()
+            elif self.current().type == TokenType.SECTION:
+                # Gap 9 fix: Handle § section marker in flow expression
+                # Concatenate § with following IDENTIFIER/NUMBER
+                section_marker = self.current().value  # '§'
+                self.advance()
+                if self.current().type == TokenType.IDENTIFIER:
+                    section_marker += self.current().value
+                    self.advance()
+                elif self.current().type == TokenType.NUMBER:
+                    section_marker += _token_to_str(self.current())
+                    self.advance()
+                parts.append(section_marker)
             elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING):
                 parts.append(self.current().value)
                 self.advance()
