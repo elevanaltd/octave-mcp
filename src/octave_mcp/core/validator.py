@@ -12,8 +12,9 @@ Validates AST against schema definitions with:
 from dataclasses import dataclass
 from typing import Any
 
-from octave_mcp.core.ast_nodes import ASTNode, Document
-from octave_mcp.core.constraints import EnumConstraint
+from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document
+from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
+from octave_mcp.core.schema_extractor import SchemaDefinition
 
 
 @dataclass
@@ -34,12 +35,21 @@ class Validator:
         self.schema = schema or {}
         self.errors: list[ValidationError] = []
 
-    def validate(self, doc: Document, strict: bool = False) -> list[ValidationError]:
+    def validate(
+        self,
+        doc: Document,
+        strict: bool = False,
+        section_schemas: dict[str, SchemaDefinition] | None = None,
+    ) -> list[ValidationError]:
         """Validate document against schema.
 
         Args:
             doc: Document AST
             strict: If True, reject unknown fields
+            section_schemas: Optional dict mapping section names to SchemaDefinition.
+                            When provided, sections with matching keys will be validated
+                            against their schema's constraints. Sections without a
+                            matching entry are skipped (I5: schema sovereignty).
 
         Returns:
             List of validation errors (empty if valid)
@@ -52,7 +62,13 @@ class Validator:
 
         # Validate sections
         for section in doc.sections:
-            self._validate_section(section, strict)
+            # Look up schema for this section by key (if section has a key attribute)
+            section_schema = None
+            if section_schemas is not None:
+                section_key = getattr(section, "key", None)
+                if section_key is not None:
+                    section_schema = section_schemas.get(section_key)
+            self._validate_section(section, strict, section_schema)
 
         return self.errors
 
@@ -91,25 +107,70 @@ class Validator:
             if field in fields_schema:
                 self._validate_type(field, value, fields_schema[field])
 
-    def _validate_section(self, section: ASTNode, strict: bool) -> None:
-        """Validate a section.
+    def _validate_section(self, section: ASTNode, strict: bool, section_schema: SchemaDefinition | None = None) -> None:
+        """Validate a section against its schema definition.
 
-        DEFERRED: Section validation requires schema infrastructure.
-        See docs/implementation-roadmap.md:
-        - Gap 1: Holographic Pattern Parsing (1-2 days)
-        - Gap 2: Constraint Chain Evaluation (2-3 days)
-        - Gap 3: Target Routing & Validation (1-2 days)
+        Args:
+            section: The section AST node to validate
+            strict: Whether strict mode is enabled
+            section_schema: Optional schema definition for this section.
+                           If None, skip content validation (I5: schema-less = UNVALIDATED).
 
-        Total Phase 1: 3-4 weeks foundational work
-
-        Once complete, this will validate:
+        Validates:
         - Holographic patterns: ["example"∧CONSTRAINT→§TARGET]
         - Constraint chains: REQ∧ENUM[A,B]∧REGEX["^[a-z]+$"]
-        - Target routing: →§INDEXER, →§META, etc.
-        - Block inheritance: Children inherit parent targets
+
+        Note: Target routing validation deferred to Issue #103.
         """
-        # Type narrowing: section is typically Assignment | Block from Document.sections
-        pass
+        # I5: Schema-less sections skip content validation
+        if section_schema is None:
+            return
+
+        # Only Block nodes have children to validate
+        if not isinstance(section, Block):
+            return
+
+        # Build map of present fields for REQ constraint checking
+        present_fields: dict[str, Any] = {}
+        for child in section.children:
+            if isinstance(child, Assignment):
+                present_fields[child.key] = child.value
+
+        # Validate each field defined in schema
+        for field_name, field_def in section_schema.fields.items():
+            # Check if field is present
+            value = present_fields.get(field_name)
+
+            # Evaluate constraints if pattern exists
+            if field_def.pattern and field_def.pattern.constraints:
+                # Check REQ constraint first for missing fields
+                has_req = any(isinstance(c, RequiredConstraint) for c in field_def.pattern.constraints.constraints)
+                if has_req and value is None:
+                    self.errors.append(
+                        ValidationError(
+                            code="E003",
+                            message=f"Field '{field_name}' is required but missing",
+                            field_path=f"{section.key}.{field_name}",
+                        )
+                    )
+                    continue
+
+                # Skip other validation if field is absent (and not required)
+                if value is None:
+                    continue
+
+                # Evaluate full constraint chain
+                result = field_def.pattern.constraints.evaluate(value=value, path=f"{section.key}.{field_name}")
+
+                # Convert constraint errors to validator errors
+                for error in result.errors:
+                    self.errors.append(
+                        ValidationError(
+                            code=error.code,
+                            message=error.message,
+                            field_path=error.path,
+                        )
+                    )
 
     def _validate_type(self, field: str, value: Any, field_schema: dict[str, Any]) -> None:
         """Validate value type and enum constraints."""
@@ -174,16 +235,22 @@ class Validator:
             )
 
 
-def validate(doc: Document, schema: dict[str, Any] | None = None, strict: bool = False) -> list[ValidationError]:
+def validate(
+    doc: Document,
+    schema: dict[str, Any] | None = None,
+    strict: bool = False,
+    section_schemas: dict[str, SchemaDefinition] | None = None,
+) -> list[ValidationError]:
     """Validate document against schema.
 
     Args:
         doc: Document AST
         schema: Schema definition (optional)
         strict: Reject unknown fields if True
+        section_schemas: Optional dict mapping section names to SchemaDefinition
 
     Returns:
         List of validation errors
     """
     validator = Validator(schema)
-    return validator.validate(doc, strict)
+    return validator.validate(doc, strict, section_schemas)

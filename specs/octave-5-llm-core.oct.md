@@ -17,6 +17,7 @@ META:
 // Mythology = compression shorthand, not decoration (docs/research/mythology-evidence-synthesis.oct.md).
 
 §1::ENVELOPE
+FILE_EXTENSION::.oct.md[canonical][.octave.txt_deprecated]
 START::===NAME===[first_line,exact_match]
 META::required[TYPE,VERSION][immediately_after_start]
 SEPARATOR::---[optional_for_discovery,signals_metadata_boundary]
