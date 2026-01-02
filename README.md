@@ -18,7 +18,7 @@ OCTAVE (Olympian Common Text And Vocabulary Engine) is a deterministic document 
 
 - **Syntax**: Unicode-first operators (`→`, `⊕`, `⧺`, `⇌`, `∨`, `∧`, `§`) with ASCII aliases (`->`, `+`, `~`, `vs`, `|`, `&`, `§`) keep documents compact while staying typable everywhere.
 - **Vocabulary**: Mythological terms are deliberate compression shorthands (e.g., `ICARIAN`, `SISYPHEAN`, `HUBRIS→NEMESIS`) that pack multiple related concepts into single tokens for higher semantic density.
-- **Authoring**: Humans typically write in the lenient view and rely on `octave ingest` to normalize into canonical Unicode; both views stay human-auditable.
+- **Authoring**: Humans typically write in the lenient view and rely on `octave validate` to normalize into canonical Unicode; both views stay human-auditable.
 
 See the [protocol specs in `specs/`](specs/README.oct.md) for the precise operators, envelopes, and schema rules (v5.1.0).
 
@@ -28,16 +28,17 @@ See the [protocol specs in `specs/`](specs/README.oct.md) for the precise operat
 
 ### Available via CLI
 
-- **`octave ingest`** - normalize lenient OCTAVE to canonical form, validate against schemas, and log every change.
-- **`octave eject`** - project canonical OCTAVE into multiple views (canonical, authoring, executive, developer) and formats (OCTAVE, JSON, YAML, Markdown) with declared loss tiers.
-- **`octave validate`** - validate OCTAVE against schemas without modifying files.
+The CLI mirrors the MCP tools for use in shell pipelines, CI/CD, and local workflows:
 
-### Available via MCP (4 tools)
+- **`octave validate`** - validate OCTAVE against schemas, output canonical form with validation status.
+- **`octave write`** - write OCTAVE files with validation (content mode or delta changes mode).
+- **`octave eject`** - project OCTAVE into views (canonical, authoring, executive, developer) and formats (OCTAVE, JSON, YAML, Markdown).
+
+### Available via MCP (3 tools)
 
 - **`octave_validate`** - schema validation and parsing of OCTAVE content
 - **`octave_write`** - unified file creation and modification (content mode OR changes mode with optional hash-based consistency checking)
 - **`octave_eject`** - format projection (octave, json, yaml, markdown) with declared loss tiers
-- **`octave_debate_to_octave`** - convert debate-hall-mcp JSON transcripts to OCTAVE format
 
 These tools make it easy for LLMs to emit minimal intent while relying on deterministic mechanics for structure and safety. If the LLM were replaced by a plain text emitter, OCTAVE would still provide value.
 
@@ -78,14 +79,14 @@ pip install -e .
 ### CLI
 
 ```bash
-# Normalize and validate lenient OCTAVE
-octave ingest document.oct.md --schema DECISION_LOG
+# Validate and normalize to canonical form
+octave validate document.oct.md --schema DECISION_LOG
+
+# Write with validation (from content)
+echo "===DOC===\nKEY::value" | octave write output.oct.md --stdin --schema META
 
 # Project to a view/format
-octave eject document.oct.md --mode executive
-
-# Validate only
-octave validate document.oct.md --schema DECISION_LOG --strict
+octave eject document.oct.md --mode executive --format markdown
 ```
 
 ### MCP setup
