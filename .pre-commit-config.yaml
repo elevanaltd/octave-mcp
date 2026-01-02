@@ -22,3 +22,14 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
+
+  # HestAI Test Structure Standard (test-structure-standard.oct.md)
+  - repo: local
+    hooks:
+      - id: no-tests-init
+        name: Prevent tests/__init__.py
+        entry: >-
+          bash -c 'test -z "$(find tests -name __init__.py -type f 2>/dev/null)" || { echo "ERROR: tests/__init__.py files must not exist"; exit 1; }'
+        language: system
+        pass_filenames: false
+        always_run: true
