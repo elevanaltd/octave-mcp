@@ -68,12 +68,14 @@ class SchemaDefinition:
         version: Schema version (from META block)
         policy: POLICY block configuration
         fields: Dictionary of field name -> FieldDefinition
+        default_target: Block-level default target for feudal inheritance (Issue #103)
     """
 
     name: str
     version: str | None = None
     policy: PolicyDefinition = field(default_factory=PolicyDefinition)
     fields: dict[str, FieldDefinition] = field(default_factory=dict)
+    default_target: str | None = None
 
 
 def _extract_policy(sections: list[Any]) -> PolicyDefinition:
