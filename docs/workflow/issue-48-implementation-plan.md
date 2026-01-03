@@ -16,7 +16,7 @@ This plan synthesizes 5 debate rounds (18 comments) from multi-model Wind/Wall/D
 - Zero runtime dependencies
 - Documents remain self-contained ("Sealed Books")
 - Provenance via section annotations (already implemented in parser.py:172-223)
-- No parser changes required
+- No parser changes required for core hydration (§OCTAVE sentinel deferred to Phase 2)
 
 ---
 
@@ -151,37 +151,40 @@ specs/
 
 ### Phase 1: Foundation (NOW - MVP)
 
+**Sequencing**: Contract-First Hydration (Schema → Tests → Core → CLI)
+
 | Task | Description | Files | Priority |
 |------|-------------|-------|----------|
 | 1.1 | Create `specs/vocabularies/` directory structure | New directory | HIGH |
 | 1.2 | Create `registry.oct.md` index | `specs/vocabularies/registry.oct.md` | HIGH |
 | 1.3 | Define TYPE::CAPSULE schema | `specs/schemas/capsule.oct.md` | HIGH |
-| 1.4 | Add §OCTAVE grammar sentinel to parser | `src/octave_mcp/core/parser.py` | HIGH |
-| 1.5 | Implement `octave normalize` CLI command | `src/octave_mcp/cli/main.py` | HIGH |
-| 1.6 | Implement `octave hydrate` CLI command | `src/octave_mcp/cli/main.py` | HIGH |
-| 1.7 | Create hydration logic module | `src/octave_mcp/core/hydrator.py` (new) | HIGH |
-| 1.8 | Add §SNAPSHOT.MANIFEST generation | Part of hydrator | HIGH |
-| 1.9 | Add §SNAPSHOT.PRUNED generation (tree shaking) | Part of hydrator | HIGH |
-| 1.10 | Add Companion Documents: `TEACHES::` to specs | `specs/octave-5-llm-*.oct.md` | MEDIUM |
-| 1.11 | Add Companion Documents: `implements:` to skills | Skills YAML frontmatter | MEDIUM |
-| 1.12 | Document ASSIST vs INVENT convention | `docs/CONTRIBUTING.md` or similar | MEDIUM |
-| 1.13 | Unit tests for hydration | `tests/test_hydrator.py` | HIGH |
-| 1.14 | Integration tests | `tests/integration/test_hydrate_cli.py` | HIGH |
+| 1.4 | Create golden-master test fixtures | `tests/fixtures/hydration/` | HIGH |
+| 1.5 | Create hydration logic module with HydrationPolicy | `src/octave_mcp/core/hydrator.py` (new) | HIGH |
+| 1.6 | Add §SNAPSHOT.MANIFEST generation | Part of hydrator | HIGH |
+| 1.7 | Add §SNAPSHOT.PRUNED generation (tree shaking) | Part of hydrator | HIGH |
+| 1.8 | Implement `octave hydrate` CLI command | `src/octave_mcp/cli/main.py` | HIGH |
+| 1.9 | Unit tests for hydration | `tests/test_hydrator.py` | HIGH |
+| 1.10 | Integration tests | `tests/integration/test_hydrate_cli.py` | HIGH |
+| 1.11 | Add Companion Documents: `TEACHES::` to specs | `specs/octave-5-llm-*.oct.md` | MEDIUM |
+| 1.12 | Add Companion Documents: `implements:` to skills | Skills YAML frontmatter | MEDIUM |
+| 1.13 | Document ASSIST vs INVENT convention | `docs/CONTRIBUTING.md` or similar | MEDIUM |
 
 ### Phase 2: Verification & Tooling (SOON)
 
 | Task | Description | Priority |
 |------|-------------|----------|
-| 2.1 | Implement `§SEAL` computation | HIGH |
-| 2.2 | Implement `octave seal` CLI command | HIGH |
-| 2.3 | Add `§SEAL` verification to validate command | HIGH |
-| 2.4 | Implement VOID MAPPER tool | HIGH |
-| 2.5 | Add `octave coverage` CLI command | HIGH |
-| 2.6 | Add `octave hydrate --check` for staleness detection | MEDIUM |
-| 2.7 | Add `octave vocab list` command | MEDIUM |
-| 2.8 | Implement PEDAGOGY DIFF tool | MEDIUM |
-| 2.9 | PRUNE_MANIFEST policy options (hash/list/count/elide) | MEDIUM |
-| 2.10 | Cycle detection for recursive imports | MEDIUM |
+| 2.1 | Add §OCTAVE grammar sentinel to parser | HIGH |
+| 2.2 | Implement `octave normalize` CLI command | HIGH |
+| 2.3 | Implement `§SEAL` computation | HIGH |
+| 2.4 | Implement `octave seal` CLI command | HIGH |
+| 2.5 | Add `§SEAL` verification to validate command | HIGH |
+| 2.6 | Implement VOID MAPPER tool | HIGH |
+| 2.7 | Add `octave coverage` CLI command | HIGH |
+| 2.8 | Add `octave hydrate --check` for staleness detection | MEDIUM |
+| 2.9 | Add `octave vocab list` command | MEDIUM |
+| 2.10 | Implement PEDAGOGY DIFF tool | MEDIUM |
+| 2.11 | PRUNE_MANIFEST policy options (hash/count/elide) | MEDIUM |
+| 2.12 | Cycle detection for recursive imports | MEDIUM |
 
 ### Phase 3: Federation & Advanced (LATER)
 
@@ -209,12 +212,18 @@ specs/
 
 ---
 
-## Open Questions for Human Decision
+## Decided Defaults (Per 2026-01-03 Debate)
 
-1. **PRUNE_MANIFEST default**: `hash` (compact + verifiable) or `list` (verbose but auditable)?
-2. **Collision default**: `error` blocks on any conflict, or `source_wins` for convenience?
-3. **Breaking changes strategy**: How should term renames/removals be handled?
-4. **R5 Mitigation**: Need deprecation/migration strategy design
+| Parameter | Decision | Rationale |
+|-----------|----------|-----------|
+| **PRUNE_MANIFEST** | `list` | Auditability for Phase 1 MVP; `hash` option added in Phase 2 |
+| **COLLISION** | `error` | I3 compliance - no silent override; user must resolve conflicts explicitly |
+| **Grammar Sentinel** | Phase 2 | Not required for core hydration; deferred to §SEAL verification phase |
+
+## Remaining Open Questions
+
+1. **Breaking changes strategy**: How should term renames/removals be handled?
+2. **R5 Mitigation**: Need deprecation/migration strategy design
 
 ---
 
@@ -244,8 +253,8 @@ specs/
 |--------|-------|---------------|
 | Round 1 | Basic SNAPSHOT | APPROVED |
 | Round 2 | Audited Capsule | APPROVED (§SNAPSHOT.* blocks) |
-| Risk Analysis | PRUNE_MANIFEST options | NEEDS DECISION |
-| Round 3 | Living Scrolls | APPROVED (§SEAL, §OCTAVE sentinel) |
+| Risk Analysis | PRUNE_MANIFEST options | DECIDED: `list` default |
+| Round 3 | Living Scrolls | APPROVED (§SEAL, §OCTAVE sentinel → Phase 2) |
 | Package Structure | Path 1.7 | APPROVED (`specs/vocabularies/`) |
 | Project Structure | Layered Content | SUPERSEDED (no dir reorg) |
 | Round 4 | Companion Documents | APPROVED (bidirectional links) |
@@ -264,3 +273,4 @@ specs/
 
 *Generated from 18 debate comments on Issue #48*
 *Last updated: 2026-01-03*
+*Decisions resolved: 2026-01-03 (debate-hall thread: 2026-01-03-issue48-phase1-scope)*
