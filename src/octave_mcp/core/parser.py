@@ -835,7 +835,15 @@ class Parser:
             return value
 
     def parse_list(self) -> ListValue:
-        """Parse list [a, b, c]."""
+        """Parse list [a, b, c].
+
+        Gap_2 ADR-0012: Captures token slice for token-witnessed reconstruction.
+        This enables correct reconstruction of holographic patterns containing
+        quoted operator symbols (e.g., ["∧"∧REQ→§SELF]).
+        """
+        # Gap_2: Record token position BEFORE consuming LIST_START
+        # We want tokens from [ to ] inclusive for reconstruction
+        start_pos = self.pos
         self.expect(TokenType.LIST_START)
         items: list[Any] = []
 
@@ -873,7 +881,13 @@ class Parser:
                 pass
 
         self.expect(TokenType.LIST_END)
-        return ListValue(items=items)
+
+        # Gap_2: Capture token slice for token-witnessed reconstruction (ADR-0012)
+        # Slice includes LIST_START through LIST_END (exclusive end, so pos is after ])
+        end_pos = self.pos
+        token_slice = self.tokens[start_pos:end_pos]
+
+        return ListValue(items=items, tokens=token_slice)
 
     def parse_list_item(self) -> Any:
         """Parse a single list item."""

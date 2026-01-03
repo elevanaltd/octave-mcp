@@ -17,9 +17,10 @@ from typing import Any
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.parser import parse_with_warnings
 from octave_mcp.core.repair import repair
+from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
-from octave_mcp.schemas.loader import get_builtin_schema
+from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
 
 # Gap_6: Regex pattern to extract spec error codes (E001-E007) from error messages
 # The core lexer/parser embed codes like "E005 at line 2, column 1: ..."
@@ -321,18 +322,44 @@ class ValidateTool(BaseTool):
             return result
 
         # STAGE 3: Schema Validation (I5 Schema Sovereignty)
-        # Try to load the requested schema
+        # Try to load the requested schema (old-style dict for META block validation)
         schema_def = get_builtin_schema(schema_name)
 
-        if schema_def is not None:
+        # Gap_1: Also try to load SchemaDefinition for section constraint validation
+        # This enables holographic pattern constraint evaluation via section_schemas
+        schema_definition: SchemaDefinition | None = None
+        section_schemas: dict[str, SchemaDefinition] | None = None
+        try:
+            schema_definition = load_schema_by_name(schema_name)
+            if schema_definition is not None and schema_definition.fields:
+                # Build section_schemas dict for constraint validation
+                # CORRECTNESS FIX: Map only the schema's name to its definition
+                # NOT every section in the document (that was a bug)
+                # The validator will look up sections by key and only validate
+                # those that have a matching entry in section_schemas
+                section_schemas = {schema_definition.name: schema_definition}
+        except Exception:
+            # Schema loading may fail - continue with old-style dict validation
+            pass
+
+        # Determine if we have a schema available for validation
+        # Priority: old-style builtin dict OR file-based SchemaDefinition
+        has_schema = schema_def is not None or (schema_definition is not None and schema_definition.fields)
+
+        if has_schema:
             # Schema found - perform validation
             # I5: "Schema-validated documents shall record the schema name and version used"
-            result["schema_name"] = schema_def.get("name", schema_name)
-            result["schema_version"] = schema_def.get("version", "unknown")
+            if schema_def is not None:
+                result["schema_name"] = schema_def.get("name", schema_name)
+                result["schema_version"] = schema_def.get("version", "unknown")
+            elif schema_definition is not None:
+                result["schema_name"] = schema_definition.name
+                result["schema_version"] = schema_definition.version or "unknown"
 
             # Use the validator with the schema definition
+            # Gap_1: Pass section_schemas for constraint validation on document sections
             validator = Validator(schema=schema_def)
-            validation_errors = validator.validate(doc, strict=False)
+            validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
 
             if validation_errors:
                 # I5: Schema validation failed - mark as INVALID
@@ -357,7 +384,7 @@ class ValidateTool(BaseTool):
             # Schema not found - remain UNVALIDATED
             # I5: "Schema bypass shall be visible, never silent"
             validator = Validator(schema=None)
-            validation_errors = validator.validate(doc, strict=False)
+            validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
 
             if validation_errors:
                 result["warnings"].extend(
@@ -381,8 +408,9 @@ class ValidateTool(BaseTool):
             result["repairs"].extend(repair_log.repairs)
 
             # Re-validate after repairs
+            # Gap_1: Pass section_schemas for constraint validation
             validator_for_repair = Validator(schema=schema_def if schema_def else None)
-            validation_errors = validator_for_repair.validate(doc, strict=False)
+            validation_errors = validator_for_repair.validate(doc, strict=False, section_schemas=section_schemas)
             if validation_errors:
                 result["warnings"].extend(
                     [

@@ -10,6 +10,7 @@ This module provides:
 - load_builtin_schemas(): Load all builtin schemas
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,11 @@ from octave_mcp.core.schema_extractor import (
     SchemaDefinition,
     extract_schema_from_document,
 )
+
+# Security: Pattern for valid schema names (uppercase letters, digits, underscores)
+# Must start with uppercase letter. Prevents path traversal attacks like "../secret"
+SCHEMA_NAME_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
 
 # BUILTIN_SCHEMA_DEFINITIONS maintained for backwards compatibility
 # These provide fallback schemas when schema files are not available
@@ -121,7 +127,17 @@ def load_schema_by_name(schema_name: str) -> SchemaDefinition | None:
 
     Returns:
         SchemaDefinition if found, None otherwise
+
+    Security:
+        Validates schema_name against SCHEMA_NAME_PATTERN to prevent path traversal.
+        Names containing path separators, '..' or other special characters are rejected.
     """
+    # Security: Validate schema name to prevent path traversal attacks
+    # Schema names must be uppercase letters, digits, underscores only
+    # This blocks attacks like "../secret", "foo/bar", etc.
+    if not SCHEMA_NAME_PATTERN.match(schema_name):
+        return None  # Invalid schema name format - reject silently
+
     search_paths = get_schema_search_paths()
 
     # Try different filename patterns

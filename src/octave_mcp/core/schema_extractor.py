@@ -20,6 +20,7 @@ from octave_mcp.core.holographic import (
     HolographicPatternError,
     parse_holographic_pattern,
 )
+from octave_mcp.core.lexer import TokenType
 
 
 @dataclass
@@ -194,21 +195,22 @@ def _parse_field_assignment(assignment: Assignment) -> FieldDefinition | None:
 def _list_value_to_pattern_string(list_value: Any) -> str:
     """Convert ListValue AST to holographic pattern string.
 
-    The parser converts ["example"∧REQ→§SELF] into a ListValue.
-    We need to reconstruct it back to a pattern string.
+    Gap_2 ADR-0012: Token-witnessed reconstruction for operator masquerade.
 
-    The parser breaks the pattern into tokens:
-    - ListValue(items=['example', '∧', 'REQ→', '§', 'SELF'])
+    When list_value.tokens is available (captured by parser), uses token-type-aware
+    reconstruction that correctly distinguishes quoted operator symbols from actual
+    operators. Falls back to items-based heuristic reconstruction when tokens unavailable.
 
-    For ENUM patterns, the parser produces:
-    - ListValue(items=['ACTIVE', '∧', 'REQ∧ENUM', ListValue(items=['A', 'B']), '→', '§', 'SELF'])
+    The token-witnessed approach solves the operator masquerade problem:
+    - Input: ["∧"∧REQ→§SELF]
+    - Tokens: [STRING("∧"), CONSTRAINT(∧), IDENTIFIER(REQ), FLOW(→), SECTION(§), IDENTIFIER(SELF)]
+    - Output: ["∧"∧REQ→§SELF] (quoted example preserved)
 
-    We need to reconstruct this as:
-    - '["example"∧REQ→§SELF]'
-    - '["ACTIVE"∧REQ∧ENUM[A,B]→§SELF]'
+    Without tokens, reconstruction cannot distinguish STRING("∧") from CONSTRAINT(∧)
+    because both have the same value after lexer processing.
 
     Args:
-        list_value: ListValue AST node
+        list_value: ListValue AST node (may have tokens attribute)
 
     Returns:
         Reconstructed pattern string like '["example"∧REQ→§SELF]'
@@ -220,8 +222,106 @@ def _list_value_to_pattern_string(list_value: Any) -> str:
     if not items:
         return "[]"
 
-    # Reconstruct the pattern from tokenized items
-    # Items like: ['example', '∧', 'REQ→', '§', 'SELF']
+    # Gap_2: Prefer token-witnessed reconstruction when available
+    if hasattr(list_value, "tokens") and list_value.tokens:
+        return _token_witnessed_reconstruction(list_value.tokens)
+
+    # Fall back to items-based heuristic reconstruction (backwards compat)
+    return _items_based_reconstruction(items)
+
+
+def _token_witnessed_reconstruction(tokens: list[Any]) -> str:
+    """Reconstruct holographic pattern from token slice with type awareness.
+
+    Gap_2 ADR-0012: Token-type-aware reconstruction that preserves quoted operator
+    symbols correctly. Each token's type metadata determines how it's rendered:
+
+    - STRING tokens: Values quoted in source, render with quotes
+    - CONSTRAINT (∧), FLOW (→), SECTION (§): Render as operators
+    - IDENTIFIER: Render bare (constraint keywords, target names)
+    - LIST_START/LIST_END: Structural delimiters
+    - COMMA: Item separator
+
+    This approach is deterministic and mirrors the source exactly.
+
+    Args:
+        tokens: Token slice from ListValue.tokens (includes [ and ])
+
+    Returns:
+        Reconstructed pattern string like '["∧"∧REQ→§SELF]'
+    """
+    parts = []
+
+    for token in tokens:
+        token_type = token.type
+
+        if token_type == TokenType.LIST_START:
+            parts.append("[")
+        elif token_type == TokenType.LIST_END:
+            parts.append("]")
+        elif token_type == TokenType.STRING:
+            # Gap_2: STRING tokens were quoted in source - preserve quotes
+            parts.append(f'"{token.value}"')
+        elif token_type == TokenType.CONSTRAINT:
+            # Actual constraint operator ∧
+            parts.append(token.value)
+        elif token_type == TokenType.FLOW:
+            # Flow operator →
+            parts.append(token.value)
+        elif token_type == TokenType.SECTION:
+            # Section marker § (for routing target)
+            parts.append(token.value)
+        elif token_type == TokenType.IDENTIFIER:
+            # Bare identifiers: constraint keywords (REQ, OPT), target names (SELF, INDEXER)
+            parts.append(token.value)
+        elif token_type == TokenType.NUMBER:
+            # Numeric values
+            if token.raw is not None:
+                parts.append(token.raw)  # Preserve original format
+            else:
+                parts.append(str(token.value))
+        elif token_type == TokenType.BOOLEAN:
+            parts.append("true" if token.value else "false")
+        elif token_type == TokenType.NULL:
+            parts.append("null")
+        elif token_type == TokenType.COMMA:
+            parts.append(",")
+        elif token_type == TokenType.SYNTHESIS:
+            # Synthesis operator ⊕
+            parts.append(token.value)
+        elif token_type == TokenType.TENSION:
+            # Tension operator ⇌
+            parts.append(token.value)
+        elif token_type == TokenType.ALTERNATIVE:
+            # Alternative operator ∨
+            parts.append(token.value)
+        elif token_type == TokenType.CONCAT:
+            # Concat operator ⧺
+            parts.append(token.value)
+        elif token_type == TokenType.AT:
+            # At operator @
+            parts.append(token.value)
+        # Skip whitespace tokens (NEWLINE, INDENT) - they don't affect pattern semantics
+
+    return "".join(parts)
+
+
+def _items_based_reconstruction(items: list[Any]) -> str:
+    """Reconstruct holographic pattern from parsed items (fallback heuristic).
+
+    This is the original reconstruction logic, used when tokens are not available.
+    It uses heuristics to guess whether values should be quoted, which can fail
+    for operator masquerade cases like ["∧"∧REQ→§SELF].
+
+    Gap_2: This path is preserved for backwards compatibility with ListValue
+    objects that don't have tokens (e.g., programmatically created).
+
+    Args:
+        items: ListValue.items list
+
+    Returns:
+        Reconstructed pattern string (may have incorrect quoting for edge cases)
+    """
     parts = []
     i = 0
     while i < len(items):
