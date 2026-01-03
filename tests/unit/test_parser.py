@@ -510,3 +510,52 @@ ROUTE::START->§DESTINATION
         assert assignment.key == "ROUTE"
         # Flow expression should capture section marker with identifier
         assert "§DESTINATION" in assignment.value
+
+    def test_section_marker_with_bracket_annotation_preserves_siblings(self):
+        """Should consume bracket annotation after §X[note] to preserve sibling keys.
+
+        Gap 9 regression: The SECTION token handling in parse_value() was added
+        but did not call _consume_bracket_annotation(). This caused the bracket
+        annotation to be left unconsumed, which broke indentation tracking and
+        caused sibling keys to be lost.
+
+        Bug repro case from CRS review:
+        - A::§X[note] followed by B::Y
+        - Without bracket consumption, B is orphaned
+        """
+        content = """===TEST===
+BLOCK:
+  A::§X[note]
+  B::Y
+===END==="""
+        doc = parse(content)
+
+        assert len(doc.sections) == 1
+        block = doc.sections[0]
+        assert isinstance(block, Block)
+        assert block.key == "BLOCK"
+        # Critical: Both children must be preserved
+        child_keys = [c.key for c in block.children]
+        assert "A" in child_keys, f"Expected 'A' in children, got {child_keys}"
+        assert "B" in child_keys, f"Expected 'B' in children, got {child_keys}"
+        assert len(block.children) == 2, f"Expected 2 children, got {len(block.children)}"
+
+    def test_section_marker_with_nested_bracket_annotation(self):
+        """Should handle nested bracket annotations like §X[[nested,content]].
+
+        Edge case: Nested brackets should also be consumed properly.
+        """
+        content = """===TEST===
+BLOCK:
+  REF::§TARGET[[a,b]]
+  NEXT::value
+===END==="""
+        doc = parse(content)
+
+        assert len(doc.sections) == 1
+        block = doc.sections[0]
+        assert isinstance(block, Block)
+        # Both children should be preserved
+        child_keys = [c.key for c in block.children]
+        assert "REF" in child_keys
+        assert "NEXT" in child_keys

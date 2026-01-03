@@ -821,6 +821,11 @@ class Parser:
                 self.advance()
             # else: bare § marker, return as-is
 
+            # Gap 9 regression fix: Consume bracket annotation if present
+            # Examples: §X[note], §TARGET[[nested,content]]
+            # Must consume before returning so indentation tracking sees NEWLINE
+            self._consume_bracket_annotation(capture=False)
+
             return section_marker
 
         else:
