@@ -541,3 +541,195 @@ class TestRepairValueEdgeCases:
         # Empty constraints -> no repair possible
         assert was_repaired is False
         assert repaired_value == "any_value"
+
+
+# =============================================================================
+# Gap_5 BLOCKING FIX TESTS (CRS Critical Issues)
+# =============================================================================
+
+
+class TestRepairIntegration:
+    """BLOCKING 1: repair() must wire repair_value() into pipeline.
+
+    Currently repair() returns document unchanged - repair_value() is never called.
+    These tests ensure repair() actually applies schema-driven repairs.
+    """
+
+    def test_repair_integration_applies_enum_casefold(self):
+        """repair() should apply enum casefold when fix=True.
+
+        This is an integration test showing repair() uses repair_value()
+        to fix enum case mismatches in document fields.
+        """
+        from octave_mcp.core.constraints import ConstraintChain, EnumConstraint
+        from octave_mcp.core.holographic import HolographicPattern
+        from octave_mcp.core.parser import parse
+        from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
+
+        # Create document with incorrect case
+        content = """===TEST===
+META:
+  TYPE::TEST
+
+STATUS::active
+===END===
+"""
+        doc = parse(content)
+
+        # Create schema with ENUM constraint for STATUS field
+        constraints = ConstraintChain([EnumConstraint(allowed_values=["ACTIVE", "INACTIVE"])])
+        pattern = HolographicPattern(example="ACTIVE", constraints=constraints, target=None)
+        field_def = FieldDefinition(name="STATUS", pattern=pattern, raw_value=None)
+
+        schema = SchemaDefinition(name="TEST", version="1.0", fields={"STATUS": field_def})
+
+        # Call repair with fix=True and schema
+        repaired_doc, repair_log = repair(doc, [], fix=True, schema=schema)
+
+        # Verify repair was applied
+        assert repair_log.has_repairs(), "repair() should apply schema-driven repairs"
+
+        # Find the STATUS assignment in repaired document
+        status_value = None
+        for section in repaired_doc.sections:
+            if hasattr(section, "key") and section.key == "STATUS":
+                status_value = section.value
+                break
+
+        assert status_value == "ACTIVE", f"Expected 'ACTIVE', got '{status_value}'"
+
+    def test_repair_integration_applies_type_coercion(self):
+        """repair() should apply type coercion when fix=True.
+
+        This test ensures repair() applies string-to-number coercion
+        for fields with TYPE[NUMBER] constraint.
+        """
+        from octave_mcp.core.constraints import ConstraintChain, TypeConstraint
+        from octave_mcp.core.holographic import HolographicPattern
+        from octave_mcp.core.parser import parse
+        from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
+
+        # Create document with string number
+        content = """===TEST===
+META:
+  TYPE::TEST
+
+COUNT::"42"
+===END===
+"""
+        doc = parse(content)
+
+        # Create schema with TYPE[NUMBER] constraint for COUNT field
+        constraints = ConstraintChain([TypeConstraint(expected_type="NUMBER")])
+        pattern = HolographicPattern(example=42, constraints=constraints, target=None)
+        field_def = FieldDefinition(name="COUNT", pattern=pattern, raw_value=None)
+
+        schema = SchemaDefinition(name="TEST", version="1.0", fields={"COUNT": field_def})
+
+        # Call repair with fix=True and schema
+        repaired_doc, repair_log = repair(doc, [], fix=True, schema=schema)
+
+        # Verify repair was applied
+        assert repair_log.has_repairs(), "repair() should apply type coercion repairs"
+
+        # Find the COUNT assignment in repaired document
+        count_value = None
+        for section in repaired_doc.sections:
+            if hasattr(section, "key") and section.key == "COUNT":
+                count_value = section.value
+                break
+
+        assert count_value == 42, f"Expected 42 (int), got '{count_value}' ({type(count_value).__name__})"
+        assert isinstance(count_value, int), f"Expected int type, got {type(count_value).__name__}"
+
+
+class TestTypeCoercionOverflowRejection:
+    """BLOCKING 2: type coercion must reject non-finite values (inf, nan).
+
+    Currently "1e309" coerces to inf and logs safe=True.
+    This is lossy conversion - original value cannot be recovered.
+    """
+
+    def test_type_coercion_rejects_overflow_to_infinity(self):
+        """TYPE coercion: '1e309' should NOT coerce to inf (lossy)."""
+        constraints = ConstraintChain([TypeConstraint(expected_type="NUMBER")])
+        pattern = HolographicPattern(example=1.0, constraints=constraints, target=None)
+        field_def = FieldDefinition(name="VALUE", pattern=pattern, raw_value=None)
+
+        value = "1e309"  # Overflows to infinity in Python float
+        repair_log = RepairLog(repairs=[])
+
+        repaired_value, was_repaired = repair_value(
+            value=value,
+            field_def=field_def,
+            repair_log=repair_log,
+            fix=True,
+        )
+
+        # Should NOT repair - overflow to inf is lossy
+        assert was_repaired is False, "Overflow to inf is lossy, should not repair"
+        assert repaired_value == "1e309", "Original value should be preserved"
+        assert not repair_log.has_repairs(), "No repair should be logged"
+
+    def test_type_coercion_rejects_negative_overflow_to_infinity(self):
+        """TYPE coercion: '-1e309' should NOT coerce to -inf (lossy)."""
+        constraints = ConstraintChain([TypeConstraint(expected_type="NUMBER")])
+        pattern = HolographicPattern(example=1.0, constraints=constraints, target=None)
+        field_def = FieldDefinition(name="VALUE", pattern=pattern, raw_value=None)
+
+        value = "-1e309"  # Overflows to -infinity
+        repair_log = RepairLog(repairs=[])
+
+        repaired_value, was_repaired = repair_value(
+            value=value,
+            field_def=field_def,
+            repair_log=repair_log,
+            fix=True,
+        )
+
+        # Should NOT repair - overflow to -inf is lossy
+        assert was_repaired is False, "Overflow to -inf is lossy, should not repair"
+        assert repaired_value == "-1e309", "Original value should be preserved"
+        assert not repair_log.has_repairs(), "No repair should be logged"
+
+    def test_type_coercion_rejects_nan(self):
+        """TYPE coercion: 'nan' should NOT coerce (not a valid number)."""
+        constraints = ConstraintChain([TypeConstraint(expected_type="NUMBER")])
+        pattern = HolographicPattern(example=1.0, constraints=constraints, target=None)
+        field_def = FieldDefinition(name="VALUE", pattern=pattern, raw_value=None)
+
+        value = "nan"  # Not a number
+        repair_log = RepairLog(repairs=[])
+
+        repaired_value, was_repaired = repair_value(
+            value=value,
+            field_def=field_def,
+            repair_log=repair_log,
+            fix=True,
+        )
+
+        # Should NOT repair - nan is not a valid numeric value
+        assert was_repaired is False, "NaN is not a valid number, should not repair"
+        assert repaired_value == "nan", "Original value should be preserved"
+        assert not repair_log.has_repairs(), "No repair should be logged"
+
+    def test_type_coercion_accepts_large_but_finite_number(self):
+        """TYPE coercion: '1e308' should coerce (large but finite)."""
+        constraints = ConstraintChain([TypeConstraint(expected_type="NUMBER")])
+        pattern = HolographicPattern(example=1.0, constraints=constraints, target=None)
+        field_def = FieldDefinition(name="VALUE", pattern=pattern, raw_value=None)
+
+        value = "1e308"  # Large but still finite
+        repair_log = RepairLog(repairs=[])
+
+        repaired_value, was_repaired = repair_value(
+            value=value,
+            field_def=field_def,
+            repair_log=repair_log,
+            fix=True,
+        )
+
+        # Should repair - 1e308 is a valid finite number
+        assert was_repaired is True, "1e308 is finite, should repair"
+        assert repaired_value == 1e308, f"Expected 1e308, got {repaired_value}"
+        assert repair_log.has_repairs(), "Repair should be logged"

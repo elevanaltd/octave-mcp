@@ -12,15 +12,18 @@ Gap_5 implements the TIER_REPAIR logic:
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
-from octave_mcp.core.ast_nodes import Document
+from octave_mcp.core.ast_nodes import Assignment, Block, Document, Section
 from octave_mcp.core.constraints import EnumConstraint, TypeConstraint
 from octave_mcp.core.repair_log import RepairLog, RepairTier
+from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
 from octave_mcp.core.validator import ValidationError
 
+# Keep TYPE_CHECKING block empty for potential future use
 if TYPE_CHECKING:
-    from octave_mcp.core.schema_extractor import FieldDefinition
+    pass
 
 
 def repair_value(
@@ -198,9 +201,11 @@ def _attempt_type_coercion(
         else:
             coerced = float(value_stripped)
 
-        # Verify lossless conversion by converting back to string
-        # For floats, this may differ slightly but still represent same value
-        # The key is that the value parses successfully
+            # BLOCKING 2 FIX: Reject non-finite results (inf, -inf, nan)
+            # These are lossy conversions - original value cannot be recovered
+            # e.g., "1e309" -> inf is lossy, "1e308" -> 1e308 is lossless
+            if not math.isfinite(coerced):
+                return value, False
 
         # Log the repair (I4 compliance)
         repair_log.add(
@@ -223,17 +228,18 @@ def repair(
     doc: Document,
     validation_errors: list[ValidationError],
     fix: bool = False,
+    schema: SchemaDefinition | None = None,
 ) -> tuple[Document, RepairLog]:
     """Apply repairs based on tier classification.
 
-    Note: This function handles document-level repairs.
-    For field-level value repairs, use repair_value() directly with
-    the appropriate FieldDefinition and constraints.
+    BLOCKING 1 FIX: Now wires repair_value() into the pipeline for schema-driven
+    repairs when schema is provided.
 
     Args:
         doc: Parsed document AST
         validation_errors: Errors from validation
         fix: Whether to apply TIER_REPAIR fixes
+        schema: Optional SchemaDefinition with field definitions for repair
 
     Returns:
         Tuple of (repaired document, repair log)
@@ -241,18 +247,69 @@ def repair(
     repair_log = RepairLog(repairs=[])
 
     # TIER_NORMALIZATION: Always applied (already handled by lexer/parser)
-    # These are logged during parsing (ascii→unicode, whitespace, envelope)
+    # These are logged during parsing (ascii->unicode, whitespace, envelope)
 
-    # TIER_REPAIR: Only when fix=true
-    # Note: Document-level repairs would iterate through AST nodes here.
-    # Field-level repairs are applied via repair_value() when validating
-    # individual fields with their schema definitions.
-    #
-    # The repair() function signature is preserved for backwards compatibility
-    # with document-level repair workflows. The new repair_value() function
-    # provides fine-grained field-level repair capabilities.
+    # TIER_REPAIR: Only when fix=true AND schema is provided
+    if fix and schema is not None:
+        _apply_schema_repairs(doc, schema, repair_log)
 
     # TIER_FORBIDDEN: Never automatic
     # These should remain as validation errors, never auto-fixed
 
     return doc, repair_log
+
+
+def _apply_schema_repairs(
+    doc: Document,
+    schema: SchemaDefinition,
+    repair_log: RepairLog,
+) -> None:
+    """Apply schema-driven repairs to document fields.
+
+    Iterates through document sections and applies repair_value() to fields
+    that have corresponding definitions in the schema.
+
+    Args:
+        doc: Document to repair (modified in place)
+        schema: SchemaDefinition with field definitions
+        repair_log: RepairLog to record repairs
+    """
+    # Iterate through document sections
+    for section in doc.sections:
+        _repair_ast_node(section, schema, repair_log)
+
+
+def _repair_ast_node(
+    node: Any,
+    schema: SchemaDefinition,
+    repair_log: RepairLog,
+) -> None:
+    """Recursively repair an AST node and its children.
+
+    Args:
+        node: AST node to repair (Assignment, Block, or Section)
+        schema: SchemaDefinition with field definitions
+        repair_log: RepairLog to record repairs
+    """
+    if isinstance(node, Assignment):
+        # Check if field has a schema definition
+        field_def = schema.fields.get(node.key)
+        if field_def is not None:
+            repaired_value, was_repaired = repair_value(
+                value=node.value,
+                field_def=field_def,
+                repair_log=repair_log,
+                fix=True,
+            )
+            if was_repaired:
+                node.value = repaired_value
+
+    elif isinstance(node, Block):
+        # Recursively process block children
+        for child in node.children:
+            _repair_ast_node(child, schema, repair_log)
+
+    elif isinstance(node, Section):
+        # Recursively process section children
+        for child in node.children:
+            _repair_ast_node(child, schema, repair_log)
