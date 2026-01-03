@@ -333,24 +333,28 @@ class ValidateTool(BaseTool):
             schema_definition = load_schema_by_name(schema_name)
             if schema_definition is not None and schema_definition.fields:
                 # Build section_schemas dict for constraint validation
-                # Map document sections to their schema definitions
-                section_schemas = {}
-                # For schemas with a FIELDS block, map sections matching the schema name
-                for section in doc.sections:
-                    section_key = getattr(section, "key", None)
-                    if section_key is not None:
-                        # Check if this section matches the schema's target sections
-                        # For now, use schema name matching (can be enhanced with POLICY.TARGETS)
-                        section_schemas[section_key] = schema_definition
+                # CORRECTNESS FIX: Map only the schema's name to its definition
+                # NOT every section in the document (that was a bug)
+                # The validator will look up sections by key and only validate
+                # those that have a matching entry in section_schemas
+                section_schemas = {schema_definition.name: schema_definition}
         except Exception:
             # Schema loading may fail - continue with old-style dict validation
             pass
 
-        if schema_def is not None:
+        # Determine if we have a schema available for validation
+        # Priority: old-style builtin dict OR file-based SchemaDefinition
+        has_schema = schema_def is not None or (schema_definition is not None and schema_definition.fields)
+
+        if has_schema:
             # Schema found - perform validation
             # I5: "Schema-validated documents shall record the schema name and version used"
-            result["schema_name"] = schema_def.get("name", schema_name)
-            result["schema_version"] = schema_def.get("version", "unknown")
+            if schema_def is not None:
+                result["schema_name"] = schema_def.get("name", schema_name)
+                result["schema_version"] = schema_def.get("version", "unknown")
+            elif schema_definition is not None:
+                result["schema_name"] = schema_definition.name
+                result["schema_version"] = schema_definition.version or "unknown"
 
             # Use the validator with the schema definition
             # Gap_1: Pass section_schemas for constraint validation on document sections
@@ -379,7 +383,6 @@ class ValidateTool(BaseTool):
         else:
             # Schema not found - remain UNVALIDATED
             # I5: "Schema bypass shall be visible, never silent"
-            # Gap_1: Still pass section_schemas if SchemaDefinition was loaded
             validator = Validator(schema=None)
             validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
 

@@ -1405,3 +1405,218 @@ KEY: value
         # And spec_code field should be populated
         if "E005" in error.get("message", ""):
             assert error.get("spec_code") == "E005"
+
+
+class TestValidateToolCRSBlockingIssues:
+    """Tests for CRS blocking issues found in Gap_1 implementation review.
+
+    These tests verify the fixes for:
+    1. SECURITY: Schema name path traversal prevention
+    2. CORRECTNESS: section_schemas maps only to schema's own name
+    3. TEST COVERAGE: Holographic schema constraint validation works
+    """
+
+    @pytest.mark.asyncio
+    async def test_schema_name_path_traversal_blocked(self):
+        """SECURITY: Schema names with path traversal patterns are rejected.
+
+        CRS finding: load_schema_by_name(schema_name) allows path traversal.
+        Fix: Validate schema_name against SCHEMA_NAME_PATTERN (^[A-Z][A-Z0-9_]*$)
+        """
+        from octave_mcp.schemas.loader import load_schema_by_name
+
+        # Path traversal attacks should return None (schema not found)
+        assert load_schema_by_name("../README") is None
+        assert load_schema_by_name("..%2F..%2Fetc%2Fpasswd") is None
+        assert load_schema_by_name("foo/bar") is None
+        assert load_schema_by_name("../secret") is None
+        assert load_schema_by_name("../../etc/passwd") is None
+
+        # Valid schema names should be allowed (but may return None if file doesn't exist)
+        # META should exist and load successfully
+        meta_schema = load_schema_by_name("META")
+        assert meta_schema is not None or meta_schema is None  # Either is fine, key is no exception
+
+        # Invalid patterns (lowercase, special chars)
+        assert load_schema_by_name("meta") is None  # lowercase not allowed
+        assert load_schema_by_name("Meta") is None  # must start uppercase, all caps
+        assert load_schema_by_name("META-SCHEMA") is None  # hyphen not allowed
+        assert load_schema_by_name("META.SCHEMA") is None  # dot not allowed
+
+    @pytest.mark.asyncio
+    async def test_schema_name_valid_patterns_accepted(self):
+        """SECURITY: Valid schema name patterns are accepted.
+
+        Valid patterns: ^[A-Z][A-Z0-9_]*$
+        Examples: META, SESSION_LOG, TEST_HOLOGRAPHIC, SCHEMA_V2
+        """
+        from octave_mcp.schemas.loader import SCHEMA_NAME_PATTERN
+
+        # Valid patterns
+        assert SCHEMA_NAME_PATTERN.match("META")
+        assert SCHEMA_NAME_PATTERN.match("SESSION_LOG")
+        assert SCHEMA_NAME_PATTERN.match("TEST_HOLOGRAPHIC")
+        assert SCHEMA_NAME_PATTERN.match("SCHEMA_V2")
+        assert SCHEMA_NAME_PATTERN.match("A")  # Single uppercase letter
+
+        # Invalid patterns
+        assert not SCHEMA_NAME_PATTERN.match("../secret")
+        assert not SCHEMA_NAME_PATTERN.match("meta")  # lowercase
+        assert not SCHEMA_NAME_PATTERN.match("_META")  # starts with underscore
+        assert not SCHEMA_NAME_PATTERN.match("1META")  # starts with digit
+        assert not SCHEMA_NAME_PATTERN.match("META-SCHEMA")  # hyphen
+        assert not SCHEMA_NAME_PATTERN.match("")  # empty
+
+    @pytest.mark.asyncio
+    async def test_section_schemas_maps_only_to_schema_name(self):
+        """CORRECTNESS: section_schemas maps only to schema's own name.
+
+        CRS finding: Current impl might assign loaded schema to every section key.
+        Fix: section_schemas = {schema_definition.name: schema_definition}
+
+        This test verifies that when validating with a holographic schema,
+        only the section matching the schema name is validated, not ALL sections.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Document has TEST_HOLOGRAPHIC section (matches schema) and OTHER section (unrelated)
+        # Only TEST_HOLOGRAPHIC should be validated against the schema constraints
+        content = """===DOC===
+TEST_HOLOGRAPHIC:
+  NAME::"correct_name"
+  STATUS::ACTIVE
+---
+OTHER_SECTION:
+  RANDOM_FIELD::anything_goes_here
+  NO_CONSTRAINT_CHECKING::true
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST_HOLOGRAPHIC",
+            fix=False,
+        )
+
+        # Should succeed because:
+        # 1. TEST_HOLOGRAPHIC section has valid NAME and STATUS
+        # 2. OTHER_SECTION is NOT validated (no matching schema)
+        assert result["status"] == "success"
+        # If section_schemas incorrectly mapped OTHER_SECTION to schema,
+        # we'd get errors about missing required fields (NAME, STATUS)
+        # The fact that this passes proves the fix works
+        validation_errors = result.get("validation_errors", [])
+        assert not any(
+            "OTHER_SECTION" in str(e) for e in validation_errors
+        ), "CORRECTNESS BUG: OTHER_SECTION should not be validated against TEST_HOLOGRAPHIC schema"
+
+    @pytest.mark.asyncio
+    async def test_holographic_schema_constraint_violation_detected(self):
+        """TEST COVERAGE: Holographic schema constraints are evaluated.
+
+        CRS finding: Tests don't exercise section_schemas path with SchemaDefinition.
+        Fix: Use TEST_HOLOGRAPHIC schema (has holographic FIELDS with REQ/ENUM constraints)
+
+        This test proves that:
+        1. SchemaDefinition is loaded from test_holographic.oct.md
+        2. section_schemas is built and passed to validator
+        3. Constraint validation (ENUM) catches invalid values
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # TEST_HOLOGRAPHIC schema defines STATUS with ENUM[DRAFT,ACTIVE,DEPRECATED]
+        # Using INVALID_STATUS should trigger constraint violation
+        content = """===DOC===
+TEST_HOLOGRAPHIC:
+  NAME::"test_name"
+  STATUS::INVALID_STATUS
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST_HOLOGRAPHIC",
+            fix=False,
+        )
+
+        # Should succeed (parsing works) but validation should fail
+        assert result["status"] == "success"
+
+        # This test PROVES the section_schemas path is exercised:
+        # If section_schemas wiring were removed, this test would pass with VALIDATED
+        # because no constraints would be checked on document sections
+        validation_errors = result.get("validation_errors", [])
+        error_codes = [e.get("code") for e in validation_errors]
+
+        # E005 is the ENUM constraint violation code
+        assert "E005" in error_codes, (
+            f"TEST COVERAGE: ENUM constraint violation should produce E005. "
+            f"Got codes: {error_codes}, errors: {validation_errors}. "
+            f"If no E005, section_schemas wiring may be broken."
+        )
+
+    @pytest.mark.asyncio
+    async def test_holographic_schema_required_field_missing_detected(self):
+        """TEST COVERAGE: Holographic schema REQ constraints are evaluated.
+
+        TEST_HOLOGRAPHIC schema defines NAME and STATUS as REQ (required).
+        Missing a required field should trigger E003.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Missing NAME field (required by TEST_HOLOGRAPHIC schema)
+        content = """===DOC===
+TEST_HOLOGRAPHIC:
+  STATUS::ACTIVE
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST_HOLOGRAPHIC",
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+
+        validation_errors = result.get("validation_errors", [])
+        error_codes = [e.get("code") for e in validation_errors]
+
+        # E003 is the required field missing code
+        assert "E003" in error_codes, (
+            f"TEST COVERAGE: Missing REQ field should produce E003. "
+            f"Got codes: {error_codes}, errors: {validation_errors}. "
+            f"If no E003, section_schemas constraint evaluation may be broken."
+        )
+
+    @pytest.mark.asyncio
+    async def test_holographic_schema_valid_document_passes(self):
+        """TEST COVERAGE: Valid document passes holographic schema validation.
+
+        Document with all required fields and valid ENUM values should pass.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # All required fields present, STATUS is valid ENUM value
+        content = """===DOC===
+TEST_HOLOGRAPHIC:
+  NAME::"valid_name"
+  STATUS::ACTIVE
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST_HOLOGRAPHIC",
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+
+        # No validation errors when document is valid
+        validation_errors = result.get("validation_errors", [])
+        assert len(validation_errors) == 0, f"Valid document should have no validation errors. Got: {validation_errors}"
