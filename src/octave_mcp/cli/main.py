@@ -178,7 +178,7 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
     from octave_mcp.core.parser import parse
     from octave_mcp.core.repair import repair
     from octave_mcp.core.validator import Validator
-    from octave_mcp.schemas.loader import get_builtin_schema
+    from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
 
     # CRS-FIX #4: XOR enforcement - exactly ONE input source
     if file is not None and use_stdin:
@@ -203,6 +203,10 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
         validation_status = "UNVALIDATED"
         validation_errors: list = []
 
+        # Gap_5: Load SchemaDefinition for repair() to use
+        # repair() requires SchemaDefinition (not old-style dict) for TIER_REPAIR fixes
+        schema_definition = load_schema_by_name(schema) if schema else None
+
         if schema:
             schema_def = get_builtin_schema(schema)
             if schema_def is not None:
@@ -222,8 +226,10 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
             validation_errors = validator.validate(doc, strict=False)
 
         # Apply repairs if requested
+        # Gap_5: Pass schema_definition to repair() for schema-driven repairs
+        # repair() requires schema parameter to apply TIER_REPAIR fixes (enum casefold, type coercion)
         if fix and validation_errors:
-            doc, repair_log = repair(doc, validation_errors, fix=True)
+            doc, repair_log = repair(doc, validation_errors, fix=True, schema=schema_definition)
             # Re-validate after repairs
             if schema:
                 schema_def = get_builtin_schema(schema)
