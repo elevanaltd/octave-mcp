@@ -132,9 +132,18 @@ class Comment(ASTNode):
 
 @dataclass
 class ListValue:
-    """List value [a, b, c]."""
+    """List value [a, b, c].
+
+    Attributes:
+        items: Parsed list item values
+        tokens: Optional token slice for token-witnessed reconstruction (ADR-0012).
+                When present, enables correct reconstruction of holographic patterns
+                containing quoted operator symbols (e.g., ["∧"∧REQ→§SELF]).
+                The token list preserves type metadata lost during value extraction.
+    """
 
     items: list[Any] = field(default_factory=list)
+    tokens: list[Any] | None = None  # Gap_2: Token slice for fidelity reconstruction
 
 
 @dataclass

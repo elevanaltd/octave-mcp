@@ -423,6 +423,129 @@ FIELDS:
         assert schema.policy.unknown_fields == "REJECT"
 
 
+class TestTokenWitnessedReconstruction:
+    """Test token-witnessed reconstruction for Gap_2 operator masquerade (ADR-0012).
+
+    These tests verify that holographic patterns with quoted operator symbols
+    are correctly reconstructed from token-aware ListValue parsing.
+
+    Problem: The lexer strips quotes from strings, so "∧" (quoted constraint symbol
+    as a value) becomes indistinguishable from ∧ (actual operator). Token-witnessed
+    reconstruction preserves token type metadata to enable correct reconstruction.
+    """
+
+    def test_operator_masquerade_quoted_constraint(self):
+        """Quoted constraint symbol should be preserved as example value.
+
+        Input: FIELD::["∧"∧REQ→§SELF]
+        Expected:
+          - pattern.example == "∧" (the quoted constraint symbol as value)
+          - pattern.constraints contains REQ
+          - pattern.target == "SELF"
+
+        ADR-0012: Token-witnessed reconstruction distinguishes STRING tokens
+        from CONSTRAINT tokens, enabling correct reconstruction.
+        """
+        from octave_mcp.core.schema_extractor import extract_schema_from_document
+
+        doc = parse(
+            """
+===TEST===
+META:
+  TYPE::PROTOCOL_DEFINITION
+
+FIELDS:
+  FIELD::["∧"∧REQ→§SELF]
+===END===
+"""
+        )
+        schema = extract_schema_from_document(doc)
+
+        # Verify field was extracted
+        assert "FIELD" in schema.fields
+        field = schema.fields["FIELD"]
+
+        # The quoted "∧" should be the example value, not treated as operator
+        assert field.pattern is not None, "Pattern should parse successfully"
+        assert field.pattern.example == "∧", f"Expected example '∧', got {field.pattern.example!r}"
+
+        # REQ constraint should be present
+        assert field.is_required, "Field should have REQ constraint"
+
+        # Target should be SELF
+        assert field.pattern.target == "SELF", f"Expected target 'SELF', got {field.pattern.target!r}"
+
+    def test_operator_masquerade_quoted_flow(self):
+        """Quoted flow operator should be preserved as example value.
+
+        Input: FIELD::["→"∧REQ→§SELF]
+        Expected:
+          - pattern.example == "→" (the quoted flow symbol as value)
+          - pattern.target == "SELF" (from the actual flow operator)
+
+        ADR-0012: STRING token containing "→" is distinct from FLOW token.
+        """
+        from octave_mcp.core.schema_extractor import extract_schema_from_document
+
+        doc = parse(
+            """
+===TEST===
+META:
+  TYPE::PROTOCOL_DEFINITION
+
+FIELDS:
+  FIELD::["→"∧REQ→§SELF]
+===END===
+"""
+        )
+        schema = extract_schema_from_document(doc)
+
+        assert "FIELD" in schema.fields
+        field = schema.fields["FIELD"]
+
+        # The quoted "→" should be the example value
+        assert field.pattern is not None, "Pattern should parse successfully"
+        assert field.pattern.example == "→", f"Expected example '→', got {field.pattern.example!r}"
+
+        # Target should be SELF (from the actual → operator)
+        assert field.pattern.target == "SELF", f"Expected target 'SELF', got {field.pattern.target!r}"
+
+    def test_quoted_section_marker_literal(self):
+        """Quoted section marker should be preserved as example value.
+
+        Input: FIELD::["§"∧REQ→§SELF]
+        Expected:
+          - pattern.example == "§" (the quoted section marker as value)
+          - pattern.target == "SELF" (from the actual section marker)
+
+        ADR-0012: STRING token containing "§" is distinct from SECTION token.
+        """
+        from octave_mcp.core.schema_extractor import extract_schema_from_document
+
+        doc = parse(
+            """
+===TEST===
+META:
+  TYPE::PROTOCOL_DEFINITION
+
+FIELDS:
+  FIELD::["§"∧REQ→§SELF]
+===END===
+"""
+        )
+        schema = extract_schema_from_document(doc)
+
+        assert "FIELD" in schema.fields
+        field = schema.fields["FIELD"]
+
+        # The quoted "§" should be the example value, not treated as routing marker
+        assert field.pattern is not None, "Pattern should parse successfully"
+        assert field.pattern.example == "§", f"Expected example '§', got {field.pattern.example!r}"
+
+        # Target should be SELF (from the actual § marker)
+        assert field.pattern.target == "SELF", f"Expected target 'SELF', got {field.pattern.target!r}"
+
+
 class TestSchemaExtractorDefaultTarget:
     """Test POLICY.DEFAULT_TARGET extraction for feudal inheritance (Issue #103)."""
 
