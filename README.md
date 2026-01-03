@@ -5,6 +5,37 @@
 [![Tests](https://img.shields.io/badge/tests-706%20passing-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)]()
 
+Production-grade MCP server implementing the OCTAVE document protocol for deterministic, auditable AI communication.
+
+## Table of Contents
+
+- [For AI Agents](#for-ai-agents)
+- [What It Does](#what-it-does)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [MCP Tools](#mcp-tools)
+- [When OCTAVE Helps](#when-octave-helps)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+
+---
+
+## For AI Agents
+
+```octave
+===AGENT_BOOTSTRAP===
+GUIDANCE::AGENTS.oct.md
+QUALITY_GATES::[mypy,ruff,black,pytest]
+DEV_SETUP::docs/guides/development-setup.md
+SPECS::specs/README.oct.md
+IMMUTABLES::[I1,I2,I3,I4,I5]
+===END===
+```
+
+---
+
+## What It Does
+
 This repository ships the **OCTAVE MCP Server**—a Model Context Protocol implementation that exposes the OCTAVE document protocol as deterministic tools. The MCP layer is delivery plumbing; the value is the OCTAVE protocol itself.
 
 OCTAVE (Olympian Common Text And Vocabulary Engine) is a deterministic document format and control plane for LLM systems. It keeps meaning durable when text is compressed, routed between agents, or projected into different views.
@@ -26,55 +57,44 @@ See the [protocol specs in `specs/`](specs/README.oct.md) for the precise operat
 
 `octave-mcp` bundles the OCTAVE tooling as MCP tools and a CLI.
 
-### Available via CLI
+- **3 MCP tools**: `octave_validate`, `octave_write`, `octave_eject`
+- **CLI commands**: `octave validate`, `octave write`, `octave eject`
+- **Deterministic**: Non-reasoning control plane for syntax, validation, projection
+- **Loss accounting**: Every transformation logged with audit trails
+- **Schema-anchored**: Validation travels with documents
 
-The CLI mirrors the MCP tools for use in shell pipelines, CI/CD, and local workflows:
-
-- **`octave validate`** - validate OCTAVE against schemas, output canonical form with validation status.
-- **`octave write`** - write OCTAVE files with validation (content mode or delta changes mode).
-- **`octave eject`** - project OCTAVE into views (canonical, authoring, executive, developer) and formats (OCTAVE, JSON, YAML, Markdown).
-
-### Available via MCP (3 tools)
-
-- **`octave_validate`** - schema validation and parsing of OCTAVE content
-- **`octave_write`** - unified file creation and modification (content mode OR changes mode with optional hash-based consistency checking)
-- **`octave_eject`** - format projection (octave, json, yaml, markdown) with declared loss tiers
-
-These tools make it easy for LLMs to emit minimal intent while relying on deterministic mechanics for structure and safety. If the LLM were replaced by a plain text emitter, OCTAVE would still provide value.
-
-## When OCTAVE helps
+## When OCTAVE Helps
 
 Use OCTAVE when documents must survive multiple agent/tool hops, repeated compression, or auditing:
 
-- coordination briefs, decision logs, or policy/control artifacts that circulate between agents
-- reusable prompts or RAG artifacts that need stable structure across context windows
-- documents that mix prose with routing/targets (e.g., §targets for tools or indexes)
+- Coordination briefs, decision logs, policy artifacts that circulate between agents
+- Reusable prompts or RAG artifacts needing stable structure across context windows
+- Documents mixing prose with routing/targets (e.g., §targets for tools or indexes)
 
-It is usually overkill for one-off chat replies, casual notes, or prose that will never be reused or validated.
+**Proven efficiency:**
+- **54–68% token reduction** vs equivalent JSON while preserving fidelity
+- **90.7% comprehension rate** (zero-shot across Claude, GPT-4o, Gemini)
+- **Higher quality outputs** (9.3/10 vs 8.3/10) when compression is explicit
 
-### Proven efficiency
+See [docs/research/](docs/research/) for benchmarks and validation studies.
 
-- **Token reduction**: Benchmarks show OCTAVE documents use **32–46% of the tokens** of equivalent JSON, a **54–68% reduction** that grows with document complexity while preserving fidelity (see `docs/research/README.md`).
-- **Model comprehension**: Zero-shot tests across Claude, GPT-4o, and Gemini families show an **average 90.7% comprehension rate** (88–96% range) of OCTAVE syntax without fine-tuning, validating the readability of the language choices (see `docs/research/README.md`).
-- **Behavior under compression**: In comparative studies, calibrated OCTAVE agents produced higher-quality outputs than verbose baselines (9.3/10 vs 8.3/10), demonstrating that explicit compression controls avoid semantic loss (see `docs/research/subagent-compression-study.md`).
+## Installation
 
-## Installing
-
-### From PyPI
-
+**PyPI:**
 ```bash
 pip install octave-mcp
+# or
+uv pip install octave-mcp
 ```
 
-### From source
-
+**From source:**
 ```bash
 git clone https://github.com/elevanaltd/octave-mcp.git
 cd octave-mcp
-pip install -e .
+uv pip install -e ".[dev]"
 ```
 
-## Quick start
+## Quick Start
 
 ### CLI
 
@@ -89,76 +109,86 @@ echo "===DOC===\nKEY::value" | octave write output.oct.md --stdin --schema META
 octave eject document.oct.md --mode executive --format markdown
 ```
 
-### MCP setup
+### MCP Setup
 
-Use the setup script to configure common MCP clients:
+Add to Claude Desktop (`claude_desktop_config.json`) or Claude Code (`~/.claude.json`):
 
+```json
+{
+  "mcpServers": {
+    "octave": {
+      "command": "octave-mcp-server"
+    }
+  }
+}
+```
+
+**Or use the setup script:**
 ```bash
-./setup-mcp.sh --claude-desktop   # Claude Desktop
-./setup-mcp.sh --claude-code      # Claude Code CLI
-./setup-mcp.sh --codex            # OpenAI Codex CLI
-./setup-mcp.sh --gemini           # Google Gemini CLI
-./setup-mcp.sh --all              # Configure all
-
-# Show copy/paste configuration without writing files
-./setup-mcp.sh --show-config
+./setup-mcp.sh --all              # Configure all clients
+./setup-mcp.sh --show-config      # Show config for copy/paste
 ```
 
-See [docs/mcp-configuration.md](docs/mcp-configuration.md) for details.
+See [docs/mcp-configuration.md](docs/mcp-configuration.md) for advanced configuration.
 
-### Python API
+## MCP Tools
 
-```python
-from octave_mcp.core.parser import parse
-from octave_mcp.core.emitter import emit
-from octave_mcp.core.validator import validate
+| Tool | Purpose |
+|------|---------|
+| `octave_validate` | Schema validation + canonical normalization |
+| `octave_write` | Unified file creation/modification (content OR delta changes) |
+| `octave_eject` | Format projection (octave, json, yaml, markdown) |
 
-doc = parse(content)                 # lenient → AST
-errors = validate(doc, strict=True)  # schema checks
-canonical = emit(doc)                # canonical OCTAVE
-```
+### Repair Tiers
 
-## How the control plane works
+OCTAVE separates semantic decisions from mechanical guarantees through three repair tiers:
 
-OCTAVE separates semantic decisions (LLM/human) from mechanical guarantees (syntax, validation, projection, routing). The control plane is deterministic and non-reasoning:
+- **NORMALIZATION (always)**: ASCII→Unicode, whitespace (semantics preserved)
+- **REPAIR (opt-in)**: Schema-bounded coercions (enum casefold, type conversion)
+- **FORBIDDEN (never)**: Semantic inference, structure invention, target guessing
 
-```
-REASONING (LLM / human)
-  decides meaning, compression intent, routing
-          │
-          ▼
-OCTAVE CONTROL PLANE
-  normalizes, validates, classifies changes, projects
-          │
-          ▼
-CANONICAL OCTAVE + VIEW PROJECTIONS
-```
-
-### Repair and change tiers
-
-- **NORMALIZATION (always)**: mechanical fixes only (ASCII → Unicode, whitespace). Semantics preserved.
-- **REPAIR (opt-in)**: schema-bounded coercions (enum casefold, type conversions). May adjust values but not invent structure or targets.
-- **FORBIDDEN (never automatic)**: semantic inference or structure invention (target guessing, missing field insertion, semantic rewrites).
-
-Every change is logged so you can audit how meaning moved through the system.
+Every transformation is logged for auditability.
 
 ## Documentation
 
-- [Usage guide](docs/usage.md)
-- [API reference](docs/api.md)
-- [MCP configuration](docs/mcp-configuration.md)
-- [Protocol specs](specs/README.oct.md) – canonical operator, envelope, schema, and data rules
+| Doc | Content |
+|-----|---------|
+| [Usage Guide](docs/usage.md) | CLI, MCP, and API examples |
+| [API Reference](docs/api.md) | Python API documentation |
+| [MCP Configuration](docs/mcp-configuration.md) | Client setup and integration |
+| [Protocol Specs](specs/README.oct.md) | Canonical operators, envelopes, schema rules (v5.1.0) |
+| [Development Setup](docs/guides/development-setup.md) | Dev environment, testing, quality gates |
+| [Architecture](docs/architecture/) | Decision records and design docs |
+| [Research](docs/research/) | Benchmarks and validation studies |
 
-## Development
+### Architecture Immutables
+
+| ID | Principle |
+|----|-----------|
+| **I1** | Syntactic Fidelity — normalization alters syntax, never semantics |
+| **I2** | Deterministic Absence — distinguish absent vs null vs default |
+| **I3** | Mirror Constraint — reflect only what's present, create nothing |
+| **I4** | Transform Auditability — log every transformation with stable IDs |
+| **I5** | Schema Sovereignty — validation status visible in output |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and guidelines.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
-pip install -e ".[dev]"
+# Quick dev setup
+git clone https://github.com/elevanaltd/octave-mcp.git
+cd octave-mcp
+uv venv && source .venv/bin/activate
+uv pip install -e ".[dev]"
 
-# Quality gates
-mypy src
-ruff check src tests
-black --check src tests
+# Run tests (706 passing, 87% coverage)
 pytest
+
+# Quality checks
+ruff check src tests && mypy src && black --check src tests
 ```
+
+## License
+
+Apache-2.0 — Built with [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk).
