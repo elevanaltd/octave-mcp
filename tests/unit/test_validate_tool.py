@@ -1089,6 +1089,165 @@ META:
         assert result["validation_status"] == "VALIDATED"
 
 
+class TestValidateToolConstraintIntegration:
+    """Tests for Gap_1: Constraint validation integration into MCP validate tool.
+
+    The MCP validate tool has constraint validation machinery in the core validator,
+    but it was never wired up through the MCP surface. These tests verify that:
+    1. SchemaDefinition with holographic patterns is loaded when available
+    2. section_schemas parameter is passed to validator.validate()
+    3. Constraint errors (E003, E005, E006, E007) appear in validation_errors
+    4. Backwards compatibility is maintained (no section_schemas = existing behavior)
+
+    TDD: RED phase - these tests define the expected behavior.
+    """
+
+    @pytest.mark.asyncio
+    async def test_validate_tool_detects_invalid_enum_constraint(self):
+        """Gap_1: Validate tool should detect invalid ENUM values via constraints.
+
+        When a document has a section that matches a schema with ENUM constraint,
+        and the value is not in the allowed list, E005 should be in validation_errors.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # META schema defines STATUS as ENUM[DRAFT,ACTIVE,DEPRECATED]
+        # Using an invalid value should trigger E005
+        content = """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+  STATUS::INVALID_STATUS
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+        assert result["validation_status"] == "INVALID", (
+            f"Gap_1: Document with invalid ENUM value should be INVALID, " f"got '{result['validation_status']}'"
+        )
+
+        # Check validation_errors contains E005 (ENUM validation error)
+        validation_errors = result.get("validation_errors", [])
+        error_codes = [e.get("code") for e in validation_errors]
+        assert "E005" in error_codes, (
+            f"Gap_1: Invalid ENUM should produce E005 in validation_errors, "
+            f"got codes: {error_codes}, errors: {validation_errors}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_tool_detects_missing_required_field(self):
+        """Gap_1: Validate tool should detect missing required fields via constraints.
+
+        When a document section has a REQ constraint in schema but field is missing,
+        E003 should be in validation_errors.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # META schema requires TYPE field - missing it should trigger E003
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+        assert result["validation_status"] == "INVALID", (
+            f"Gap_1: Document missing required field should be INVALID, " f"got '{result['validation_status']}'"
+        )
+
+        # Check validation_errors contains E003 (required field missing)
+        validation_errors = result.get("validation_errors", [])
+        error_codes = [e.get("code") for e in validation_errors]
+        assert "E003" in error_codes, (
+            f"Gap_1: Missing required field should produce E003 in validation_errors, "
+            f"got codes: {error_codes}, errors: {validation_errors}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_tool_passes_valid_constraints(self):
+        """Gap_1: Validate tool should pass when all constraints are satisfied.
+
+        When all fields meet constraint requirements:
+        - Required fields present
+        - ENUM values valid
+        - Then validation_status should be VALIDATED with empty validation_errors
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Valid META content - all required fields present, STATUS is valid ENUM
+        content = """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+  STATUS::ACTIVE
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+        assert result["validation_status"] == "VALIDATED", (
+            f"Gap_1: Valid document should be VALIDATED, " f"got '{result['validation_status']}'"
+        )
+
+        # validation_errors should be empty
+        validation_errors = result.get("validation_errors", [])
+        assert len(validation_errors) == 0, (
+            f"Gap_1: Valid document should have empty validation_errors, " f"got: {validation_errors}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_tool_no_section_schemas_preserves_behavior(self):
+        """Gap_1: When no matching SchemaDefinition found, fall back to existing behavior.
+
+        For unknown schemas, section_schemas won't be built, so constraint
+        validation won't run. This maintains backwards compatibility.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Use unknown schema - should result in UNVALIDATED (schema not found)
+        content = """===TEST===
+SOME_SECTION:
+  FIELD::value
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="NONEXISTENT_SCHEMA",
+            fix=False,
+        )
+
+        assert result["status"] == "success"
+        # Should be UNVALIDATED because schema not found
+        assert result["validation_status"] == "UNVALIDATED", (
+            f"Gap_1: Unknown schema should result in UNVALIDATED, " f"got '{result['validation_status']}'"
+        )
+
+        # Should not have schema_name since schema wasn't found
+        assert result.get("schema_name") is None or "schema_name" not in result
+
+
 class TestValidateToolSpecCodeMapping:
     """Tests for Gap_6: Error message spec_code field mapping.
 
