@@ -9,15 +9,32 @@ allowed-tools: Read
 ===OCTAVE_COMPRESSION===
 META:
   TYPE::SKILL
-  VERSION::"2.1"
+  VERSION::"2.2"
   PURPOSE::"Workflow for transforming prose into semantic density"
   REQUIRES::octave-literacy
   TIER::LOSSLESS
+  SPEC_REFERENCE::octave-5-llm-data.oct.md[§1b::COMPRESSION_TIERS]
 
 §1::COMPRESSION_MANDATE
   TARGET::"60-80% token reduction with 100% decision-logic fidelity"
   PRINCIPLE::"Semantics > Syntax Rigidity"
   TRUTH::"Dense ≠ Obscure. Preserve the causal chain."
+
+  §1b::COMPRESSION_TIER_SELECTION
+    // Full tier definitions in octave-5-llm-data.oct.md §1b
+    LOSSLESS::[target:100%_fidelity,preserve:everything,drop:none]
+      USE::[critical_reasoning,legal_documents,safety_analysis,audit_trails]
+    CONSERVATIVE::[target:85-90%_compression,preserve:explanatory_depth,drop:redundancy]
+      USE::[research_summaries,design_decisions,technical_analysis]
+      LOSS::~10-15%[repetition,some_edge_cases,verbose_phrasing]
+    AGGRESSIVE::[target:70%_compression,preserve:core_thesis∧conclusions,drop:nuance∨narrative]
+      USE::[context_window_scarcity,quick_reference,decision_support]
+      LOSS::~30%[explanatory_depth,execution_tradeoff_narratives,edge_case_exploration]
+    ULTRA::[target:50%_compression,preserve:facts∧structure,drop:all_narrative]
+      USE::[extreme_scarcity,embedding_generation,dense_reference]
+      LOSS::~50%[almost_all_explanatory_content,some_nuance,tradeoff_reasoning]
+
+    TIER_METADATA::include_in_META_block[COMPRESSION_TIER,LOSS_PROFILE,NARRATIVE_DEPTH]
 
 §2::TRANSFORMATION_WORKFLOW
   PHASE_1_READ::[
