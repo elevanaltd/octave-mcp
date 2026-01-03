@@ -9,10 +9,11 @@ allowed-tools: Read
 ===OCTAVE_MASTERY===
 META:
   TYPE::SKILL
-  VERSION::"2.0"
+  VERSION::"2.1"
   PURPOSE::"Expert-level OCTAVE application: Archetypes, Advanced Syntax, Strategy"
   REQUIRES::octave-literacy
   TIER::LOSSLESS
+  SPEC_REFERENCE::octave-5-llm-core.oct.md
 
 §1::SEMANTIC_PANTHEON
   // The complete vocabulary for semantic compression
@@ -52,7 +53,7 @@ META:
 §4::ADVANCED_SYNTAX
   // Extends octave-literacy with holographic and type patterns
   HOLOGRAPHIC::KEY::["value"∧CONSTRAINT→§TARGET]
-  INLINE_OBJECT::[key::value, key2::value2]
+  INLINE_MAP::[key::value, key2::value2][values_must_be_atoms,no_nesting]
   TYPE_DISAMBIGUATION::[
     STRING::"42",
     NUMBER::42,
