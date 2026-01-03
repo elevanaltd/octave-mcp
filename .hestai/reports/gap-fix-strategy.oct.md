@@ -123,7 +123,6 @@ PHASE_1::FIX_MECHANICAL_FOUNDATION[SEQUENTIAL]
     PARALLEL_WITH::Gap_7[no_dependency]
     AGENT::implementation-lead
     GATE::error_codes_E001_E007_propagated
-  VERSION::v0.2.1
 
 PHASE_2::CONCEPTUAL_RESOLUTION[DEBATE_DRIVEN]
   STEP_4::Gap_2_debate[holographic_parsing]
@@ -137,7 +136,12 @@ PHASE_2::CONCEPTUAL_RESOLUTION[DEBATE_DRIVEN]
     DEPENDS::Gap_2_complete
     AGENT::implementation-lead
     GATE::constraints_validated_per_spec
-  VERSION::v0.2.2
+
+VERSION_STRATEGY::[
+  RATIONALE::"No intermediate consumers—single release after all phases complete",
+  TAG::v0.2.1[after_Phase_1+Phase_2_complete],
+  REJECTED::intermediate_tags[unnecessary_overhead]
+]
 
 PHASE_3::DEFERRED[v0.3.0]
   GAPS::[Gap_3,Gap_4,Gap_5,Gap_8]
