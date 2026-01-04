@@ -19,6 +19,9 @@ class TokenType(Enum):
     # Grammar sentinel (Issue #48 Phase 2)
     GRAMMAR_SENTINEL = auto()  # OCTAVE::VERSION at document start
 
+    # Version field (Issues #140 #141)
+    VERSION = auto()  # VERSION::1.0.0 semantic version strings
+
     # Structural operators
     ASSIGN = auto()  # ::
     BLOCK = auto()  # :
@@ -98,6 +101,18 @@ TOKEN_PATTERNS = [
     # Pattern: OCTAVE::VERSION where VERSION is semver-like (e.g., 5, 5.1, 5.1.0, 5.1.0-beta.1)
     # Version regex: major(.minor(.patch)?)?(-prerelease)?
     (r"OCTAVE::(\d+(?:\.\d+)*(?:-[A-Za-z0-9.]+)?)", TokenType.GRAMMAR_SENTINEL),
+    # VERSION field patterns (Issues #140 #141) - must come before NUMBER
+    # Handles bare VERSION::1.0.0 semantic version strings
+    # Quoted versions (VERSION::"1.0.0") are handled by normal STRING token
+    # Pattern: major(.minor(.patch)?)?(-prerelease)?(+build)?
+    (r"VERSION\s*::\s*(\d+(?:\.\d+)*(?:-[A-Za-z0-9.]+)?(?:\+[A-Za-z0-9.]+)?)", TokenType.VERSION),
+    # Semantic version pattern (must come before NUMBER to prevent partial match)
+    # Matches version strings with 3+ parts OR 2 parts + suffix
+    # Examples: 0.1.0, 1.2.3, 1.0-beta, 1.0+build
+    # Excludes simple floats like 3.14 (handled by NUMBER)
+    (r"(\d+\.\d+\.\d+(?:\.\d+)*(?:-[A-Za-z0-9.]+)?(?:\+[A-Za-z0-9.]+)?)", TokenType.VERSION),  # 3+ parts
+    (r"(\d+\.\d+(?:-[A-Za-z0-9.]+)(?:\+[A-Za-z0-9.]+)?)", TokenType.VERSION),  # 2 parts + prerelease
+    (r"(\d+\.\d+(?:\+[A-Za-z0-9.]+))", TokenType.VERSION),  # 2 parts + build
     # Envelope markers (must come before SEPARATOR)
     # ENVELOPE_END must come before ENVELOPE_START to match first
     (r"===END===", TokenType.ENVELOPE_END),
@@ -217,6 +232,9 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 if token_type == TokenType.GRAMMAR_SENTINEL:
                     # Issue #48 Phase 2: Extract version string from OCTAVE::VERSION
                     value = match.group(1)  # Extract VERSION from OCTAVE::VERSION
+                elif token_type == TokenType.VERSION:
+                    # Issues #140 #141: Extract version string from VERSION::1.0.0
+                    value = match.group(1)  # Extract version value (quoted or bare)
                 elif token_type == TokenType.ENVELOPE_START:
                     value = match.group(1)  # Extract NAME from ===NAME===
                 elif token_type == TokenType.ENVELOPE_END:

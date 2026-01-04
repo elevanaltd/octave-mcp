@@ -491,3 +491,48 @@ class TestHyphenatedIdentifiers:
         number_tokens = [t for t in tokens if t.type == TokenType.NUMBER]
         assert len(number_tokens) == 1
         assert number_tokens[0].value == -42
+
+
+class TestVersionTokenization:
+    """Test VERSION field tokenization (Issues #140 #141).
+
+    The NUMBER token pattern cannot handle semantic versions with multiple dots.
+    VERSION field values like "0.1.0" must be handled by a dedicated VERSION token.
+    """
+
+    def test_version_tokenization_major_only(self):
+        """Should tokenize VERSION::1 with major version only."""
+        tokens, _ = tokenize("VERSION::1")
+        version_token = [t for t in tokens if t.type == TokenType.VERSION][0]
+        assert version_token.value == "1"
+
+    def test_version_tokenization_full_semver(self):
+        """Should tokenize VERSION::1.0.0 with full semantic version."""
+        tokens, _ = tokenize("VERSION::1.0.0")
+        version_token = [t for t in tokens if t.type == TokenType.VERSION][0]
+        assert version_token.value == "1.0.0"
+
+    def test_version_with_prerelease(self):
+        """Should tokenize VERSION::1.0.0-beta.1 with prerelease identifier."""
+        tokens, _ = tokenize("VERSION::1.0.0-beta.1")
+        version_token = [t for t in tokens if t.type == TokenType.VERSION][0]
+        assert version_token.value == "1.0.0-beta.1"
+
+    def test_version_with_build_metadata(self):
+        """Should tokenize VERSION::1.0.0+build.123 with build metadata."""
+        tokens, _ = tokenize("VERSION::1.0.0+build.123")
+        version_token = [t for t in tokens if t.type == TokenType.VERSION][0]
+        assert version_token.value == "1.0.0+build.123"
+
+    def test_version_quoted_string(self):
+        """Should tokenize VERSION::"1.0.0" as quoted string."""
+        tokens, _ = tokenize('VERSION::"1.0.0"')
+        # Quoted versions should still be STRING tokens
+        string_token = [t for t in tokens if t.type == TokenType.STRING][0]
+        assert string_token.value == "1.0.0"
+
+    def test_version_does_not_consume_regular_numbers(self):
+        """VERSION pattern should not interfere with regular NUMBER tokens."""
+        tokens, _ = tokenize("COUNT::42")
+        number_token = [t for t in tokens if t.type == TokenType.NUMBER][0]
+        assert number_token.value == 42
