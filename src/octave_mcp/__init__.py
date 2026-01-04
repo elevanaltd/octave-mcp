@@ -4,11 +4,16 @@ This package provides a complete implementation of the OCTAVE specification,
 including lexer, parser, emitter, validator, and vocabulary hydration.
 
 Public API exports:
-- Core functions: parse(), emit()
-- Core classes: Parser, Validator, TokenType
+- Core functions: parse(), emit(), tokenize(), repair(), project()
+- Core classes: Parser, Validator, TokenType, Token
 - AST nodes: Document, Block, Assignment, Section, ListValue, InlineMap, Absent
 - Hydration: hydrate(), HydrationPolicy, VocabularyRegistry
-- Exceptions: VocabularyError, CollisionError, ParserError, LexerError
+- Schema: SchemaDefinition, FieldDefinition, extract_schema_from_document()
+- Repair: repair(), RepairLog, RepairEntry, RepairTier
+- Projection: project(), ProjectionResult
+- Routing: RoutingLog, RoutingEntry
+- Sealing: seal_document(), verify_seal(), SealVerificationResult
+- Exceptions: VocabularyError, CollisionError, ParserError, LexerError, etc.
 - Operators: OCTAVE_OPERATORS dict with canonical Unicode operators
 """
 
@@ -16,14 +21,23 @@ from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, Inlin
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.hydrator import (
     CollisionError,
+    CycleDetectionError,
     HydrationPolicy,
+    SourceUriSecurityError,
+    VersionMismatchError,
     VocabularyError,
     VocabularyRegistry,
     hydrate,
 )
-from octave_mcp.core.lexer import LexerError, TokenType
+from octave_mcp.core.lexer import LexerError, Token, TokenType, tokenize
 from octave_mcp.core.parser import Parser, ParserError, parse
-from octave_mcp.core.validator import Validator
+from octave_mcp.core.projector import ProjectionResult, project
+from octave_mcp.core.repair import repair
+from octave_mcp.core.repair_log import RepairEntry, RepairLog, RepairTier
+from octave_mcp.core.routing import RoutingEntry, RoutingLog
+from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition, extract_schema_from_document
+from octave_mcp.core.sealer import SealVerificationResult, seal_document, verify_seal
+from octave_mcp.core.validator import ValidationError, Validator
 
 __version__ = "0.3.0"
 
@@ -63,10 +77,14 @@ __all__ = [
     # Core functions
     "parse",
     "emit",
+    "tokenize",
+    "repair",
+    "project",
     # Core classes
     "Parser",
     "Validator",
     "TokenType",
+    "Token",
     # AST nodes
     "Document",
     "Block",
@@ -79,11 +97,32 @@ __all__ = [
     "hydrate",
     "HydrationPolicy",
     "VocabularyRegistry",
+    # Schema
+    "SchemaDefinition",
+    "FieldDefinition",
+    "extract_schema_from_document",
+    # Repair (I4 audit trail)
+    "RepairLog",
+    "RepairEntry",
+    "RepairTier",
+    # Projection
+    "ProjectionResult",
+    # Routing (I4 audit trail)
+    "RoutingLog",
+    "RoutingEntry",
+    # Sealing (document integrity)
+    "seal_document",
+    "verify_seal",
+    "SealVerificationResult",
     # Exceptions
     "VocabularyError",
     "CollisionError",
+    "VersionMismatchError",
+    "CycleDetectionError",
+    "SourceUriSecurityError",
     "ParserError",
     "LexerError",
+    "ValidationError",
     # Operators
     "OCTAVE_OPERATORS",
     "OP_ASSIGN",
