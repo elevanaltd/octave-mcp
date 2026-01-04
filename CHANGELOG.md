@@ -1,0 +1,86 @@
+# Changelog
+
+All notable changes to OCTAVE-MCP will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- `list_exports()` helper function for API discovery - easily explore all 52 public exports by category
+
+## [0.3.0] - 2026-01-04
+
+### Added
+- **51 public API exports** enabling external packages to import OCTAVE functionality
+  - Core functions: `parse()`, `emit()`, `tokenize()`, `repair()`, `project()`
+  - Core classes: `Parser`, `Validator`, `TokenType`, `Token`
+  - AST nodes: `Document`, `Block`, `Assignment`, `Section`, `ListValue`, `InlineMap`, `Absent`
+  - Hydration: `hydrate()`, `HydrationPolicy`, `VocabularyRegistry`
+  - Schema: `SchemaDefinition`, `FieldDefinition`, `extract_schema_from_document()`
+  - Repair (I4): `RepairLog`, `RepairEntry`, `RepairTier`
+  - Routing (I4): `RoutingLog`, `RoutingEntry`
+  - Sealing: `seal_document()`, `verify_seal()`, `SealVerificationResult`
+  - Exceptions: 9 exception types for granular error handling
+  - Operators: `OCTAVE_OPERATORS` dict + 10 `OP_*` constants
+- Comprehensive API documentation in `docs/public-api-reference.md`
+- PyPI package distribution
+
+### Fixed
+- CLI version reporting now uses package version instead of hardcoded value
+- Version alignment across all components (pyproject.toml, __init__.py, CLI)
+
+### Changed
+- Package version updated from 0.2.0 to 0.3.0
+
+## [0.2.0] - 2025-12-28
+
+### Added
+- MCP (Model Context Protocol) server implementation
+  - `octave_validate` tool - Schema validation with repair suggestions
+  - `octave_write` tool - Unified file writing with CAS support
+  - `octave_eject` tool - Multiple projection modes (canonical, authoring, executive, developer)
+- Comprehensive schema validation system (I5 - Schema Sovereignty)
+- Repair log functionality for audit trail (I4 - Transform Auditability)
+- Routing log for transformation tracking
+- Document sealing for integrity verification
+- Hydration system with vocabulary registry
+- Support for holographic patterns
+
+### Changed
+- Consolidated from multiple tools to three core MCP tools
+- Improved error handling and validation messages
+- Enhanced lenient parsing with better error recovery
+
+### Fixed
+- Parse error handling for edge cases
+- Idempotency issues in canonical emission
+
+## [0.1.0] - 2025-12-15
+
+### Added
+- Initial OCTAVE specification implementation
+- Core parser and lexer
+- AST (Abstract Syntax Tree) nodes
+- Basic emit functionality for canonical output
+- Support for OCTAVE operators (both Unicode and ASCII)
+- Command-line interface (`octave` command)
+- Test suite with >1000 tests
+- Five core immutables:
+  - I1: Syntactic Fidelity
+  - I2: Deterministic Absence
+  - I3: Mirror Constraint
+  - I4: Transform Auditability
+  - I5: Schema Sovereignty
+
+### Features
+- Lenient-to-canonical transformation pipeline
+- Loss accounting for LLM communication
+- Non-reasoning document processing
+- Deterministic, idempotent transformations
+
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/elevanaltd/octave-mcp/releases/tag/v0.1.0
