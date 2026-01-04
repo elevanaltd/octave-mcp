@@ -336,7 +336,7 @@ expr = f"A{OP_TENSION}B{OP_FLOW}C"  # "A⇌B→C"
 ```python
 from octave_mcp import __version__
 
-print(__version__)  # "0.3.0"
+print(__version__)  # "0.3.1"
 ```
 
 ---

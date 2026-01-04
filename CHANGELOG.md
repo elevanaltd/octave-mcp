@@ -8,7 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Fixed
+
+## [0.3.1] - 2026-01-04
+
+### Added
 - `list_exports()` helper function for API discovery - easily explore all 52 public exports by category
+- Regression tests covering semantic version strings (`VERSION` token) and multi-word value handling
+
+### Fixed
+- Handle semantic version strings (e.g., `1.2.3`, prerelease/build forms) via `VERSION` tokenization (#140, #141, #142)
+- Prevent `VALUE_TOKENS` data loss in multi-word values; unify value token handling in parser/lexer (#140, #141, #142)
+- Restrict `GRAMMAR_SENTINEL` matching to document start only (#142)
 
 ## [0.3.0] - 2026-01-04
 
@@ -80,7 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/elevanaltd/octave-mcp/releases/tag/v0.1.0
