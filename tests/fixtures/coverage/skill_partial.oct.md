@@ -1,0 +1,10 @@
+===SKILL_PARTIAL===
+META:
+  TYPE::"SKILL"
+
+§1::SYNTAX_IMPL
+  IMPLEMENTS::§1
+
+§4::NOVEL_SECTION
+  NOTE::not_in_spec
+===END===
