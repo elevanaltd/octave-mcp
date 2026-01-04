@@ -559,3 +559,88 @@ BLOCK:
         child_keys = [c.key for c in block.children]
         assert "REF" in child_keys
         assert "NEXT" in child_keys
+
+
+class TestValueTokenDataLoss:
+    """Test critical parser fix for VERSION/BOOLEAN/NULL/STRING token data loss.
+
+    Issue #140/#141: Parser drops VERSION, BOOLEAN, NULL, and STRING tokens
+    in multi-word values causing silent data loss.
+
+    Example: "NOTE::Release 1.2.3" → NOTE gets only "Release" (loses "1.2.3")
+
+    Solution: Create VALUE_TOKENS classification to unify token handling.
+    """
+
+    def test_multiword_with_version_token(self):
+        """VERSION tokens should be included in multi-word values."""
+        content = """===TEST===
+NOTE::Release 1.2.3 is ready
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "NOTE"
+        assert assignment.value == "Release 1.2.3 is ready"
+
+    def test_multiword_with_boolean_token(self):
+        """BOOLEAN tokens should be included in multi-word values."""
+        content = """===TEST===
+STATUS::true pending review
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "STATUS"
+        assert assignment.value == "true pending review"
+
+    def test_multiword_with_null_token(self):
+        """NULL tokens should be included in multi-word values."""
+        content = """===TEST===
+RESULT::null hypothesis confirmed
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "RESULT"
+        assert assignment.value == "null hypothesis confirmed"
+
+    def test_multiword_with_string_token(self):
+        """STRING tokens should be included in multi-word values."""
+        content = """===TEST===
+MESSAGE::"Hello" world greeting
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "MESSAGE"
+        # Quoted strings should preserve quotes in multi-word context
+        assert assignment.value == '"Hello" world greeting'
+
+    def test_version_start_multiword(self):
+        """Values starting with VERSION should preserve all words (Issue #140/#141)."""
+        content = """===TEST===
+RELEASE::1.0.0 is ready
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "RELEASE"
+        assert assignment.value == "1.0.0 is ready"
+
+    def test_number_sequence_with_version(self):
+        """NUMBER followed by VERSION should preserve both (Issue #140/#141)."""
+        content = """===TEST===
+BUILD::123 1.0.0
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "BUILD"
+        assert assignment.value == "123 1.0.0"

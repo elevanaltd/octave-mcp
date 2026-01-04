@@ -491,3 +491,174 @@ class TestHyphenatedIdentifiers:
         number_tokens = [t for t in tokens if t.type == TokenType.NUMBER]
         assert len(number_tokens) == 1
         assert number_tokens[0].value == -42
+
+
+class TestVersionTokenization:
+    """Test VERSION field tokenization (Issues #140 #141).
+
+    The NUMBER token pattern cannot handle semantic versions with multiple dots.
+    VERSION field values like "0.1.0" must be handled by a dedicated VERSION token.
+    """
+
+    def test_version_tokenization_major_only(self):
+        """Should tokenize VERSION::1 as IDENTIFIER + ASSIGN + NUMBER.
+
+        Single integers are NUMBER tokens, not VERSION tokens.
+        Parser contract requires VERSION::1 to be IDENTIFIER + ASSIGN + value.
+        """
+        tokens, _ = tokenize("VERSION::1")
+        relevant = [t for t in tokens if t.type != TokenType.EOF]
+        assert len(relevant) == 3
+        assert relevant[0].type == TokenType.IDENTIFIER
+        assert relevant[0].value == "VERSION"
+        assert relevant[1].type == TokenType.ASSIGN
+        assert relevant[2].type == TokenType.NUMBER
+        assert relevant[2].value == 1
+
+    def test_version_tokenization_full_semver(self):
+        """Should tokenize VERSION::1.0.0 with full semantic version."""
+        tokens, _ = tokenize("VERSION::1.0.0")
+        version_token = [t for t in tokens if t.type == TokenType.VERSION][0]
+        assert version_token.value == "1.0.0"
+
+    def test_version_with_prerelease(self):
+        """Should tokenize VERSION::1.0.0-beta.1 with prerelease identifier."""
+        tokens, _ = tokenize("VERSION::1.0.0-beta.1")
+        version_token = [t for t in tokens if t.type == TokenType.VERSION][0]
+        assert version_token.value == "1.0.0-beta.1"
+
+    def test_version_with_build_metadata(self):
+        """Should tokenize VERSION::1.0.0+build.123 with build metadata."""
+        tokens, _ = tokenize("VERSION::1.0.0+build.123")
+        version_token = [t for t in tokens if t.type == TokenType.VERSION][0]
+        assert version_token.value == "1.0.0+build.123"
+
+    def test_version_quoted_string(self):
+        """Should tokenize VERSION::"1.0.0" as quoted string."""
+        tokens, _ = tokenize('VERSION::"1.0.0"')
+        # Quoted versions should still be STRING tokens
+        string_token = [t for t in tokens if t.type == TokenType.STRING][0]
+        assert string_token.value == "1.0.0"
+
+    def test_version_does_not_consume_regular_numbers(self):
+        """VERSION pattern should not interfere with regular NUMBER tokens."""
+        tokens, _ = tokenize("COUNT::42")
+        number_token = [t for t in tokens if t.type == TokenType.NUMBER][0]
+        assert number_token.value == 42
+
+    def test_version_field_preserves_parser_contract(self):
+        """VERSION::1.0.0 must tokenize as IDENTIFIER + ASSIGN + VERSION.
+
+        Parser contract violation fix: The parser expects field assignments
+        to tokenize as IDENTIFIER('field_name') + ASSIGN('::') + value.
+        The VERSION:: collapsing pattern broke this contract, causing silent
+        data loss in META blocks.
+        """
+        tokens, _ = tokenize("VERSION::1.0.0")
+        relevant = [t for t in tokens if t.type != TokenType.EOF]
+        assert len(relevant) == 3, f"Expected 3 tokens, got {len(relevant)}: {[(t.type, t.value) for t in relevant]}"
+        assert relevant[0].type == TokenType.IDENTIFIER
+        assert relevant[0].value == "VERSION"
+        assert relevant[1].type == TokenType.ASSIGN
+        assert relevant[2].type == TokenType.VERSION
+        assert relevant[2].value == "1.0.0"
+
+    def test_hyphenated_prerelease_tokens_correctly(self):
+        """1.0.0-beta-1 should be a single VERSION token.
+
+        Hyphen support: Prereleases can have hyphens within identifiers
+        (e.g., beta-1, rc-2). The VERSION pattern must support this.
+        """
+        tokens, _ = tokenize("1.0.0-beta-1")
+        version_tokens = [t for t in tokens if t.type == TokenType.VERSION]
+        assert len(version_tokens) == 1, f"Expected 1 VERSION token, got {len(version_tokens)}"
+        assert version_tokens[0].value == "1.0.0-beta-1"
+
+    def test_standalone_version_in_list(self):
+        """Should tokenize standalone versions in generic contexts (e.g. lists)."""
+        # Verifies regex priority works for 1.2.3 without 'VERSION::' prefix
+        tokens, _ = tokenize("[1.2.3, 2.0.0]")
+
+        # Find VERSION tokens (skip LIST_START, COMMA, LIST_END)
+        version_tokens = [t for t in tokens if t.type == TokenType.VERSION]
+        assert len(version_tokens) == 2
+        assert version_tokens[0].value == "1.2.3"
+        assert version_tokens[1].value == "2.0.0"
+
+    def test_version_in_dependency_value(self):
+        """VERSION tokens should work in dependency specifications."""
+        tokens, _ = tokenize("DEPENDENCY::package 1.2.3")
+
+        # Should have IDENTIFIER, ASSIGN, IDENTIFIER, VERSION
+        relevant = [t for t in tokens if t.type not in (TokenType.EOF, TokenType.NEWLINE)]
+        assert len(relevant) == 4
+        assert relevant[3].type == TokenType.VERSION
+        assert relevant[3].value == "1.2.3"
+
+
+class TestGrammarSentinelScoping:
+    """Test GRAMMAR_SENTINEL scope restriction to prevent silent data loss.
+
+    ISSUE: OCTAVE:: pattern matches anywhere in documents, not just at document start.
+    This causes silent prefix loss when appearing in value positions.
+
+    Example: NOTE::OCTAVE::5.1.0
+    Bug: Tokenizes as IDENTIFIER('NOTE'), ASSIGN('::'), GRAMMAR_SENTINEL('5.1.0')
+    Result: NOTE field gets value "5.1.0" (loses "OCTAVE::" prefix)
+
+    FIX: Restrict GRAMMAR_SENTINEL to document start only (position 0).
+    """
+
+    def test_grammar_sentinel_only_at_document_start(self):
+        """OCTAVE:: should not trigger GRAMMAR_SENTINEL mid-document."""
+        tokens, _ = tokenize("NOTE::OCTAVE::5.1.0")
+        # Should NOT contain GRAMMAR_SENTINEL token
+        sentinel_tokens = [t for t in tokens if t.type == TokenType.GRAMMAR_SENTINEL]
+        assert len(sentinel_tokens) == 0, "GRAMMAR_SENTINEL must not match mid-document"
+        # Should tokenize as regular identifiers
+        assert any(
+            t.value == "OCTAVE" for t in tokens if t.type == TokenType.IDENTIFIER
+        ), "OCTAVE should be an IDENTIFIER when not at document start"
+
+    def test_grammar_sentinel_at_document_start(self):
+        """OCTAVE:: at document start should trigger GRAMMAR_SENTINEL."""
+        tokens, _ = tokenize("OCTAVE::5.1.0")
+        sentinel_tokens = [t for t in tokens if t.type == TokenType.GRAMMAR_SENTINEL]
+        assert len(sentinel_tokens) == 1, "GRAMMAR_SENTINEL should match at document start"
+        assert sentinel_tokens[0].value == "5.1.0"
+
+    def test_grammar_sentinel_after_whitespace_at_start(self):
+        """OCTAVE:: should still match GRAMMAR_SENTINEL after leading whitespace."""
+        tokens, _ = tokenize("  OCTAVE::5.1.0")
+        # After leading whitespace, we're still at document start logically
+        # This may need to be decided: strict position 0, or after indentation?
+        # For now, test that it does NOT match (strict position 0 interpretation)
+        sentinel_tokens = [t for t in tokens if t.type == TokenType.GRAMMAR_SENTINEL]
+        # Strict interpretation: GRAMMAR_SENTINEL only at actual position 0
+        assert len(sentinel_tokens) == 0, "GRAMMAR_SENTINEL should require position 0 (no leading whitespace)"
+
+    def test_octave_identifier_in_value_position(self):
+        """OCTAVE as identifier should work in value positions."""
+        tokens, _ = tokenize("TOOL::OCTAVE")
+        relevant = [t for t in tokens if t.type != TokenType.EOF]
+        assert len(relevant) == 3
+        assert relevant[0].type == TokenType.IDENTIFIER
+        assert relevant[0].value == "TOOL"
+        assert relevant[1].type == TokenType.ASSIGN
+        assert relevant[2].type == TokenType.IDENTIFIER
+        assert relevant[2].value == "OCTAVE"
+
+    def test_no_silent_data_loss_in_nested_assignment(self):
+        """Nested OCTAVE:: patterns should not lose data."""
+        tokens, _ = tokenize("NOTE::OCTAVE::5.1.0")
+        relevant = [t for t in tokens if t.type != TokenType.EOF]
+        # Should tokenize as: IDENTIFIER('NOTE') ASSIGN('::') IDENTIFIER('OCTAVE') ASSIGN('::') VERSION('5.1.0')
+        assert len(relevant) == 5, f"Expected 5 tokens, got {len(relevant)}: {[(t.type, t.value) for t in relevant]}"
+        assert relevant[0].type == TokenType.IDENTIFIER
+        assert relevant[0].value == "NOTE"
+        assert relevant[1].type == TokenType.ASSIGN
+        assert relevant[2].type == TokenType.IDENTIFIER
+        assert relevant[2].value == "OCTAVE"
+        assert relevant[3].type == TokenType.ASSIGN
+        assert relevant[4].type == TokenType.VERSION
+        assert relevant[4].value == "5.1.0"

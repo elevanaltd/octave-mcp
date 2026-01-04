@@ -102,15 +102,41 @@ EXPRESSION_OPERATORS: frozenset[TokenType] = frozenset(
     }
 )
 
+# Semantic classification of tokens that can appear in values (#140/#141)
+# This prevents data loss when VERSION, BOOLEAN, NULL, or STRING tokens
+# appear in multi-word values like "Release 1.2.3 is ready"
+VALUE_TOKENS: frozenset[TokenType] = frozenset(
+    {
+        TokenType.IDENTIFIER,
+        TokenType.NUMBER,
+        TokenType.VERSION,
+        TokenType.BOOLEAN,
+        TokenType.NULL,
+        TokenType.STRING,
+    }
+)
+
 
 def _token_to_str(token: Token) -> str:
     """Convert token to string, preserving raw lexeme for NUMBER tokens (GH#66).
 
     For NUMBER tokens, uses the raw lexeme to preserve scientific notation format
     (e.g., '1e10' instead of '10000000000.0'). For other tokens, uses str(value).
+
+    Issue #140/#141: Added support for VERSION, BOOLEAN, NULL, and STRING tokens
+    to prevent data loss in multi-word values.
     """
     if token.type == TokenType.NUMBER and token.raw is not None:
         return token.raw
+    elif token.type == TokenType.BOOLEAN:
+        return "true" if token.value else "false"
+    elif token.type == TokenType.NULL:
+        return "null"
+    elif token.type == TokenType.VERSION:
+        return str(token.value)
+    elif token.type == TokenType.STRING:
+        # Preserve quotes for strings in multi-word values
+        return f'"{token.value}"'
     return str(token.value)
 
 
@@ -606,15 +632,45 @@ class Parser:
         token = self.current()
 
         if token.type == TokenType.STRING:
+            # Issue #140/#141: Check if STRING is followed by more tokens for multi-word value
+            next_token = self.peek()
+            if next_token.type in VALUE_TOKENS:
+                # STRING followed by more tokens - coalesce as multi-word value
+                start_line = token.line
+                start_column = token.column
+                word_parts = [_token_to_str(token)]
+                self.advance()  # Consume STRING
+
+                # Accumulate following VALUE_TOKENS
+                while self.current().type in VALUE_TOKENS:
+                    word_parts.append(_token_to_str(self.current()))
+                    self.advance()
+
+                result = " ".join(word_parts)
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "multi_word_coalesce",
+                        "original": word_parts,
+                        "result": result,
+                        "context": "string_multiword",
+                        "line": start_line,
+                        "column": start_column,
+                    }
+                )
+                self._consume_bracket_annotation(capture=False)
+                return result
+
+            # Standalone STRING
             self.advance()
             return token.value
 
         elif token.type == TokenType.NUMBER:
-            # GH#87: Check if NUMBER is followed by IDENTIFIER (e.g., 123_suffix)
+            # GH#87: Check if NUMBER is followed by VALUE_TOKENS (e.g., 123_suffix, 123 1.0.0)
             # If so, coalesce into multi-word string value (same pattern as IDENTIFIER path)
             next_token = self.peek()
-            if next_token.type == TokenType.IDENTIFIER:
-                # NUMBER followed by IDENTIFIER - coalesce as multi-word value
+            if next_token.type in VALUE_TOKENS:
+                # NUMBER followed by VALUE_TOKENS - coalesce as multi-word value
                 # Track start position for I4 audit
                 start_line = token.line
                 start_column = token.column
@@ -623,8 +679,8 @@ class Parser:
                 word_parts = [_token_to_str(token)]
                 self.advance()  # Consume NUMBER
 
-                # Accumulate following IDENTIFIER/NUMBER tokens (like IDENTIFIER path)
-                while self.current().type in (TokenType.IDENTIFIER, TokenType.NUMBER):
+                # Accumulate following VALUE_TOKENS (like IDENTIFIER path) - Issue #140/#141
+                while self.current().type in VALUE_TOKENS:
                     # Check if next token after this is an operator
                     if self.peek().type in EXPRESSION_OPERATORS:
                         # Include this token and parse rest as expression
@@ -632,14 +688,11 @@ class Parser:
                         self.advance()
                         # Continue with flow expression parsing
                         expr_parts = [" ".join(word_parts)]
-                        while (
-                            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER)
-                            or self.current().type in EXPRESSION_OPERATORS
-                        ):
+                        while self.current().type in VALUE_TOKENS or self.current().type in EXPRESSION_OPERATORS:
                             if self.current().type in EXPRESSION_OPERATORS:
                                 expr_parts.append(self.current().value)
                                 self.advance()
-                            elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER):
+                            elif self.current().type in VALUE_TOKENS:
                                 expr_parts.append(_token_to_str(self.current()))
                                 self.advance()
                             else:
@@ -689,12 +742,106 @@ class Parser:
             return token.value
 
         elif token.type == TokenType.BOOLEAN:
+            # Issue #140/#141: Check if BOOLEAN is followed by more tokens for multi-word value
+            next_token = self.peek()
+            if next_token.type in VALUE_TOKENS:
+                # BOOLEAN followed by more tokens - coalesce as multi-word value
+                start_line = token.line
+                start_column = token.column
+                word_parts = [_token_to_str(token)]
+                self.advance()  # Consume BOOLEAN
+
+                # Accumulate following VALUE_TOKENS
+                while self.current().type in VALUE_TOKENS:
+                    word_parts.append(_token_to_str(self.current()))
+                    self.advance()
+
+                result = " ".join(word_parts)
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "multi_word_coalesce",
+                        "original": word_parts,
+                        "result": result,
+                        "context": "boolean_multiword",
+                        "line": start_line,
+                        "column": start_column,
+                    }
+                )
+                self._consume_bracket_annotation(capture=False)
+                return result
+
+            # Standalone BOOLEAN
             self.advance()
             return token.value
 
         elif token.type == TokenType.NULL:
+            # Issue #140/#141: Check if NULL is followed by more tokens for multi-word value
+            next_token = self.peek()
+            if next_token.type in VALUE_TOKENS:
+                # NULL followed by more tokens - coalesce as multi-word value
+                start_line = token.line
+                start_column = token.column
+                word_parts = [_token_to_str(token)]
+                self.advance()  # Consume NULL
+
+                # Accumulate following VALUE_TOKENS
+                while self.current().type in VALUE_TOKENS:
+                    word_parts.append(_token_to_str(self.current()))
+                    self.advance()
+
+                result = " ".join(word_parts)
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "multi_word_coalesce",
+                        "original": word_parts,
+                        "result": result,
+                        "context": "null_multiword",
+                        "line": start_line,
+                        "column": start_column,
+                    }
+                )
+                self._consume_bracket_annotation(capture=False)
+                return result
+
+            # Standalone NULL
             self.advance()
             return None
+
+        elif token.type == TokenType.VERSION:
+            # Issue #140/#141: Check if VERSION is followed by more tokens for multi-word value
+            next_token = self.peek()
+            if next_token.type in VALUE_TOKENS:
+                # VERSION followed by more tokens - coalesce as multi-word value
+                start_line = token.line
+                start_column = token.column
+                word_parts = [_token_to_str(token)]
+                self.advance()  # Consume VERSION
+
+                # Accumulate following VALUE_TOKENS
+                while self.current().type in VALUE_TOKENS:
+                    word_parts.append(_token_to_str(self.current()))
+                    self.advance()
+
+                result = " ".join(word_parts)
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "multi_word_coalesce",
+                        "original": word_parts,
+                        "result": result,
+                        "context": "version_multiword",
+                        "line": start_line,
+                        "column": start_column,
+                    }
+                )
+                self._consume_bracket_annotation(capture=False)
+                return result
+
+            # Standalone VERSION
+            self.advance()
+            return str(token.value)
 
         elif token.type == TokenType.LIST_START:
             return self.parse_list()
@@ -731,13 +878,14 @@ class Parser:
 
             # GH#66: Continue capturing consecutive identifiers as multi-word value
             # GH#63: Include NUMBER tokens in multi-word capture (convert to string)
-            # Stop at delimiters, operators, or non-identifier/number tokens
+            # Issue #140/#141: Include VALUE_TOKENS to prevent data loss
+            # Stop at delimiters, operators, or non-value tokens
             word_parts = [parts[0]]
             # Track start position for I4 audit
             start_line = token.line
             start_column = token.column
 
-            while self.current().type in (TokenType.IDENTIFIER, TokenType.NUMBER):
+            while self.current().type in VALUE_TOKENS:
                 # Check if next token after this identifier is an operator
                 # If so, we're starting an expression, not a multi-word value
                 if self.peek().type in EXPRESSION_OPERATORS:
@@ -747,15 +895,12 @@ class Parser:
                     self.advance()
                     # Now we need to continue with flow expression parsing
                     expr_parts = [" ".join(word_parts)]
-                    while (
-                        self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER)
-                        or self.current().type in EXPRESSION_OPERATORS
-                    ):
+                    while self.current().type in VALUE_TOKENS or self.current().type in EXPRESSION_OPERATORS:
                         if self.current().type in EXPRESSION_OPERATORS:
                             expr_parts.append(self.current().value)
                             self.advance()
-                        elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.NUMBER):
-                            # GH#66: Use _token_to_str to preserve NUMBER lexemes
+                        elif self.current().type in VALUE_TOKENS:
+                            # GH#66/#140/#141: Use _token_to_str to preserve all value token lexemes
                             expr_parts.append(_token_to_str(self.current()))
                             self.advance()
                         else:

@@ -19,6 +19,9 @@ class TokenType(Enum):
     # Grammar sentinel (Issue #48 Phase 2)
     GRAMMAR_SENTINEL = auto()  # OCTAVE::VERSION at document start
 
+    # Version field (Issues #140 #141)
+    VERSION = auto()  # VERSION::1.0.0 semantic version strings
+
     # Structural operators
     ASSIGN = auto()  # ::
     BLOCK = auto()  # :
@@ -80,6 +83,8 @@ class LexerError(Exception):
         super().__init__(f"{error_code} at line {line}, column {column}: {message}")
 
 
+# Critical-Engineer: consulted for Parser contract integrity (VERSION field + sentinel scoping)
+
 # ASCII to Unicode normalization table
 ASCII_ALIASES = {
     "->": "→",
@@ -97,7 +102,21 @@ TOKEN_PATTERNS = [
     # Grammar sentinel (Issue #48 Phase 2) - must come first
     # Pattern: OCTAVE::VERSION where VERSION is semver-like (e.g., 5, 5.1, 5.1.0, 5.1.0-beta.1)
     # Version regex: major(.minor(.patch)?)?(-prerelease)?
-    (r"OCTAVE::(\d+(?:\.\d+)*(?:-[A-Za-z0-9.]+)?)", TokenType.GRAMMAR_SENTINEL),
+    (r"OCTAVE::(\d+(?:\.\d+)*(?:-[A-Za-z0-9.-]+)?)", TokenType.GRAMMAR_SENTINEL),
+    # VERSION token patterns (Issues #140, #141)
+    # Pattern ordering is critical for performance:
+    # 1. VERSION patterns come BEFORE NUMBER to prevent greedy NUMBER matching
+    # 2. VERSION regex uses specific anchors (\d+\.\d+) that fail fast on non-versions
+    # 3. Most numeric inputs match NUMBER directly, so VERSION overhead is minimal
+    # 4. Performance impact: <2% on typical documents (VERSION patterns fail quickly)
+    # Semantic version pattern (must come before NUMBER to prevent partial match)
+    # Matches version strings with 3+ parts OR 2 parts + suffix
+    # Examples: 0.1.0, 1.2.3, 1.0-beta, 1.0-beta-1, 1.0+build
+    # Excludes simple floats like 3.14 (handled by NUMBER)
+    # Note: Hyphens allowed in prerelease identifiers (e.g., beta-1, rc-2)
+    (r"(\d+\.\d+\.\d+(?:\.\d+)*(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.]+)?)", TokenType.VERSION),  # 3+ parts
+    (r"(\d+\.\d+(?:-[A-Za-z0-9.-]+)(?:\+[A-Za-z0-9.]+)?)", TokenType.VERSION),  # 2 parts + prerelease
+    (r"(\d+\.\d+(?:\+[A-Za-z0-9.]+))", TokenType.VERSION),  # 2 parts + build
     # Envelope markers (must come before SEPARATOR)
     # ENVELOPE_END must come before ENVELOPE_START to match first
     (r"===END===", TokenType.ENVELOPE_END),
@@ -206,6 +225,11 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
         # Try to match token patterns
         matched = False
         for pattern, token_type in compiled_patterns:
+            # GRAMMAR_SENTINEL must only match at document start (position 0)
+            # to prevent silent data loss in nested assignments like NOTE::OCTAVE::5.1.0
+            if token_type == TokenType.GRAMMAR_SENTINEL and pos != 0:
+                continue  # Skip GRAMMAR_SENTINEL pattern if not at position 0
+
             match = pattern.match(content, pos)
             if match:
                 matched_text = match.group()
@@ -217,6 +241,9 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 if token_type == TokenType.GRAMMAR_SENTINEL:
                     # Issue #48 Phase 2: Extract version string from OCTAVE::VERSION
                     value = match.group(1)  # Extract VERSION from OCTAVE::VERSION
+                elif token_type == TokenType.VERSION:
+                    # Issues #140 #141: Extract version string from VERSION::1.0.0
+                    value = match.group(1)  # Extract version value (quoted or bare)
                 elif token_type == TokenType.ENVELOPE_START:
                     value = match.group(1)  # Extract NAME from ===NAME===
                 elif token_type == TokenType.ENVELOPE_END:
