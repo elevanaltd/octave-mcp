@@ -73,9 +73,9 @@ SECOND:
 ===END==="""
         doc = parse(source)
 
-        assert len(doc.sections) == 2, (
-            f"Expected 2 blocks, got {len(doc.sections)}: " f"{[getattr(s, 'key', str(s)) for s in doc.sections]}"
-        )
+        assert (
+            len(doc.sections) == 2
+        ), f"Expected 2 blocks, got {len(doc.sections)}: {[getattr(s, 'key', str(s)) for s in doc.sections]}"
         assert doc.sections[0].key == "FIRST"
         assert doc.sections[1].key == "SECOND"
 
@@ -135,7 +135,7 @@ BLOCK_B:
         emitted2 = emit(doc2)
 
         # Idempotence: second emit should equal first emit
-        assert emitted1 == emitted2, f"Idempotence violated!\n" f"First emit:\n{emitted1}\n" f"Second emit:\n{emitted2}"
+        assert emitted1 == emitted2, f"Idempotence violated!\nFirst emit:\n{emitted1}\nSecond emit:\n{emitted2}"
 
     def test_round_trip_preserves_sibling_structure(self):
         """Verify structure is preserved through round-trip."""
@@ -181,9 +181,7 @@ LEVEL1_B:
         emitted2 = emit(doc2)
 
         # Idempotence check
-        assert emitted1 == emitted2, (
-            f"Complex nesting idempotence violated!\n" f"First:\n{emitted1}\n" f"Second:\n{emitted2}"
-        )
+        assert emitted1 == emitted2, f"Complex nesting idempotence violated!\nFirst:\n{emitted1}\nSecond:\n{emitted2}"
 
 
 class TestEdgeCases:
@@ -269,9 +267,9 @@ SIBLING_ASSIGNMENT::at_root
         doc = parse(source)
 
         # Should have 2 top-level sections
-        assert len(doc.sections) == 2, (
-            f"Expected 2 sections, got {len(doc.sections)}: " f"{[getattr(s, 'key', str(s)) for s in doc.sections]}"
-        )
+        assert (
+            len(doc.sections) == 2
+        ), f"Expected 2 sections, got {len(doc.sections)}: {[getattr(s, 'key', str(s)) for s in doc.sections]}"
 
         # First is Section marker
         from octave_mcp.core.ast_nodes import Section

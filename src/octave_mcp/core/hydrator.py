@@ -30,6 +30,20 @@ class VocabularyError(Exception):
     pass
 
 
+class SourceUriSecurityError(VocabularyError):
+    """Raised when SOURCE_URI contains a security violation.
+
+    Issue #48 CE Review BLOCKING: Prevents path traversal attacks via SOURCE_URI.
+    Malicious documents could attempt to access sensitive files like /etc/passwd
+    via absolute paths, path traversal (../../../), or symlinks.
+    """
+
+    def __init__(self, source_uri: str, reason: str):
+        self.source_uri = source_uri
+        self.reason = reason
+        super().__init__(f"Security violation in SOURCE_URI '{source_uri}': {reason}")
+
+
 class CollisionError(VocabularyError):
     """Raised when term collision is detected with 'error' strategy."""
 
@@ -101,6 +115,27 @@ class HydrationPolicy:
     prune_strategy: Literal["list"] = "list"  # hash/count/elide in Phase 2
     collision_strategy: Literal["error", "source_wins", "local_wins"] = "error"
     max_depth: int = 1
+
+
+@dataclass
+class StalenessResult:
+    """Result of staleness check for a single snapshot.
+
+    Issue #48 Task 2.8: Staleness detection for hydrated documents.
+
+    Attributes:
+        namespace: The vocabulary namespace (e.g., "@test/vocabulary")
+        status: "FRESH" if hash matches, "STALE" if hash differs, "ERROR" on failure
+        expected_hash: Hash stored in manifest (SOURCE_HASH)
+        actual_hash: Current hash of source file (or None if error)
+        error: Error message if status is "ERROR" (optional)
+    """
+
+    namespace: str
+    status: Literal["FRESH", "STALE", "ERROR"]
+    expected_hash: str
+    actual_hash: str | None
+    error: str | None = None
 
 
 @dataclass
@@ -292,6 +327,74 @@ def compute_vocabulary_hash(vocab_path: Path, chunk_size: int = 8192) -> str:
         while chunk := f.read(chunk_size):
             hasher.update(chunk)
     return f"sha256:{hasher.hexdigest()}"
+
+
+def validate_source_uri(source_uri: str, base_path: Path) -> Path:
+    """Validate SOURCE_URI for security and return resolved path.
+
+    Issue #48 CE Review FIX: Prevents path traversal attacks while allowing
+    legitimate cross-directory layouts.
+
+    Security checks performed:
+    1. Reject absolute paths (e.g., /etc/passwd)
+    2. Resolve path (following symlinks)
+    3. Verify resolved path is within allowed base directory
+
+    Note on ".." handling (Issue #48 CE Review FIX):
+    - hydrate() generates SOURCE_URI with ".." for cross-directory layouts
+      (e.g., vocab in specs/, output in docs/ -> "../specs/vocab.oct.md")
+    - Security comes from verifying the RESOLVED path stays within base_path
+    - Paths with ".." that resolve WITHIN base are ALLOWED (valid cross-directory)
+    - Paths with ".." that resolve OUTSIDE base are REJECTED (path traversal attack)
+
+    Args:
+        source_uri: The SOURCE_URI string from manifest
+        base_path: The allowed base directory (must be absolute)
+
+    Returns:
+        Resolved absolute Path to the file
+
+    Raises:
+        SourceUriSecurityError: If security violation detected
+    """
+    # Normalize base_path to absolute
+    base_path = base_path.resolve()
+
+    # Check 1: Reject absolute paths
+    if source_uri.startswith("/") or (len(source_uri) > 1 and source_uri[1] == ":"):
+        raise SourceUriSecurityError(
+            source_uri,
+            "absolute paths are not allowed for security reasons",
+        )
+
+    # Build candidate path (relative to base)
+    # Note: ".." in source_uri is ALLOWED - security comes from Check 3 below
+    candidate = base_path / source_uri
+
+    # Check 2: Resolve and verify within base
+    # resolve() follows symlinks and returns absolute path
+    try:
+        resolved = candidate.resolve()
+    except (OSError, ValueError) as e:
+        raise SourceUriSecurityError(
+            source_uri,
+            f"failed to resolve path: {e}",
+        ) from e
+
+    # Check 3: Verify resolved path is within base directory
+    # THIS IS THE CRITICAL SECURITY CHECK - catches:
+    # - Path traversal attacks (../../../etc/passwd)
+    # - Symlink escapes (link pointing outside base)
+    # - Any other mechanism that could escape base_path
+    try:
+        resolved.relative_to(base_path)
+    except ValueError:
+        raise SourceUriSecurityError(
+            source_uri,
+            "resolved path is outside allowed directory",
+        ) from None
+
+    return resolved
 
 
 def parse_vocabulary(vocab_path: Path) -> dict[str, str]:
@@ -540,6 +643,7 @@ def hydrate(
     source_path: Path,
     registry: VocabularyRegistry,
     policy: HydrationPolicy,
+    output_path: Path | None = None,
 ) -> Document:
     """Hydrate a document by transforming IMPORT directives to SNAPSHOTs.
 
@@ -547,6 +651,7 @@ def hydrate(
         source_path: Path to source document with IMPORT directives
         registry: Vocabulary registry for namespace resolution
         policy: Hydration policy settings
+        output_path: Path where hydrated document will be written (for relative SOURCE_URI)
 
     Returns:
         New Document with IMPORT replaced by SNAPSHOT + MANIFEST + PRUNED
@@ -629,7 +734,9 @@ def hydrate(
 
         # Create §SNAPSHOT::MANIFEST section
         # Issue #48: Pass version information to manifest
-        manifest_section = _create_manifest_section(vocab_path, policy, imp.version, resolved_version)
+        # Issue #48 Debate Decision: Store relative path (output_path or source_path as base)
+        base_path = output_path if output_path else source_path
+        manifest_section = _create_manifest_section(vocab_path, policy, imp.version, resolved_version, base_path)
         new_sections.append(manifest_section)
 
         # Create §SNAPSHOT::PRUNED section
@@ -667,16 +774,23 @@ def _create_manifest_section(
     policy: HydrationPolicy,
     requested_version: str | None = None,
     resolved_version: str | None = None,
+    base_path: Path | None = None,
 ) -> Section:
     """Create §SNAPSHOT::MANIFEST section.
 
     Issue #48: Now includes REQUESTED_VERSION and RESOLVED_VERSION fields.
+
+    Issue #48 Debate Decision: SOURCE_URI stores a RELATIVE path for security.
+    Absolute paths are forbidden during staleness checking to prevent
+    path traversal attacks. The relative path is computed from base_path's
+    parent directory (where the output file will be written).
 
     Args:
         vocab_path: Path to vocabulary file
         policy: Hydration policy settings
         requested_version: Version requested in IMPORT directive (or None)
         resolved_version: Version from registry (or None)
+        base_path: Path to output file (for computing relative SOURCE_URI)
 
     Returns:
         Section with manifest information
@@ -700,11 +814,27 @@ def _create_manifest_section(
     requested_version_str = requested_version if requested_version else "unspecified"
     resolved_version_str = resolved_version if resolved_version else "unknown"
 
+    # Issue #48 Debate Decision: Store relative path in SOURCE_URI for security
+    # Compute relative path from output file's directory to vocabulary file
+    if base_path is not None:
+        base_dir = base_path.resolve().parent
+        vocab_resolved = vocab_path.resolve()
+        try:
+            source_uri = str(vocab_resolved.relative_to(base_dir))
+        except ValueError:
+            # Vocab is outside base_dir, use os.path.relpath for cross-directory paths
+            import os
+
+            source_uri = os.path.relpath(vocab_resolved, base_dir)
+    else:
+        # Fallback: use absolute path (legacy behavior, will fail staleness check)
+        source_uri = str(vocab_path)
+
     return Section(
         section_id="SNAPSHOT",
         key="MANIFEST",
         children=[
-            Assignment(key="SOURCE_URI", value=str(vocab_path)),
+            Assignment(key="SOURCE_URI", value=source_uri),
             Assignment(key="SOURCE_HASH", value=compute_vocabulary_hash(vocab_path)),
             Assignment(key="HYDRATION_TIME", value=hydration_time),
             Assignment(key="REQUESTED_VERSION", value=requested_version_str),
@@ -726,3 +856,271 @@ def _create_pruned_section(pruned_terms: set[str]) -> Section:
             Assignment(key="TERMS", value=terms_list),
         ],
     )
+
+
+def check_staleness(
+    doc: Document,
+    base_path: Path | None = None,
+    allowed_root: Path | None = None,
+) -> list[StalenessResult]:
+    """Check staleness of all SNAPSHOT manifests in a hydrated document.
+
+    Issue #48 Task 2.8: Staleness detection for hydrated documents.
+    Issue #48 CE Review: base_path parameter for security-compliant path resolution.
+    Issue #48 CE Security Fix: allowed_root parameter for post-resolution containment.
+
+    Parses the document to find §SNAPSHOT::MANIFEST sections, extracts
+    SOURCE_URI and SOURCE_HASH from each, computes current hash of source
+    file, and compares to determine if snapshot is stale.
+
+    Security model:
+    - Absolute paths are FORBIDDEN (rejected before resolution)
+    - Relative paths with ".." ARE ALLOWED for cross-directory layouts
+    - After resolution, path MUST be within allowed_root (containment check)
+    - This prevents crafted paths like "../../../etc/passwd" from escaping
+
+    Args:
+        doc: Parsed OCTAVE document (already hydrated)
+        base_path: Base directory for resolving relative SOURCE_URI paths.
+                   If None, uses current working directory.
+        allowed_root: Root directory for containment check. Resolved paths
+                      must be within this directory. If None, defaults to base_path.
+
+    Returns:
+        List of StalenessResult, one per SNAPSHOT/MANIFEST pair found.
+        Empty list if no snapshots found in document.
+    """
+    results: list[StalenessResult] = []
+
+    # Track current namespace as we iterate through sections
+    # SNAPSHOT sections come before their MANIFEST sections
+    current_namespace: str | None = None
+
+    for section in doc.sections:
+        if isinstance(section, Section):
+            # Detect §CONTEXT::SNAPSHOT["@namespace/name"]
+            if section.section_id == "CONTEXT" and section.key == "SNAPSHOT":
+                # Extract namespace from annotation like: "@test/vocabulary"
+                # The annotation field contains the quoted namespace
+                namespace = _extract_namespace_from_annotation(section.annotation)
+                if namespace:
+                    current_namespace = namespace
+
+            # Detect §SNAPSHOT::MANIFEST
+            elif section.section_id == "SNAPSHOT" and section.key == "MANIFEST":
+                # Extract SOURCE_URI and SOURCE_HASH from manifest
+                source_uri = None
+                source_hash = None
+
+                for child in section.children:
+                    if isinstance(child, Assignment):
+                        if child.key == "SOURCE_URI":
+                            source_uri = child.value
+                        elif child.key == "SOURCE_HASH":
+                            source_hash = child.value
+
+                namespace = current_namespace or "unknown"
+
+                # Issue #48 CE Review BLOCKING: Emit ERROR for malformed manifests
+                # instead of silently skipping them
+                if not source_uri or (isinstance(source_uri, str) and not source_uri.strip()):
+                    results.append(
+                        StalenessResult(
+                            namespace=namespace,
+                            status="ERROR",
+                            expected_hash=source_hash or "missing",
+                            actual_hash=None,
+                            error="Malformed manifest: missing or empty SOURCE_URI",
+                        )
+                    )
+                elif not source_hash or (isinstance(source_hash, str) and not source_hash.strip()):
+                    results.append(
+                        StalenessResult(
+                            namespace=namespace,
+                            status="ERROR",
+                            expected_hash="missing",
+                            actual_hash=None,
+                            error="Malformed manifest: missing or empty SOURCE_HASH",
+                        )
+                    )
+                else:
+                    # Check if source file exists and compute hash
+                    # Issue #48 CE Security Fix: Pass allowed_root for containment check
+                    result = _check_single_snapshot(
+                        namespace=namespace,
+                        source_uri=source_uri,
+                        expected_hash=source_hash,
+                        base_path=base_path,
+                        allowed_root=allowed_root,
+                    )
+                    results.append(result)
+
+    return results
+
+
+def _extract_namespace_from_annotation(annotation: str | None) -> str | None:
+    """Extract namespace from section annotation like '"@test/vocabulary"'.
+
+    The parser stores annotations without brackets, so we just need to
+    strip the surrounding quotes.
+
+    Args:
+        annotation: Section annotation string (may be quoted)
+
+    Returns:
+        Extracted namespace or None if not found
+    """
+    if not annotation:
+        return None
+
+    # Remove surrounding quotes if present
+    namespace = annotation.strip()
+    if namespace.startswith('"') and namespace.endswith('"'):
+        namespace = namespace[1:-1]
+    return namespace if namespace else None
+
+
+def _extract_namespace_from_snapshot_key(key: str) -> str | None:
+    """Extract namespace from SNAPSHOT key like 'SNAPSHOT["@test/vocabulary"]'.
+
+    Args:
+        key: Section key containing namespace
+
+    Returns:
+        Extracted namespace or None if not found
+    """
+    # Match pattern: SNAPSHOT["@namespace/name"]
+    match = re.match(r'SNAPSHOT\["([^"]+)"\]', key)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _check_single_snapshot(
+    namespace: str,
+    source_uri: str,
+    expected_hash: str,
+    base_path: Path | None = None,
+    allowed_root: Path | None = None,
+) -> StalenessResult:
+    """Check staleness of a single snapshot.
+
+    Issue #48 CE Review FIX: Secure path resolution for staleness checking.
+    Issue #48 CE Security Fix: Post-resolution containment enforcement.
+
+    Security model for staleness checking:
+    - Absolute paths are FORBIDDEN (prevents /etc/passwd style attacks)
+    - Relative paths with ".." ARE ALLOWED (cross-directory layouts)
+    - Path is resolved relative to base_path (follows symlinks)
+    - AFTER resolution, path MUST be within allowed_root (containment check)
+    - Error messages do NOT echo raw paths (prevents information leakage)
+
+    Note on ".." handling (Issue #48 CE Review FIX):
+    - hydrate() generates SOURCE_URI with ".." for cross-directory layouts
+      (e.g., vocab in specs/, output in docs/ -> "../specs/vocab.oct.md")
+    - The old blanket rejection of ".." broke these valid workflows
+    - Security now comes from: (1) rejecting absolute paths,
+      (2) post-resolution containment check, (3) hash verification
+
+    Difference from validate_source_uri():
+    - validate_source_uri() enforces strict base containment (for user input)
+    - _check_single_snapshot() uses allowed_root for containment (more flexible)
+    - Both reject absolute paths for security
+
+    Args:
+        namespace: Vocabulary namespace
+        source_uri: Path to source file from manifest
+        expected_hash: Hash stored in manifest
+        base_path: Optional base path for resolving relative SOURCE_URI paths
+        allowed_root: Root directory for containment check. Resolved paths must
+                      be within this directory. If None, defaults to base_path.
+
+    Returns:
+        StalenessResult with FRESH, STALE, or ERROR status
+    """
+    if base_path is None:
+        base_path = Path.cwd()
+
+    # Issue #48 CE Review FIX: Reject absolute paths (security)
+    # Do NOT echo the raw path in error messages (prevents information leakage)
+    if source_uri.startswith("/") or (len(source_uri) > 1 and source_uri[1] == ":"):
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error="Security violation: absolute SOURCE_URI paths are not allowed",
+        )
+
+    # Issue #48 CE Review FIX: Resolve path relative to base_path
+    # ".." patterns ARE ALLOWED for cross-directory layouts (vocab in specs/, output in docs/)
+    # Security now comes from: (1) rejecting absolute paths,
+    # (2) post-resolution containment check, (3) hash verification
+    try:
+        candidate = base_path / source_uri
+        source_path = candidate.resolve()  # Follows symlinks
+    except (OSError, ValueError) as e:
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error=f"Security violation: failed to resolve path: {e}",
+        )
+
+    # Issue #48 CE Security Fix: Post-resolution containment check
+    # CRITICAL: This check MUST happen BEFORE checking if file exists
+    # Otherwise, an attacker could access existing files outside the project
+    # Default allowed_root to base_path for backwards compatibility
+    effective_root = (allowed_root or base_path).resolve()
+    try:
+        source_path.relative_to(effective_root)
+    except ValueError:
+        # Path escapes allowed_root - this is a security violation
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error=f"Security violation: resolved path escapes allowed root for {namespace}",
+        )
+
+    # Check if source file exists
+    if not source_path.exists():
+        # Issue #48 CE Review FIX: Do not echo source_uri in error message
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error=f"Source file not found for namespace: {namespace}",
+        )
+
+    try:
+        # Compute current hash
+        actual_hash = compute_vocabulary_hash(source_path)
+
+        # Compare hashes
+        if actual_hash == expected_hash:
+            return StalenessResult(
+                namespace=namespace,
+                status="FRESH",
+                expected_hash=expected_hash,
+                actual_hash=actual_hash,
+            )
+        else:
+            return StalenessResult(
+                namespace=namespace,
+                status="STALE",
+                expected_hash=expected_hash,
+                actual_hash=actual_hash,
+            )
+
+    except Exception as e:
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error=str(e),
+        )

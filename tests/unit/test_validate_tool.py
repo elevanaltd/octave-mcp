@@ -343,9 +343,9 @@ class TestValidateToolI5SchemaSovereignty:
 
         assert result["status"] == "success"
         # META schema is found and document validates (no META block = no constraints)
-        assert result["validation_status"] == "VALIDATED", (
-            f"I5: Should be VALIDATED when META schema validates content, " f"but got '{result['validation_status']}'"
-        )
+        assert (
+            result["validation_status"] == "VALIDATED"
+        ), f"I5: Should be VALIDATED when META schema validates content, but got '{result['validation_status']}'"
         # Schema info should be recorded
         assert result.get("schema_name") == "META"
 
@@ -383,9 +383,9 @@ class TestValidateToolI5SchemaSovereignty:
         )
 
         # Value must not be the silent PENDING_INFRASTRUCTURE placeholder
-        assert result["validation_status"] != "PENDING_INFRASTRUCTURE", (
-            "I5 violation: PENDING_INFRASTRUCTURE is a silent bypass. " "Must use UNVALIDATED to make bypass visible."
-        )
+        assert (
+            result["validation_status"] != "PENDING_INFRASTRUCTURE"
+        ), "I5 violation: PENDING_INFRASTRUCTURE is a silent bypass. Must use UNVALIDATED to make bypass visible."
 
 
 class TestValidateToolSchemaValidation:
@@ -482,10 +482,9 @@ KEY::value
 
         assert result["status"] == "success"  # Operation succeeded, content is invalid
         # I5: Must return INVALID when schema validation fails
-        assert result["validation_status"] == "INVALID", (
-            f"I5 violation: Should be INVALID when META schema validation fails, "
-            f"got '{result['validation_status']}'"
-        )
+        assert (
+            result["validation_status"] == "INVALID"
+        ), f"I5 violation: Should be INVALID when META schema validation fails, got '{result['validation_status']}'"
         # Should record schema info even on invalid
         assert result.get("schema_name") == "META", "I5: schema_name should be recorded even on INVALID"
         # Should include validation errors
@@ -1004,9 +1003,9 @@ META:
         )
 
         # Should succeed, not raise E005 error for parentheses
-        assert result["status"] == "success", (
-            f"Issue #91: YAML frontmatter with parentheses failed. " f"Errors: {result.get('errors', [])}"
-        )
+        assert (
+            result["status"] == "success"
+        ), f"Issue #91: YAML frontmatter with parentheses failed. Errors: {result.get('errors', [])}"
         # Should have valid canonical output
         assert "===TEST===" in result["canonical"]
         assert "===END===" in result["canonical"]
@@ -1033,9 +1032,9 @@ KEY::value
         )
 
         # Should succeed without E005 errors
-        assert result["status"] == "success", (
-            f"Issue #91: YAML frontmatter with brackets failed. " f"Errors: {result.get('errors', [])}"
-        )
+        assert (
+            result["status"] == "success"
+        ), f"Issue #91: YAML frontmatter with brackets failed. Errors: {result.get('errors', [])}"
 
     @pytest.mark.asyncio
     async def test_validate_with_yaml_frontmatter_special_chars(self):
@@ -1061,9 +1060,9 @@ FIELD::value
         )
 
         # Should succeed without tokenization errors
-        assert result["status"] == "success", (
-            f"Issue #91: YAML frontmatter with special chars failed. " f"Errors: {result.get('errors', [])}"
-        )
+        assert (
+            result["status"] == "success"
+        ), f"Issue #91: YAML frontmatter with special chars failed. Errors: {result.get('errors', [])}"
 
     @pytest.mark.asyncio
     async def test_validate_without_yaml_frontmatter_still_works(self):
@@ -1129,9 +1128,9 @@ META:
         )
 
         assert result["status"] == "success"
-        assert result["validation_status"] == "INVALID", (
-            f"Gap_1: Document with invalid ENUM value should be INVALID, " f"got '{result['validation_status']}'"
-        )
+        assert (
+            result["validation_status"] == "INVALID"
+        ), f"Gap_1: Document with invalid ENUM value should be INVALID, got '{result['validation_status']}'"
 
         # Check validation_errors contains E005 (ENUM validation error)
         validation_errors = result.get("validation_errors", [])
@@ -1165,9 +1164,9 @@ META:
         )
 
         assert result["status"] == "success"
-        assert result["validation_status"] == "INVALID", (
-            f"Gap_1: Document missing required field should be INVALID, " f"got '{result['validation_status']}'"
-        )
+        assert (
+            result["validation_status"] == "INVALID"
+        ), f"Gap_1: Document missing required field should be INVALID, got '{result['validation_status']}'"
 
         # Check validation_errors contains E003 (required field missing)
         validation_errors = result.get("validation_errors", [])
@@ -1205,15 +1204,15 @@ META:
         )
 
         assert result["status"] == "success"
-        assert result["validation_status"] == "VALIDATED", (
-            f"Gap_1: Valid document should be VALIDATED, " f"got '{result['validation_status']}'"
-        )
+        assert (
+            result["validation_status"] == "VALIDATED"
+        ), f"Gap_1: Valid document should be VALIDATED, got '{result['validation_status']}'"
 
         # validation_errors should be empty
         validation_errors = result.get("validation_errors", [])
-        assert len(validation_errors) == 0, (
-            f"Gap_1: Valid document should have empty validation_errors, " f"got: {validation_errors}"
-        )
+        assert (
+            len(validation_errors) == 0
+        ), f"Gap_1: Valid document should have empty validation_errors, got: {validation_errors}"
 
     @pytest.mark.asyncio
     async def test_validate_tool_no_section_schemas_preserves_behavior(self):
@@ -1240,9 +1239,9 @@ SOME_SECTION:
 
         assert result["status"] == "success"
         # Should be UNVALIDATED because schema not found
-        assert result["validation_status"] == "UNVALIDATED", (
-            f"Gap_1: Unknown schema should result in UNVALIDATED, " f"got '{result['validation_status']}'"
-        )
+        assert (
+            result["validation_status"] == "UNVALIDATED"
+        ), f"Gap_1: Unknown schema should result in UNVALIDATED, got '{result['validation_status']}'"
 
         # Should not have schema_name since schema wasn't found
         assert result.get("schema_name") is None or "schema_name" not in result
@@ -1300,10 +1299,10 @@ KEY: value
         assert error["code"] == "E_PARSE", f"Expected E_PARSE wrapper, got {error['code']}"
 
         # Gap_6 fix: spec_code should be present and contain 'E001'
-        assert "spec_code" in error, f"Gap_6 violation: spec_code field missing from error dict. " f"Error: {error}"
-        assert error["spec_code"] == "E001", (
-            f"Gap_6: Expected spec_code='E001' for single colon error, " f"got spec_code='{error.get('spec_code')}'"
-        )
+        assert "spec_code" in error, f"Gap_6 violation: spec_code field missing from error dict. Error: {error}"
+        assert (
+            error["spec_code"] == "E001"
+        ), f"Gap_6: Expected spec_code='E001' for single colon error, got spec_code='{error.get('spec_code')}'"
 
     @pytest.mark.asyncio
     async def test_validate_tab_error_has_spec_code(self):
@@ -1337,10 +1336,10 @@ KEY: value
         assert error["code"] == "E_TOKENIZE", f"Expected E_TOKENIZE wrapper, got {error['code']}"
 
         # Gap_6 fix: spec_code should be present and contain 'E005'
-        assert "spec_code" in error, f"Gap_6 violation: spec_code field missing from error dict. " f"Error: {error}"
-        assert error["spec_code"] == "E005", (
-            f"Gap_6: Expected spec_code='E005' for tab error, " f"got spec_code='{error.get('spec_code')}'"
-        )
+        assert "spec_code" in error, f"Gap_6 violation: spec_code field missing from error dict. Error: {error}"
+        assert (
+            error["spec_code"] == "E005"
+        ), f"Gap_6: Expected spec_code='E005' for tab error, got spec_code='{error.get('spec_code')}'"
 
     @pytest.mark.asyncio
     async def test_validate_non_spec_error_has_no_spec_code(self):
@@ -1367,9 +1366,9 @@ KEY: value
         assert error["code"] == "E_INPUT"
 
         # E_INPUT has no spec equivalent, so spec_code should be absent or None
-        assert error.get("spec_code") is None, (
-            f"E_INPUT should not have spec_code (no spec equivalent), " f"but got spec_code='{error.get('spec_code')}'"
-        )
+        assert (
+            error.get("spec_code") is None
+        ), f"E_INPUT should not have spec_code (no spec equivalent), but got spec_code='{error.get('spec_code')}'"
 
     @pytest.mark.asyncio
     async def test_validate_spec_code_extracted_from_error_message(self):
@@ -1673,9 +1672,9 @@ TEST_HOLOGRAPHIC:
         # Gap_5 FIX PROOF: After fix, canonical should contain repaired value
         # The enum casefold repair transforms "active" -> "ACTIVE"
         canonical = result["canonical"]
-        assert "STATUS::ACTIVE" in canonical or 'STATUS::"ACTIVE"' in canonical, (
-            f"Gap_5: Enum casefold repair not applied. " f"Expected STATUS::ACTIVE in canonical, got:\n{canonical}"
-        )
+        assert (
+            "STATUS::ACTIVE" in canonical or 'STATUS::"ACTIVE"' in canonical
+        ), f"Gap_5: Enum casefold repair not applied. Expected STATUS::ACTIVE in canonical, got:\n{canonical}"
 
         # Gap_5 FIX PROOF: repair_log should contain ENUM_CASEFOLD entry
         # Note: repair_log entries may be RepairEntry dataclasses or dicts
@@ -1686,9 +1685,9 @@ TEST_HOLOGRAPHIC:
             rule_id = r.get("rule_id") if isinstance(r, dict) else getattr(r, "rule_id", None)
             if rule_id == "ENUM_CASEFOLD":
                 enum_casefold_repairs.append(r)
-        assert len(enum_casefold_repairs) >= 1, (
-            f"Gap_5: ENUM_CASEFOLD repair not logged. " f"repair_log contents: {repair_log}"
-        )
+        assert (
+            len(enum_casefold_repairs) >= 1
+        ), f"Gap_5: ENUM_CASEFOLD repair not logged. repair_log contents: {repair_log}"
 
         # Verify repair details (handle both dict and dataclass)
         repair_entry = enum_casefold_repairs[0]
@@ -1727,9 +1726,9 @@ TEST_HOLOGRAPHIC:
 
         # With fix=False, canonical should contain the ORIGINAL value (not repaired)
         canonical = result["canonical"]
-        assert "STATUS::active" in canonical or 'STATUS::"active"' in canonical, (
-            f"Gap_5: With fix=False, canonical should preserve original value. " f"Got:\n{canonical}"
-        )
+        assert (
+            "STATUS::active" in canonical or 'STATUS::"active"' in canonical
+        ), f"Gap_5: With fix=False, canonical should preserve original value. Got:\n{canonical}"
 
     @pytest.mark.asyncio
     async def test_validate_fix_applies_type_coercion_via_mcp(self):

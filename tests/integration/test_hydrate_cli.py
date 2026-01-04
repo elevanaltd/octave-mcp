@@ -373,3 +373,300 @@ class TestHydrateEndToEnd:
         assert "§CONTEXT::IMPORT" not in result.output
         # Terms should be inlined
         assert "First letter of the Greek alphabet" in result.output
+
+
+class TestHydrateCheckCommand:
+    """Integration tests for `octave hydrate --check` staleness detection.
+
+    TDD RED phase: Issue #48 Task 2.8
+    """
+
+    @pytest.fixture
+    def runner(self):
+        """Create CLI test runner."""
+        return CliRunner()
+
+    def test_check_fresh_document_exits_zero(self, runner):
+        """Should exit 0 when all snapshots are fresh."""
+        # Issue #48 Debate Decision: Use output file in fixtures dir
+        # to ensure relative SOURCE_URI paths don't have traversal (..)
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+        hydrated_file = FIXTURES_DIR / "test_fresh_temp.oct.md"
+
+        try:
+            # Hydrate to file
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    source_file,
+                    "--mapping",
+                    f"@test/vocabulary={vocab_file}",
+                    "-o",
+                    str(hydrated_file),
+                ],
+            )
+            assert result.exit_code == 0
+
+            # Now check staleness - should be fresh
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    str(hydrated_file),
+                    "--check",
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert "FRESH" in result.output
+            assert "@test/vocabulary" in result.output
+        finally:
+            hydrated_file.unlink(missing_ok=True)
+
+    def test_check_stale_document_exits_one(self, runner):
+        """Should exit 1 when at least one snapshot is stale."""
+        # Create a hydrated document with a fake/stale hash
+        # Issue #48 Debate Decision: Use relative paths in SOURCE_URI
+        # Create temp file in fixtures dir to avoid path traversal
+        fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+        hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter of the Greek alphabet"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"vocabulary.oct.md"
+  SOURCE_HASH::"{fake_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+        # Create temp file in FIXTURES_DIR to have relative path work
+        hydrated_file = FIXTURES_DIR / "test_stale_temp.oct.md"
+        hydrated_file.write_text(hydrated_content)
+
+        try:
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    str(hydrated_file),
+                    "--check",
+                ],
+            )
+
+            assert result.exit_code == 1
+            assert "STALE" in result.output
+            assert "@test/vocabulary" in result.output
+        finally:
+            hydrated_file.unlink(missing_ok=True)
+
+    def test_check_outputs_expected_and_actual_hash(self, runner):
+        """Should output expected and actual hashes for stale snapshots."""
+        # Issue #48 Debate Decision: Use relative paths in SOURCE_URI
+        # Create temp file in fixtures dir to avoid path traversal
+        fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+        hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"vocabulary.oct.md"
+  SOURCE_HASH::"{fake_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+        # Create temp file in FIXTURES_DIR to have relative path work
+        hydrated_file = FIXTURES_DIR / "test_hash_temp.oct.md"
+        hydrated_file.write_text(hydrated_content)
+
+        try:
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    str(hydrated_file),
+                    "--check",
+                ],
+            )
+
+            # Should show expected and actual hash
+            assert "expected:" in result.output.lower()
+            assert "got:" in result.output.lower() or "actual:" in result.output.lower()
+            assert "000000" in result.output  # Part of the fake hash
+        finally:
+            hydrated_file.unlink(missing_ok=True)
+
+    def test_check_non_hydrated_document_exits_zero(self, runner):
+        """Should exit 0 for documents without snapshots (nothing to check)."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--check",
+            ],
+        )
+
+        # No snapshots to check - exit 0
+        assert result.exit_code == 0
+
+    def test_check_missing_source_file_exits_one(self, runner):
+        """Should exit 1 when source file in manifest no longer exists."""
+        hydrated_content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"/nonexistent/path/vocab.oct.md"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(hydrated_content)
+            hydrated_file = f.name
+
+        try:
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    hydrated_file,
+                    "--check",
+                ],
+            )
+
+            # Error checking staleness - exit 1
+            assert result.exit_code == 1
+        finally:
+            Path(hydrated_file).unlink(missing_ok=True)
+
+    def test_check_and_other_options_are_mutually_exclusive(self, runner):
+        """--check should not be used with hydration options."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--check",
+                "--mapping",
+                f"@test/vocabulary={vocab_file}",
+            ],
+        )
+
+        # Should fail - --check doesn't need mapping
+        assert result.exit_code == 1 or "cannot" in result.output.lower() or "exclusive" in result.output.lower()
+
+    def test_check_cross_directory_layout_without_project_root(self, runner):
+        """Cross-directory layout: --check should work without --project-root.
+
+        Issue #48 Regression: hydrate --check fails for legitimate cross-directory layouts.
+
+        When hydrate creates output in docs/ from vocab in specs/:
+        - SOURCE_URI is relative path like "../specs/vocab.oct.md"
+        - --check used to fail because default allowed_root was document's parent (docs/)
+        - The resolved path (specs/vocab.oct.md) is outside docs/ -> containment error
+
+        Fix: Auto-detect allowed_root by finding common ancestor of document and all SOURCE_URIs.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create cross-directory structure:
+            # project/
+            #   specs/vocab.oct.md    <- vocabulary here
+            #   docs/hydrated.oct.md  <- hydrated document here
+            specs_dir = tmpdir_path / "specs"
+            docs_dir = tmpdir_path / "docs"
+            specs_dir.mkdir()
+            docs_dir.mkdir()
+
+            # Create vocabulary file in specs/
+            vocab_content = """===VOCAB===
+META:
+  TYPE::"CAPSULE"
+  VERSION::"1.0.0"
+
+§1::TERMS
+  TERM_A::"Definition of term A"
+  TERM_B::"Definition of term B"
+
+===END===
+"""
+            vocab_file = specs_dir / "vocab.oct.md"
+            vocab_file.write_text(vocab_content)
+
+            # Create source document in project root (will be hydrated to docs/)
+            source_content = """===DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::IMPORT["@test/vocab"]
+
+§1::CONTENT
+  USES_A::"Uses TERM_A here"
+
+===END===
+"""
+            source_file = tmpdir_path / "source.oct.md"
+            source_file.write_text(source_content)
+
+            # Hydrate to docs/ directory (creates cross-directory relative path)
+            hydrated_file = docs_dir / "hydrated.oct.md"
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    str(source_file),
+                    "--mapping",
+                    f"@test/vocab={vocab_file}",
+                    "-o",
+                    str(hydrated_file),
+                ],
+            )
+            assert result.exit_code == 0, f"Hydration failed: {result.output}"
+
+            # Verify the SOURCE_URI has ".." (cross-directory reference)
+            hydrated_content = hydrated_file.read_text()
+            assert "../specs/" in hydrated_content, f"Expected cross-directory path, got: {hydrated_content}"
+
+            # NOW: Run --check WITHOUT --project-root
+            # This should work (exit 0, FRESH) but was failing due to containment bug
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    str(hydrated_file),
+                    "--check",
+                ],
+            )
+
+            # This is the regression test - should NOT fail with containment error
+            # Should exit 0 with FRESH status (vocab unchanged since hydration)
+            assert result.exit_code == 0, f"Cross-directory check failed: {result.output}"
+            assert "FRESH" in result.output, f"Expected FRESH status, got: {result.output}"

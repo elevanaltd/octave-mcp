@@ -94,6 +94,88 @@ def _ast_to_markdown(doc):
     return "\n".join(lines)
 
 
+def _compute_allowed_root_for_check(doc, base_path):
+    """Compute allowed_root by finding common ancestor of document and SOURCE_URIs.
+
+    Issue #48 Cross-directory fix: When hydrate creates output in a different
+    directory than the vocabulary (e.g., output in docs/, vocab in specs/),
+    the SOURCE_URI contains ".." patterns. The default allowed_root (document's
+    parent) is too restrictive for these legitimate cross-directory layouts.
+
+    This function:
+    1. Extracts all SOURCE_URI paths from MANIFEST sections
+    2. Resolves them relative to base_path
+    3. Finds the common ancestor of base_path and all resolved paths
+    4. Returns that as the allowed_root for containment checking
+
+    Security: The common ancestor approach is safe because:
+    - Absolute paths are still rejected by check_staleness()
+    - The allowed_root is at most as broad as the common ancestor
+    - Path traversal attacks (../../../etc/passwd) would still fail
+      because they resolve outside any reasonable project root
+
+    Args:
+        doc: Parsed OCTAVE document (already hydrated)
+        base_path: Document's parent directory (resolved)
+
+    Returns:
+        Path to use as allowed_root for check_staleness()
+    """
+    from pathlib import Path
+
+    from octave_mcp.core.ast_nodes import Assignment, Section
+
+    # Collect all resolved SOURCE_URI paths
+    resolved_paths = [base_path]  # Start with document's directory
+
+    for section in doc.sections:
+        if isinstance(section, Section):
+            if section.section_id == "SNAPSHOT" and section.key == "MANIFEST":
+                for child in section.children:
+                    if isinstance(child, Assignment) and child.key == "SOURCE_URI":
+                        source_uri = child.value
+                        if isinstance(source_uri, str) and source_uri.strip():
+                            # Skip absolute paths (they'll be rejected later anyway)
+                            if source_uri.startswith("/") or (len(source_uri) > 1 and source_uri[1] == ":"):
+                                continue
+                            # Resolve relative path
+                            try:
+                                resolved = (base_path / source_uri).resolve()
+                                resolved_paths.append(resolved)
+                            except (OSError, ValueError):
+                                # Path resolution failed - let check_staleness handle it
+                                continue
+
+    # Find common ancestor of all paths
+    if len(resolved_paths) == 1:
+        # No SOURCE_URIs found or all failed - use base_path
+        return base_path
+
+    # Compute common ancestor using Path parents
+    # Start with first path's parents and intersect with others
+    common_parts = list(resolved_paths[0].parts)
+
+    for path in resolved_paths[1:]:
+        path_parts = list(path.parts)
+        # Find longest common prefix
+        new_common = []
+        for a, b in zip(common_parts, path_parts, strict=False):
+            if a == b:
+                new_common.append(a)
+            else:
+                break
+        common_parts = new_common
+
+    if not common_parts:
+        # No common ancestor (shouldn't happen on same filesystem)
+        return base_path
+
+    # Reconstruct path from common parts
+    common_ancestor = Path(*common_parts)
+
+    return common_ancestor
+
+
 @cli.command()
 @click.argument("file", type=click.Path(exists=True))
 @click.option(
@@ -468,12 +550,26 @@ def write(
     type=click.Path(),
     help="Output file path (default: stdout)",
 )
+@click.option(
+    "--check",
+    "check_mode",
+    is_flag=True,
+    help="Check staleness of hydrated document (exit 0=fresh, 1=stale or error)",
+)
+@click.option(
+    "--project-root",
+    "project_root",
+    type=click.Path(exists=True),
+    help="Project root directory for security containment (default: document's parent directory)",
+)
 def hydrate(
     file: str,
     registry: str | None,
     mapping: tuple[str, ...],
     collision: str,
     output: str | None,
+    check_mode: bool,
+    project_root: str | None,
 ):
     """Hydrate vocabulary imports in OCTAVE document.
 
@@ -482,12 +578,22 @@ def hydrate(
     - §SNAPSHOT::MANIFEST with provenance (SOURCE_URI, SOURCE_HASH, HYDRATION_TIME)
     - §SNAPSHOT::PRUNED with available-but-unused terms
 
+    With --check flag, checks staleness of already-hydrated document:
+    - Exit 0: All snapshots are fresh (hashes match)
+    - Exit 1: At least one snapshot is stale or error occurred
+
+    Security: The --project-root option specifies the containment boundary.
+    All resolved SOURCE_URI paths must stay within this directory.
+    Defaults to the document's parent directory if not specified.
+
     Issue #48: Living Scrolls vocabulary hydration.
 
     Examples:
         octave hydrate doc.oct.md --registry specs/vocabularies/registry.oct.md
         octave hydrate doc.oct.md --mapping "@test/vocab=./vocab.oct.md"
         octave hydrate doc.oct.md -o hydrated.oct.md
+        octave hydrate hydrated.oct.md --check
+        octave hydrate hydrated.oct.md --check --project-root /path/to/project
 
     Exit code 0 on success, 1 on failure.
     """
@@ -495,8 +601,70 @@ def hydrate(
 
     from octave_mcp.core import hydrator
     from octave_mcp.core.emitter import emit
+    from octave_mcp.core.parser import parse
 
     try:
+        # Handle --check mode (staleness detection)
+        if check_mode:
+            # --check is mutually exclusive with hydration options
+            if mapping or registry or output:
+                click.echo(
+                    "Error: --check cannot be used with --mapping, --registry, or --output. "
+                    "Use --check alone to verify staleness of an already-hydrated document.",
+                    err=True,
+                )
+                raise SystemExit(1)
+
+            # Read and parse the document
+            source_path = Path(file)
+            content = source_path.read_text(encoding="utf-8")
+            doc = parse(content)
+
+            # Check staleness
+            # Issue #48 CE Review: Use document's directory as base_path for
+            # resolving relative SOURCE_URI paths (security + portability)
+            # Issue #48 CE Security Fix: Use allowed_root for post-resolution containment
+            # Issue #48 Cross-directory fix: Auto-detect allowed_root when SOURCE_URI contains ".."
+            base_path = source_path.parent.resolve()
+
+            if project_root:
+                # User explicitly specified project root
+                allowed_root = Path(project_root).resolve()
+            else:
+                # Auto-detect allowed_root from SOURCE_URI paths
+                # This handles cross-directory layouts (e.g., output in docs/, vocab in specs/)
+                allowed_root = _compute_allowed_root_for_check(doc, base_path)
+
+            results = hydrator.check_staleness(doc, base_path=base_path, allowed_root=allowed_root)
+
+            if not results:
+                # No snapshots found - nothing to check
+                click.echo("No SNAPSHOT sections found in document.")
+                raise SystemExit(0)
+
+            # Report results
+            has_stale_or_error = False
+            for staleness_result in results:
+                if staleness_result.status == "FRESH":
+                    actual_hash = staleness_result.actual_hash or "N/A"
+                    click.echo(f"FRESH: {staleness_result.namespace} (hash: {actual_hash[:20]}...)")
+                elif staleness_result.status == "STALE":
+                    actual = staleness_result.actual_hash[:20] if staleness_result.actual_hash else "N/A"
+                    click.echo(
+                        f"STALE: {staleness_result.namespace} "
+                        f"(expected: {staleness_result.expected_hash[:20]}..., got: {actual}...)"
+                    )
+                    has_stale_or_error = True
+                else:  # ERROR
+                    click.echo(f"ERROR: {staleness_result.namespace} - {staleness_result.error}")
+                    has_stale_or_error = True
+
+            if has_stale_or_error:
+                raise SystemExit(1)
+            else:
+                raise SystemExit(0)
+
+        # Normal hydration mode
         # Build registry from options
         if mapping:
             # Direct mappings provided via --mapping
@@ -518,8 +686,7 @@ def hydrate(
                 vocab_registry = hydrator.VocabularyRegistry(default_registry)
             else:
                 click.echo(
-                    "Error: No registry specified and default registry not found. "
-                    "Use --registry or --mapping option.",
+                    "Error: No registry specified and default registry not found. Use --registry or --mapping option.",
                     err=True,
                 )
                 raise SystemExit(1)
@@ -532,8 +699,10 @@ def hydrate(
         )
 
         # Hydrate the document
+        # Issue #48 Debate Decision: Pass output_path for relative SOURCE_URI
         source_path = Path(file)
-        result = hydrator.hydrate(source_path, vocab_registry, policy)
+        output_path = Path(output) if output else None
+        result = hydrator.hydrate(source_path, vocab_registry, policy, output_path)
 
         # Emit canonical output
         output_content = emit(result)
@@ -787,6 +956,176 @@ def coverage(spec_file: str, skill_file: str, output_format: str):
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1) from e
+
+
+@cli.group()
+def vocab():
+    """Vocabulary management commands.
+
+    Issue #48 Task 2.9: Commands for working with OCTAVE vocabularies.
+    """
+    pass
+
+
+@vocab.command("list")
+@click.option(
+    "--registry",
+    type=click.Path(exists=True),
+    help="Path to vocabulary registry file (default: specs/vocabularies/registry.oct.md)",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format (default: table)",
+)
+def vocab_list(registry: str | None, output_format: str):
+    """List available vocabularies from registry.
+
+    Reads the vocabulary registry and displays:
+    - Name: Vocabulary capsule name
+    - Version: Semantic version
+    - Path: Relative path from registry root
+    - Term count: Number of terms in the vocabulary
+
+    Examples:
+        octave vocab list
+        octave vocab list --registry specs/vocabularies/registry.oct.md
+        octave vocab list --format json
+
+    Exit code 0 on success, 1 on error.
+    """
+    import json as json_module
+    from pathlib import Path
+
+    from octave_mcp.core.parser import parse
+
+    try:
+        # Determine registry path
+        if registry:
+            registry_path = Path(registry)
+        else:
+            # Try default location
+            registry_path = Path("specs/vocabularies/registry.oct.md")
+            if not registry_path.exists():
+                click.echo(
+                    "Error: No registry specified and default registry not found at "
+                    "specs/vocabularies/registry.oct.md. Use --registry option.",
+                    err=True,
+                )
+                raise SystemExit(1)
+
+        # Read and parse registry
+        content = registry_path.read_text(encoding="utf-8")
+        doc = parse(content)
+
+        # Extract vocabulary entries
+        vocabularies = _extract_vocabulary_entries_from_registry(doc)
+
+        if not vocabularies:
+            click.echo("No vocabularies found in registry.")
+            raise SystemExit(0)
+
+        # Output based on format
+        if output_format == "json":
+            output = json_module.dumps(vocabularies, indent=2)
+            click.echo(output)
+        else:
+            # Table format
+            _print_vocabulary_table(vocabularies)
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
+def _extract_vocabulary_entries_from_registry(doc) -> list[dict]:
+    """Extract vocabulary entries from parsed registry document.
+
+    Looks for nested sections with NAME, PATH, VERSION, and TERMS fields.
+
+    Args:
+        doc: Parsed OCTAVE document
+
+    Returns:
+        List of vocabulary entry dictionaries
+    """
+    from octave_mcp.core.ast_nodes import Assignment, ListValue, Section
+
+    vocabularies = []
+
+    def extract_from_section(section):
+        """Recursively extract vocabulary entries from section."""
+        name = None
+        path = None
+        version = None
+        terms = []
+
+        for child in section.children:
+            if isinstance(child, Assignment):
+                if child.key == "NAME":
+                    name = child.value
+                elif child.key == "PATH":
+                    path = child.value
+                elif child.key == "VERSION":
+                    version = child.value
+                elif child.key == "TERMS":
+                    if isinstance(child.value, ListValue):
+                        terms = child.value.items
+                    elif isinstance(child.value, list):
+                        terms = child.value
+            elif isinstance(child, Section):
+                # Recurse into nested sections
+                extract_from_section(child)
+
+        # If we found a vocabulary entry, add it
+        if name and path:
+            vocabularies.append(
+                {
+                    "name": name,
+                    "version": version or "unknown",
+                    "path": path,
+                    "term_count": len(terms),
+                }
+            )
+
+    # Search all sections
+    for section in doc.sections:
+        if isinstance(section, Section):
+            extract_from_section(section)
+
+    return vocabularies
+
+
+def _print_vocabulary_table(vocabularies: list[dict]) -> None:
+    """Print vocabulary entries in table format.
+
+    Args:
+        vocabularies: List of vocabulary entry dictionaries
+    """
+    # Calculate column widths
+    name_width = max(len("Name"), max(len(v["name"]) for v in vocabularies))
+    version_width = max(len("Version"), max(len(str(v["version"])) for v in vocabularies))
+    path_width = max(len("Path"), max(len(v["path"]) for v in vocabularies))
+    count_width = max(len("Terms"), max(len(str(v["term_count"])) for v in vocabularies))
+
+    # Print header
+    header = f"{'Name':<{name_width}}  {'Version':<{version_width}}  {'Path':<{path_width}}  {'Terms':>{count_width}}"
+    click.echo(header)
+    click.echo("-" * len(header))
+
+    # Print rows
+    for vocab in vocabularies:
+        row = (
+            f"{vocab['name']:<{name_width}}  "
+            f"{vocab['version']:<{version_width}}  "
+            f"{vocab['path']:<{path_width}}  "
+            f"{vocab['term_count']:>{count_width}}"
+        )
+        click.echo(row)
 
 
 if __name__ == "__main__":

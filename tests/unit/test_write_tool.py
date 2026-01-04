@@ -664,10 +664,9 @@ class TestWriteToolI5SchemaSovereignty:
             )
 
             # Value must not be the silent PENDING_INFRASTRUCTURE placeholder
-            assert result["validation_status"] != "PENDING_INFRASTRUCTURE", (
-                "I5 violation: PENDING_INFRASTRUCTURE is a silent bypass. "
-                "Must use UNVALIDATED to make bypass visible."
-            )
+            assert (
+                result["validation_status"] != "PENDING_INFRASTRUCTURE"
+            ), "I5 violation: PENDING_INFRASTRUCTURE is a silent bypass. Must use UNVALIDATED to make bypass visible."
 
 
 class TestWriteToolSchemaValidation:

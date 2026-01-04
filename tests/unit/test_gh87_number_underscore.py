@@ -256,9 +256,9 @@ a::123_suffix
             w for w in warnings if w.get("type") == "lenient_parse" and w.get("subtype") == "multi_word_coalesce"
         ]
 
-        assert len(coalesce_warnings) >= 1, (
-            f"Expected I4 audit warning for NUMBER+IDENTIFIER coalescing. " f"Got warnings: {warnings}"
-        )
+        assert (
+            len(coalesce_warnings) >= 1
+        ), f"Expected I4 audit warning for NUMBER+IDENTIFIER coalescing. Got warnings: {warnings}"
 
         warning = coalesce_warnings[0]
         # Warning should capture both parts

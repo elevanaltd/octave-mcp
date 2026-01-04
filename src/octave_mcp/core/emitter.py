@@ -72,7 +72,7 @@ def emit_value(value: Any) -> str:
     if isinstance(value, Absent):
         # I2: Absent is NOT the same as null
         # Raise to catch caller bugs - Absent should be filtered BEFORE emit_value
-        raise ValueError("Absent value passed to emit_value(). " "I2 requires filtering Absent before emission.")
+        raise ValueError("Absent value passed to emit_value(). I2 requires filtering Absent before emission.")
     if value is None:
         return "null"
     elif isinstance(value, bool):

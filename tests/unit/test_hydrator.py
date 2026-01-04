@@ -776,6 +776,1085 @@ def _create_test_registry_with_version():
     )
 
 
+class TestStalenessDetection:
+    """Tests for staleness detection in hydrated documents.
+
+    TDD RED phase: Tests for check_staleness() function.
+    Issue #48 Task 2.8: octave hydrate --check staleness detection.
+
+    Note: After CE Review security fixes (Issue #48 Phase 2-3), SOURCE_URI
+    must use relative paths. Tests use relative paths from a controlled base.
+    """
+
+    def test_check_staleness_returns_fresh_when_hash_matches(self):
+        """Should return FRESH status when source hash matches manifest."""
+        import os
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        # Security: Use relative path from a temp directory with a copy of the vocab
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            # Copy vocabulary to temp dir
+            vocab_source = FIXTURES_DIR / "vocabulary.oct.md"
+            vocab_copy = base / "vocabulary.oct.md"
+            vocab_copy.write_text(vocab_source.read_text())
+            vocab_hash = compute_vocabulary_hash(vocab_copy)
+
+            # Use relative path in manifest
+            hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter of the Greek alphabet"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"vocabulary.oct.md"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+  REQUESTED_VERSION::"unspecified"
+  RESOLVED_VERSION::"1.0.0"
+
+===END===
+"""
+
+            # Change to temp directory so relative path resolves correctly
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                doc = parse(hydrated_content)
+                results = check_staleness(doc)
+
+                assert len(results) == 1
+                assert results[0].status == "FRESH"
+                assert results[0].namespace == "@test/vocabulary"
+                assert results[0].expected_hash == vocab_hash
+                assert results[0].actual_hash == vocab_hash
+            finally:
+                os.chdir(original_cwd)
+
+    def test_check_staleness_returns_stale_when_hash_differs(self):
+        """Should return STALE status when source hash doesn't match manifest."""
+        import os
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+        # Security: Use relative path from a temp directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            # Copy vocabulary to temp dir
+            vocab_source = FIXTURES_DIR / "vocabulary.oct.md"
+            vocab_copy = base / "vocabulary.oct.md"
+            vocab_copy.write_text(vocab_source.read_text())
+
+            hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter of the Greek alphabet"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"vocabulary.oct.md"
+  SOURCE_HASH::"{fake_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+  REQUESTED_VERSION::"unspecified"
+  RESOLVED_VERSION::"1.0.0"
+
+===END===
+"""
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                doc = parse(hydrated_content)
+                results = check_staleness(doc)
+
+                assert len(results) == 1
+                assert results[0].status == "STALE"
+                assert results[0].namespace == "@test/vocabulary"
+                assert results[0].expected_hash == fake_hash
+                assert results[0].actual_hash != fake_hash
+            finally:
+                os.chdir(original_cwd)
+
+    def test_check_staleness_handles_missing_source_file(self):
+        """Should return ERROR status when source file no longer exists."""
+        import os
+        import tempfile
+
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        # Use relative path (security-compliant) to a non-existent file
+        hydrated_content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter of the Greek alphabet"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"nonexistent_vocab.oct.md"
+  SOURCE_HASH::"sha256:abcd1234"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        # Run from a temp directory where the file doesn't exist
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                doc = parse(hydrated_content)
+                results = check_staleness(doc)
+
+                assert len(results) == 1
+                assert results[0].status == "ERROR"
+                assert "not found" in results[0].error.lower()
+            finally:
+                os.chdir(original_cwd)
+
+    def test_check_staleness_handles_multiple_snapshots(self):
+        """Should check staleness for all SNAPSHOT manifests in document."""
+        import os
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+        # Security: Use relative paths from a temp directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            # Copy vocabulary to temp dir
+            vocab_source = FIXTURES_DIR / "vocabulary.oct.md"
+            vocab_copy = base / "vocabulary.oct.md"
+            vocab_copy.write_text(vocab_source.read_text())
+            vocab_hash = compute_vocabulary_hash(vocab_copy)
+
+            # Document with two snapshots - one fresh, one stale
+            hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"vocabulary.oct.md"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+§CONTEXT::SNAPSHOT["@test/other"]
+  BETA::"Second letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"vocabulary.oct.md"
+  SOURCE_HASH::"{fake_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                doc = parse(hydrated_content)
+                results = check_staleness(doc)
+
+                assert len(results) == 2
+                statuses = {r.namespace: r.status for r in results}
+                assert statuses.get("@test/vocabulary") == "FRESH"
+                assert statuses.get("@test/other") == "STALE"
+            finally:
+                os.chdir(original_cwd)
+
+    def test_check_staleness_returns_empty_for_non_hydrated_document(self):
+        """Should return empty list for document without SNAPSHOT sections."""
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        content = """===DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§1::CONTENT
+  KEY::"value"
+
+===END===
+"""
+
+        doc = parse(content)
+        results = check_staleness(doc)
+
+        assert len(results) == 0
+
+    def test_staleness_result_dataclass(self):
+        """StalenessResult should have correct fields."""
+        from octave_mcp.core.hydrator import StalenessResult
+
+        result = StalenessResult(
+            namespace="@test/vocab",
+            status="FRESH",
+            expected_hash="sha256:abc",
+            actual_hash="sha256:abc",
+        )
+
+        assert result.namespace == "@test/vocab"
+        assert result.status == "FRESH"
+        assert result.expected_hash == "sha256:abc"
+        assert result.actual_hash == "sha256:abc"
+        assert result.error is None
+
+    def test_staleness_result_with_error(self):
+        """StalenessResult should support error field."""
+        from octave_mcp.core.hydrator import StalenessResult
+
+        result = StalenessResult(
+            namespace="@test/vocab",
+            status="ERROR",
+            expected_hash="sha256:abc",
+            actual_hash=None,
+            error="File not found",
+        )
+
+        assert result.status == "ERROR"
+        assert result.error == "File not found"
+
+
+class TestSourceUriSecurityValidation:
+    """Tests for SOURCE_URI security validation.
+
+    Issue #48 CE Review BLOCKING: Prevent path traversal attacks via SOURCE_URI.
+    A malicious document could use absolute paths like /etc/passwd,
+    path traversal like ../../../sensitive/file, or symlinks to sensitive locations.
+
+    TDD RED phase: Tests for _validate_source_uri() function.
+    """
+
+    def test_validate_source_uri_rejects_absolute_path(self):
+        """Should reject absolute paths like /etc/passwd.
+
+        Note: validate_source_uri is for validating relative paths that should
+        stay within a base directory. Absolute paths bypass this model entirely.
+        """
+        from octave_mcp.core.hydrator import SourceUriSecurityError, validate_source_uri
+
+        with pytest.raises(SourceUriSecurityError, match="absolute"):
+            validate_source_uri("/etc/passwd", base_path=Path("/tmp/registry"))
+
+    def test_validate_source_uri_rejects_path_traversal(self):
+        """Should reject path traversal patterns like ../../../sensitive.
+
+        Issue #48 CE Review FIX: validate_source_uri now allows ".." patterns
+        but rejects them if the resolved path is OUTSIDE the base directory.
+        The error message says "outside allowed directory" not "traversal".
+        """
+        from octave_mcp.core.hydrator import SourceUriSecurityError, validate_source_uri
+
+        with pytest.raises(SourceUriSecurityError, match="outside"):
+            validate_source_uri(
+                "../../../etc/passwd",
+                base_path=Path("/tmp/registry"),
+            )
+
+    def test_validate_source_uri_rejects_hidden_traversal(self):
+        """Should reject hidden traversal patterns like vocab/../../etc/passwd.
+
+        Issue #48 CE Review FIX: validate_source_uri now allows ".." patterns
+        but rejects them if the resolved path is OUTSIDE the base directory.
+        """
+        from octave_mcp.core.hydrator import SourceUriSecurityError, validate_source_uri
+
+        with pytest.raises(SourceUriSecurityError, match="outside"):
+            validate_source_uri(
+                "vocab/../../etc/passwd",
+                base_path=Path("/tmp/registry"),
+            )
+
+    def test_validate_source_uri_allows_relative_path_within_base(self):
+        """Should allow relative paths that stay within base directory."""
+        from octave_mcp.core.hydrator import validate_source_uri
+
+        # Use actual fixtures directory as base
+        result = validate_source_uri(
+            "vocabulary.oct.md",
+            base_path=FIXTURES_DIR,
+        )
+
+        assert result == FIXTURES_DIR / "vocabulary.oct.md"
+
+    def test_validate_source_uri_allows_nested_relative_path(self):
+        """Should allow nested relative paths within base."""
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import validate_source_uri
+
+        # Create nested temp structure
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            nested = base / "subdir" / "vocab.oct.md"
+            nested.parent.mkdir(parents=True)
+            nested.write_text("test content")
+
+            result = validate_source_uri(
+                "subdir/vocab.oct.md",
+                base_path=base,
+            )
+
+            # Compare resolved paths (macOS /var -> /private/var symlink)
+            assert result.resolve() == nested.resolve()
+
+    def test_validate_source_uri_rejects_symlink_escape(self):
+        """Should reject symlinks that point outside base directory.
+
+        Note: This test creates a symlink to /etc/passwd to verify
+        that symlinks are properly resolved and rejected.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import SourceUriSecurityError, validate_source_uri
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            symlink = base / "malicious_link"
+
+            # Create symlink to /etc/passwd (or any file outside base)
+            symlink.symlink_to("/etc/passwd")
+
+            with pytest.raises(SourceUriSecurityError, match="outside"):
+                validate_source_uri(
+                    "malicious_link",
+                    base_path=base,
+                )
+
+    def test_check_staleness_returns_error_for_path_traversal(self):
+        """Should return ERROR StalenessResult for malicious SOURCE_URI.
+
+        Issue #48 CE Review FIX: _check_single_snapshot now allows ".." patterns
+        for cross-directory layouts. The path traversal is rejected because:
+        1. The file doesn't exist, OR
+        2. A security check catches the escape (for strict validation)
+
+        Either way, the staleness check returns ERROR status.
+        """
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        # Malicious document with path traversal in SOURCE_URI
+        malicious_content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"../../../etc/passwd"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        doc = parse(malicious_content)
+        results = check_staleness(doc)
+
+        assert len(results) == 1
+        assert results[0].status == "ERROR"
+        # Error can be "file not found" (file doesn't exist) or security-related
+        error_lower = results[0].error.lower()
+        assert any(
+            keyword in error_lower for keyword in ["not found", "security", "outside"]
+        ), f"Error should indicate file not found or security issue, got: {results[0].error}"
+
+    def test_check_staleness_rejects_absolute_path(self):
+        """Should reject absolute paths in SOURCE_URI with ERROR status.
+
+        Security model (Debate Decision): Absolute paths are FORBIDDEN in
+        SOURCE_URI for unified security model with validate_source_uri().
+        Error messages should not echo the raw absolute path.
+        """
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        # Document with absolute path in SOURCE_URI (now rejected)
+        content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"/etc/passwd"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        doc = parse(content)
+        results = check_staleness(doc)
+
+        assert len(results) == 1
+        assert results[0].status == "ERROR"
+        # Error message should mention security but NOT echo the raw path
+        assert "absolute" in results[0].error.lower() or "security" in results[0].error.lower()
+        # Should NOT contain the actual path (security: don't echo)
+        assert "/etc/passwd" not in results[0].error
+
+    def test_check_staleness_works_with_relative_path(self):
+        """Should correctly handle relative paths in SOURCE_URI.
+
+        This confirms relative paths still work after the absolute path
+        prohibition - the intended behavior for trusted hydration.
+        """
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        # Use a real file that exists (vocabulary fixture)
+        vocab_path = FIXTURES_DIR / "vocabulary.oct.md"
+        vocab_hash = compute_vocabulary_hash(vocab_path)
+
+        # Calculate relative path from cwd to fixture
+        cwd = Path.cwd()
+        try:
+            rel_path = vocab_path.relative_to(cwd)
+        except ValueError:
+            # If can't make relative, skip this test
+            pytest.skip("Cannot create relative path from cwd to fixture")
+
+        # Document with relative path in SOURCE_URI (allowed)
+        content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{rel_path}"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        doc = parse(content)
+        results = check_staleness(doc)
+
+        assert len(results) == 1
+        assert results[0].status == "FRESH"  # File exists and hash matches
+
+
+class TestMalformedManifestHandling:
+    """Tests for handling malformed MANIFEST sections.
+
+    Issue #48 CE Review BLOCKING: Emit explicit ERROR for malformed manifests
+    instead of silently skipping them.
+
+    TDD RED phase: Tests for malformed manifest detection.
+    """
+
+    def test_check_staleness_returns_error_for_missing_source_uri(self):
+        """Should return ERROR when MANIFEST is missing SOURCE_URI."""
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        doc = parse(content)
+        results = check_staleness(doc)
+
+        # Should report error, not silently skip
+        assert len(results) == 1
+        assert results[0].status == "ERROR"
+        assert "SOURCE_URI" in results[0].error or "missing" in results[0].error.lower()
+
+    def test_check_staleness_returns_error_for_missing_source_hash(self):
+        """Should return ERROR when MANIFEST is missing SOURCE_HASH."""
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        vocab_path = FIXTURES_DIR / "vocabulary.oct.md"
+
+        content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{vocab_path}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        doc = parse(content)
+        results = check_staleness(doc)
+
+        # Should report error, not silently skip
+        assert len(results) == 1
+        assert results[0].status == "ERROR"
+        assert "SOURCE_HASH" in results[0].error or "missing" in results[0].error.lower()
+
+    def test_check_staleness_returns_error_for_empty_source_uri(self):
+        """Should return ERROR when SOURCE_URI is empty string."""
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::""
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        doc = parse(content)
+        results = check_staleness(doc)
+
+        # Should report error for empty SOURCE_URI
+        assert len(results) == 1
+        assert results[0].status == "ERROR"
+        assert "empty" in results[0].error.lower() or "SOURCE_URI" in results[0].error
+
+    def test_check_staleness_reports_all_malformed_manifests(self):
+        """Should report errors for ALL malformed manifests in document."""
+        import tempfile
+
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        # Use a temporary directory to create test content
+        with tempfile.TemporaryDirectory() as tmpdir:
+            content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocab1"]
+  ALPHA::"First"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_HASH::"sha256:abc123"
+
+§CONTEXT::SNAPSHOT["@test/vocab2"]
+  BETA::"Second"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{tmpdir}/vocab.oct.md"
+
+===END===
+"""
+
+            doc = parse(content)
+            results = check_staleness(doc)
+
+            # Should have two ERROR results, not silently skip
+            assert len(results) == 2
+            assert all(r.status == "ERROR" for r in results)
+
+
+class TestCrossDirectoryLayout:
+    """Tests for cross-directory vocabulary layouts.
+
+    Issue #48 CE Review: hydrate() generates `../` in SOURCE_URI when vocab is
+    in a different directory than the output file. The staleness check must
+    accept these paths (via validate_source_uri resolution) while still
+    rejecting actual path traversal attacks.
+
+    Test case: vocab in `specs/`, output in `docs/`, verify --check works.
+    """
+
+    def test_cross_directory_hydration_and_staleness_check(self):
+        """Should handle cross-directory layouts: vocab in specs/, output in docs/.
+
+        This is the critical integration test for Issue #48 CE Review fix.
+        The hydrate() function generates SOURCE_URI like "../specs/vocab.oct.md"
+        when the output is in a different directory. The staleness check MUST
+        accept this path (it's within the project) and verify the hash.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.emitter import emit
+        from octave_mcp.core.hydrator import (
+            HydrationPolicy,
+            VocabularyRegistry,
+            check_staleness,
+            hydrate,
+        )
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create cross-directory structure:
+            # project/
+            #   specs/vocabulary.oct.md  <-- vocab file
+            #   docs/output.oct.md       <-- hydrated output
+            specs_dir = base / "specs"
+            docs_dir = base / "docs"
+            specs_dir.mkdir()
+            docs_dir.mkdir()
+
+            # Create vocabulary in specs/
+            vocab_path = specs_dir / "vocabulary.oct.md"
+            vocab_path.write_text(
+                """===VOCAB===
+META:
+  TYPE::"CAPSULE"
+  VERSION::"1.0.0"
+
+§1::TERMS
+  ALPHA::"First term"
+  BETA::"Second term"
+
+===END===
+"""
+            )
+
+            # Create source document (will import the vocabulary)
+            source_path = base / "source.oct.md"
+            source_path.write_text(
+                """===SOURCE===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::IMPORT["@test/vocabulary"]
+
+§1::CONTENT
+  REF::"Uses ALPHA term"
+
+===END===
+"""
+            )
+
+            # Create registry pointing to vocab in specs/
+            registry = VocabularyRegistry.from_mappings({"@test/vocabulary": vocab_path})
+            policy = HydrationPolicy()
+
+            # Hydrate with output_path in docs/
+            output_path = docs_dir / "output.oct.md"
+            result = hydrate(source_path, registry, policy, output_path=output_path)
+
+            # Emit to output file
+            output_content = emit(result)
+            output_path.write_text(output_content)
+
+            # Verify SOURCE_URI contains relative path with ".."
+            # (this is the path from docs/ to specs/)
+            manifest = _find_manifest_section(result)
+            source_uri = _get_field_value(manifest, "SOURCE_URI")
+            assert source_uri is not None, "SOURCE_URI should be present in manifest"
+            assert ".." in source_uri, f"SOURCE_URI should contain '..' for cross-directory: {source_uri}"
+
+            # THE CRITICAL TEST: staleness check should work with the cross-directory path
+            # This is where the old code FAILED - it rejected ALL ".." patterns
+            # Issue #48 CE Security Fix: Pass allowed_root=base (project root) to allow
+            # cross-directory access within the project
+            hydrated_doc = parse(output_content)
+            results = check_staleness(hydrated_doc, base_path=docs_dir, allowed_root=base)
+
+            assert len(results) == 1, "Should have one staleness result"
+            assert results[0].status == "FRESH", (
+                f"Cross-directory staleness check should return FRESH, got {results[0].status}. "
+                f"Error: {results[0].error}"
+            )
+
+    def test_cross_directory_rejects_escape_attempt(self):
+        """Should reject path traversal that escapes the project directory.
+
+        Even with the fix allowing `../` paths, we must still reject paths
+        that resolve to non-existent files or security violations.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            project_dir = base / "project"
+            project_dir.mkdir()
+
+            # Malicious document trying to escape project directory
+            # Even though ../../../etc/passwd uses "..", it should fail
+            # because the path either doesn't exist or is blocked by security
+            malicious_content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"../../../etc/passwd"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(malicious_content)
+            results = check_staleness(doc, base_path=project_dir)
+
+            assert len(results) == 1
+            assert results[0].status == "ERROR", "Should reject path that escapes base directory"
+            # Error should be either:
+            # - "file not found" (path resolves but doesn't exist)
+            # - "security" (blocked by security check)
+            # Both are acceptable - the key is that it fails with ERROR
+            error_lower = results[0].error.lower()
+            assert any(
+                keyword in error_lower for keyword in ["not found", "security", "outside"]
+            ), f"Error should mention 'not found', 'security', or 'outside', got: {results[0].error}"
+
+    def test_cross_directory_within_project_is_allowed(self):
+        """Should allow `../sibling/` paths that stay within base directory.
+
+        This tests the valid use case: different directories within the same project.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create sibling directories within the project
+            # project/
+            #   specs/vocab.oct.md
+            #   docs/  <-- base_path for staleness check
+            specs_dir = base / "specs"
+            docs_dir = base / "docs"
+            specs_dir.mkdir()
+            docs_dir.mkdir()
+
+            # Create vocab file
+            vocab_path = specs_dir / "vocab.oct.md"
+            vocab_path.write_text("test vocabulary content")
+            vocab_hash = compute_vocabulary_hash(vocab_path)
+
+            # Document with SOURCE_URI pointing to sibling directory
+            # From docs/, ../specs/vocab.oct.md resolves to specs/vocab.oct.md
+            # which is a valid cross-directory reference
+            content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"../specs/vocab.oct.md"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(content)
+            # Use docs_dir as base_path (simulating running staleness check from docs/)
+            # Use base as allowed_root (the project root that contains both specs/ and docs/)
+            # Issue #48 CE Security Fix: allowed_root must encompass all cross-directory paths
+            results = check_staleness(doc, base_path=docs_dir, allowed_root=base)
+
+            assert len(results) == 1
+            assert results[0].status == "FRESH", (
+                f"Should allow sibling directory access within project. " f"Error: {results[0].error}"
+            )
+
+
+class TestPostResolutionContainment:
+    """Tests for post-resolution path containment enforcement.
+
+    Issue #48 CE Security Fix: After resolving a path (with ..), verify
+    the resolved path stays within the allowed_root directory.
+
+    This prevents path traversal attacks where a crafted SOURCE_URI like
+    "../../../../../../../etc/passwd" could escape the project directory.
+    """
+
+    def test_escape_attempt_via_traversal_blocked(self):
+        """Should return ERROR for path traversal that escapes allowed_root.
+
+        CRITICAL REGRESSION TEST: This is the exact vulnerability CE identified.
+        A crafted SOURCE_URI with enough "../" components could escape the project
+        and access sensitive files like /etc/passwd.
+
+        The fix: After resolving the path, check that it's still within allowed_root.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create project structure
+            project_dir = base / "project"
+            docs_dir = project_dir / "docs"
+            docs_dir.mkdir(parents=True)
+
+            # Dynamically compute how many "../" are needed to escape to /etc/passwd
+            # This makes the test work regardless of directory depth
+            # For example, if project is at /tmp/xyz/project/docs, we need enough
+            # "../" to get to / and then navigate to etc/passwd
+            docs_resolved = docs_dir.resolve()
+            depth_to_root = len(docs_resolved.parts) - 1  # -1 for root itself
+            traversal_path = "../" * depth_to_root + "etc/passwd"
+
+            # Create malicious document with escape attempt
+            content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{traversal_path}"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(content)
+
+            # allowed_root is the PROJECT directory (parent of docs)
+            # The resolved path (../../../.../etc/passwd) escapes project_dir
+            # So it MUST be rejected even though the file might exist
+            results = check_staleness(doc, base_path=docs_dir, allowed_root=project_dir)
+
+            assert len(results) == 1
+            assert results[0].status == "ERROR", (
+                f"Escape attempt should return ERROR, got {results[0].status}. " f"Error: {results[0].error}"
+            )
+            # Error should mention security violation
+            error_lower = results[0].error.lower()
+            assert (
+                "security" in error_lower or "escapes" in error_lower or "outside" in error_lower
+            ), f"Error should mention security violation, got: {results[0].error}"
+
+    def test_cross_directory_within_allowed_root_allowed(self):
+        """Should allow cross-directory paths that stay within allowed_root.
+
+        This ensures the fix doesn't break legitimate cross-directory layouts
+        where vocab is in specs/ and output is in docs/, both within project/.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Project structure with allowed cross-directory layout:
+            # project/
+            #   specs/vocab.oct.md
+            #   docs/  <-- base_path for staleness check
+            project_dir = base / "project"
+            specs_dir = project_dir / "specs"
+            docs_dir = project_dir / "docs"
+            specs_dir.mkdir(parents=True)
+            docs_dir.mkdir(parents=True)
+
+            # Create vocab file
+            vocab_path = specs_dir / "vocab.oct.md"
+            vocab_path.write_text("test vocabulary content")
+            vocab_hash = compute_vocabulary_hash(vocab_path)
+
+            # Cross-directory path: from docs/, go up to project/, then into specs/
+            content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"../specs/vocab.oct.md"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(content)
+
+            # base_path is docs/, allowed_root is project/
+            # The resolved path (project/specs/vocab.oct.md) is within project/
+            # So it should be allowed
+            results = check_staleness(doc, base_path=docs_dir, allowed_root=project_dir)
+
+            assert len(results) == 1
+            assert results[0].status == "FRESH", (
+                f"Cross-directory within allowed_root should work. " f"Error: {results[0].error}"
+            )
+
+    def test_allowed_root_defaults_to_base_path(self):
+        """When allowed_root is not specified, should use base_path as default.
+
+        This maintains backwards compatibility and ensures existing behavior
+        where base_path was the only containment check still works.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create vocab in the same directory (no cross-directory)
+            vocab_path = base / "vocab.oct.md"
+            vocab_path.write_text("test vocabulary content")
+            vocab_hash = compute_vocabulary_hash(vocab_path)
+
+            content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"vocab.oct.md"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(content)
+
+            # Don't pass allowed_root - it should default to base_path
+            results = check_staleness(doc, base_path=base)
+
+            assert len(results) == 1
+            assert results[0].status == "FRESH", f"Default allowed_root should work. Error: {results[0].error}"
+
+    def test_escape_attempt_blocked_even_when_file_exists(self):
+        """Should block escape even if the target file exists.
+
+        This is critical: the old code would allow access if the file existed.
+        The new code must block access based on containment, not file existence.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create project structure
+            project_dir = base / "project"
+            docs_dir = project_dir / "docs"
+            docs_dir.mkdir(parents=True)
+
+            # Create a file OUTSIDE the project that we try to access
+            outside_file = base / "sensitive.txt"
+            outside_file.write_text("sensitive data")
+
+            # Create malicious document trying to escape to parent directory
+            # ../sensitive.txt from project/docs/ goes to project/../sensitive.txt = base/sensitive.txt
+            # which is OUTSIDE project_dir
+            content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"../../sensitive.txt"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(content)
+
+            # allowed_root is project_dir
+            # The resolved path (base/sensitive.txt) escapes project_dir
+            # MUST be rejected even though the file exists
+            results = check_staleness(doc, base_path=docs_dir, allowed_root=project_dir)
+
+            assert len(results) == 1
+            assert results[0].status == "ERROR", (
+                f"Should block escape even when file exists. Got: {results[0].status}. " f"Error: {results[0].error}"
+            )
+
+
 class TestHashComputation:
     """Tests for vocabulary hash computation."""
 
