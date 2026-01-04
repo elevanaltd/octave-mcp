@@ -574,6 +574,27 @@ class TestVersionTokenization:
         assert len(version_tokens) == 1, f"Expected 1 VERSION token, got {len(version_tokens)}"
         assert version_tokens[0].value == "1.0.0-beta-1"
 
+    def test_standalone_version_in_list(self):
+        """Should tokenize standalone versions in generic contexts (e.g. lists)."""
+        # Verifies regex priority works for 1.2.3 without 'VERSION::' prefix
+        tokens, _ = tokenize("[1.2.3, 2.0.0]")
+
+        # Find VERSION tokens (skip LIST_START, COMMA, LIST_END)
+        version_tokens = [t for t in tokens if t.type == TokenType.VERSION]
+        assert len(version_tokens) == 2
+        assert version_tokens[0].value == "1.2.3"
+        assert version_tokens[1].value == "2.0.0"
+
+    def test_version_in_dependency_value(self):
+        """VERSION tokens should work in dependency specifications."""
+        tokens, _ = tokenize("DEPENDENCY::package 1.2.3")
+
+        # Should have IDENTIFIER, ASSIGN, IDENTIFIER, VERSION
+        relevant = [t for t in tokens if t.type not in (TokenType.EOF, TokenType.NEWLINE)]
+        assert len(relevant) == 4
+        assert relevant[3].type == TokenType.VERSION
+        assert relevant[3].value == "1.2.3"
+
 
 class TestGrammarSentinelScoping:
     """Test GRAMMAR_SENTINEL scope restriction to prevent silent data loss.
