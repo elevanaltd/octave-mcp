@@ -1501,8 +1501,10 @@ META:
 
             # THE CRITICAL TEST: staleness check should work with the cross-directory path
             # This is where the old code FAILED - it rejected ALL ".." patterns
+            # Issue #48 CE Security Fix: Pass allowed_root=base (project root) to allow
+            # cross-directory access within the project
             hydrated_doc = parse(output_content)
-            results = check_staleness(hydrated_doc, base_path=docs_dir)
+            results = check_staleness(hydrated_doc, base_path=docs_dir, allowed_root=base)
 
             assert len(results) == 1, "Should have one staleness result"
             assert results[0].status == "FRESH", (
@@ -1609,12 +1611,247 @@ META:
 
             doc = parse(content)
             # Use docs_dir as base_path (simulating running staleness check from docs/)
-            # The path ../specs/vocab.oct.md should resolve correctly
-            results = check_staleness(doc, base_path=docs_dir)
+            # Use base as allowed_root (the project root that contains both specs/ and docs/)
+            # Issue #48 CE Security Fix: allowed_root must encompass all cross-directory paths
+            results = check_staleness(doc, base_path=docs_dir, allowed_root=base)
 
             assert len(results) == 1
             assert results[0].status == "FRESH", (
                 f"Should allow sibling directory access within project. " f"Error: {results[0].error}"
+            )
+
+
+class TestPostResolutionContainment:
+    """Tests for post-resolution path containment enforcement.
+
+    Issue #48 CE Security Fix: After resolving a path (with ..), verify
+    the resolved path stays within the allowed_root directory.
+
+    This prevents path traversal attacks where a crafted SOURCE_URI like
+    "../../../../../../../etc/passwd" could escape the project directory.
+    """
+
+    def test_escape_attempt_via_traversal_blocked(self):
+        """Should return ERROR for path traversal that escapes allowed_root.
+
+        CRITICAL REGRESSION TEST: This is the exact vulnerability CE identified.
+        A crafted SOURCE_URI with enough "../" components could escape the project
+        and access sensitive files like /etc/passwd.
+
+        The fix: After resolving the path, check that it's still within allowed_root.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create project structure
+            project_dir = base / "project"
+            docs_dir = project_dir / "docs"
+            docs_dir.mkdir(parents=True)
+
+            # Dynamically compute how many "../" are needed to escape to /etc/passwd
+            # This makes the test work regardless of directory depth
+            # For example, if project is at /tmp/xyz/project/docs, we need enough
+            # "../" to get to / and then navigate to etc/passwd
+            docs_resolved = docs_dir.resolve()
+            depth_to_root = len(docs_resolved.parts) - 1  # -1 for root itself
+            traversal_path = "../" * depth_to_root + "etc/passwd"
+
+            # Create malicious document with escape attempt
+            content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{traversal_path}"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(content)
+
+            # allowed_root is the PROJECT directory (parent of docs)
+            # The resolved path (../../../.../etc/passwd) escapes project_dir
+            # So it MUST be rejected even though the file might exist
+            results = check_staleness(doc, base_path=docs_dir, allowed_root=project_dir)
+
+            assert len(results) == 1
+            assert results[0].status == "ERROR", (
+                f"Escape attempt should return ERROR, got {results[0].status}. " f"Error: {results[0].error}"
+            )
+            # Error should mention security violation
+            error_lower = results[0].error.lower()
+            assert (
+                "security" in error_lower or "escapes" in error_lower or "outside" in error_lower
+            ), f"Error should mention security violation, got: {results[0].error}"
+
+    def test_cross_directory_within_allowed_root_allowed(self):
+        """Should allow cross-directory paths that stay within allowed_root.
+
+        This ensures the fix doesn't break legitimate cross-directory layouts
+        where vocab is in specs/ and output is in docs/, both within project/.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Project structure with allowed cross-directory layout:
+            # project/
+            #   specs/vocab.oct.md
+            #   docs/  <-- base_path for staleness check
+            project_dir = base / "project"
+            specs_dir = project_dir / "specs"
+            docs_dir = project_dir / "docs"
+            specs_dir.mkdir(parents=True)
+            docs_dir.mkdir(parents=True)
+
+            # Create vocab file
+            vocab_path = specs_dir / "vocab.oct.md"
+            vocab_path.write_text("test vocabulary content")
+            vocab_hash = compute_vocabulary_hash(vocab_path)
+
+            # Cross-directory path: from docs/, go up to project/, then into specs/
+            content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"../specs/vocab.oct.md"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(content)
+
+            # base_path is docs/, allowed_root is project/
+            # The resolved path (project/specs/vocab.oct.md) is within project/
+            # So it should be allowed
+            results = check_staleness(doc, base_path=docs_dir, allowed_root=project_dir)
+
+            assert len(results) == 1
+            assert results[0].status == "FRESH", (
+                f"Cross-directory within allowed_root should work. " f"Error: {results[0].error}"
+            )
+
+    def test_allowed_root_defaults_to_base_path(self):
+        """When allowed_root is not specified, should use base_path as default.
+
+        This maintains backwards compatibility and ensures existing behavior
+        where base_path was the only containment check still works.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create vocab in the same directory (no cross-directory)
+            vocab_path = base / "vocab.oct.md"
+            vocab_path.write_text("test vocabulary content")
+            vocab_hash = compute_vocabulary_hash(vocab_path)
+
+            content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"vocab.oct.md"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(content)
+
+            # Don't pass allowed_root - it should default to base_path
+            results = check_staleness(doc, base_path=base)
+
+            assert len(results) == 1
+            assert results[0].status == "FRESH", f"Default allowed_root should work. Error: {results[0].error}"
+
+    def test_escape_attempt_blocked_even_when_file_exists(self):
+        """Should block escape even if the target file exists.
+
+        This is critical: the old code would allow access if the file existed.
+        The new code must block access based on containment, not file existence.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create project structure
+            project_dir = base / "project"
+            docs_dir = project_dir / "docs"
+            docs_dir.mkdir(parents=True)
+
+            # Create a file OUTSIDE the project that we try to access
+            outside_file = base / "sensitive.txt"
+            outside_file.write_text("sensitive data")
+
+            # Create malicious document trying to escape to parent directory
+            # ../sensitive.txt from project/docs/ goes to project/../sensitive.txt = base/sensitive.txt
+            # which is OUTSIDE project_dir
+            content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"../../sensitive.txt"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+            doc = parse(content)
+
+            # allowed_root is project_dir
+            # The resolved path (base/sensitive.txt) escapes project_dir
+            # MUST be rejected even though the file exists
+            results = check_staleness(doc, base_path=docs_dir, allowed_root=project_dir)
+
+            assert len(results) == 1
+            assert results[0].status == "ERROR", (
+                f"Should block escape even when file exists. Got: {results[0].status}. " f"Error: {results[0].error}"
             )
 
 

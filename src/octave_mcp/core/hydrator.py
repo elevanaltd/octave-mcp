@@ -858,20 +858,33 @@ def _create_pruned_section(pruned_terms: set[str]) -> Section:
     )
 
 
-def check_staleness(doc: Document, base_path: Path | None = None) -> list[StalenessResult]:
+def check_staleness(
+    doc: Document,
+    base_path: Path | None = None,
+    allowed_root: Path | None = None,
+) -> list[StalenessResult]:
     """Check staleness of all SNAPSHOT manifests in a hydrated document.
 
     Issue #48 Task 2.8: Staleness detection for hydrated documents.
     Issue #48 CE Review: base_path parameter for security-compliant path resolution.
+    Issue #48 CE Security Fix: allowed_root parameter for post-resolution containment.
 
     Parses the document to find §SNAPSHOT::MANIFEST sections, extracts
     SOURCE_URI and SOURCE_HASH from each, computes current hash of source
     file, and compares to determine if snapshot is stale.
 
+    Security model:
+    - Absolute paths are FORBIDDEN (rejected before resolution)
+    - Relative paths with ".." ARE ALLOWED for cross-directory layouts
+    - After resolution, path MUST be within allowed_root (containment check)
+    - This prevents crafted paths like "../../../etc/passwd" from escaping
+
     Args:
         doc: Parsed OCTAVE document (already hydrated)
         base_path: Base directory for resolving relative SOURCE_URI paths.
                    If None, uses current working directory.
+        allowed_root: Root directory for containment check. Resolved paths
+                      must be within this directory. If None, defaults to base_path.
 
     Returns:
         List of StalenessResult, one per SNAPSHOT/MANIFEST pair found.
@@ -932,11 +945,13 @@ def check_staleness(doc: Document, base_path: Path | None = None) -> list[Stalen
                     )
                 else:
                     # Check if source file exists and compute hash
+                    # Issue #48 CE Security Fix: Pass allowed_root for containment check
                     result = _check_single_snapshot(
                         namespace=namespace,
                         source_uri=source_uri,
                         expected_hash=source_hash,
                         base_path=base_path,
+                        allowed_root=allowed_root,
                     )
                     results.append(result)
 
@@ -986,26 +1001,30 @@ def _check_single_snapshot(
     source_uri: str,
     expected_hash: str,
     base_path: Path | None = None,
+    allowed_root: Path | None = None,
 ) -> StalenessResult:
     """Check staleness of a single snapshot.
 
     Issue #48 CE Review FIX: Secure path resolution for staleness checking.
+    Issue #48 CE Security Fix: Post-resolution containment enforcement.
 
     Security model for staleness checking:
     - Absolute paths are FORBIDDEN (prevents /etc/passwd style attacks)
     - Relative paths with ".." ARE ALLOWED (cross-directory layouts)
     - Path is resolved relative to base_path (follows symlinks)
+    - AFTER resolution, path MUST be within allowed_root (containment check)
     - Error messages do NOT echo raw paths (prevents information leakage)
 
     Note on ".." handling (Issue #48 CE Review FIX):
     - hydrate() generates SOURCE_URI with ".." for cross-directory layouts
       (e.g., vocab in specs/, output in docs/ -> "../specs/vocab.oct.md")
     - The old blanket rejection of ".." broke these valid workflows
-    - Security comes from rejecting absolute paths + hash verification
+    - Security now comes from: (1) rejecting absolute paths,
+      (2) post-resolution containment check, (3) hash verification
 
     Difference from validate_source_uri():
     - validate_source_uri() enforces strict base containment (for user input)
-    - _check_single_snapshot() allows cross-directory (hydrate-generated paths)
+    - _check_single_snapshot() uses allowed_root for containment (more flexible)
     - Both reject absolute paths for security
 
     Args:
@@ -1013,6 +1032,8 @@ def _check_single_snapshot(
         source_uri: Path to source file from manifest
         expected_hash: Hash stored in manifest
         base_path: Optional base path for resolving relative SOURCE_URI paths
+        allowed_root: Root directory for containment check. Resolved paths must
+                      be within this directory. If None, defaults to base_path.
 
     Returns:
         StalenessResult with FRESH, STALE, or ERROR status
@@ -1033,7 +1054,8 @@ def _check_single_snapshot(
 
     # Issue #48 CE Review FIX: Resolve path relative to base_path
     # ".." patterns ARE ALLOWED for cross-directory layouts (vocab in specs/, output in docs/)
-    # Security comes from: (1) rejecting absolute paths (2) hash verification
+    # Security now comes from: (1) rejecting absolute paths,
+    # (2) post-resolution containment check, (3) hash verification
     try:
         candidate = base_path / source_uri
         source_path = candidate.resolve()  # Follows symlinks
@@ -1044,6 +1066,23 @@ def _check_single_snapshot(
             expected_hash=expected_hash,
             actual_hash=None,
             error=f"Security violation: failed to resolve path: {e}",
+        )
+
+    # Issue #48 CE Security Fix: Post-resolution containment check
+    # CRITICAL: This check MUST happen BEFORE checking if file exists
+    # Otherwise, an attacker could access existing files outside the project
+    # Default allowed_root to base_path for backwards compatibility
+    effective_root = (allowed_root or base_path).resolve()
+    try:
+        source_path.relative_to(effective_root)
+    except ValueError:
+        # Path escapes allowed_root - this is a security violation
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error=f"Security violation: resolved path escapes allowed root for {namespace}",
         )
 
     # Check if source file exists

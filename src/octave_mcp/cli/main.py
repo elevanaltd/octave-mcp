@@ -474,6 +474,12 @@ def write(
     is_flag=True,
     help="Check staleness of hydrated document (exit 0=fresh, 1=stale or error)",
 )
+@click.option(
+    "--project-root",
+    "project_root",
+    type=click.Path(exists=True),
+    help="Project root directory for security containment (default: document's parent directory)",
+)
 def hydrate(
     file: str,
     registry: str | None,
@@ -481,6 +487,7 @@ def hydrate(
     collision: str,
     output: str | None,
     check_mode: bool,
+    project_root: str | None,
 ):
     """Hydrate vocabulary imports in OCTAVE document.
 
@@ -493,6 +500,10 @@ def hydrate(
     - Exit 0: All snapshots are fresh (hashes match)
     - Exit 1: At least one snapshot is stale or error occurred
 
+    Security: The --project-root option specifies the containment boundary.
+    All resolved SOURCE_URI paths must stay within this directory.
+    Defaults to the document's parent directory if not specified.
+
     Issue #48: Living Scrolls vocabulary hydration.
 
     Examples:
@@ -500,6 +511,7 @@ def hydrate(
         octave hydrate doc.oct.md --mapping "@test/vocab=./vocab.oct.md"
         octave hydrate doc.oct.md -o hydrated.oct.md
         octave hydrate hydrated.oct.md --check
+        octave hydrate hydrated.oct.md --check --project-root /path/to/project
 
     Exit code 0 on success, 1 on failure.
     """
@@ -529,8 +541,10 @@ def hydrate(
             # Check staleness
             # Issue #48 CE Review: Use document's directory as base_path for
             # resolving relative SOURCE_URI paths (security + portability)
+            # Issue #48 CE Security Fix: Use allowed_root for post-resolution containment
             base_path = source_path.parent.resolve()
-            results = hydrator.check_staleness(doc, base_path=base_path)
+            allowed_root = Path(project_root).resolve() if project_root else base_path
+            results = hydrator.check_staleness(doc, base_path=base_path, allowed_root=allowed_root)
 
             if not results:
                 # No snapshots found - nothing to check
