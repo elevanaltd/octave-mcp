@@ -388,12 +388,11 @@ class TestHydrateCheckCommand:
 
     def test_check_fresh_document_exits_zero(self, runner):
         """Should exit 0 when all snapshots are fresh."""
+        # Issue #48 Debate Decision: Use output file in fixtures dir
+        # to ensure relative SOURCE_URI paths don't have traversal (..)
         source_file = str(FIXTURES_DIR / "source.oct.md")
         vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
-
-        # First hydrate the document
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            hydrated_file = f.name
+        hydrated_file = FIXTURES_DIR / "test_fresh_temp.oct.md"
 
         try:
             # Hydrate to file
@@ -405,7 +404,7 @@ class TestHydrateCheckCommand:
                     "--mapping",
                     f"@test/vocabulary={vocab_file}",
                     "-o",
-                    hydrated_file,
+                    str(hydrated_file),
                 ],
             )
             assert result.exit_code == 0
@@ -415,7 +414,7 @@ class TestHydrateCheckCommand:
                 cli,
                 [
                     "hydrate",
-                    hydrated_file,
+                    str(hydrated_file),
                     "--check",
                 ],
             )
@@ -424,13 +423,14 @@ class TestHydrateCheckCommand:
             assert "FRESH" in result.output
             assert "@test/vocabulary" in result.output
         finally:
-            Path(hydrated_file).unlink(missing_ok=True)
+            hydrated_file.unlink(missing_ok=True)
 
     def test_check_stale_document_exits_one(self, runner):
         """Should exit 1 when at least one snapshot is stale."""
         # Create a hydrated document with a fake/stale hash
+        # Issue #48 Debate Decision: Use relative paths in SOURCE_URI
+        # Create temp file in fixtures dir to avoid path traversal
         fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
 
         hydrated_content = f"""===HYDRATED_DOC===
 META:
@@ -441,23 +441,22 @@ META:
   ALPHA::"First letter of the Greek alphabet"
 
 §SNAPSHOT::MANIFEST
-  SOURCE_URI::"{vocab_file}"
+  SOURCE_URI::"vocabulary.oct.md"
   SOURCE_HASH::"{fake_hash}"
   HYDRATION_TIME::"2024-01-01T00:00:00Z"
 
 ===END===
 """
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(hydrated_content)
-            hydrated_file = f.name
+        # Create temp file in FIXTURES_DIR to have relative path work
+        hydrated_file = FIXTURES_DIR / "test_stale_temp.oct.md"
+        hydrated_file.write_text(hydrated_content)
 
         try:
             result = runner.invoke(
                 cli,
                 [
                     "hydrate",
-                    hydrated_file,
+                    str(hydrated_file),
                     "--check",
                 ],
             )
@@ -466,12 +465,13 @@ META:
             assert "STALE" in result.output
             assert "@test/vocabulary" in result.output
         finally:
-            Path(hydrated_file).unlink(missing_ok=True)
+            hydrated_file.unlink(missing_ok=True)
 
     def test_check_outputs_expected_and_actual_hash(self, runner):
         """Should output expected and actual hashes for stale snapshots."""
+        # Issue #48 Debate Decision: Use relative paths in SOURCE_URI
+        # Create temp file in fixtures dir to avoid path traversal
         fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
 
         hydrated_content = f"""===HYDRATED_DOC===
 META:
@@ -482,23 +482,22 @@ META:
   ALPHA::"First letter"
 
 §SNAPSHOT::MANIFEST
-  SOURCE_URI::"{vocab_file}"
+  SOURCE_URI::"vocabulary.oct.md"
   SOURCE_HASH::"{fake_hash}"
   HYDRATION_TIME::"2024-01-01T00:00:00Z"
 
 ===END===
 """
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(hydrated_content)
-            hydrated_file = f.name
+        # Create temp file in FIXTURES_DIR to have relative path work
+        hydrated_file = FIXTURES_DIR / "test_hash_temp.oct.md"
+        hydrated_file.write_text(hydrated_content)
 
         try:
             result = runner.invoke(
                 cli,
                 [
                     "hydrate",
-                    hydrated_file,
+                    str(hydrated_file),
                     "--check",
                 ],
             )
@@ -508,7 +507,7 @@ META:
             assert "got:" in result.output.lower() or "actual:" in result.output.lower()
             assert "000000" in result.output  # Part of the fake hash
         finally:
-            Path(hydrated_file).unlink(missing_ok=True)
+            hydrated_file.unlink(missing_ok=True)
 
     def test_check_non_hydrated_document_exits_zero(self, runner):
         """Should exit 0 for documents without snapshots (nothing to check)."""
