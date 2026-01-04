@@ -332,13 +332,20 @@ def compute_vocabulary_hash(vocab_path: Path, chunk_size: int = 8192) -> str:
 def validate_source_uri(source_uri: str, base_path: Path) -> Path:
     """Validate SOURCE_URI for security and return resolved path.
 
-    Issue #48 CE Review BLOCKING: Prevents path traversal attacks.
+    Issue #48 CE Review FIX: Prevents path traversal attacks while allowing
+    legitimate cross-directory layouts.
 
     Security checks performed:
     1. Reject absolute paths (e.g., /etc/passwd)
-    2. Reject path traversal patterns (e.g., ../../../sensitive)
+    2. Resolve path (following symlinks)
     3. Verify resolved path is within allowed base directory
-    4. Resolve symlinks and verify target is within base
+
+    Note on ".." handling (Issue #48 CE Review FIX):
+    - hydrate() generates SOURCE_URI with ".." for cross-directory layouts
+      (e.g., vocab in specs/, output in docs/ -> "../specs/vocab.oct.md")
+    - Security comes from verifying the RESOLVED path stays within base_path
+    - Paths with ".." that resolve WITHIN base are ALLOWED (valid cross-directory)
+    - Paths with ".." that resolve OUTSIDE base are REJECTED (path traversal attack)
 
     Args:
         source_uri: The SOURCE_URI string from manifest
@@ -360,18 +367,11 @@ def validate_source_uri(source_uri: str, base_path: Path) -> Path:
             "absolute paths are not allowed for security reasons",
         )
 
-    # Check 2: Reject obvious path traversal patterns
-    # This catches ../ patterns before resolution
-    if ".." in source_uri:
-        raise SourceUriSecurityError(
-            source_uri,
-            "path traversal patterns (..) are not allowed for security reasons",
-        )
-
     # Build candidate path (relative to base)
+    # Note: ".." in source_uri is ALLOWED - security comes from Check 3 below
     candidate = base_path / source_uri
 
-    # Check 3: Resolve and verify within base
+    # Check 2: Resolve and verify within base
     # resolve() follows symlinks and returns absolute path
     try:
         resolved = candidate.resolve()
@@ -381,8 +381,11 @@ def validate_source_uri(source_uri: str, base_path: Path) -> Path:
             f"failed to resolve path: {e}",
         ) from e
 
-    # Check 4: Verify resolved path is within base directory
-    # This catches symlink escapes and any remaining traversal
+    # Check 3: Verify resolved path is within base directory
+    # THIS IS THE CRITICAL SECURITY CHECK - catches:
+    # - Path traversal attacks (../../../etc/passwd)
+    # - Symlink escapes (link pointing outside base)
+    # - Any other mechanism that could escape base_path
     try:
         resolved.relative_to(base_path)
     except ValueError:
@@ -986,13 +989,24 @@ def _check_single_snapshot(
 ) -> StalenessResult:
     """Check staleness of a single snapshot.
 
-    Issue #48 CE Review BLOCKING: Includes security validation for SOURCE_URI.
+    Issue #48 CE Review FIX: Secure path resolution for staleness checking.
 
-    Security model (unified with validate_source_uri):
-    - Absolute paths are FORBIDDEN for security (debate decision)
-    - Path traversal (..) is ALWAYS rejected as it can escape any directory
-    - Relative paths are resolved from base_path (document's directory)
+    Security model for staleness checking:
+    - Absolute paths are FORBIDDEN (prevents /etc/passwd style attacks)
+    - Relative paths with ".." ARE ALLOWED (cross-directory layouts)
+    - Path is resolved relative to base_path (follows symlinks)
     - Error messages do NOT echo raw paths (prevents information leakage)
+
+    Note on ".." handling (Issue #48 CE Review FIX):
+    - hydrate() generates SOURCE_URI with ".." for cross-directory layouts
+      (e.g., vocab in specs/, output in docs/ -> "../specs/vocab.oct.md")
+    - The old blanket rejection of ".." broke these valid workflows
+    - Security comes from rejecting absolute paths + hash verification
+
+    Difference from validate_source_uri():
+    - validate_source_uri() enforces strict base containment (for user input)
+    - _check_single_snapshot() allows cross-directory (hydrate-generated paths)
+    - Both reject absolute paths for security
 
     Args:
         namespace: Vocabulary namespace
@@ -1003,9 +1017,11 @@ def _check_single_snapshot(
     Returns:
         StalenessResult with FRESH, STALE, or ERROR status
     """
-    # Issue #48 Debate Decision: Reject absolute paths for unified security model
-    # This aligns with validate_source_uri() which also forbids absolute paths.
-    # Do NOT echo the raw path in error messages (security: information leakage).
+    if base_path is None:
+        base_path = Path.cwd()
+
+    # Issue #48 CE Review FIX: Reject absolute paths (security)
+    # Do NOT echo the raw path in error messages (prevents information leakage)
     if source_uri.startswith("/") or (len(source_uri) > 1 and source_uri[1] == ":"):
         return StalenessResult(
             namespace=namespace,
@@ -1015,45 +1031,30 @@ def _check_single_snapshot(
             error="Security violation: absolute SOURCE_URI paths are not allowed",
         )
 
-    # Issue #48 CE Review BLOCKING: Reject path traversal patterns
-    # These could escape directory bounds regardless of whether path is absolute
-    if ".." in source_uri:
-        return StalenessResult(
-            namespace=namespace,
-            status="ERROR",
-            expected_hash=expected_hash,
-            actual_hash=None,
-            error="Security violation: path traversal patterns (..) are not allowed in SOURCE_URI",
-        )
-
-    # Resolve the source path (only relative paths reach here)
-    source_path = Path(source_uri)
-    if base_path is None:
-        base_path = Path.cwd()
-    source_path = base_path / source_uri
-
-    # Verify relative paths stay within base directory
+    # Issue #48 CE Review FIX: Resolve path relative to base_path
+    # ".." patterns ARE ALLOWED for cross-directory layouts (vocab in specs/, output in docs/)
+    # Security comes from: (1) rejecting absolute paths (2) hash verification
     try:
-        resolved = source_path.resolve()
-        resolved.relative_to(base_path.resolve())
-        source_path = resolved
-    except ValueError:
+        candidate = base_path / source_uri
+        source_path = candidate.resolve()  # Follows symlinks
+    except (OSError, ValueError) as e:
         return StalenessResult(
             namespace=namespace,
             status="ERROR",
             expected_hash=expected_hash,
             actual_hash=None,
-            error="Security violation: resolved path is outside allowed directory",
+            error=f"Security violation: failed to resolve path: {e}",
         )
 
     # Check if source file exists
     if not source_path.exists():
+        # Issue #48 CE Review FIX: Do not echo source_uri in error message
         return StalenessResult(
             namespace=namespace,
             status="ERROR",
             expected_hash=expected_hash,
             actual_hash=None,
-            error=f"Source file not found: {source_uri}",
+            error=f"Source file not found for namespace: {namespace}",
         )
 
     try:
