@@ -60,6 +60,34 @@ class CollisionError(VocabularyError):
             )
 
 
+class VersionMismatchError(VocabularyError):
+    """Raised when requested version doesn't match registry version.
+
+    Issue #48: Version string handling for deterministic vocabulary resolution.
+    """
+
+    def __init__(
+        self,
+        namespace: str,
+        requested_version: str,
+        registry_version: str | None,
+    ):
+        self.namespace = namespace
+        self.requested_version = requested_version
+        self.registry_version = registry_version
+
+        if registry_version is None:
+            super().__init__(
+                f"Version mismatch for '{namespace}': "
+                f"requested version '{requested_version}' but registry has no version information"
+            )
+        else:
+            super().__init__(
+                f"Version mismatch for '{namespace}': "
+                f"requested version '{requested_version}' but registry has version '{registry_version}'"
+            )
+
+
 @dataclass
 class HydrationPolicy:
     """Policy settings for vocabulary hydration.
@@ -90,12 +118,27 @@ class ImportDirective:
     section: Section | None = None
 
 
+@dataclass
+class VocabularyEntry:
+    """Entry in the vocabulary registry.
+
+    Attributes:
+        path: Path to vocabulary file
+        version: Optional semantic version string
+    """
+
+    path: Path
+    version: str | None = None
+
+
 class VocabularyRegistry:
     """Registry for resolving vocabulary namespaces to file paths.
 
     Supports two modes:
     1. Registry file mode: Parses specs/vocabularies/registry.oct.md
     2. Direct mapping mode: Uses explicit namespace -> path mapping
+
+    Issue #48: Now supports version information for deterministic resolution.
     """
 
     def __init__(self, registry_path: Path | None = None):
@@ -105,7 +148,7 @@ class VocabularyRegistry:
             registry_path: Path to registry.oct.md file
         """
         self.registry_path = registry_path
-        self._mappings: dict[str, Path] = {}
+        self._entries: dict[str, VocabularyEntry] = {}
 
         if registry_path and registry_path.exists():
             self._load_registry(registry_path)
@@ -114,6 +157,8 @@ class VocabularyRegistry:
     def from_mappings(cls, mappings: dict[str, Path]) -> "VocabularyRegistry":
         """Create registry from direct namespace -> path mappings.
 
+        Backwards-compatible API that creates entries without version info.
+
         Args:
             mappings: Dictionary of namespace to Path mappings
 
@@ -121,7 +166,28 @@ class VocabularyRegistry:
             VocabularyRegistry instance with the provided mappings
         """
         registry = cls(registry_path=None)
-        registry._mappings = dict(mappings)
+        for namespace, path in mappings.items():
+            registry._entries[namespace] = VocabularyEntry(path=path, version=None)
+        return registry
+
+    @classmethod
+    def from_mappings_with_versions(cls, mappings: dict[str, dict[str, Any]]) -> "VocabularyRegistry":
+        """Create registry from mappings that include version information.
+
+        Issue #48: New API for version-aware resolution.
+
+        Args:
+            mappings: Dictionary of namespace to {"path": Path, "version": str}
+
+        Returns:
+            VocabularyRegistry instance with versioned entries
+        """
+        registry = cls(registry_path=None)
+        for namespace, entry_data in mappings.items():
+            registry._entries[namespace] = VocabularyEntry(
+                path=entry_data["path"],
+                version=entry_data.get("version"),
+            )
         return registry
 
     def _load_registry(self, registry_path: Path) -> None:
@@ -135,45 +201,77 @@ class VocabularyRegistry:
                 self._extract_vocabulary_entries(section, registry_path.parent)
 
     def _extract_vocabulary_entries(self, section: Section, base_path: Path) -> None:
-        """Extract vocabulary entries from registry section."""
-        # Look for NAME and PATH assignments in nested sections
+        """Extract vocabulary entries from registry section.
+
+        Issue #48: Now extracts VERSION field in addition to NAME and PATH.
+        """
+        # Look for NAME, PATH, and VERSION assignments in nested sections
         for child in section.children:
             if isinstance(child, Section):
                 name = None
                 path = None
+                version = None
                 for grandchild in child.children:
                     if isinstance(grandchild, Assignment):
                         if grandchild.key == "NAME":
                             name = grandchild.value
                         elif grandchild.key == "PATH":
                             path = grandchild.value
+                        elif grandchild.key == "VERSION":
+                            version = grandchild.value
 
                 if name and path:
                     # Build namespace from section structure
                     # e.g., §2a::SNAPSHOT -> @core/SNAPSHOT
                     namespace = f"@core/{name}"
-                    self._mappings[namespace] = base_path / path
+                    self._entries[namespace] = VocabularyEntry(
+                        path=base_path / path,
+                        version=version,
+                    )
 
             # Recurse into nested sections
             if isinstance(child, Section):
                 self._extract_vocabulary_entries(child, base_path)
 
-    def resolve(self, namespace: str) -> Path:
-        """Resolve namespace to file path.
+    def resolve(self, namespace: str, requested_version: str | None = None) -> tuple[Path, str | None]:
+        """Resolve namespace to file path and version.
+
+        Issue #48: Now returns tuple of (path, version) and validates version match.
 
         Args:
             namespace: Vocabulary namespace (e.g., "@core/meta")
+            requested_version: Optional version to validate against
 
         Returns:
-            Path to vocabulary file
+            Tuple of (Path to vocabulary file, resolved version or None)
 
         Raises:
             VocabularyError: If namespace cannot be resolved
+            VersionMismatchError: If requested version doesn't match registry version
         """
-        if namespace in self._mappings:
-            return self._mappings[namespace]
+        if namespace not in self._entries:
+            raise VocabularyError(f"Unknown vocabulary namespace: {namespace}")
 
-        raise VocabularyError(f"Unknown vocabulary namespace: {namespace}")
+        entry = self._entries[namespace]
+
+        # Version validation if version was requested
+        if requested_version is not None:
+            if entry.version is None:
+                # Registry has no version but caller requested one
+                raise VersionMismatchError(
+                    namespace=namespace,
+                    requested_version=requested_version,
+                    registry_version=None,
+                )
+            if entry.version != requested_version:
+                # Version mismatch
+                raise VersionMismatchError(
+                    namespace=namespace,
+                    requested_version=requested_version,
+                    registry_version=entry.version,
+                )
+
+        return entry.path, entry.version
 
 
 def compute_vocabulary_hash(vocab_path: Path, chunk_size: int = 8192) -> str:
@@ -473,8 +571,9 @@ def hydrate(
     local_defs = _get_local_definitions(doc)
 
     for imp in imports:
-        # Resolve namespace to path
-        vocab_path = registry.resolve(imp.namespace)
+        # Resolve namespace to path, passing version for validation
+        # Issue #48: Version handling - pass version to resolve for validation
+        vocab_path, resolved_version = registry.resolve(imp.namespace, imp.version)
 
         # Parse vocabulary
         vocab_terms = parse_vocabulary(vocab_path)
@@ -529,7 +628,8 @@ def hydrate(
         new_sections.append(snapshot_section)
 
         # Create §SNAPSHOT::MANIFEST section
-        manifest_section = _create_manifest_section(vocab_path, policy)
+        # Issue #48: Pass version information to manifest
+        manifest_section = _create_manifest_section(vocab_path, policy, imp.version, resolved_version)
         new_sections.append(manifest_section)
 
         # Create §SNAPSHOT::PRUNED section
@@ -562,8 +662,25 @@ def hydrate(
     return result
 
 
-def _create_manifest_section(vocab_path: Path, policy: HydrationPolicy) -> Section:
-    """Create §SNAPSHOT::MANIFEST section."""
+def _create_manifest_section(
+    vocab_path: Path,
+    policy: HydrationPolicy,
+    requested_version: str | None = None,
+    resolved_version: str | None = None,
+) -> Section:
+    """Create §SNAPSHOT::MANIFEST section.
+
+    Issue #48: Now includes REQUESTED_VERSION and RESOLVED_VERSION fields.
+
+    Args:
+        vocab_path: Path to vocabulary file
+        policy: Hydration policy settings
+        requested_version: Version requested in IMPORT directive (or None)
+        resolved_version: Version from registry (or None)
+
+    Returns:
+        Section with manifest information
+    """
     now = datetime.now(UTC)
     hydration_time = now.isoformat()
 
@@ -577,6 +694,12 @@ def _create_manifest_section(vocab_path: Path, policy: HydrationPolicy) -> Secti
         ],
     )
 
+    # Issue #48: Version fields in manifest
+    # REQUESTED_VERSION: what the IMPORT directive specified (or "unspecified")
+    # RESOLVED_VERSION: what the registry provided (or "unknown")
+    requested_version_str = requested_version if requested_version else "unspecified"
+    resolved_version_str = resolved_version if resolved_version else "unknown"
+
     return Section(
         section_id="SNAPSHOT",
         key="MANIFEST",
@@ -584,6 +707,8 @@ def _create_manifest_section(vocab_path: Path, policy: HydrationPolicy) -> Secti
             Assignment(key="SOURCE_URI", value=str(vocab_path)),
             Assignment(key="SOURCE_HASH", value=compute_vocabulary_hash(vocab_path)),
             Assignment(key="HYDRATION_TIME", value=hydration_time),
+            Assignment(key="REQUESTED_VERSION", value=requested_version_str),
+            Assignment(key="RESOLVED_VERSION", value=resolved_version_str),
             policy_block,
         ],
     )

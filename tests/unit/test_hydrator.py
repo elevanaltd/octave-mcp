@@ -170,9 +170,12 @@ class TestRegistryResolution:
         registry = VocabularyRegistry(registry_path)
 
         # @core/SNAPSHOT should resolve to core/SNAPSHOT.oct.md
-        path = registry.resolve("@core/SNAPSHOT")
+        # Issue #48: resolve now returns tuple (path, version)
+        path, version = registry.resolve("@core/SNAPSHOT")
         assert path is not None
         assert "SNAPSHOT" in str(path)
+        # Registry file has version 1.0.0 for SNAPSHOT
+        assert version == "1.0.0"
 
     def test_resolve_test_namespace(self):
         """Should resolve test namespace to fixture path."""
@@ -181,8 +184,10 @@ class TestRegistryResolution:
         # Create a test registry that maps @test/vocabulary to fixtures
         registry = VocabularyRegistry.from_mappings({"@test/vocabulary": FIXTURES_DIR / "vocabulary.oct.md"})
 
-        path = registry.resolve("@test/vocabulary")
+        # Issue #48: resolve now returns tuple (path, version)
+        path, version = registry.resolve("@test/vocabulary")
         assert path == FIXTURES_DIR / "vocabulary.oct.md"
+        assert version is None  # from_mappings doesn't include version
 
     def test_resolve_unknown_namespace_raises(self):
         """Should raise error for unknown namespace."""
@@ -553,6 +558,222 @@ class TestHydrationOutput:
         reparsed = parse(output)
         assert reparsed is not None
         assert reparsed.name == result.name
+
+
+class TestVersionHandling:
+    """Tests for version string handling in vocabulary resolution.
+
+    Issue #48: Version strings in IMPORT directives should be respected.
+    These tests define the contract for version-aware resolution.
+    """
+
+    def test_registry_extracts_version_from_entries(self):
+        """Registry should extract VERSION field from vocabulary entries."""
+        from octave_mcp.core.hydrator import VocabularyRegistry
+
+        registry_path = Path(__file__).parent.parent.parent / "specs" / "vocabularies" / "registry.oct.md"
+        registry = VocabularyRegistry(registry_path)
+
+        # Registry should now provide version info
+        path, version = registry.resolve("@core/SNAPSHOT")
+        assert path is not None
+        assert version == "1.0.0"
+
+    def test_registry_from_mappings_with_version(self):
+        """Registry from_mappings should support version information."""
+        from octave_mcp.core.hydrator import VocabularyRegistry
+
+        # New API: mappings include version
+        registry = VocabularyRegistry.from_mappings_with_versions(
+            {
+                "@test/vocabulary": {
+                    "path": FIXTURES_DIR / "vocabulary.oct.md",
+                    "version": "1.0.0",
+                }
+            }
+        )
+
+        path, version = registry.resolve("@test/vocabulary")
+        assert path == FIXTURES_DIR / "vocabulary.oct.md"
+        assert version == "1.0.0"
+
+    def test_registry_from_mappings_without_version(self):
+        """Registry from_mappings should work without version (backwards compatible)."""
+        from octave_mcp.core.hydrator import VocabularyRegistry
+
+        # Original API still works, returns None for version
+        registry = VocabularyRegistry.from_mappings({"@test/vocabulary": FIXTURES_DIR / "vocabulary.oct.md"})
+
+        path, version = registry.resolve("@test/vocabulary")
+        assert path == FIXTURES_DIR / "vocabulary.oct.md"
+        assert version is None
+
+    def test_version_match_succeeds(self):
+        """Should succeed when requested version matches registry version."""
+        from octave_mcp.core.hydrator import VocabularyRegistry
+
+        registry = VocabularyRegistry.from_mappings_with_versions(
+            {
+                "@test/vocabulary": {
+                    "path": FIXTURES_DIR / "vocabulary.oct.md",
+                    "version": "1.0.0",
+                }
+            }
+        )
+
+        # Request specific version that matches
+        path, version = registry.resolve("@test/vocabulary", requested_version="1.0.0")
+        assert path == FIXTURES_DIR / "vocabulary.oct.md"
+        assert version == "1.0.0"
+
+    def test_version_mismatch_raises_error(self):
+        """Should raise error when requested version doesn't match registry version."""
+        from octave_mcp.core.hydrator import VersionMismatchError, VocabularyRegistry
+
+        registry = VocabularyRegistry.from_mappings_with_versions(
+            {
+                "@test/vocabulary": {
+                    "path": FIXTURES_DIR / "vocabulary.oct.md",
+                    "version": "1.0.0",
+                }
+            }
+        )
+
+        # Request version that doesn't match
+        with pytest.raises(VersionMismatchError) as exc_info:
+            registry.resolve("@test/vocabulary", requested_version="2.0.0")
+
+        assert "2.0.0" in str(exc_info.value)
+        assert "1.0.0" in str(exc_info.value)
+
+    def test_version_request_without_registry_version(self):
+        """Should raise error when version requested but registry has no version."""
+        from octave_mcp.core.hydrator import VersionMismatchError, VocabularyRegistry
+
+        registry = VocabularyRegistry.from_mappings({"@test/vocabulary": FIXTURES_DIR / "vocabulary.oct.md"})
+
+        # Request specific version when registry has none
+        with pytest.raises(VersionMismatchError):
+            registry.resolve("@test/vocabulary", requested_version="1.0.0")
+
+    def test_hydration_passes_version_to_resolve(self):
+        """Hydration should pass import version to registry.resolve()."""
+        from octave_mcp.core.hydrator import HydrationPolicy, VocabularyRegistry, hydrate
+
+        source_path = FIXTURES_DIR / "source_with_version.oct.md"
+
+        # Create registry with version
+        registry = VocabularyRegistry.from_mappings_with_versions(
+            {
+                "@test/vocabulary": {
+                    "path": FIXTURES_DIR / "vocabulary.oct.md",
+                    "version": "1.0.0",
+                }
+            }
+        )
+        policy = HydrationPolicy()
+
+        # Should succeed since versions match
+        result = hydrate(source_path, registry, policy)
+        assert result is not None
+
+    def test_hydration_fails_on_version_mismatch(self):
+        """Hydration should fail when import version doesn't match registry."""
+        from octave_mcp.core.hydrator import (
+            HydrationPolicy,
+            VersionMismatchError,
+            VocabularyRegistry,
+            hydrate,
+        )
+
+        source_path = FIXTURES_DIR / "source_with_wrong_version.oct.md"
+
+        # Registry has version 1.0.0
+        registry = VocabularyRegistry.from_mappings_with_versions(
+            {
+                "@test/vocabulary": {
+                    "path": FIXTURES_DIR / "vocabulary.oct.md",
+                    "version": "1.0.0",
+                }
+            }
+        )
+        policy = HydrationPolicy()
+
+        # Should fail because import requests 2.0.0
+        with pytest.raises(VersionMismatchError):
+            hydrate(source_path, registry, policy)
+
+    def test_manifest_contains_requested_version(self):
+        """Manifest should include REQUESTED_VERSION field."""
+        from octave_mcp.core.hydrator import HydrationPolicy, VocabularyRegistry, hydrate
+
+        source_path = FIXTURES_DIR / "source_with_version.oct.md"
+
+        registry = VocabularyRegistry.from_mappings_with_versions(
+            {
+                "@test/vocabulary": {
+                    "path": FIXTURES_DIR / "vocabulary.oct.md",
+                    "version": "1.0.0",
+                }
+            }
+        )
+        policy = HydrationPolicy()
+
+        result = hydrate(source_path, registry, policy)
+
+        manifest = _find_manifest_section(result)
+        requested_version = _get_field_value(manifest, "REQUESTED_VERSION")
+        assert requested_version == "1.0.0"
+
+    def test_manifest_contains_resolved_version(self):
+        """Manifest should include RESOLVED_VERSION field."""
+        from octave_mcp.core.hydrator import HydrationPolicy, VocabularyRegistry, hydrate
+
+        source_path = FIXTURES_DIR / "source_with_version.oct.md"
+
+        registry = VocabularyRegistry.from_mappings_with_versions(
+            {
+                "@test/vocabulary": {
+                    "path": FIXTURES_DIR / "vocabulary.oct.md",
+                    "version": "1.0.0",
+                }
+            }
+        )
+        policy = HydrationPolicy()
+
+        result = hydrate(source_path, registry, policy)
+
+        manifest = _find_manifest_section(result)
+        resolved_version = _get_field_value(manifest, "RESOLVED_VERSION")
+        assert resolved_version == "1.0.0"
+
+    def test_manifest_unspecified_requested_version(self):
+        """Manifest should show 'unspecified' when import has no version."""
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        source_path = FIXTURES_DIR / "source.oct.md"
+        registry = _create_test_registry_with_version()
+        policy = HydrationPolicy()
+
+        result = hydrate(source_path, registry, policy)
+
+        manifest = _find_manifest_section(result)
+        requested_version = _get_field_value(manifest, "REQUESTED_VERSION")
+        assert requested_version == "unspecified"
+
+
+def _create_test_registry_with_version():
+    """Create a test registry with version information."""
+    from octave_mcp.core.hydrator import VocabularyRegistry
+
+    return VocabularyRegistry.from_mappings_with_versions(
+        {
+            "@test/vocabulary": {
+                "path": FIXTURES_DIR / "vocabulary.oct.md",
+                "version": "1.0.0",
+            }
+        }
+    )
 
 
 class TestHashComputation:
