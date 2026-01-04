@@ -7,6 +7,7 @@ META:
   TOKENS::"~75"
   REQUIRES::octave-5-llm-core
   PURPOSE::compression_and_instances
+  TEACHES::[§skills/octave-compression]
   IMPLEMENTATION_NOTES::"Compression tiers (LOSSLESS/CONSERVATIVE/AGGRESSIVE/ULTRA) are specified here for LLM compression behavior. OCTAVE-MCP v0.2.0 removed mcp/ingest.py during 3-tool consolidation; compression tier selection is not implemented in the server."
   CRITICAL_GAPS::[compression_rules_enforcement,tier_specific_logic,loss_profile_tracking]
 
