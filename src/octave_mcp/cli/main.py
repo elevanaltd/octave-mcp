@@ -397,5 +397,131 @@ def write(
         raise SystemExit(1) from e
 
 
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option(
+    "--registry",
+    type=click.Path(exists=True),
+    help="Path to vocabulary registry file (default: specs/vocabularies/registry.oct.md)",
+)
+@click.option(
+    "--mapping",
+    multiple=True,
+    help="Direct namespace mapping in format 'namespace=path' (can be repeated)",
+)
+@click.option(
+    "--collision",
+    type=click.Choice(["error", "source_wins", "local_wins"]),
+    default="error",
+    help="Collision handling strategy (default: error)",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path (default: stdout)",
+)
+def hydrate(
+    file: str,
+    registry: str | None,
+    mapping: tuple[str, ...],
+    collision: str,
+    output: str | None,
+):
+    """Hydrate vocabulary imports in OCTAVE document.
+
+    Transforms §CONTEXT::IMPORT["@namespace/name"] directives into:
+    - §CONTEXT::SNAPSHOT["@namespace/name"] with hydrated terms
+    - §SNAPSHOT::MANIFEST with provenance (SOURCE_URI, SOURCE_HASH, HYDRATION_TIME)
+    - §SNAPSHOT::PRUNED with available-but-unused terms
+
+    Issue #48: Living Scrolls vocabulary hydration.
+
+    Examples:
+        octave hydrate doc.oct.md --registry specs/vocabularies/registry.oct.md
+        octave hydrate doc.oct.md --mapping "@test/vocab=./vocab.oct.md"
+        octave hydrate doc.oct.md -o hydrated.oct.md
+
+    Exit code 0 on success, 1 on failure.
+    """
+    from pathlib import Path
+
+    from octave_mcp.core import hydrator
+    from octave_mcp.core.emitter import emit
+
+    try:
+        # Build registry from options
+        if mapping:
+            # Direct mappings provided via --mapping
+            mappings_dict: dict[str, Path] = {}
+            for m in mapping:
+                if "=" not in m:
+                    click.echo(f"Error: Invalid mapping format '{m}'. Use 'namespace=path'", err=True)
+                    raise SystemExit(1)
+                namespace, path_str = m.split("=", 1)
+                mappings_dict[namespace] = Path(path_str)
+            vocab_registry = hydrator.VocabularyRegistry.from_mappings(mappings_dict)
+        elif registry:
+            # Registry file provided
+            vocab_registry = hydrator.VocabularyRegistry(Path(registry))
+        else:
+            # Try default registry location
+            default_registry = Path("specs/vocabularies/registry.oct.md")
+            if default_registry.exists():
+                vocab_registry = hydrator.VocabularyRegistry(default_registry)
+            else:
+                click.echo(
+                    "Error: No registry specified and default registry not found. "
+                    "Use --registry or --mapping option.",
+                    err=True,
+                )
+                raise SystemExit(1)
+
+        # Build policy
+        policy = hydrator.HydrationPolicy(
+            collision_strategy=collision,  # type: ignore
+            prune_strategy="list",
+            max_depth=1,
+        )
+
+        # Hydrate the document
+        source_path = Path(file)
+        result = hydrator.hydrate(source_path, vocab_registry, policy)
+
+        # Emit canonical output
+        output_content = emit(result)
+
+        # Write to file or stdout
+        if output:
+            # Security: validate output path before writing (Issue #48 CRS fix)
+            from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
+
+            path_valid, path_error = validate_octave_path(output)
+            if not path_valid:
+                click.echo(f"Error: {path_error}", err=True)
+                raise SystemExit(1)
+
+            write_result = atomic_write_octave(output, output_content, None)
+            if write_result["status"] == "error":
+                click.echo(f"Error: {write_result['error']}", err=True)
+                raise SystemExit(1)
+
+            click.echo(f"Hydrated document written to: {write_result['path']}")
+        else:
+            click.echo(output_content)
+
+    except hydrator.CollisionError as e:
+        click.echo(f"Error: Term collision - {e}", err=True)
+        raise SystemExit(1) from e
+    except hydrator.VocabularyError as e:
+        click.echo(f"Error: Vocabulary error - {e}", err=True)
+        raise SystemExit(1) from e
+    except SystemExit:
+        raise
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
 if __name__ == "__main__":
     cli()

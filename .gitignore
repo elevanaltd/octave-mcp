@@ -4,7 +4,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv
 .venv/
+.venv*/
 venv/
 ENV/
 env/
@@ -38,6 +40,9 @@ CLAUDE.md
 
 # HestAI report scratch area
 .hestai/reports/scratch/
+
+# HestAI context state (ephemeral session state)
+.hestai/context/state/
 
 # Active Sessions (Ephemeral)
 .hestai/sessions/active/
