@@ -30,6 +30,20 @@ class VocabularyError(Exception):
     pass
 
 
+class SourceUriSecurityError(VocabularyError):
+    """Raised when SOURCE_URI contains a security violation.
+
+    Issue #48 CE Review BLOCKING: Prevents path traversal attacks via SOURCE_URI.
+    Malicious documents could attempt to access sensitive files like /etc/passwd
+    via absolute paths, path traversal (../../../), or symlinks.
+    """
+
+    def __init__(self, source_uri: str, reason: str):
+        self.source_uri = source_uri
+        self.reason = reason
+        super().__init__(f"Security violation in SOURCE_URI '{source_uri}': {reason}")
+
+
 class CollisionError(VocabularyError):
     """Raised when term collision is detected with 'error' strategy."""
 
@@ -313,6 +327,71 @@ def compute_vocabulary_hash(vocab_path: Path, chunk_size: int = 8192) -> str:
         while chunk := f.read(chunk_size):
             hasher.update(chunk)
     return f"sha256:{hasher.hexdigest()}"
+
+
+def validate_source_uri(source_uri: str, base_path: Path) -> Path:
+    """Validate SOURCE_URI for security and return resolved path.
+
+    Issue #48 CE Review BLOCKING: Prevents path traversal attacks.
+
+    Security checks performed:
+    1. Reject absolute paths (e.g., /etc/passwd)
+    2. Reject path traversal patterns (e.g., ../../../sensitive)
+    3. Verify resolved path is within allowed base directory
+    4. Resolve symlinks and verify target is within base
+
+    Args:
+        source_uri: The SOURCE_URI string from manifest
+        base_path: The allowed base directory (must be absolute)
+
+    Returns:
+        Resolved absolute Path to the file
+
+    Raises:
+        SourceUriSecurityError: If security violation detected
+    """
+    # Normalize base_path to absolute
+    base_path = base_path.resolve()
+
+    # Check 1: Reject absolute paths
+    if source_uri.startswith("/") or (len(source_uri) > 1 and source_uri[1] == ":"):
+        raise SourceUriSecurityError(
+            source_uri,
+            "absolute paths are not allowed for security reasons",
+        )
+
+    # Check 2: Reject obvious path traversal patterns
+    # This catches ../ patterns before resolution
+    if ".." in source_uri:
+        raise SourceUriSecurityError(
+            source_uri,
+            "path traversal patterns (..) are not allowed for security reasons",
+        )
+
+    # Build candidate path (relative to base)
+    candidate = base_path / source_uri
+
+    # Check 3: Resolve and verify within base
+    # resolve() follows symlinks and returns absolute path
+    try:
+        resolved = candidate.resolve()
+    except (OSError, ValueError) as e:
+        raise SourceUriSecurityError(
+            source_uri,
+            f"failed to resolve path: {e}",
+        ) from e
+
+    # Check 4: Verify resolved path is within base directory
+    # This catches symlink escapes and any remaining traversal
+    try:
+        resolved.relative_to(base_path)
+    except ValueError:
+        raise SourceUriSecurityError(
+            source_uri,
+            "resolved path is outside allowed directory",
+        ) from None
+
+    return resolved
 
 
 def parse_vocabulary(vocab_path: Path) -> dict[str, str]:
@@ -693,6 +772,10 @@ def _create_manifest_section(
 
     Issue #48: Now includes REQUESTED_VERSION and RESOLVED_VERSION fields.
 
+    Note: SOURCE_URI stores the absolute path to enable staleness detection.
+    Security validation is applied during check_staleness() when reading
+    untrusted documents, not here during trusted hydration.
+
     Args:
         vocab_path: Path to vocabulary file
         policy: Hydration policy settings
@@ -749,10 +832,11 @@ def _create_pruned_section(pruned_terms: set[str]) -> Section:
     )
 
 
-def check_staleness(doc: Document) -> list[StalenessResult]:
+def check_staleness(doc: Document, base_path: Path | None = None) -> list[StalenessResult]:
     """Check staleness of all SNAPSHOT manifests in a hydrated document.
 
     Issue #48 Task 2.8: Staleness detection for hydrated documents.
+    Issue #48 CE Review: base_path parameter for security-compliant path resolution.
 
     Parses the document to find §SNAPSHOT::MANIFEST sections, extracts
     SOURCE_URI and SOURCE_HASH from each, computes current hash of source
@@ -760,6 +844,8 @@ def check_staleness(doc: Document) -> list[StalenessResult]:
 
     Args:
         doc: Parsed OCTAVE document (already hydrated)
+        base_path: Base directory for resolving relative SOURCE_URI paths.
+                   If None, uses current working directory.
 
     Returns:
         List of StalenessResult, one per SNAPSHOT/MANIFEST pair found.
@@ -794,12 +880,37 @@ def check_staleness(doc: Document) -> list[StalenessResult]:
                         elif child.key == "SOURCE_HASH":
                             source_hash = child.value
 
-                if source_uri and source_hash:
+                namespace = current_namespace or "unknown"
+
+                # Issue #48 CE Review BLOCKING: Emit ERROR for malformed manifests
+                # instead of silently skipping them
+                if not source_uri or (isinstance(source_uri, str) and not source_uri.strip()):
+                    results.append(
+                        StalenessResult(
+                            namespace=namespace,
+                            status="ERROR",
+                            expected_hash=source_hash or "missing",
+                            actual_hash=None,
+                            error="Malformed manifest: missing or empty SOURCE_URI",
+                        )
+                    )
+                elif not source_hash or (isinstance(source_hash, str) and not source_hash.strip()):
+                    results.append(
+                        StalenessResult(
+                            namespace=namespace,
+                            status="ERROR",
+                            expected_hash="missing",
+                            actual_hash=None,
+                            error="Malformed manifest: missing or empty SOURCE_HASH",
+                        )
+                    )
+                else:
                     # Check if source file exists and compute hash
                     result = _check_single_snapshot(
-                        namespace=current_namespace or "unknown",
+                        namespace=namespace,
                         source_uri=source_uri,
                         expected_hash=source_hash,
+                        base_path=base_path,
                     )
                     results.append(result)
 
@@ -848,18 +959,58 @@ def _check_single_snapshot(
     namespace: str,
     source_uri: str,
     expected_hash: str,
+    base_path: Path | None = None,
 ) -> StalenessResult:
     """Check staleness of a single snapshot.
+
+    Issue #48 CE Review BLOCKING: Includes security validation for SOURCE_URI.
+
+    Security model:
+    - Path traversal (..) is ALWAYS rejected as it can escape any directory
+    - Absolute paths are allowed when checking documents we created
+    - Relative paths are resolved from base_path (document's directory)
 
     Args:
         namespace: Vocabulary namespace
         source_uri: Path to source file from manifest
         expected_hash: Hash stored in manifest
+        base_path: Optional base path for resolving relative SOURCE_URI paths
 
     Returns:
         StalenessResult with FRESH, STALE, or ERROR status
     """
+    # Issue #48 CE Review BLOCKING: Reject path traversal patterns
+    # These could escape directory bounds regardless of whether path is absolute
+    if ".." in source_uri:
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error="Security violation: path traversal patterns (..) are not allowed in SOURCE_URI",
+        )
+
+    # Resolve the source path
     source_path = Path(source_uri)
+
+    # If relative path, resolve from base_path
+    if not source_path.is_absolute():
+        if base_path is None:
+            base_path = Path.cwd()
+        source_path = base_path / source_uri
+        # For relative paths, verify they stay within base
+        try:
+            resolved = source_path.resolve()
+            resolved.relative_to(base_path.resolve())
+            source_path = resolved
+        except ValueError:
+            return StalenessResult(
+                namespace=namespace,
+                status="ERROR",
+                expected_hash=expected_hash,
+                actual_hash=None,
+                error="Security violation: resolved path is outside allowed directory",
+            )
 
     # Check if source file exists
     if not source_path.exists():

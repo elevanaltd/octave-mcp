@@ -527,7 +527,10 @@ def hydrate(
             doc = parse(content)
 
             # Check staleness
-            results = hydrator.check_staleness(doc)
+            # Issue #48 CE Review: Use document's directory as base_path for
+            # resolving relative SOURCE_URI paths (security + portability)
+            base_path = source_path.parent.resolve()
+            results = hydrator.check_staleness(doc, base_path=base_path)
 
             if not results:
                 # No snapshots found - nothing to check
