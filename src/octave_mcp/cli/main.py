@@ -164,11 +164,17 @@ def eject(file: str, mode: str, output_format: str):
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--schema", help="Schema name for validation (e.g., 'META', 'SESSION_LOG')")
 @click.option("--fix", is_flag=True, help="Apply repairs to output")
-def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
+@click.option("--verify-seal", "verify_seal", is_flag=True, help="Verify SEAL section integrity")
+def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool, verify_seal: bool):
     """Validate OCTAVE against schema.
 
     Matches MCP octave_validate tool. Returns validation_status:
     VALIDATED (schema passed), UNVALIDATED (no schema), or INVALID (schema failed).
+
+    With --verify-seal, also checks SEAL section integrity:
+    - VERIFIED: Hash matches content
+    - INVALID: Hash mismatch (content modified)
+    - No SEAL section: Informational message
 
     Exit code 0 on success, 1 on validation failure.
     """
@@ -244,6 +250,22 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
 
         # Output validation status
         click.echo(f"\nvalidation_status: {validation_status}")
+
+        # Seal verification if requested
+        seal_status = None
+        if verify_seal:
+            from octave_mcp.core.sealer import SealStatus
+            from octave_mcp.core.sealer import verify_seal as do_verify_seal
+
+            seal_result = do_verify_seal(doc)
+            seal_status = seal_result.status
+
+            if seal_status == SealStatus.VERIFIED:
+                click.echo("Seal: VERIFIED (SHA256 match)")
+            elif seal_status == SealStatus.INVALID:
+                click.echo("Seal: INVALID (hash mismatch - content modified)")
+            elif seal_status == SealStatus.NO_SEAL:
+                click.echo("Seal: No SEAL section found")
 
         # If INVALID, output errors and exit with code 1
         if validation_status == "INVALID":
@@ -581,6 +603,80 @@ def normalize(file: str, output: str | None):
                 raise SystemExit(1)
 
             click.echo(f"Normalized document written to: {write_result['path']}")
+        else:
+            click.echo(output_content)
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path (default: stdout)",
+)
+def seal(file: str, output: str | None):
+    """Seal OCTAVE document with cryptographic integrity proof.
+
+    Adds a SEAL section to the document containing:
+    - SCOPE: Line range covered by seal (LINES[1,N])
+    - ALGORITHM: Hash algorithm used (SHA256)
+    - HASH: SHA256 hash of normalized content
+    - GRAMMAR: Grammar version (if present in document)
+
+    The document is normalized (parse -> emit) before sealing to ensure
+    consistent hashing regardless of input formatting.
+
+    Issue #48 Phase 2: SEAL Cryptographic Integrity Layer.
+
+    Examples:
+        octave seal doc.oct.md
+        octave seal doc.oct.md -o sealed.oct.md
+
+    Exit code 0 on success, 1 on failure.
+    """
+    from pathlib import Path
+
+    from octave_mcp.core.emitter import emit
+    from octave_mcp.core.parser import parse
+    from octave_mcp.core.sealer import seal_document
+
+    try:
+        # Read input file
+        input_path = Path(file)
+        content = input_path.read_text(encoding="utf-8")
+
+        # Parse (lenient) -> AST
+        doc = parse(content)
+
+        # Seal the document (handles normalization internally)
+        sealed_doc = seal_document(doc)
+
+        # Emit canonical sealed output
+        output_content = emit(sealed_doc)
+
+        # Write to file or stdout
+        if output:
+            # Security: validate output path before writing
+            from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
+
+            path_valid, path_error = validate_octave_path(output)
+            if not path_valid:
+                click.echo(f"Error: {path_error}", err=True)
+                raise SystemExit(1)
+
+            write_result = atomic_write_octave(output, output_content, None)
+            if write_result["status"] == "error":
+                click.echo(f"Error: {write_result['error']}", err=True)
+                raise SystemExit(1)
+
+            click.echo(f"Sealed document written to: {write_result['path']}")
         else:
             click.echo(output_content)
 
