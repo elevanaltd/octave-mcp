@@ -687,5 +687,82 @@ def seal(file: str, output: str | None):
         raise SystemExit(1) from e
 
 
+@cli.command()
+@click.argument("spec_file", type=click.Path(exists=True))
+@click.argument("skill_file", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format (default: text)",
+)
+def coverage(spec_file: str, skill_file: str, output_format: str):
+    """Analyze coverage between SPEC and SKILL documents.
+
+    VOID MAPPER tool for spec-to-skill coverage analysis.
+    Identifies gaps between specifications and their implementing skills.
+
+    Output shows:
+    - COVERAGE_RATIO: Percentage of spec sections covered
+    - GAPS: Spec sections NOT implemented in skill
+    - NOVEL: Skill sections NOT in spec
+
+    Examples:
+        octave coverage spec.oct.md skill.oct.md
+        octave coverage spec.oct.md skill.oct.md --format json
+
+    Exit code 0 on success, 1 on failure.
+    """
+    import json as json_module
+    from pathlib import Path
+
+    from octave_mcp.core.coverage_mapper import compute_coverage, format_coverage_report
+    from octave_mcp.core.parser import parse
+
+    try:
+        # Read spec and skill files
+        spec_path = Path(spec_file)
+        skill_path = Path(skill_file)
+
+        spec_content = spec_path.read_text(encoding="utf-8")
+        skill_content = skill_path.read_text(encoding="utf-8")
+
+        # Parse documents
+        spec_doc = parse(spec_content)
+        skill_doc = parse(skill_content)
+
+        # Compute coverage
+        result = compute_coverage(spec_doc, skill_doc)
+
+        # Output based on format
+        if output_format == "json":
+            data = {
+                "spec": str(spec_path),
+                "skill": str(skill_path),
+                "coverage_ratio": result.coverage_ratio,
+                "covered_sections": result.covered_sections,
+                "gaps": result.gaps,
+                "novel": result.novel,
+                "spec_total": result.spec_total,
+                "skill_total": result.skill_total,
+            }
+            click.echo(json_module.dumps(data, indent=2))
+        else:
+            # Text format with header
+            click.echo("Coverage Analysis")
+            click.echo("=================")
+            click.echo(f"Spec: {spec_path.name}")
+            click.echo(f"Skill: {skill_path.name}")
+            click.echo("")
+            click.echo(format_coverage_report(result))
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
 if __name__ == "__main__":
     cli()
