@@ -71,9 +71,104 @@ OP_FLOW = OCTAVE_OPERATORS["FLOW"]
 OP_SECTION = OCTAVE_OPERATORS["SECTION"]
 OP_COMMENT = OCTAVE_OPERATORS["COMMENT"]
 
+
+def list_exports(category: str | None = None) -> list[str]:
+    """List public API exports, optionally filtered by category.
+
+    Args:
+        category: Optional category filter. Valid values:
+            - 'functions': Core functions (parse, emit, etc.)
+            - 'classes': Core classes (Parser, Validator, etc.)
+            - 'ast': AST node types
+            - 'hydration': Hydration-related exports
+            - 'schema': Schema-related exports
+            - 'repair': Repair/audit trail exports
+            - 'exceptions': Exception types
+            - 'operators': Operator constants
+            - None: Return all exports
+
+    Returns:
+        List of export names in the specified category
+
+    Example:
+        >>> import octave_mcp
+        >>> octave_mcp.list_exports('functions')
+        ['parse', 'emit', 'tokenize', 'repair', 'project', 'hydrate', ...]
+        >>> len(octave_mcp.list_exports())  # All exports
+        51
+    """
+    categories = {
+        "functions": [
+            "parse",
+            "emit",
+            "tokenize",
+            "repair",
+            "project",
+            "hydrate",
+            "extract_schema_from_document",
+            "seal_document",
+            "verify_seal",
+        ],
+        "classes": [
+            "Parser",
+            "Validator",
+            "TokenType",
+            "Token",
+            "HydrationPolicy",
+            "VocabularyRegistry",
+            "SchemaDefinition",
+            "FieldDefinition",
+            "RepairLog",
+            "RepairEntry",
+            "RepairTier",
+            "ProjectionResult",
+            "RoutingLog",
+            "RoutingEntry",
+            "SealVerificationResult",
+        ],
+        "ast": ["Document", "Block", "Assignment", "Section", "ListValue", "InlineMap", "Absent"],
+        "hydration": ["hydrate", "HydrationPolicy", "VocabularyRegistry"],
+        "schema": ["SchemaDefinition", "FieldDefinition", "extract_schema_from_document"],
+        "repair": ["RepairLog", "RepairEntry", "RepairTier", "RoutingLog", "RoutingEntry"],
+        "exceptions": [
+            "VocabularyError",
+            "CollisionError",
+            "VersionMismatchError",
+            "CycleDetectionError",
+            "SourceUriSecurityError",
+            "ParserError",
+            "LexerError",
+            "ValidationError",
+        ],
+        "operators": [
+            "OCTAVE_OPERATORS",
+            "OP_ASSIGN",
+            "OP_BLOCK",
+            "OP_CONCAT",
+            "OP_SYNTHESIS",
+            "OP_TENSION",
+            "OP_CONSTRAINT",
+            "OP_ALTERNATIVE",
+            "OP_FLOW",
+            "OP_SECTION",
+            "OP_COMMENT",
+        ],
+    }
+
+    if category is None:
+        # Return all exports
+        return sorted(set(sum(categories.values(), [])) | {"__version__", "list_exports"})
+    elif category in categories:
+        return sorted(categories[category])
+    else:
+        raise ValueError(f"Invalid category '{category}'. Valid categories: {list(categories.keys())}")
+
+
 __all__ = [
     # Version
     "__version__",
+    # Helper function
+    "list_exports",
     # Core functions
     "parse",
     "emit",
@@ -135,4 +230,6 @@ __all__ = [
     "OP_FLOW",
     "OP_SECTION",
     "OP_COMMENT",
+    # Helper function
+    "list_exports",
 ]
