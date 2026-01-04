@@ -373,3 +373,211 @@ class TestHydrateEndToEnd:
         assert "§CONTEXT::IMPORT" not in result.output
         # Terms should be inlined
         assert "First letter of the Greek alphabet" in result.output
+
+
+class TestHydrateCheckCommand:
+    """Integration tests for `octave hydrate --check` staleness detection.
+
+    TDD RED phase: Issue #48 Task 2.8
+    """
+
+    @pytest.fixture
+    def runner(self):
+        """Create CLI test runner."""
+        return CliRunner()
+
+    def test_check_fresh_document_exits_zero(self, runner):
+        """Should exit 0 when all snapshots are fresh."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        # First hydrate the document
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            hydrated_file = f.name
+
+        try:
+            # Hydrate to file
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    source_file,
+                    "--mapping",
+                    f"@test/vocabulary={vocab_file}",
+                    "-o",
+                    hydrated_file,
+                ],
+            )
+            assert result.exit_code == 0
+
+            # Now check staleness - should be fresh
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    hydrated_file,
+                    "--check",
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert "FRESH" in result.output
+            assert "@test/vocabulary" in result.output
+        finally:
+            Path(hydrated_file).unlink(missing_ok=True)
+
+    def test_check_stale_document_exits_one(self, runner):
+        """Should exit 1 when at least one snapshot is stale."""
+        # Create a hydrated document with a fake/stale hash
+        fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter of the Greek alphabet"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{vocab_file}"
+  SOURCE_HASH::"{fake_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(hydrated_content)
+            hydrated_file = f.name
+
+        try:
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    hydrated_file,
+                    "--check",
+                ],
+            )
+
+            assert result.exit_code == 1
+            assert "STALE" in result.output
+            assert "@test/vocabulary" in result.output
+        finally:
+            Path(hydrated_file).unlink(missing_ok=True)
+
+    def test_check_outputs_expected_and_actual_hash(self, runner):
+        """Should output expected and actual hashes for stale snapshots."""
+        fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{vocab_file}"
+  SOURCE_HASH::"{fake_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(hydrated_content)
+            hydrated_file = f.name
+
+        try:
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    hydrated_file,
+                    "--check",
+                ],
+            )
+
+            # Should show expected and actual hash
+            assert "expected:" in result.output.lower()
+            assert "got:" in result.output.lower() or "actual:" in result.output.lower()
+            assert "000000" in result.output  # Part of the fake hash
+        finally:
+            Path(hydrated_file).unlink(missing_ok=True)
+
+    def test_check_non_hydrated_document_exits_zero(self, runner):
+        """Should exit 0 for documents without snapshots (nothing to check)."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--check",
+            ],
+        )
+
+        # No snapshots to check - exit 0
+        assert result.exit_code == 0
+
+    def test_check_missing_source_file_exits_one(self, runner):
+        """Should exit 1 when source file in manifest no longer exists."""
+        hydrated_content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"/nonexistent/path/vocab.oct.md"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(hydrated_content)
+            hydrated_file = f.name
+
+        try:
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    hydrated_file,
+                    "--check",
+                ],
+            )
+
+            # Error checking staleness - exit 1
+            assert result.exit_code == 1
+        finally:
+            Path(hydrated_file).unlink(missing_ok=True)
+
+    def test_check_and_other_options_are_mutually_exclusive(self, runner):
+        """--check should not be used with hydration options."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--check",
+                "--mapping",
+                f"@test/vocabulary={vocab_file}",
+            ],
+        )
+
+        # Should fail - --check doesn't need mapping
+        assert result.exit_code == 1 or "cannot" in result.output.lower() or "exclusive" in result.output.lower()

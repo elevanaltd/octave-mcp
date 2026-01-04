@@ -776,6 +776,218 @@ def _create_test_registry_with_version():
     )
 
 
+class TestStalenessDetection:
+    """Tests for staleness detection in hydrated documents.
+
+    TDD RED phase: Tests for check_staleness() function.
+    Issue #48 Task 2.8: octave hydrate --check staleness detection.
+    """
+
+    def test_check_staleness_returns_fresh_when_hash_matches(self):
+        """Should return FRESH status when source hash matches manifest."""
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        # Create a hydrated document with valid manifest
+        vocab_path = FIXTURES_DIR / "vocabulary.oct.md"
+        vocab_hash = compute_vocabulary_hash(vocab_path)
+
+        hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter of the Greek alphabet"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{vocab_path}"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+  REQUESTED_VERSION::"unspecified"
+  RESOLVED_VERSION::"1.0.0"
+
+===END===
+"""
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(hydrated_content)
+            temp_path = Path(f.name)
+
+        try:
+            doc = parse(hydrated_content)
+            results = check_staleness(doc)
+
+            assert len(results) == 1
+            assert results[0].status == "FRESH"
+            assert results[0].namespace == "@test/vocabulary"
+            assert results[0].expected_hash == vocab_hash
+            assert results[0].actual_hash == vocab_hash
+        finally:
+            temp_path.unlink()
+
+    def test_check_staleness_returns_stale_when_hash_differs(self):
+        """Should return STALE status when source hash doesn't match manifest."""
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        vocab_path = FIXTURES_DIR / "vocabulary.oct.md"
+        fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+        hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter of the Greek alphabet"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{vocab_path}"
+  SOURCE_HASH::"{fake_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+  REQUESTED_VERSION::"unspecified"
+  RESOLVED_VERSION::"1.0.0"
+
+===END===
+"""
+
+        doc = parse(hydrated_content)
+        results = check_staleness(doc)
+
+        assert len(results) == 1
+        assert results[0].status == "STALE"
+        assert results[0].namespace == "@test/vocabulary"
+        assert results[0].expected_hash == fake_hash
+        assert results[0].actual_hash != fake_hash
+
+    def test_check_staleness_handles_missing_source_file(self):
+        """Should return ERROR status when source file no longer exists."""
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        hydrated_content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter of the Greek alphabet"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"/nonexistent/path/vocab.oct.md"
+  SOURCE_HASH::"sha256:abcd1234"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        doc = parse(hydrated_content)
+        results = check_staleness(doc)
+
+        assert len(results) == 1
+        assert results[0].status == "ERROR"
+        assert "not found" in results[0].error.lower() or "no such file" in results[0].error.lower()
+
+    def test_check_staleness_handles_multiple_snapshots(self):
+        """Should check staleness for all SNAPSHOT manifests in document."""
+        from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
+        from octave_mcp.core.parser import parse
+
+        vocab_path = FIXTURES_DIR / "vocabulary.oct.md"
+        vocab_hash = compute_vocabulary_hash(vocab_path)
+        fake_hash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+        # Document with two snapshots - one fresh, one stale
+        hydrated_content = f"""===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{vocab_path}"
+  SOURCE_HASH::"{vocab_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+§CONTEXT::SNAPSHOT["@test/other"]
+  BETA::"Second letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"{vocab_path}"
+  SOURCE_HASH::"{fake_hash}"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        doc = parse(hydrated_content)
+        results = check_staleness(doc)
+
+        assert len(results) == 2
+        statuses = {r.namespace: r.status for r in results}
+        assert statuses.get("@test/vocabulary") == "FRESH"
+        assert statuses.get("@test/other") == "STALE"
+
+    def test_check_staleness_returns_empty_for_non_hydrated_document(self):
+        """Should return empty list for document without SNAPSHOT sections."""
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        content = """===DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§1::CONTENT
+  KEY::"value"
+
+===END===
+"""
+
+        doc = parse(content)
+        results = check_staleness(doc)
+
+        assert len(results) == 0
+
+    def test_staleness_result_dataclass(self):
+        """StalenessResult should have correct fields."""
+        from octave_mcp.core.hydrator import StalenessResult
+
+        result = StalenessResult(
+            namespace="@test/vocab",
+            status="FRESH",
+            expected_hash="sha256:abc",
+            actual_hash="sha256:abc",
+        )
+
+        assert result.namespace == "@test/vocab"
+        assert result.status == "FRESH"
+        assert result.expected_hash == "sha256:abc"
+        assert result.actual_hash == "sha256:abc"
+        assert result.error is None
+
+    def test_staleness_result_with_error(self):
+        """StalenessResult should support error field."""
+        from octave_mcp.core.hydrator import StalenessResult
+
+        result = StalenessResult(
+            namespace="@test/vocab",
+            status="ERROR",
+            expected_hash="sha256:abc",
+            actual_hash=None,
+            error="File not found",
+        )
+
+        assert result.status == "ERROR"
+        assert result.error == "File not found"
+
+
 class TestHashComputation:
     """Tests for vocabulary hash computation."""
 
