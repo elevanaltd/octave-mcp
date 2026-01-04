@@ -5,9 +5,11 @@ Aligned with MCP tools per Issue #51.
 
 import click
 
+from octave_mcp import __version__
+
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version=__version__)
 def cli():
     """OCTAVE command-line tools."""
     pass
