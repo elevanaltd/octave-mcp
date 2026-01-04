@@ -227,6 +227,13 @@ class Parser:
         doc = Document()
         self.skip_whitespace()
 
+        # Issue #48 Phase 2: Check for grammar sentinel OCTAVE::VERSION
+        # The lexer now produces a GRAMMAR_SENTINEL token for this pattern
+        if self.current().type == TokenType.GRAMMAR_SENTINEL:
+            doc.grammar_version = self.current().value  # Version string from lexer
+            self.advance()
+            self.skip_whitespace()
+
         # Check for explicit envelope
         if self.current().type == TokenType.ENVELOPE_START:
             token = self.advance()

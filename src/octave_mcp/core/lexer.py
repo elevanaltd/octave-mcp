@@ -16,6 +16,9 @@ from typing import Any
 class TokenType(Enum):
     """OCTAVE token types."""
 
+    # Grammar sentinel (Issue #48 Phase 2)
+    GRAMMAR_SENTINEL = auto()  # OCTAVE::VERSION at document start
+
     # Structural operators
     ASSIGN = auto()  # ::
     BLOCK = auto()  # :
@@ -91,6 +94,10 @@ ASCII_ALIASES = {
 
 # Token patterns (order matters for longest match)
 TOKEN_PATTERNS = [
+    # Grammar sentinel (Issue #48 Phase 2) - must come first
+    # Pattern: OCTAVE::VERSION where VERSION is semver-like (e.g., 5, 5.1, 5.1.0, 5.1.0-beta.1)
+    # Version regex: major(.minor(.patch)?)?(-prerelease)?
+    (r"OCTAVE::(\d+(?:\.\d+)*(?:-[A-Za-z0-9.]+)?)", TokenType.GRAMMAR_SENTINEL),
     # Envelope markers (must come before SEPARATOR)
     # ENVELOPE_END must come before ENVELOPE_START to match first
     (r"===END===", TokenType.ENVELOPE_END),
@@ -207,7 +214,10 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
 
                 # ... (value extraction logic)
                 # Handle special tokens
-                if token_type == TokenType.ENVELOPE_START:
+                if token_type == TokenType.GRAMMAR_SENTINEL:
+                    # Issue #48 Phase 2: Extract version string from OCTAVE::VERSION
+                    value = match.group(1)  # Extract VERSION from OCTAVE::VERSION
+                elif token_type == TokenType.ENVELOPE_START:
                     value = match.group(1)  # Extract NAME from ===NAME===
                 elif token_type == TokenType.ENVELOPE_END:
                     value = "END"

@@ -114,6 +114,9 @@ class Document(ASTNode):
         sections: List of parsed sections (Assignment, Block, Section)
         has_separator: True if document contains --- separator
         raw_frontmatter: YAML frontmatter content if present (Issue #91)
+        grammar_version: OCTAVE grammar version from sentinel (Issue #48 Phase 2)
+            Format: OCTAVE::VERSION at document start, e.g., "OCTAVE::5.1.0"
+            When present, enables forward compatibility detection and migration routing.
     """
 
     name: str = "INFERRED"
@@ -121,6 +124,7 @@ class Document(ASTNode):
     sections: list[ASTNode] = field(default_factory=list)
     has_separator: bool = False
     raw_frontmatter: str | None = None
+    grammar_version: str | None = None
 
 
 @dataclass
