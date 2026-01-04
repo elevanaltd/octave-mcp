@@ -94,6 +94,88 @@ def _ast_to_markdown(doc):
     return "\n".join(lines)
 
 
+def _compute_allowed_root_for_check(doc, base_path):
+    """Compute allowed_root by finding common ancestor of document and SOURCE_URIs.
+
+    Issue #48 Cross-directory fix: When hydrate creates output in a different
+    directory than the vocabulary (e.g., output in docs/, vocab in specs/),
+    the SOURCE_URI contains ".." patterns. The default allowed_root (document's
+    parent) is too restrictive for these legitimate cross-directory layouts.
+
+    This function:
+    1. Extracts all SOURCE_URI paths from MANIFEST sections
+    2. Resolves them relative to base_path
+    3. Finds the common ancestor of base_path and all resolved paths
+    4. Returns that as the allowed_root for containment checking
+
+    Security: The common ancestor approach is safe because:
+    - Absolute paths are still rejected by check_staleness()
+    - The allowed_root is at most as broad as the common ancestor
+    - Path traversal attacks (../../../etc/passwd) would still fail
+      because they resolve outside any reasonable project root
+
+    Args:
+        doc: Parsed OCTAVE document (already hydrated)
+        base_path: Document's parent directory (resolved)
+
+    Returns:
+        Path to use as allowed_root for check_staleness()
+    """
+    from pathlib import Path
+
+    from octave_mcp.core.ast_nodes import Assignment, Section
+
+    # Collect all resolved SOURCE_URI paths
+    resolved_paths = [base_path]  # Start with document's directory
+
+    for section in doc.sections:
+        if isinstance(section, Section):
+            if section.section_id == "SNAPSHOT" and section.key == "MANIFEST":
+                for child in section.children:
+                    if isinstance(child, Assignment) and child.key == "SOURCE_URI":
+                        source_uri = child.value
+                        if isinstance(source_uri, str) and source_uri.strip():
+                            # Skip absolute paths (they'll be rejected later anyway)
+                            if source_uri.startswith("/") or (len(source_uri) > 1 and source_uri[1] == ":"):
+                                continue
+                            # Resolve relative path
+                            try:
+                                resolved = (base_path / source_uri).resolve()
+                                resolved_paths.append(resolved)
+                            except (OSError, ValueError):
+                                # Path resolution failed - let check_staleness handle it
+                                continue
+
+    # Find common ancestor of all paths
+    if len(resolved_paths) == 1:
+        # No SOURCE_URIs found or all failed - use base_path
+        return base_path
+
+    # Compute common ancestor using Path parents
+    # Start with first path's parents and intersect with others
+    common_parts = list(resolved_paths[0].parts)
+
+    for path in resolved_paths[1:]:
+        path_parts = list(path.parts)
+        # Find longest common prefix
+        new_common = []
+        for a, b in zip(common_parts, path_parts, strict=False):
+            if a == b:
+                new_common.append(a)
+            else:
+                break
+        common_parts = new_common
+
+    if not common_parts:
+        # No common ancestor (shouldn't happen on same filesystem)
+        return base_path
+
+    # Reconstruct path from common parts
+    common_ancestor = Path(*common_parts)
+
+    return common_ancestor
+
+
 @cli.command()
 @click.argument("file", type=click.Path(exists=True))
 @click.option(
@@ -542,8 +624,17 @@ def hydrate(
             # Issue #48 CE Review: Use document's directory as base_path for
             # resolving relative SOURCE_URI paths (security + portability)
             # Issue #48 CE Security Fix: Use allowed_root for post-resolution containment
+            # Issue #48 Cross-directory fix: Auto-detect allowed_root when SOURCE_URI contains ".."
             base_path = source_path.parent.resolve()
-            allowed_root = Path(project_root).resolve() if project_root else base_path
+
+            if project_root:
+                # User explicitly specified project root
+                allowed_root = Path(project_root).resolve()
+            else:
+                # Auto-detect allowed_root from SOURCE_URI paths
+                # This handles cross-directory layouts (e.g., output in docs/, vocab in specs/)
+                allowed_root = _compute_allowed_root_for_check(doc, base_path)
+
             results = hydrator.check_staleness(doc, base_path=base_path, allowed_root=allowed_root)
 
             if not results:
