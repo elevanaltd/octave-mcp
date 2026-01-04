@@ -2,6 +2,7 @@
 name: octave-compression
 description: Specialized workflow for transforming verbose natural language into semantic OCTAVE structures. REQUIRES octave-literacy to be loaded first. Use when refactoring documentation, generating knowledge artifacts, or compressing context. Triggers on: compress to octave, semantic compression, documentation refactoring.
 allowed-tools: Read
+implements: specs/octave-5-llm-data
 ---
 
 # OCTAVE Compression Skill

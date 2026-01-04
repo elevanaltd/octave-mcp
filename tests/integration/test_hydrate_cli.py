@@ -670,3 +670,171 @@ META:
             # Should exit 0 with FRESH status (vocab unchanged since hydration)
             assert result.exit_code == 0, f"Cross-directory check failed: {result.output}"
             assert "FRESH" in result.output, f"Expected FRESH status, got: {result.output}"
+
+
+class TestHydratePruneManifestOption:
+    """Integration tests for `octave hydrate --prune-manifest` option.
+
+    TDD RED phase: Issue #48 Task 2.11 - CLI option for prune_strategy.
+    """
+
+    @pytest.fixture
+    def runner(self):
+        """Create CLI test runner."""
+        return CliRunner()
+
+    def test_prune_manifest_list_is_default(self, runner):
+        """Default behavior should be prune_strategy='list'."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--mapping",
+                f"@test/vocabulary={vocab_file}",
+            ],
+        )
+
+        assert result.exit_code == 0
+        # Default is 'list' - should have TERMS in PRUNED section
+        assert "TERMS::" in result.output
+        assert "GAMMA" in result.output
+        assert "EPSILON" in result.output
+
+    def test_prune_manifest_list_option(self, runner):
+        """--prune-manifest list should explicitly use list strategy."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--mapping",
+                f"@test/vocabulary={vocab_file}",
+                "--prune-manifest",
+                "list",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "TERMS::" in result.output
+        assert "GAMMA" in result.output
+
+    def test_prune_manifest_hash_option(self, runner):
+        """--prune-manifest hash should produce HASH field."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--mapping",
+                f"@test/vocabulary={vocab_file}",
+                "--prune-manifest",
+                "hash",
+            ],
+        )
+
+        assert result.exit_code == 0
+        # Should have HASH, not TERMS
+        assert "HASH::" in result.output
+        assert "sha256:" in result.output
+        # TERMS should not appear (except maybe in content)
+        assert "TERMS::" not in result.output
+
+    def test_prune_manifest_count_option(self, runner):
+        """--prune-manifest count should produce COUNT field."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--mapping",
+                f"@test/vocabulary={vocab_file}",
+                "--prune-manifest",
+                "count",
+            ],
+        )
+
+        assert result.exit_code == 0
+        # Should have COUNT, not TERMS
+        assert "COUNT::" in result.output
+        # GAMMA and EPSILON are pruned = 2
+        assert "COUNT::2" in result.output
+        assert "TERMS::" not in result.output
+
+    def test_prune_manifest_elide_option(self, runner):
+        """--prune-manifest elide should omit PRUNED section entirely."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--mapping",
+                f"@test/vocabulary={vocab_file}",
+                "--prune-manifest",
+                "elide",
+            ],
+        )
+
+        assert result.exit_code == 0
+        # Should have SNAPSHOT and MANIFEST
+        assert "SNAPSHOT" in result.output
+        assert "MANIFEST" in result.output
+        # Should NOT have PRUNED section
+        assert "PRUNED" not in result.output
+
+    def test_prune_manifest_invalid_option(self, runner):
+        """Invalid --prune-manifest value should fail with error."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--mapping",
+                f"@test/vocabulary={vocab_file}",
+                "--prune-manifest",
+                "invalid",
+            ],
+        )
+
+        # Click should reject invalid choice
+        assert result.exit_code != 0
+
+    def test_prune_manifest_recorded_in_manifest(self, runner):
+        """HYDRATION_POLICY in MANIFEST should reflect --prune-manifest option."""
+        source_file = str(FIXTURES_DIR / "source.oct.md")
+        vocab_file = str(FIXTURES_DIR / "vocabulary.oct.md")
+
+        result = runner.invoke(
+            cli,
+            [
+                "hydrate",
+                source_file,
+                "--mapping",
+                f"@test/vocabulary={vocab_file}",
+                "--prune-manifest",
+                "hash",
+            ],
+        )
+
+        assert result.exit_code == 0
+        # MANIFEST HYDRATION_POLICY should record PRUNE strategy
+        # Note: emitter outputs PRUNE::hash (no quotes for identifier-like values)
+        assert "PRUNE::hash" in result.output
