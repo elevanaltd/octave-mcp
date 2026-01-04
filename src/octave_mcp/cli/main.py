@@ -468,12 +468,19 @@ def write(
     type=click.Path(),
     help="Output file path (default: stdout)",
 )
+@click.option(
+    "--check",
+    "check_mode",
+    is_flag=True,
+    help="Check staleness of hydrated document (exit 0=fresh, 1=stale or error)",
+)
 def hydrate(
     file: str,
     registry: str | None,
     mapping: tuple[str, ...],
     collision: str,
     output: str | None,
+    check_mode: bool,
 ):
     """Hydrate vocabulary imports in OCTAVE document.
 
@@ -482,12 +489,17 @@ def hydrate(
     - §SNAPSHOT::MANIFEST with provenance (SOURCE_URI, SOURCE_HASH, HYDRATION_TIME)
     - §SNAPSHOT::PRUNED with available-but-unused terms
 
+    With --check flag, checks staleness of already-hydrated document:
+    - Exit 0: All snapshots are fresh (hashes match)
+    - Exit 1: At least one snapshot is stale or error occurred
+
     Issue #48: Living Scrolls vocabulary hydration.
 
     Examples:
         octave hydrate doc.oct.md --registry specs/vocabularies/registry.oct.md
         octave hydrate doc.oct.md --mapping "@test/vocab=./vocab.oct.md"
         octave hydrate doc.oct.md -o hydrated.oct.md
+        octave hydrate hydrated.oct.md --check
 
     Exit code 0 on success, 1 on failure.
     """
@@ -495,8 +507,56 @@ def hydrate(
 
     from octave_mcp.core import hydrator
     from octave_mcp.core.emitter import emit
+    from octave_mcp.core.parser import parse
 
     try:
+        # Handle --check mode (staleness detection)
+        if check_mode:
+            # --check is mutually exclusive with hydration options
+            if mapping or registry or output:
+                click.echo(
+                    "Error: --check cannot be used with --mapping, --registry, or --output. "
+                    "Use --check alone to verify staleness of an already-hydrated document.",
+                    err=True,
+                )
+                raise SystemExit(1)
+
+            # Read and parse the document
+            source_path = Path(file)
+            content = source_path.read_text(encoding="utf-8")
+            doc = parse(content)
+
+            # Check staleness
+            results = hydrator.check_staleness(doc)
+
+            if not results:
+                # No snapshots found - nothing to check
+                click.echo("No SNAPSHOT sections found in document.")
+                raise SystemExit(0)
+
+            # Report results
+            has_stale_or_error = False
+            for staleness_result in results:
+                if staleness_result.status == "FRESH":
+                    actual_hash = staleness_result.actual_hash or "N/A"
+                    click.echo(f"FRESH: {staleness_result.namespace} (hash: {actual_hash[:20]}...)")
+                elif staleness_result.status == "STALE":
+                    actual = staleness_result.actual_hash[:20] if staleness_result.actual_hash else "N/A"
+                    click.echo(
+                        f"STALE: {staleness_result.namespace} "
+                        f"(expected: {staleness_result.expected_hash[:20]}..., got: {actual}...)"
+                    )
+                    has_stale_or_error = True
+                else:  # ERROR
+                    click.echo(f"ERROR: {staleness_result.namespace} - {staleness_result.error}")
+                    has_stale_or_error = True
+
+            if has_stale_or_error:
+                raise SystemExit(1)
+            else:
+                raise SystemExit(0)
+
+        # Normal hydration mode
         # Build registry from options
         if mapping:
             # Direct mappings provided via --mapping
@@ -518,8 +578,7 @@ def hydrate(
                 vocab_registry = hydrator.VocabularyRegistry(default_registry)
             else:
                 click.echo(
-                    "Error: No registry specified and default registry not found. "
-                    "Use --registry or --mapping option.",
+                    "Error: No registry specified and default registry not found. Use --registry or --mapping option.",
                     err=True,
                 )
                 raise SystemExit(1)
@@ -787,6 +846,176 @@ def coverage(spec_file: str, skill_file: str, output_format: str):
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1) from e
+
+
+@cli.group()
+def vocab():
+    """Vocabulary management commands.
+
+    Issue #48 Task 2.9: Commands for working with OCTAVE vocabularies.
+    """
+    pass
+
+
+@vocab.command("list")
+@click.option(
+    "--registry",
+    type=click.Path(exists=True),
+    help="Path to vocabulary registry file (default: specs/vocabularies/registry.oct.md)",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format (default: table)",
+)
+def vocab_list(registry: str | None, output_format: str):
+    """List available vocabularies from registry.
+
+    Reads the vocabulary registry and displays:
+    - Name: Vocabulary capsule name
+    - Version: Semantic version
+    - Path: Relative path from registry root
+    - Term count: Number of terms in the vocabulary
+
+    Examples:
+        octave vocab list
+        octave vocab list --registry specs/vocabularies/registry.oct.md
+        octave vocab list --format json
+
+    Exit code 0 on success, 1 on error.
+    """
+    import json as json_module
+    from pathlib import Path
+
+    from octave_mcp.core.parser import parse
+
+    try:
+        # Determine registry path
+        if registry:
+            registry_path = Path(registry)
+        else:
+            # Try default location
+            registry_path = Path("specs/vocabularies/registry.oct.md")
+            if not registry_path.exists():
+                click.echo(
+                    "Error: No registry specified and default registry not found at "
+                    "specs/vocabularies/registry.oct.md. Use --registry option.",
+                    err=True,
+                )
+                raise SystemExit(1)
+
+        # Read and parse registry
+        content = registry_path.read_text(encoding="utf-8")
+        doc = parse(content)
+
+        # Extract vocabulary entries
+        vocabularies = _extract_vocabulary_entries_from_registry(doc)
+
+        if not vocabularies:
+            click.echo("No vocabularies found in registry.")
+            raise SystemExit(0)
+
+        # Output based on format
+        if output_format == "json":
+            output = json_module.dumps(vocabularies, indent=2)
+            click.echo(output)
+        else:
+            # Table format
+            _print_vocabulary_table(vocabularies)
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
+def _extract_vocabulary_entries_from_registry(doc) -> list[dict]:
+    """Extract vocabulary entries from parsed registry document.
+
+    Looks for nested sections with NAME, PATH, VERSION, and TERMS fields.
+
+    Args:
+        doc: Parsed OCTAVE document
+
+    Returns:
+        List of vocabulary entry dictionaries
+    """
+    from octave_mcp.core.ast_nodes import Assignment, ListValue, Section
+
+    vocabularies = []
+
+    def extract_from_section(section):
+        """Recursively extract vocabulary entries from section."""
+        name = None
+        path = None
+        version = None
+        terms = []
+
+        for child in section.children:
+            if isinstance(child, Assignment):
+                if child.key == "NAME":
+                    name = child.value
+                elif child.key == "PATH":
+                    path = child.value
+                elif child.key == "VERSION":
+                    version = child.value
+                elif child.key == "TERMS":
+                    if isinstance(child.value, ListValue):
+                        terms = child.value.items
+                    elif isinstance(child.value, list):
+                        terms = child.value
+            elif isinstance(child, Section):
+                # Recurse into nested sections
+                extract_from_section(child)
+
+        # If we found a vocabulary entry, add it
+        if name and path:
+            vocabularies.append(
+                {
+                    "name": name,
+                    "version": version or "unknown",
+                    "path": path,
+                    "term_count": len(terms),
+                }
+            )
+
+    # Search all sections
+    for section in doc.sections:
+        if isinstance(section, Section):
+            extract_from_section(section)
+
+    return vocabularies
+
+
+def _print_vocabulary_table(vocabularies: list[dict]) -> None:
+    """Print vocabulary entries in table format.
+
+    Args:
+        vocabularies: List of vocabulary entry dictionaries
+    """
+    # Calculate column widths
+    name_width = max(len("Name"), max(len(v["name"]) for v in vocabularies))
+    version_width = max(len("Version"), max(len(str(v["version"])) for v in vocabularies))
+    path_width = max(len("Path"), max(len(v["path"]) for v in vocabularies))
+    count_width = max(len("Terms"), max(len(str(v["term_count"])) for v in vocabularies))
+
+    # Print header
+    header = f"{'Name':<{name_width}}  {'Version':<{version_width}}  {'Path':<{path_width}}  {'Terms':>{count_width}}"
+    click.echo(header)
+    click.echo("-" * len(header))
+
+    # Print rows
+    for vocab in vocabularies:
+        row = (
+            f"{vocab['name']:<{name_width}}  "
+            f"{vocab['version']:<{version_width}}  "
+            f"{vocab['path']:<{path_width}}  "
+            f"{vocab['term_count']:>{count_width}}"
+        )
+        click.echo(row)
 
 
 if __name__ == "__main__":

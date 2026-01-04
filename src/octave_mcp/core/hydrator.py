@@ -104,6 +104,27 @@ class HydrationPolicy:
 
 
 @dataclass
+class StalenessResult:
+    """Result of staleness check for a single snapshot.
+
+    Issue #48 Task 2.8: Staleness detection for hydrated documents.
+
+    Attributes:
+        namespace: The vocabulary namespace (e.g., "@test/vocabulary")
+        status: "FRESH" if hash matches, "STALE" if hash differs, "ERROR" on failure
+        expected_hash: Hash stored in manifest (SOURCE_HASH)
+        actual_hash: Current hash of source file (or None if error)
+        error: Error message if status is "ERROR" (optional)
+    """
+
+    namespace: str
+    status: Literal["FRESH", "STALE", "ERROR"]
+    expected_hash: str
+    actual_hash: str | None
+    error: str | None = None
+
+
+@dataclass
 class ImportDirective:
     """Parsed import directive information.
 
@@ -726,3 +747,155 @@ def _create_pruned_section(pruned_terms: set[str]) -> Section:
             Assignment(key="TERMS", value=terms_list),
         ],
     )
+
+
+def check_staleness(doc: Document) -> list[StalenessResult]:
+    """Check staleness of all SNAPSHOT manifests in a hydrated document.
+
+    Issue #48 Task 2.8: Staleness detection for hydrated documents.
+
+    Parses the document to find §SNAPSHOT::MANIFEST sections, extracts
+    SOURCE_URI and SOURCE_HASH from each, computes current hash of source
+    file, and compares to determine if snapshot is stale.
+
+    Args:
+        doc: Parsed OCTAVE document (already hydrated)
+
+    Returns:
+        List of StalenessResult, one per SNAPSHOT/MANIFEST pair found.
+        Empty list if no snapshots found in document.
+    """
+    results: list[StalenessResult] = []
+
+    # Track current namespace as we iterate through sections
+    # SNAPSHOT sections come before their MANIFEST sections
+    current_namespace: str | None = None
+
+    for section in doc.sections:
+        if isinstance(section, Section):
+            # Detect §CONTEXT::SNAPSHOT["@namespace/name"]
+            if section.section_id == "CONTEXT" and section.key == "SNAPSHOT":
+                # Extract namespace from annotation like: "@test/vocabulary"
+                # The annotation field contains the quoted namespace
+                namespace = _extract_namespace_from_annotation(section.annotation)
+                if namespace:
+                    current_namespace = namespace
+
+            # Detect §SNAPSHOT::MANIFEST
+            elif section.section_id == "SNAPSHOT" and section.key == "MANIFEST":
+                # Extract SOURCE_URI and SOURCE_HASH from manifest
+                source_uri = None
+                source_hash = None
+
+                for child in section.children:
+                    if isinstance(child, Assignment):
+                        if child.key == "SOURCE_URI":
+                            source_uri = child.value
+                        elif child.key == "SOURCE_HASH":
+                            source_hash = child.value
+
+                if source_uri and source_hash:
+                    # Check if source file exists and compute hash
+                    result = _check_single_snapshot(
+                        namespace=current_namespace or "unknown",
+                        source_uri=source_uri,
+                        expected_hash=source_hash,
+                    )
+                    results.append(result)
+
+    return results
+
+
+def _extract_namespace_from_annotation(annotation: str | None) -> str | None:
+    """Extract namespace from section annotation like '"@test/vocabulary"'.
+
+    The parser stores annotations without brackets, so we just need to
+    strip the surrounding quotes.
+
+    Args:
+        annotation: Section annotation string (may be quoted)
+
+    Returns:
+        Extracted namespace or None if not found
+    """
+    if not annotation:
+        return None
+
+    # Remove surrounding quotes if present
+    namespace = annotation.strip()
+    if namespace.startswith('"') and namespace.endswith('"'):
+        namespace = namespace[1:-1]
+    return namespace if namespace else None
+
+
+def _extract_namespace_from_snapshot_key(key: str) -> str | None:
+    """Extract namespace from SNAPSHOT key like 'SNAPSHOT["@test/vocabulary"]'.
+
+    Args:
+        key: Section key containing namespace
+
+    Returns:
+        Extracted namespace or None if not found
+    """
+    # Match pattern: SNAPSHOT["@namespace/name"]
+    match = re.match(r'SNAPSHOT\["([^"]+)"\]', key)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _check_single_snapshot(
+    namespace: str,
+    source_uri: str,
+    expected_hash: str,
+) -> StalenessResult:
+    """Check staleness of a single snapshot.
+
+    Args:
+        namespace: Vocabulary namespace
+        source_uri: Path to source file from manifest
+        expected_hash: Hash stored in manifest
+
+    Returns:
+        StalenessResult with FRESH, STALE, or ERROR status
+    """
+    source_path = Path(source_uri)
+
+    # Check if source file exists
+    if not source_path.exists():
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error=f"Source file not found: {source_uri}",
+        )
+
+    try:
+        # Compute current hash
+        actual_hash = compute_vocabulary_hash(source_path)
+
+        # Compare hashes
+        if actual_hash == expected_hash:
+            return StalenessResult(
+                namespace=namespace,
+                status="FRESH",
+                expected_hash=expected_hash,
+                actual_hash=actual_hash,
+            )
+        else:
+            return StalenessResult(
+                namespace=namespace,
+                status="STALE",
+                expected_hash=expected_hash,
+                actual_hash=actual_hash,
+            )
+
+    except Exception as e:
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error=str(e),
+        )
