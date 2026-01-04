@@ -2416,3 +2416,21 @@ class TestPruneStrategyOptions:
             prune_value = _get_field_value(policy_block, "PRUNE")
 
             assert prune_value == strategy, f"PRUNE field should be '{strategy}', got: {prune_value}"
+
+    def test_invalid_prune_strategy_raises_vocabulary_error(self):
+        """Invalid prune_strategy must raise VocabularyError, not silent fallback.
+
+        Issue #48 CE Review H1: Production risk - misconfiguration should fail loudly.
+        Previously, any invalid strategy silently became COUNT mode.
+        """
+        from octave_mcp.core.hydrator import VocabularyError, _create_pruned_section
+
+        with pytest.raises(VocabularyError, match="Invalid prune_strategy"):
+            _create_pruned_section({"term1", "term2"}, "bogus")  # type: ignore
+
+    def test_invalid_prune_strategy_shows_valid_options(self):
+        """Error message should list valid options for discoverability."""
+        from octave_mcp.core.hydrator import VocabularyError, _create_pruned_section
+
+        with pytest.raises(VocabularyError, match=r"list.*hash.*count.*elide"):
+            _create_pruned_section({"term1"}, "invalid_strategy")  # type: ignore

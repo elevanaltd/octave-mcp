@@ -945,7 +945,7 @@ def _create_pruned_section(
             ],
         )
 
-    else:  # strategy == "count"
+    elif strategy == "count":
         # Just the count of pruned terms
         return Section(
             section_id="SNAPSHOT",
@@ -954,6 +954,10 @@ def _create_pruned_section(
                 Assignment(key="COUNT", value=len(sorted_terms)),
             ],
         )
+
+    else:
+        # Issue #48 CE Review H1: Invalid strategy must fail loudly, not silent fallback
+        raise VocabularyError(f"Invalid prune_strategy: {strategy!r}. " "Expected one of: list, hash, count, elide")
 
 
 def check_staleness(
