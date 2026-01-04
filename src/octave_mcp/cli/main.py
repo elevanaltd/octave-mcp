@@ -165,7 +165,13 @@ def eject(file: str, mode: str, output_format: str):
 @click.option("--schema", help="Schema name for validation (e.g., 'META', 'SESSION_LOG')")
 @click.option("--fix", is_flag=True, help="Apply repairs to output")
 @click.option("--verify-seal", "verify_seal", is_flag=True, help="Verify SEAL section integrity")
-def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool, verify_seal: bool):
+@click.option(
+    "--require-seal",
+    "require_seal",
+    is_flag=True,
+    help="Require SEAL section (exit 1 if missing). Only valid with --verify-seal",
+)
+def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool, verify_seal: bool, require_seal: bool):
     """Validate OCTAVE against schema.
 
     Matches MCP octave_validate tool. Returns validation_status:
@@ -173,10 +179,14 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool, v
 
     With --verify-seal, also checks SEAL section integrity:
     - VERIFIED: Hash matches content
-    - INVALID: Hash mismatch (content modified)
-    - No SEAL section: Informational message
+    - INVALID: Hash mismatch (content modified) - exits with code 1
+    - No SEAL section: Informational message (exit 0 unless --require-seal)
 
-    Exit code 0 on success, 1 on validation failure.
+    With --require-seal (requires --verify-seal):
+    - Exit 1 if no SEAL section found
+    - Useful for CI to enforce sealed documents
+
+    Exit code 0 on success, 1 on validation or seal failure.
     """
     import sys
 
@@ -189,6 +199,11 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool, v
     # CRS-FIX #4: XOR enforcement - exactly ONE input source
     if file is not None and use_stdin:
         click.echo("Error: Cannot provide both FILE and --stdin", err=True)
+        raise SystemExit(1)
+
+    # Issue #131: --require-seal only valid with --verify-seal
+    if require_seal and not verify_seal:
+        click.echo("Error: --require-seal requires --verify-seal", err=True)
         raise SystemExit(1)
 
     # Get content from file or stdin
@@ -267,11 +282,21 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool, v
             elif seal_status == SealStatus.NO_SEAL:
                 click.echo("Seal: No SEAL section found")
 
-        # If INVALID, output errors and exit with code 1
+        # If schema validation INVALID, output errors and exit with code 1
         if validation_status == "INVALID":
             for error in validation_errors:
                 click.echo(f"  {error.code}: {error.message}", err=True)
             raise SystemExit(1)
+
+        # Issue #131: Exit with failure if seal verification failed
+        if verify_seal:
+            from octave_mcp.core.sealer import SealStatus
+
+            if seal_status == SealStatus.INVALID:
+                raise SystemExit(1)
+            if require_seal and seal_status == SealStatus.NO_SEAL:
+                click.echo("Error: --require-seal specified but no SEAL section found", err=True)
+                raise SystemExit(1)
 
     except SystemExit:
         raise

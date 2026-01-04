@@ -311,3 +311,235 @@ META:
             temp_path.unlink()
             if sealed_path.exists():
                 sealed_path.unlink()
+
+
+class TestVerifySealExitCodes:
+    """Tests for --verify-seal exit code behavior.
+
+    Issue #131: Exit codes should reflect seal verification status.
+    - INVALID seal should exit 1
+    - NO_SEAL should exit 0 by default
+    - --require-seal with NO_SEAL should exit 1
+    """
+
+    def test_verify_seal_invalid_exits_nonzero(self):
+        """--verify-seal with INVALID seal should exit with code 1.
+
+        This ensures CI can detect tampered documents.
+        """
+        runner = CliRunner()
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(
+                """===DOC===
+META:
+  TYPE::"TEST"
+===END==="""
+            )
+            temp_path = Path(f.name)
+
+        try:
+            # Seal the document
+            seal_result = runner.invoke(cli, ["seal", str(temp_path)])
+            assert seal_result.exit_code == 0
+
+            # Tamper with the sealed content
+            tampered_content = seal_result.output.replace("TYPE::TEST", "TYPE::TAMPERED")
+
+            tampered_path = Path(str(temp_path) + ".tampered")
+            tampered_path.write_text(tampered_content)
+
+            # Verify the tampered document - should exit non-zero
+            verify_result = runner.invoke(cli, ["validate", str(tampered_path), "--verify-seal"])
+
+            assert verify_result.exit_code != 0, (
+                f"Expected non-zero exit code for INVALID seal, "
+                f"got {verify_result.exit_code}. Output: {verify_result.output}"
+            )
+        finally:
+            temp_path.unlink()
+            if tampered_path.exists():
+                tampered_path.unlink()
+
+    def test_verify_seal_valid_exits_zero(self):
+        """--verify-seal with VERIFIED seal should exit with code 0."""
+        runner = CliRunner()
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(
+                """===DOC===
+META:
+  TYPE::"TEST"
+===END==="""
+            )
+            temp_path = Path(f.name)
+
+        try:
+            # Seal the document
+            seal_result = runner.invoke(cli, ["seal", str(temp_path)])
+            assert seal_result.exit_code == 0
+
+            sealed_path = Path(str(temp_path) + ".sealed")
+            sealed_path.write_text(seal_result.output)
+
+            # Verify the sealed document - should exit zero
+            verify_result = runner.invoke(cli, ["validate", str(sealed_path), "--verify-seal"])
+
+            assert verify_result.exit_code == 0, (
+                f"Expected exit code 0 for VERIFIED seal, "
+                f"got {verify_result.exit_code}. Output: {verify_result.output}"
+            )
+        finally:
+            temp_path.unlink()
+            if sealed_path.exists():
+                sealed_path.unlink()
+
+    def test_verify_seal_no_seal_exits_zero_by_default(self):
+        """--verify-seal with NO_SEAL should exit 0 by default (informational only)."""
+        runner = CliRunner()
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(
+                """===DOC===
+META:
+  TYPE::"TEST"
+===END==="""
+            )
+            temp_path = Path(f.name)
+
+        try:
+            # Verify unsealed document - should exit zero (informational)
+            verify_result = runner.invoke(cli, ["validate", str(temp_path), "--verify-seal"])
+
+            assert verify_result.exit_code == 0, (
+                f"Expected exit code 0 for NO_SEAL (informational), "
+                f"got {verify_result.exit_code}. Output: {verify_result.output}"
+            )
+            # Should still indicate no seal was found
+            assert "No SEAL" in verify_result.output or "NO_SEAL" in verify_result.output.upper()
+        finally:
+            temp_path.unlink()
+
+    def test_require_seal_with_no_seal_exits_nonzero(self):
+        """--require-seal with NO_SEAL should exit with code 1."""
+        runner = CliRunner()
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(
+                """===DOC===
+META:
+  TYPE::"TEST"
+===END==="""
+            )
+            temp_path = Path(f.name)
+
+        try:
+            # Verify with --require-seal on unsealed document - should exit non-zero
+            verify_result = runner.invoke(cli, ["validate", str(temp_path), "--verify-seal", "--require-seal"])
+
+            assert verify_result.exit_code != 0, (
+                f"Expected non-zero exit code for --require-seal with NO_SEAL, "
+                f"got {verify_result.exit_code}. Output: {verify_result.output}"
+            )
+            # Should have an error message about missing seal
+            assert "require" in verify_result.output.lower() or "seal" in verify_result.output.lower()
+        finally:
+            temp_path.unlink()
+
+    def test_require_seal_without_verify_seal_is_error(self):
+        """--require-seal without --verify-seal should produce an error."""
+        runner = CliRunner()
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(
+                """===DOC===
+META:
+  TYPE::"TEST"
+===END==="""
+            )
+            temp_path = Path(f.name)
+
+        try:
+            # --require-seal without --verify-seal should error
+            verify_result = runner.invoke(cli, ["validate", str(temp_path), "--require-seal"])
+
+            # Should either error or be ignored (we prefer error for clarity)
+            # If exit 0, the flag was ignored. If exit 1, error detected.
+            # The requirement says it should be no-op OR error - we implement as error
+            if verify_result.exit_code != 0:
+                # Error case - should have message about require-seal needing verify-seal
+                assert "verify-seal" in verify_result.output.lower() or "require" in verify_result.output.lower()
+            # If exit 0, flag was silently ignored which is also acceptable per spec
+        finally:
+            temp_path.unlink()
+
+    def test_require_seal_with_valid_seal_exits_zero(self):
+        """--require-seal with VERIFIED seal should exit 0."""
+        runner = CliRunner()
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(
+                """===DOC===
+META:
+  TYPE::"TEST"
+===END==="""
+            )
+            temp_path = Path(f.name)
+
+        try:
+            # Seal the document
+            seal_result = runner.invoke(cli, ["seal", str(temp_path)])
+            assert seal_result.exit_code == 0
+
+            sealed_path = Path(str(temp_path) + ".sealed")
+            sealed_path.write_text(seal_result.output)
+
+            # Verify with --require-seal - seal exists and is valid
+            verify_result = runner.invoke(cli, ["validate", str(sealed_path), "--verify-seal", "--require-seal"])
+
+            assert verify_result.exit_code == 0, (
+                f"Expected exit code 0 for --require-seal with VERIFIED seal, "
+                f"got {verify_result.exit_code}. Output: {verify_result.output}"
+            )
+        finally:
+            temp_path.unlink()
+            if sealed_path.exists():
+                sealed_path.unlink()
+
+    def test_invalid_seal_exits_nonzero_even_with_valid_schema(self):
+        """Document with valid schema but broken seal should exit 1.
+
+        Schema validation passes but seal verification fails - overall should fail.
+        """
+        runner = CliRunner()
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
+            f.write(
+                """===DOC===
+META:
+  TYPE::"TEST"
+===END==="""
+            )
+            temp_path = Path(f.name)
+
+        try:
+            # Seal the document
+            seal_result = runner.invoke(cli, ["seal", str(temp_path)])
+            assert seal_result.exit_code == 0
+
+            # Tamper with content (still valid OCTAVE syntax)
+            tampered_content = seal_result.output.replace("TYPE::TEST", "TYPE::MODIFIED")
+            tampered_path = Path(str(temp_path) + ".tampered")
+            tampered_path.write_text(tampered_content)
+
+            # Verify - document is syntactically valid but seal is broken
+            verify_result = runner.invoke(cli, ["validate", str(tampered_path), "--verify-seal"])
+
+            assert verify_result.exit_code != 0, (
+                f"Expected non-zero exit for valid document with INVALID seal, "
+                f"got {verify_result.exit_code}. Output: {verify_result.output}"
+            )
+        finally:
+            temp_path.unlink()
+            if tampered_path.exists():
+                tampered_path.unlink()
