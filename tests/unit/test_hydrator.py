@@ -1168,12 +1168,48 @@ META:
         assert results[0].status == "ERROR"
         assert "security" in results[0].error.lower() or "traversal" in results[0].error.lower()
 
-    def test_check_staleness_handles_absolute_path(self):
-        """Should handle absolute paths in SOURCE_URI.
+    def test_check_staleness_rejects_absolute_path(self):
+        """Should reject absolute paths in SOURCE_URI with ERROR status.
 
-        Security model: Absolute paths are allowed because hydrate() creates
-        them from trusted sources. The security concern is path traversal (..).
-        This test verifies that absolute paths work correctly.
+        Security model (Debate Decision): Absolute paths are FORBIDDEN in
+        SOURCE_URI for unified security model with validate_source_uri().
+        Error messages should not echo the raw absolute path.
+        """
+        from octave_mcp.core.hydrator import check_staleness
+        from octave_mcp.core.parser import parse
+
+        # Document with absolute path in SOURCE_URI (now rejected)
+        content = """===HYDRATED_DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::SNAPSHOT["@test/vocabulary"]
+  ALPHA::"First letter"
+
+§SNAPSHOT::MANIFEST
+  SOURCE_URI::"/etc/passwd"
+  SOURCE_HASH::"sha256:abc123"
+  HYDRATION_TIME::"2024-01-01T00:00:00Z"
+
+===END===
+"""
+
+        doc = parse(content)
+        results = check_staleness(doc)
+
+        assert len(results) == 1
+        assert results[0].status == "ERROR"
+        # Error message should mention security but NOT echo the raw path
+        assert "absolute" in results[0].error.lower() or "security" in results[0].error.lower()
+        # Should NOT contain the actual path (security: don't echo)
+        assert "/etc/passwd" not in results[0].error
+
+    def test_check_staleness_works_with_relative_path(self):
+        """Should correctly handle relative paths in SOURCE_URI.
+
+        This confirms relative paths still work after the absolute path
+        prohibition - the intended behavior for trusted hydration.
         """
         from octave_mcp.core.hydrator import check_staleness, compute_vocabulary_hash
         from octave_mcp.core.parser import parse
@@ -1182,7 +1218,15 @@ META:
         vocab_path = FIXTURES_DIR / "vocabulary.oct.md"
         vocab_hash = compute_vocabulary_hash(vocab_path)
 
-        # Document with absolute path in SOURCE_URI (trusted, created by hydrate)
+        # Calculate relative path from cwd to fixture
+        cwd = Path.cwd()
+        try:
+            rel_path = vocab_path.relative_to(cwd)
+        except ValueError:
+            # If can't make relative, skip this test
+            pytest.skip("Cannot create relative path from cwd to fixture")
+
+        # Document with relative path in SOURCE_URI (allowed)
         content = f"""===HYDRATED_DOC===
 META:
   TYPE::"SPEC"
@@ -1192,7 +1236,7 @@ META:
   ALPHA::"First letter"
 
 §SNAPSHOT::MANIFEST
-  SOURCE_URI::"{vocab_path}"
+  SOURCE_URI::"{rel_path}"
   SOURCE_HASH::"{vocab_hash}"
   HYDRATION_TIME::"2024-01-01T00:00:00Z"
 
