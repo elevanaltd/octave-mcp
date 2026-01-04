@@ -640,6 +640,7 @@ def hydrate(
     source_path: Path,
     registry: VocabularyRegistry,
     policy: HydrationPolicy,
+    output_path: Path | None = None,
 ) -> Document:
     """Hydrate a document by transforming IMPORT directives to SNAPSHOTs.
 
@@ -647,6 +648,7 @@ def hydrate(
         source_path: Path to source document with IMPORT directives
         registry: Vocabulary registry for namespace resolution
         policy: Hydration policy settings
+        output_path: Path where hydrated document will be written (for relative SOURCE_URI)
 
     Returns:
         New Document with IMPORT replaced by SNAPSHOT + MANIFEST + PRUNED
@@ -729,7 +731,9 @@ def hydrate(
 
         # Create §SNAPSHOT::MANIFEST section
         # Issue #48: Pass version information to manifest
-        manifest_section = _create_manifest_section(vocab_path, policy, imp.version, resolved_version)
+        # Issue #48 Debate Decision: Store relative path (output_path or source_path as base)
+        base_path = output_path if output_path else source_path
+        manifest_section = _create_manifest_section(vocab_path, policy, imp.version, resolved_version, base_path)
         new_sections.append(manifest_section)
 
         # Create §SNAPSHOT::PRUNED section
@@ -767,20 +771,23 @@ def _create_manifest_section(
     policy: HydrationPolicy,
     requested_version: str | None = None,
     resolved_version: str | None = None,
+    base_path: Path | None = None,
 ) -> Section:
     """Create §SNAPSHOT::MANIFEST section.
 
     Issue #48: Now includes REQUESTED_VERSION and RESOLVED_VERSION fields.
 
-    Note: SOURCE_URI stores the absolute path to enable staleness detection.
-    Security validation is applied during check_staleness() when reading
-    untrusted documents, not here during trusted hydration.
+    Issue #48 Debate Decision: SOURCE_URI stores a RELATIVE path for security.
+    Absolute paths are forbidden during staleness checking to prevent
+    path traversal attacks. The relative path is computed from base_path's
+    parent directory (where the output file will be written).
 
     Args:
         vocab_path: Path to vocabulary file
         policy: Hydration policy settings
         requested_version: Version requested in IMPORT directive (or None)
         resolved_version: Version from registry (or None)
+        base_path: Path to output file (for computing relative SOURCE_URI)
 
     Returns:
         Section with manifest information
@@ -804,11 +811,27 @@ def _create_manifest_section(
     requested_version_str = requested_version if requested_version else "unspecified"
     resolved_version_str = resolved_version if resolved_version else "unknown"
 
+    # Issue #48 Debate Decision: Store relative path in SOURCE_URI for security
+    # Compute relative path from output file's directory to vocabulary file
+    if base_path is not None:
+        base_dir = base_path.resolve().parent
+        vocab_resolved = vocab_path.resolve()
+        try:
+            source_uri = str(vocab_resolved.relative_to(base_dir))
+        except ValueError:
+            # Vocab is outside base_dir, use os.path.relpath for cross-directory paths
+            import os
+
+            source_uri = os.path.relpath(vocab_resolved, base_dir)
+    else:
+        # Fallback: use absolute path (legacy behavior, will fail staleness check)
+        source_uri = str(vocab_path)
+
     return Section(
         section_id="SNAPSHOT",
         key="MANIFEST",
         children=[
-            Assignment(key="SOURCE_URI", value=str(vocab_path)),
+            Assignment(key="SOURCE_URI", value=source_uri),
             Assignment(key="SOURCE_HASH", value=compute_vocabulary_hash(vocab_path)),
             Assignment(key="HYDRATION_TIME", value=hydration_time),
             Assignment(key="REQUESTED_VERSION", value=requested_version_str),
@@ -965,10 +988,11 @@ def _check_single_snapshot(
 
     Issue #48 CE Review BLOCKING: Includes security validation for SOURCE_URI.
 
-    Security model:
+    Security model (unified with validate_source_uri):
+    - Absolute paths are FORBIDDEN for security (debate decision)
     - Path traversal (..) is ALWAYS rejected as it can escape any directory
-    - Absolute paths are allowed when checking documents we created
     - Relative paths are resolved from base_path (document's directory)
+    - Error messages do NOT echo raw paths (prevents information leakage)
 
     Args:
         namespace: Vocabulary namespace
@@ -979,6 +1003,18 @@ def _check_single_snapshot(
     Returns:
         StalenessResult with FRESH, STALE, or ERROR status
     """
+    # Issue #48 Debate Decision: Reject absolute paths for unified security model
+    # This aligns with validate_source_uri() which also forbids absolute paths.
+    # Do NOT echo the raw path in error messages (security: information leakage).
+    if source_uri.startswith("/") or (len(source_uri) > 1 and source_uri[1] == ":"):
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error="Security violation: absolute SOURCE_URI paths are not allowed",
+        )
+
     # Issue #48 CE Review BLOCKING: Reject path traversal patterns
     # These could escape directory bounds regardless of whether path is absolute
     if ".." in source_uri:
@@ -990,27 +1026,25 @@ def _check_single_snapshot(
             error="Security violation: path traversal patterns (..) are not allowed in SOURCE_URI",
         )
 
-    # Resolve the source path
+    # Resolve the source path (only relative paths reach here)
     source_path = Path(source_uri)
+    if base_path is None:
+        base_path = Path.cwd()
+    source_path = base_path / source_uri
 
-    # If relative path, resolve from base_path
-    if not source_path.is_absolute():
-        if base_path is None:
-            base_path = Path.cwd()
-        source_path = base_path / source_uri
-        # For relative paths, verify they stay within base
-        try:
-            resolved = source_path.resolve()
-            resolved.relative_to(base_path.resolve())
-            source_path = resolved
-        except ValueError:
-            return StalenessResult(
-                namespace=namespace,
-                status="ERROR",
-                expected_hash=expected_hash,
-                actual_hash=None,
-                error="Security violation: resolved path is outside allowed directory",
-            )
+    # Verify relative paths stay within base directory
+    try:
+        resolved = source_path.resolve()
+        resolved.relative_to(base_path.resolve())
+        source_path = resolved
+    except ValueError:
+        return StalenessResult(
+            namespace=namespace,
+            status="ERROR",
+            expected_hash=expected_hash,
+            actual_hash=None,
+            error="Security violation: resolved path is outside allowed directory",
+        )
 
     # Check if source file exists
     if not source_path.exists():

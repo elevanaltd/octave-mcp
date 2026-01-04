@@ -594,8 +594,10 @@ def hydrate(
         )
 
         # Hydrate the document
+        # Issue #48 Debate Decision: Pass output_path for relative SOURCE_URI
         source_path = Path(file)
-        result = hydrator.hydrate(source_path, vocab_registry, policy)
+        output_path = Path(output) if output else None
+        result = hydrator.hydrate(source_path, vocab_registry, policy, output_path)
 
         # Emit canonical output
         output_content = emit(result)
