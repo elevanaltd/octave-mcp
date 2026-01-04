@@ -523,5 +523,73 @@ def hydrate(
         raise SystemExit(1) from e
 
 
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path (default: stdout)",
+)
+def normalize(file: str, output: str | None):
+    """Normalize OCTAVE document to canonical form.
+
+    Transforms an OCTAVE document to canonical form with:
+    - UTF-8 encoding
+    - LF-only line endings (no CRLF)
+    - Trimmed trailing whitespace
+    - Normalized indentation (2 spaces)
+    - Unicode operators (-> to U+2192, + to U+2295, # to U+00A7, etc.)
+
+    Issue #48 Phase 2: Wall Condition C1 canonical text rules.
+
+    Examples:
+        octave normalize doc.oct.md
+        octave normalize doc.oct.md -o normalized.oct.md
+
+    Exit code 0 on success, 1 on failure.
+    """
+    from pathlib import Path
+
+    from octave_mcp.core.emitter import emit
+    from octave_mcp.core.parser import parse
+
+    try:
+        # Read input file
+        input_path = Path(file)
+        content = input_path.read_text(encoding="utf-8")
+
+        # Parse (lenient) -> AST
+        doc = parse(content)
+
+        # Emit (canonical) -> normalized output
+        output_content = emit(doc)
+
+        # Write to file or stdout
+        if output:
+            # Security: validate output path before writing
+            from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
+
+            path_valid, path_error = validate_octave_path(output)
+            if not path_valid:
+                click.echo(f"Error: {path_error}", err=True)
+                raise SystemExit(1)
+
+            write_result = atomic_write_octave(output, output_content, None)
+            if write_result["status"] == "error":
+                click.echo(f"Error: {write_result['error']}", err=True)
+                raise SystemExit(1)
+
+            click.echo(f"Normalized document written to: {write_result['path']}")
+        else:
+            click.echo(output_content)
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
 if __name__ == "__main__":
     cli()
