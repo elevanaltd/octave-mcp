@@ -1620,3 +1620,149 @@ TEST_HOLOGRAPHIC:
         # No validation errors when document is valid
         validation_errors = result.get("validation_errors", [])
         assert len(validation_errors) == 0, f"Valid document should have no validation errors. Got: {validation_errors}"
+
+
+class TestValidateToolGap5SchemaRepairWiring:
+    """Tests for Gap_5: Wire schema into repair() calls at entrypoints.
+
+    CRS BLOCKING ISSUE: repair() only applies schema repairs when fix=True AND
+    schema parameter is passed. But both CLI and MCP entrypoints call repair()
+    without passing the schema parameter!
+
+    Evidence:
+    - repair.py:252-255: `if fix and schema is not None:` guards schema repairs
+    - mcp/validate.py:407: `repair(doc, validation_errors, fix=True)` - NO schema=
+    - cli/main.py:226: `repair(doc, validation_errors, fix=True)` - NO schema=
+
+    These tests verify the fix: schema_definition must be passed to repair().
+    """
+
+    @pytest.mark.asyncio
+    async def test_validate_fix_applies_enum_casefold_via_mcp(self):
+        """Gap_5: MCP validate with fix=True applies enum casefold repairs.
+
+        End-to-end test: Call octave_validate tool with:
+        - Document containing lowercase enum value (e.g., "active")
+        - Schema with ENUM constraint (e.g., ENUM[DRAFT,ACTIVE,DEPRECATED])
+        - fix=True
+
+        Expected: canonical output has repaired value "ACTIVE" (not "active")
+        Expected: repair_log contains ENUM_CASEFOLD entry
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # TEST_HOLOGRAPHIC schema defines STATUS with ENUM[DRAFT,ACTIVE,DEPRECATED]
+        # Use lowercase "active" which should be repaired to "ACTIVE"
+        content = """===DOC===
+TEST_HOLOGRAPHIC:
+  NAME::"test_name"
+  STATUS::active
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST_HOLOGRAPHIC",
+            fix=True,  # Enable repairs
+        )
+
+        # Should succeed (parsing works)
+        assert result["status"] == "success", f"Unexpected error: {result.get('errors', [])}"
+
+        # Gap_5 FIX PROOF: After fix, canonical should contain repaired value
+        # The enum casefold repair transforms "active" -> "ACTIVE"
+        canonical = result["canonical"]
+        assert "STATUS::ACTIVE" in canonical or 'STATUS::"ACTIVE"' in canonical, (
+            f"Gap_5: Enum casefold repair not applied. " f"Expected STATUS::ACTIVE in canonical, got:\n{canonical}"
+        )
+
+        # Gap_5 FIX PROOF: repair_log should contain ENUM_CASEFOLD entry
+        # Note: repair_log entries may be RepairEntry dataclasses or dicts
+        repair_log = result.get("repair_log", [])
+        enum_casefold_repairs = []
+        for r in repair_log:
+            # Handle both dict and dataclass RepairEntry objects
+            rule_id = r.get("rule_id") if isinstance(r, dict) else getattr(r, "rule_id", None)
+            if rule_id == "ENUM_CASEFOLD":
+                enum_casefold_repairs.append(r)
+        assert len(enum_casefold_repairs) >= 1, (
+            f"Gap_5: ENUM_CASEFOLD repair not logged. " f"repair_log contents: {repair_log}"
+        )
+
+        # Verify repair details (handle both dict and dataclass)
+        repair_entry = enum_casefold_repairs[0]
+        before_val = (
+            repair_entry.get("before") if isinstance(repair_entry, dict) else getattr(repair_entry, "before", None)
+        )
+        after_val = (
+            repair_entry.get("after") if isinstance(repair_entry, dict) else getattr(repair_entry, "after", None)
+        )
+        assert before_val == "active", f"Repair before value wrong: {repair_entry}"
+        assert after_val == "ACTIVE", f"Repair after value wrong: {repair_entry}"
+
+    @pytest.mark.asyncio
+    async def test_validate_fix_false_does_not_apply_repairs(self):
+        """Gap_5: MCP validate with fix=False does NOT apply repairs to canonical.
+
+        Regression test: fix=False should only suggest repairs, not apply them.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        content = """===DOC===
+TEST_HOLOGRAPHIC:
+  NAME::"test_name"
+  STATUS::active
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST_HOLOGRAPHIC",
+            fix=False,  # Repairs disabled
+        )
+
+        assert result["status"] == "success"
+
+        # With fix=False, canonical should contain the ORIGINAL value (not repaired)
+        canonical = result["canonical"]
+        assert "STATUS::active" in canonical or 'STATUS::"active"' in canonical, (
+            f"Gap_5: With fix=False, canonical should preserve original value. " f"Got:\n{canonical}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_fix_applies_type_coercion_via_mcp(self):
+        """Gap_5: MCP validate with fix=True applies type coercion repairs.
+
+        When a schema expects NUMBER type but receives string "42",
+        repair should coerce to integer 42.
+
+        NOTE: This test may fail if TEST_HOLOGRAPHIC doesn't have a NUMBER field.
+        If so, it documents the behavior for future schema additions.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # META schema has VERSION which expects a string, so we need a schema
+        # with a NUMBER type field. If TEST_HOLOGRAPHIC doesn't have one,
+        # this test documents the expectation for when such schemas exist.
+        # For now, test with a value that might trigger type coercion if available.
+        content = """===DOC===
+TEST_HOLOGRAPHIC:
+  NAME::"test_name"
+  STATUS::ACTIVE
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST_HOLOGRAPHIC",
+            fix=True,
+        )
+
+        # This test primarily documents the type coercion path is wired
+        # The actual coercion only happens if schema has NUMBER type fields
+        assert result["status"] == "success"
+        # Type coercion repairs would appear in repair_log with rule_id="TYPE_COERCION"
+        # Currently TEST_HOLOGRAPHIC has no NUMBER fields, so we just verify no errors

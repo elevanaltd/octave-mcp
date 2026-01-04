@@ -403,9 +403,12 @@ class ValidateTool(BaseTool):
         result["routing_log"] = validator.routing_log.to_dict()
 
         # STAGE 4: Repair (if fix=True)
+        # Gap_5: Pass schema_definition to repair() for schema-driven repairs
+        # repair() requires schema parameter to apply TIER_REPAIR fixes (enum casefold, type coercion)
         if fix:
-            doc, repair_log = repair(doc, validation_errors, fix=True)
-            result["repairs"].extend(repair_log.repairs)
+            doc, repair_log = repair(doc, validation_errors, fix=True, schema=schema_definition)
+            # Convert RepairEntry dataclasses to dicts for JSON serialization
+            result["repairs"].extend([entry.to_dict() for entry in repair_log.repairs])
 
             # Re-validate after repairs
             # Gap_1: Pass section_schemas for constraint validation
