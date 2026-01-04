@@ -125,6 +125,21 @@ octave-mcp/
 - **All transformations logged** via RepairLog for auditability
 - **Test everything** — TDD workflow required
 
+## ASSIST vs INVENT Convention
+
+When implementing features that process OCTAVE content, use these symbols to document the operation type:
+
+| Symbol | Name | Meaning | Rule |
+|--------|------|---------|------|
+| `→` | ASSIST | Transform (copy/filter) | PERMITTED - No evidence required |
+| `⊕` | INVENT | Synthesize (novel content) | REQUIRES EVIDENCE - Must cite source |
+
+**Usage Examples:**
+- `SOURCE_TERMS → FILTERED_TERMS` — Filtering operation (ASSIST)
+- `SPEC_A ⊕ SPEC_B → MERGED_SPEC` — Synthesis creating new content (INVENT)
+
+**I3 Compliance:** The Mirror Constraint prohibits INVENT operations without explicit evidence. All `⊕` operations must document their synthesis rationale.
+
 ## Questions?
 
 Open an issue or start a Discussion on GitHub.

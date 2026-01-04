@@ -562,6 +562,13 @@ def write(
     type=click.Path(exists=True),
     help="Project root directory for security containment (default: document's parent directory)",
 )
+@click.option(
+    "--prune-manifest",
+    "prune_manifest",
+    type=click.Choice(["list", "hash", "count", "elide"]),
+    default="list",
+    help="How to manifest pruned terms: list (default), hash (SHA256), count (integer), or elide (omit section)",
+)
 def hydrate(
     file: str,
     registry: str | None,
@@ -570,6 +577,7 @@ def hydrate(
     output: str | None,
     check_mode: bool,
     project_root: str | None,
+    prune_manifest: str,
 ):
     """Hydrate vocabulary imports in OCTAVE document.
 
@@ -692,9 +700,10 @@ def hydrate(
                 raise SystemExit(1)
 
         # Build policy
+        # Issue #48 Task 2.11: Use --prune-manifest option for prune_strategy
         policy = hydrator.HydrationPolicy(
             collision_strategy=collision,  # type: ignore
-            prune_strategy="list",
+            prune_strategy=prune_manifest,  # type: ignore
             max_depth=1,
         )
 

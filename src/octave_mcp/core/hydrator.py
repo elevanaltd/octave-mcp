@@ -102,6 +102,28 @@ class VersionMismatchError(VocabularyError):
             )
 
 
+class CycleDetectionError(VocabularyError):
+    """Raised when circular import is detected.
+
+    Issue #48 Task 2.12: Prevents infinite loops in recursive imports.
+
+    Attributes:
+        cycle_path: List of file paths showing the import chain that forms the cycle
+    """
+
+    def __init__(self, cycle_path: list[str]):
+        self.cycle_path = cycle_path
+
+        # Build descriptive message
+        if len(cycle_path) == 1:
+            # Self-import case
+            super().__init__(f"Circular import detected: {cycle_path[0]} imports itself")
+        else:
+            # Multi-step cycle
+            chain = " -> ".join(str(p) for p in cycle_path)
+            super().__init__(f"Circular import detected: {chain}")
+
+
 @dataclass
 class HydrationPolicy:
     """Policy settings for vocabulary hydration.
@@ -112,7 +134,7 @@ class HydrationPolicy:
         max_depth: Maximum recursion depth for transitive imports (1 for MVP)
     """
 
-    prune_strategy: Literal["list"] = "list"  # hash/count/elide in Phase 2
+    prune_strategy: Literal["list", "hash", "count", "elide"] = "list"
     collision_strategy: Literal["error", "source_wins", "local_wins"] = "error"
     max_depth: int = 1
 
@@ -644,6 +666,7 @@ def hydrate(
     registry: VocabularyRegistry,
     policy: HydrationPolicy,
     output_path: Path | None = None,
+    _visited: set[Path] | None = None,
 ) -> Document:
     """Hydrate a document by transforming IMPORT directives to SNAPSHOTs.
 
@@ -652,6 +675,7 @@ def hydrate(
         registry: Vocabulary registry for namespace resolution
         policy: Hydration policy settings
         output_path: Path where hydrated document will be written (for relative SOURCE_URI)
+        _visited: Internal parameter for cycle detection (set of already-visited paths)
 
     Returns:
         New Document with IMPORT replaced by SNAPSHOT + MANIFEST + PRUNED
@@ -659,7 +683,25 @@ def hydrate(
     Raises:
         VocabularyError: If vocabulary cannot be resolved or parsed
         CollisionError: If term collision detected with 'error' strategy
+        CycleDetectionError: If circular import is detected
     """
+    # Issue #48 Task 2.12: Cycle detection
+    # Initialize visited set on first call
+    if _visited is None:
+        _visited = set()
+
+    # Resolve source path to absolute for consistent comparison
+    source_resolved = source_path.resolve()
+
+    # Check for cycle BEFORE processing
+    if source_resolved in _visited:
+        # Build cycle path from visited paths
+        cycle_path = [str(p) for p in sorted(_visited)] + [str(source_resolved)]
+        raise CycleDetectionError(cycle_path=cycle_path)
+
+    # Mark current file as being processed
+    _visited.add(source_resolved)
+
     # Read and parse source document
     content = source_path.read_text(encoding="utf-8")
     doc = parse(content)
@@ -679,6 +721,13 @@ def hydrate(
         # Resolve namespace to path, passing version for validation
         # Issue #48: Version handling - pass version to resolve for validation
         vocab_path, resolved_version = registry.resolve(imp.namespace, imp.version)
+
+        # Issue #48 Task 2.12: Check for cycle in import target
+        vocab_resolved = vocab_path.resolve()
+        if vocab_resolved in _visited:
+            # Cycle detected - import target is already in the chain
+            cycle_path = [str(source_resolved), str(vocab_resolved)]
+            raise CycleDetectionError(cycle_path=cycle_path)
 
         # Parse vocabulary
         vocab_terms = parse_vocabulary(vocab_path)
@@ -739,10 +788,12 @@ def hydrate(
         manifest_section = _create_manifest_section(vocab_path, policy, imp.version, resolved_version, base_path)
         new_sections.append(manifest_section)
 
-        # Create §SNAPSHOT::PRUNED section
+        # Create SNAPSHOT::PRUNED section (conditionally, based on strategy)
+        # Issue #48 Task 2.11: Support prune_strategy options
         pruned_terms = set(vocab_terms.keys()) - used_terms
-        pruned_section = _create_pruned_section(pruned_terms)
-        new_sections.append(pruned_section)
+        pruned_section = _create_pruned_section(pruned_terms, policy.prune_strategy)
+        if pruned_section is not None:
+            new_sections.append(pruned_section)
 
     # Build new document with SNAPSHOT replacing IMPORT
     result = Document(
@@ -844,18 +895,69 @@ def _create_manifest_section(
     )
 
 
-def _create_pruned_section(pruned_terms: set[str]) -> Section:
-    """Create §SNAPSHOT::PRUNED section."""
-    # Create sorted list of pruned terms
-    terms_list = ListValue(items=sorted(pruned_terms))
+def _create_pruned_section(
+    pruned_terms: set[str],
+    strategy: Literal["list", "hash", "count", "elide"] = "list",
+) -> Section | None:
+    """Create SNAPSHOT::PRUNED section based on prune strategy.
 
-    return Section(
-        section_id="SNAPSHOT",
-        key="PRUNED",
-        children=[
-            Assignment(key="TERMS", value=terms_list),
-        ],
-    )
+    Issue #48 Task 2.11: Supports multiple prune manifest strategies.
+
+    Args:
+        pruned_terms: Set of term names that were not used
+        strategy: How to manifest pruned terms:
+            - "list": List all pruned term names in TERMS field (default)
+            - "hash": Create HASH field with SHA256 of sorted term names
+            - "count": Create COUNT field with integer count
+            - "elide": Return None (don't include PRUNED section)
+
+    Returns:
+        Section with pruned information, or None for "elide" strategy
+    """
+    if strategy == "elide":
+        return None
+
+    # Sort terms for deterministic output
+    sorted_terms = sorted(pruned_terms)
+
+    if strategy == "list":
+        # Default: list all pruned term names
+        terms_list = ListValue(items=sorted_terms)
+        return Section(
+            section_id="SNAPSHOT",
+            key="PRUNED",
+            children=[
+                Assignment(key="TERMS", value=terms_list),
+            ],
+        )
+
+    elif strategy == "hash":
+        # Create SHA256 hash of sorted term names
+        # Hash the joined sorted term names for compact representation
+        terms_string = ",".join(sorted_terms)
+        hash_digest = hashlib.sha256(terms_string.encode("utf-8")).hexdigest()
+        hash_value = f"sha256:{hash_digest}"
+        return Section(
+            section_id="SNAPSHOT",
+            key="PRUNED",
+            children=[
+                Assignment(key="HASH", value=hash_value),
+            ],
+        )
+
+    elif strategy == "count":
+        # Just the count of pruned terms
+        return Section(
+            section_id="SNAPSHOT",
+            key="PRUNED",
+            children=[
+                Assignment(key="COUNT", value=len(sorted_terms)),
+            ],
+        )
+
+    else:
+        # Issue #48 CE Review H1: Invalid strategy must fail loudly, not silent fallback
+        raise VocabularyError(f"Invalid prune_strategy: {strategy!r}. " "Expected one of: list, hash, count, elide")
 
 
 def check_staleness(
