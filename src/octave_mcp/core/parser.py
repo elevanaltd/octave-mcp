@@ -666,11 +666,11 @@ class Parser:
             return token.value
 
         elif token.type == TokenType.NUMBER:
-            # GH#87: Check if NUMBER is followed by IDENTIFIER (e.g., 123_suffix)
+            # GH#87: Check if NUMBER is followed by VALUE_TOKENS (e.g., 123_suffix, 123 1.0.0)
             # If so, coalesce into multi-word string value (same pattern as IDENTIFIER path)
             next_token = self.peek()
-            if next_token.type == TokenType.IDENTIFIER:
-                # NUMBER followed by IDENTIFIER - coalesce as multi-word value
+            if next_token.type in VALUE_TOKENS:
+                # NUMBER followed by VALUE_TOKENS - coalesce as multi-word value
                 # Track start position for I4 audit
                 start_line = token.line
                 start_column = token.column
@@ -808,6 +808,40 @@ class Parser:
             # Standalone NULL
             self.advance()
             return None
+
+        elif token.type == TokenType.VERSION:
+            # Issue #140/#141: Check if VERSION is followed by more tokens for multi-word value
+            next_token = self.peek()
+            if next_token.type in VALUE_TOKENS:
+                # VERSION followed by more tokens - coalesce as multi-word value
+                start_line = token.line
+                start_column = token.column
+                word_parts = [_token_to_str(token)]
+                self.advance()  # Consume VERSION
+
+                # Accumulate following VALUE_TOKENS
+                while self.current().type in VALUE_TOKENS:
+                    word_parts.append(_token_to_str(self.current()))
+                    self.advance()
+
+                result = " ".join(word_parts)
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "multi_word_coalesce",
+                        "original": word_parts,
+                        "result": result,
+                        "context": "version_multiword",
+                        "line": start_line,
+                        "column": start_column,
+                    }
+                )
+                self._consume_bracket_annotation(capture=False)
+                return result
+
+            # Standalone VERSION
+            self.advance()
+            return str(token.value)
 
         elif token.type == TokenType.LIST_START:
             return self.parse_list()

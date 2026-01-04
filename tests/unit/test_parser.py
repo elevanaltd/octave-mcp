@@ -620,3 +620,27 @@ MESSAGE::"Hello" world greeting
         assert assignment.key == "MESSAGE"
         # Quoted strings should preserve quotes in multi-word context
         assert assignment.value == '"Hello" world greeting'
+
+    def test_version_start_multiword(self):
+        """Values starting with VERSION should preserve all words (Issue #140/#141)."""
+        content = """===TEST===
+RELEASE::1.0.0 is ready
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "RELEASE"
+        assert assignment.value == "1.0.0 is ready"
+
+    def test_number_sequence_with_version(self):
+        """NUMBER followed by VERSION should preserve both (Issue #140/#141)."""
+        content = """===TEST===
+BUILD::123 1.0.0
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "BUILD"
+        assert assignment.value == "123 1.0.0"
