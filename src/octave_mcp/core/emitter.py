@@ -197,6 +197,11 @@ def emit(doc: Document) -> str:
     """
     lines = []
 
+    # Issue #48 Phase 2: Emit grammar sentinel if present
+    # Grammar sentinel must appear BEFORE the envelope
+    if doc.grammar_version:
+        lines.append(f"OCTAVE::{doc.grammar_version}")
+
     # Always emit explicit envelope
     lines.append(f"==={doc.name}===")
 

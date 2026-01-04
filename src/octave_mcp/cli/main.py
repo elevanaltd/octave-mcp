@@ -164,13 +164,29 @@ def eject(file: str, mode: str, output_format: str):
 @click.option("--stdin", "use_stdin", is_flag=True, help="Read content from stdin")
 @click.option("--schema", help="Schema name for validation (e.g., 'META', 'SESSION_LOG')")
 @click.option("--fix", is_flag=True, help="Apply repairs to output")
-def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
+@click.option("--verify-seal", "verify_seal", is_flag=True, help="Verify SEAL section integrity")
+@click.option(
+    "--require-seal",
+    "require_seal",
+    is_flag=True,
+    help="Require SEAL section (exit 1 if missing). Only valid with --verify-seal",
+)
+def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool, verify_seal: bool, require_seal: bool):
     """Validate OCTAVE against schema.
 
     Matches MCP octave_validate tool. Returns validation_status:
     VALIDATED (schema passed), UNVALIDATED (no schema), or INVALID (schema failed).
 
-    Exit code 0 on success, 1 on validation failure.
+    With --verify-seal, also checks SEAL section integrity:
+    - VERIFIED: Hash matches content
+    - INVALID: Hash mismatch (content modified) - exits with code 1
+    - No SEAL section: Informational message (exit 0 unless --require-seal)
+
+    With --require-seal (requires --verify-seal):
+    - Exit 1 if no SEAL section found
+    - Useful for CI to enforce sealed documents
+
+    Exit code 0 on success, 1 on validation or seal failure.
     """
     import sys
 
@@ -183,6 +199,11 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
     # CRS-FIX #4: XOR enforcement - exactly ONE input source
     if file is not None and use_stdin:
         click.echo("Error: Cannot provide both FILE and --stdin", err=True)
+        raise SystemExit(1)
+
+    # Issue #131: --require-seal only valid with --verify-seal
+    if require_seal and not verify_seal:
+        click.echo("Error: --require-seal requires --verify-seal", err=True)
         raise SystemExit(1)
 
     # Get content from file or stdin
@@ -245,11 +266,37 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool):
         # Output validation status
         click.echo(f"\nvalidation_status: {validation_status}")
 
-        # If INVALID, output errors and exit with code 1
+        # Seal verification if requested
+        seal_status = None
+        if verify_seal:
+            from octave_mcp.core.sealer import SealStatus
+            from octave_mcp.core.sealer import verify_seal as do_verify_seal
+
+            seal_result = do_verify_seal(doc)
+            seal_status = seal_result.status
+
+            if seal_status == SealStatus.VERIFIED:
+                click.echo("Seal: VERIFIED (SHA256 match)")
+            elif seal_status == SealStatus.INVALID:
+                click.echo("Seal: INVALID (hash mismatch - content modified)")
+            elif seal_status == SealStatus.NO_SEAL:
+                click.echo("Seal: No SEAL section found")
+
+        # If schema validation INVALID, output errors and exit with code 1
         if validation_status == "INVALID":
             for error in validation_errors:
                 click.echo(f"  {error.code}: {error.message}", err=True)
             raise SystemExit(1)
+
+        # Issue #131: Exit with failure if seal verification failed
+        if verify_seal:
+            from octave_mcp.core.sealer import SealStatus
+
+            if seal_status == SealStatus.INVALID:
+                raise SystemExit(1)
+            if require_seal and seal_status == SealStatus.NO_SEAL:
+                click.echo("Error: --require-seal specified but no SEAL section found", err=True)
+                raise SystemExit(1)
 
     except SystemExit:
         raise
@@ -516,6 +563,225 @@ def hydrate(
     except hydrator.VocabularyError as e:
         click.echo(f"Error: Vocabulary error - {e}", err=True)
         raise SystemExit(1) from e
+    except SystemExit:
+        raise
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path (default: stdout)",
+)
+def normalize(file: str, output: str | None):
+    """Normalize OCTAVE document to canonical form.
+
+    Transforms an OCTAVE document to canonical form with:
+    - UTF-8 encoding
+    - LF-only line endings (no CRLF)
+    - Trimmed trailing whitespace
+    - Normalized indentation (2 spaces)
+    - Unicode operators (-> to U+2192, + to U+2295, # to U+00A7, etc.)
+
+    Issue #48 Phase 2: Wall Condition C1 canonical text rules.
+
+    Examples:
+        octave normalize doc.oct.md
+        octave normalize doc.oct.md -o normalized.oct.md
+
+    Exit code 0 on success, 1 on failure.
+    """
+    from pathlib import Path
+
+    from octave_mcp.core.emitter import emit
+    from octave_mcp.core.parser import parse
+
+    try:
+        # Read input file
+        input_path = Path(file)
+        content = input_path.read_text(encoding="utf-8")
+
+        # Parse (lenient) -> AST
+        doc = parse(content)
+
+        # Emit (canonical) -> normalized output
+        output_content = emit(doc)
+
+        # Write to file or stdout
+        if output:
+            # Security: validate output path before writing
+            from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
+
+            path_valid, path_error = validate_octave_path(output)
+            if not path_valid:
+                click.echo(f"Error: {path_error}", err=True)
+                raise SystemExit(1)
+
+            write_result = atomic_write_octave(output, output_content, None)
+            if write_result["status"] == "error":
+                click.echo(f"Error: {write_result['error']}", err=True)
+                raise SystemExit(1)
+
+            click.echo(f"Normalized document written to: {write_result['path']}")
+        else:
+            click.echo(output_content)
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path (default: stdout)",
+)
+def seal(file: str, output: str | None):
+    """Seal OCTAVE document with cryptographic integrity proof.
+
+    Adds a SEAL section to the document containing:
+    - SCOPE: Line range covered by seal (LINES[1,N])
+    - ALGORITHM: Hash algorithm used (SHA256)
+    - HASH: SHA256 hash of normalized content
+    - GRAMMAR: Grammar version (if present in document)
+
+    The document is normalized (parse -> emit) before sealing to ensure
+    consistent hashing regardless of input formatting.
+
+    Issue #48 Phase 2: SEAL Cryptographic Integrity Layer.
+
+    Examples:
+        octave seal doc.oct.md
+        octave seal doc.oct.md -o sealed.oct.md
+
+    Exit code 0 on success, 1 on failure.
+    """
+    from pathlib import Path
+
+    from octave_mcp.core.emitter import emit
+    from octave_mcp.core.parser import parse
+    from octave_mcp.core.sealer import seal_document
+
+    try:
+        # Read input file
+        input_path = Path(file)
+        content = input_path.read_text(encoding="utf-8")
+
+        # Parse (lenient) -> AST
+        doc = parse(content)
+
+        # Seal the document (handles normalization internally)
+        sealed_doc = seal_document(doc)
+
+        # Emit canonical sealed output
+        output_content = emit(sealed_doc)
+
+        # Write to file or stdout
+        if output:
+            # Security: validate output path before writing
+            from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
+
+            path_valid, path_error = validate_octave_path(output)
+            if not path_valid:
+                click.echo(f"Error: {path_error}", err=True)
+                raise SystemExit(1)
+
+            write_result = atomic_write_octave(output, output_content, None)
+            if write_result["status"] == "error":
+                click.echo(f"Error: {write_result['error']}", err=True)
+                raise SystemExit(1)
+
+            click.echo(f"Sealed document written to: {write_result['path']}")
+        else:
+            click.echo(output_content)
+
+    except SystemExit:
+        raise
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1) from e
+
+
+@cli.command()
+@click.argument("spec_file", type=click.Path(exists=True))
+@click.argument("skill_file", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format (default: text)",
+)
+def coverage(spec_file: str, skill_file: str, output_format: str):
+    """Analyze coverage between SPEC and SKILL documents.
+
+    VOID MAPPER tool for spec-to-skill coverage analysis.
+    Identifies gaps between specifications and their implementing skills.
+
+    Output shows:
+    - COVERAGE_RATIO: Percentage of spec sections covered
+    - GAPS: Spec sections NOT implemented in skill
+    - NOVEL: Skill sections NOT in spec
+
+    Examples:
+        octave coverage spec.oct.md skill.oct.md
+        octave coverage spec.oct.md skill.oct.md --format json
+
+    Exit code 0 on success, 1 on failure.
+    """
+    import json as json_module
+    from pathlib import Path
+
+    from octave_mcp.core.coverage_mapper import compute_coverage, format_coverage_report
+    from octave_mcp.core.parser import parse
+
+    try:
+        # Read spec and skill files
+        spec_path = Path(spec_file)
+        skill_path = Path(skill_file)
+
+        spec_content = spec_path.read_text(encoding="utf-8")
+        skill_content = skill_path.read_text(encoding="utf-8")
+
+        # Parse documents
+        spec_doc = parse(spec_content)
+        skill_doc = parse(skill_content)
+
+        # Compute coverage
+        result = compute_coverage(spec_doc, skill_doc)
+
+        # Output based on format
+        if output_format == "json":
+            data = {
+                "spec": str(spec_path),
+                "skill": str(skill_path),
+                "coverage_ratio": result.coverage_ratio,
+                "covered_sections": result.covered_sections,
+                "gaps": result.gaps,
+                "novel": result.novel,
+                "spec_total": result.spec_total,
+                "skill_total": result.skill_total,
+            }
+            click.echo(json_module.dumps(data, indent=2))
+        else:
+            # Text format with header
+            click.echo("Coverage Analysis")
+            click.echo("=================")
+            click.echo(f"Spec: {spec_path.name}")
+            click.echo(f"Skill: {skill_path.name}")
+            click.echo("")
+            click.echo(format_coverage_report(result))
+
     except SystemExit:
         raise
     except Exception as e:
