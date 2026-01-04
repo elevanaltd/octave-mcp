@@ -580,3 +580,93 @@ META:
 
         # Should fail - --check doesn't need mapping
         assert result.exit_code == 1 or "cannot" in result.output.lower() or "exclusive" in result.output.lower()
+
+    def test_check_cross_directory_layout_without_project_root(self, runner):
+        """Cross-directory layout: --check should work without --project-root.
+
+        Issue #48 Regression: hydrate --check fails for legitimate cross-directory layouts.
+
+        When hydrate creates output in docs/ from vocab in specs/:
+        - SOURCE_URI is relative path like "../specs/vocab.oct.md"
+        - --check used to fail because default allowed_root was document's parent (docs/)
+        - The resolved path (specs/vocab.oct.md) is outside docs/ -> containment error
+
+        Fix: Auto-detect allowed_root by finding common ancestor of document and all SOURCE_URIs.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            # Create cross-directory structure:
+            # project/
+            #   specs/vocab.oct.md    <- vocabulary here
+            #   docs/hydrated.oct.md  <- hydrated document here
+            specs_dir = tmpdir_path / "specs"
+            docs_dir = tmpdir_path / "docs"
+            specs_dir.mkdir()
+            docs_dir.mkdir()
+
+            # Create vocabulary file in specs/
+            vocab_content = """===VOCAB===
+META:
+  TYPE::"CAPSULE"
+  VERSION::"1.0.0"
+
+§1::TERMS
+  TERM_A::"Definition of term A"
+  TERM_B::"Definition of term B"
+
+===END===
+"""
+            vocab_file = specs_dir / "vocab.oct.md"
+            vocab_file.write_text(vocab_content)
+
+            # Create source document in project root (will be hydrated to docs/)
+            source_content = """===DOC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::IMPORT["@test/vocab"]
+
+§1::CONTENT
+  USES_A::"Uses TERM_A here"
+
+===END===
+"""
+            source_file = tmpdir_path / "source.oct.md"
+            source_file.write_text(source_content)
+
+            # Hydrate to docs/ directory (creates cross-directory relative path)
+            hydrated_file = docs_dir / "hydrated.oct.md"
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    str(source_file),
+                    "--mapping",
+                    f"@test/vocab={vocab_file}",
+                    "-o",
+                    str(hydrated_file),
+                ],
+            )
+            assert result.exit_code == 0, f"Hydration failed: {result.output}"
+
+            # Verify the SOURCE_URI has ".." (cross-directory reference)
+            hydrated_content = hydrated_file.read_text()
+            assert "../specs/" in hydrated_content, f"Expected cross-directory path, got: {hydrated_content}"
+
+            # NOW: Run --check WITHOUT --project-root
+            # This should work (exit 0, FRESH) but was failing due to containment bug
+            result = runner.invoke(
+                cli,
+                [
+                    "hydrate",
+                    str(hydrated_file),
+                    "--check",
+                ],
+            )
+
+            # This is the regression test - should NOT fail with containment error
+            # Should exit 0 with FRESH status (vocab unchanged since hydration)
+            assert result.exit_code == 0, f"Cross-directory check failed: {result.output}"
+            assert "FRESH" in result.output, f"Expected FRESH status, got: {result.output}"
