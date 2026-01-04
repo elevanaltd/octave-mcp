@@ -385,10 +385,9 @@ META:
             # Verify the sealed document - should exit zero
             verify_result = runner.invoke(cli, ["validate", str(sealed_path), "--verify-seal"])
 
-            assert verify_result.exit_code == 0, (
-                f"Expected exit code 0 for VERIFIED seal, "
-                f"got {verify_result.exit_code}. Output: {verify_result.output}"
-            )
+            assert (
+                verify_result.exit_code == 0
+            ), f"Expected exit code 0 for VERIFIED seal, got {verify_result.exit_code}. Output: {verify_result.output}"
         finally:
             temp_path.unlink()
             if sealed_path.exists():

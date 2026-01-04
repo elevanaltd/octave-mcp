@@ -119,9 +119,7 @@ TAGS::[initial]
 
             # Must use OCTAVE syntax: [foo,bar] or ["foo","bar"]
             # NOT Python repr: ['foo', 'bar']
-            assert "['foo'" not in content, (
-                f"I1 violation: Output uses Python list repr syntax.\n" f"Content:\n{content}"
-            )
+            assert "['foo'" not in content, f"I1 violation: Output uses Python list repr syntax.\nContent:\n{content}"
             # Verify proper OCTAVE list pattern exists
             # OCTAVE uses [a,b] or ["a","b"] - no spaces after commas in canonical form
             assert "TAGS::" in content
@@ -203,7 +201,7 @@ EXISTING::value
                 content = f.read()
 
             # I1: Output must NOT contain single quotes
-            assert "'" not in content, f"I1 violation: New list field uses Python repr syntax.\n" f"Content:\n{content}"
+            assert "'" not in content, f"I1 violation: New list field uses Python repr syntax.\nContent:\n{content}"
 
             # I1: Must be parseable
             from octave_mcp.core.parser import parse
@@ -253,14 +251,14 @@ ITEMS::[alpha, beta, gamma]
         assert result["output"] is not None
 
         # I3: Output must NOT contain "ListValue(items=" - this is Python internal repr
-        assert "ListValue(items=" not in result["output"], (
-            f"I3 violation: Markdown output exposes Python ListValue repr.\n" f"Output:\n{result['output']}"
-        )
+        assert (
+            "ListValue(items=" not in result["output"]
+        ), f"I3 violation: Markdown output exposes Python ListValue repr.\nOutput:\n{result['output']}"
 
         # I3: Output must NOT contain "ListValue" at all
-        assert "ListValue" not in result["output"], (
-            f"I3 violation: Markdown output contains 'ListValue'.\n" f"Output:\n{result['output']}"
-        )
+        assert (
+            "ListValue" not in result["output"]
+        ), f"I3 violation: Markdown output contains 'ListValue'.\nOutput:\n{result['output']}"
 
         # The list items should be present in readable form
         assert "alpha" in result["output"]
@@ -323,7 +321,7 @@ SECTION:
         output = result["output"]
 
         # I3: Output must NOT contain "ListValue"
-        assert "ListValue" not in output, f"I3 violation: Block child list shows ListValue repr.\n" f"Output:\n{output}"
+        assert "ListValue" not in output, f"I3 violation: Block child list shows ListValue repr.\nOutput:\n{output}"
 
         # Items should be present
         assert "item1" in output
