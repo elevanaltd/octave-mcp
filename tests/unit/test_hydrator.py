@@ -1994,3 +1994,425 @@ def _get_field_value(section_or_block, field_name: str):
         if isinstance(child, Assignment) and child.key == field_name:
             return child.value
     return None
+
+
+class TestCycleDetection:
+    """Tests for cycle detection in recursive imports.
+
+    TDD RED phase: Issue #48 Task 2.12 - Cycle Detection for Recursive Imports.
+
+    Cycle detection prevents infinite loops when:
+    - A imports B, B imports A (simple cycle)
+    - A imports A (self-import)
+    - A -> B -> C -> A (transitive cycle, if depth > 1 supported)
+
+    The CycleDetectionError should provide:
+    - cycle_path: list of paths showing the import chain
+    - Clear error message describing the cycle
+    """
+
+    def test_cycle_detection_error_exists(self):
+        """CycleDetectionError should be a subclass of VocabularyError."""
+        from octave_mcp.core.hydrator import CycleDetectionError, VocabularyError
+
+        assert issubclass(CycleDetectionError, VocabularyError)
+
+    def test_cycle_detection_error_has_cycle_path(self):
+        """CycleDetectionError should have cycle_path attribute."""
+        from octave_mcp.core.hydrator import CycleDetectionError
+
+        error = CycleDetectionError(cycle_path=["A.oct.md", "B.oct.md", "A.oct.md"])
+
+        assert hasattr(error, "cycle_path")
+        assert error.cycle_path == ["A.oct.md", "B.oct.md", "A.oct.md"]
+
+    def test_cycle_detection_error_message(self):
+        """CycleDetectionError should have descriptive message."""
+        from octave_mcp.core.hydrator import CycleDetectionError
+
+        error = CycleDetectionError(cycle_path=["A.oct.md", "B.oct.md", "A.oct.md"])
+
+        message = str(error)
+        assert "circular" in message.lower() or "cycle" in message.lower()
+        assert "A.oct.md" in message
+
+    def test_self_import_detected(self):
+        """Should detect when a document imports itself."""
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import (
+            CycleDetectionError,
+            HydrationPolicy,
+            VocabularyRegistry,
+            hydrate,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create a document that imports itself
+            self_importing = base / "self_import.oct.md"
+            self_importing.write_text(
+                """===SELF_IMPORT===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::IMPORT["@test/self"]
+
+§1::CONTENT
+  KEY::"value"
+
+===END===
+"""
+            )
+
+            # Registry that maps the namespace back to the same file
+            registry = VocabularyRegistry.from_mappings({"@test/self": self_importing})
+            policy = HydrationPolicy()
+
+            with pytest.raises(CycleDetectionError) as exc_info:
+                hydrate(self_importing, registry, policy)
+
+            # Should detect self-import cycle
+            assert len(exc_info.value.cycle_path) >= 1
+            assert "self_import.oct.md" in str(exc_info.value.cycle_path[-1])
+
+    def test_simple_cycle_detected(self):
+        """Should detect A -> B -> A cycle."""
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import (
+            CycleDetectionError,
+            HydrationPolicy,
+            VocabularyRegistry,
+            hydrate,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create two documents that import each other
+            # A imports B (via @test/b namespace)
+            doc_a = base / "doc_a.oct.md"
+            doc_a.write_text(
+                """===DOC_A===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::IMPORT["@test/b"]
+
+§1::CONTENT
+  KEY::"value"
+
+===END===
+"""
+            )
+
+            # B is a CAPSULE that conceptually would import A
+            # For MVP with max_depth=1, we simulate the cycle by having
+            # the import target resolve back to the source
+            # NOTE: This test validates the infrastructure for cycle detection
+            # The actual A->B->A would require depth>1 which is future work
+            doc_b = base / "doc_b.oct.md"
+            doc_b.write_text(
+                """===DOC_B===
+META:
+  TYPE::"CAPSULE"
+  VERSION::"1.0.0"
+
+§1::TERMS
+  TERM::"definition"
+
+===END===
+"""
+            )
+
+            # For this test, we simulate by making @test/b point back to doc_a
+            # This creates the simplest possible cycle: A -> A
+            registry = VocabularyRegistry.from_mappings({"@test/b": doc_a})
+            policy = HydrationPolicy()
+
+            with pytest.raises(CycleDetectionError) as exc_info:
+                hydrate(doc_a, registry, policy)
+
+            # Cycle should be detected
+            assert len(exc_info.value.cycle_path) >= 1
+
+    def test_no_cycle_with_normal_import(self):
+        """Should NOT raise CycleDetectionError for normal imports."""
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        source_path = FIXTURES_DIR / "source.oct.md"
+        registry = _create_test_registry()
+        policy = HydrationPolicy()
+
+        # Should not raise - normal import has no cycle
+        result = hydrate(source_path, registry, policy)
+        assert result is not None
+
+    def test_cycle_detection_before_parsing(self):
+        """Cycle should be detected before attempting to parse as CAPSULE.
+
+        If A imports A (self-import), we should detect the cycle BEFORE
+        trying to parse A as a CAPSULE (which would fail since it's a SPEC).
+        This is fail-fast behavior.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from octave_mcp.core.hydrator import (
+            CycleDetectionError,
+            HydrationPolicy,
+            VocabularyRegistry,
+            hydrate,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+
+            # Create a SPEC document that tries to import itself
+            # (SPEC is not a CAPSULE, so parsing as vocab would fail)
+            doc = base / "spec.oct.md"
+            doc.write_text(
+                """===SPEC===
+META:
+  TYPE::"SPEC"
+  VERSION::"1.0.0"
+
+§CONTEXT::IMPORT["@test/myself"]
+
+§1::CONTENT
+  KEY::"value"
+
+===END===
+"""
+            )
+
+            registry = VocabularyRegistry.from_mappings({"@test/myself": doc})
+            policy = HydrationPolicy()
+
+            # Should raise CycleDetectionError, NOT VocabularyError("not a CAPSULE")
+            with pytest.raises(CycleDetectionError):
+                hydrate(doc, registry, policy)
+
+
+class TestPruneStrategyOptions:
+    """Tests for prune_strategy policy options.
+
+    TDD RED phase: Issue #48 Task 2.11 - PRUNE_MANIFEST Policy Options.
+
+    The prune_strategy field controls how pruned (unused) terms are manifested:
+    - "list" (default): List all pruned term names in TERMS
+    - "hash": Create HASH field with SHA256 of sorted term names
+    - "count": Create COUNT field with integer count of pruned terms
+    - "elide": Don't include PRUNED section at all
+    """
+
+    def test_hydration_policy_accepts_hash_strategy(self):
+        """HydrationPolicy should accept prune_strategy='hash'."""
+        from octave_mcp.core.hydrator import HydrationPolicy
+
+        policy = HydrationPolicy(prune_strategy="hash")
+
+        assert policy.prune_strategy == "hash"
+
+    def test_hydration_policy_accepts_count_strategy(self):
+        """HydrationPolicy should accept prune_strategy='count'."""
+        from octave_mcp.core.hydrator import HydrationPolicy
+
+        policy = HydrationPolicy(prune_strategy="count")
+
+        assert policy.prune_strategy == "count"
+
+    def test_hydration_policy_accepts_elide_strategy(self):
+        """HydrationPolicy should accept prune_strategy='elide'."""
+        from octave_mcp.core.hydrator import HydrationPolicy
+
+        policy = HydrationPolicy(prune_strategy="elide")
+
+        assert policy.prune_strategy == "elide"
+
+    def test_prune_strategy_list_produces_terms_list(self):
+        """prune_strategy='list' should list pruned term names in TERMS field.
+
+        This is the current default behavior - verify it still works.
+        """
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        source_path = FIXTURES_DIR / "source.oct.md"
+        registry = _create_test_registry()
+        policy = HydrationPolicy(prune_strategy="list")
+
+        result = hydrate(source_path, registry, policy)
+
+        pruned = _find_pruned_section(result)
+        assert pruned is not None
+
+        terms = _get_field_value(pruned, "TERMS")
+        assert terms is not None
+        # GAMMA and EPSILON should be in PRUNED as a list
+        assert "GAMMA" in str(terms)
+        assert "EPSILON" in str(terms)
+
+    def test_prune_strategy_hash_produces_hash_field(self):
+        """prune_strategy='hash' should create HASH field with SHA256.
+
+        Expected format: HASH::"sha256:HEXDIGEST"
+        The hash is computed from sorted term names, not their definitions.
+        """
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        source_path = FIXTURES_DIR / "source.oct.md"
+        registry = _create_test_registry()
+        policy = HydrationPolicy(prune_strategy="hash")
+
+        result = hydrate(source_path, registry, policy)
+
+        pruned = _find_pruned_section(result)
+        assert pruned is not None
+
+        # Should NOT have TERMS field
+        terms = _get_field_value(pruned, "TERMS")
+        assert terms is None, "hash strategy should not produce TERMS field"
+
+        # Should have HASH field
+        hash_value = _get_field_value(pruned, "HASH")
+        assert hash_value is not None, "hash strategy should produce HASH field"
+        assert hash_value.startswith("sha256:"), f"HASH should start with 'sha256:', got: {hash_value}"
+        # SHA-256 produces 64 hex characters
+        hex_part = hash_value.split(":")[1]
+        assert len(hex_part) == 64, f"SHA256 hex should be 64 chars, got: {len(hex_part)}"
+
+    def test_prune_strategy_hash_is_deterministic(self):
+        """prune_strategy='hash' should produce same hash for same pruned terms.
+
+        The hash should be computed from sorted term names to ensure determinism.
+        """
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        source_path = FIXTURES_DIR / "source.oct.md"
+        registry = _create_test_registry()
+        policy = HydrationPolicy(prune_strategy="hash")
+
+        # Hydrate twice
+        result1 = hydrate(source_path, registry, policy)
+        result2 = hydrate(source_path, registry, policy)
+
+        pruned1 = _find_pruned_section(result1)
+        pruned2 = _find_pruned_section(result2)
+
+        hash1 = _get_field_value(pruned1, "HASH")
+        hash2 = _get_field_value(pruned2, "HASH")
+
+        assert hash1 == hash2, "Hash should be deterministic for same pruned terms"
+
+    def test_prune_strategy_count_produces_count_field(self):
+        """prune_strategy='count' should create COUNT field with integer.
+
+        Expected format: COUNT::N where N is the number of pruned terms.
+        """
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        source_path = FIXTURES_DIR / "source.oct.md"
+        registry = _create_test_registry()
+        policy = HydrationPolicy(prune_strategy="count")
+
+        result = hydrate(source_path, registry, policy)
+
+        pruned = _find_pruned_section(result)
+        assert pruned is not None
+
+        # Should NOT have TERMS field
+        terms = _get_field_value(pruned, "TERMS")
+        assert terms is None, "count strategy should not produce TERMS field"
+
+        # Should have COUNT field
+        count_value = _get_field_value(pruned, "COUNT")
+        assert count_value is not None, "count strategy should produce COUNT field"
+        assert isinstance(count_value, int), f"COUNT should be int, got: {type(count_value)}"
+        # GAMMA and EPSILON are pruned in source.oct.md
+        assert count_value == 2, f"Expected 2 pruned terms, got: {count_value}"
+
+    def test_prune_strategy_elide_produces_no_pruned_section(self):
+        """prune_strategy='elide' should NOT include PRUNED section.
+
+        The hydrated document should have SNAPSHOT and MANIFEST but no PRUNED.
+        """
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        source_path = FIXTURES_DIR / "source.oct.md"
+        registry = _create_test_registry()
+        policy = HydrationPolicy(prune_strategy="elide")
+
+        result = hydrate(source_path, registry, policy)
+
+        # Should have SNAPSHOT section
+        snapshot = _find_snapshot_section(result)
+        assert snapshot is not None, "SNAPSHOT section should exist"
+
+        # Should have MANIFEST section
+        manifest = _find_manifest_section(result)
+        assert manifest is not None, "MANIFEST section should exist"
+
+        # Should NOT have PRUNED section
+        pruned = _find_pruned_section(result)
+        assert pruned is None, "elide strategy should not produce PRUNED section"
+
+    def test_prune_strategy_elide_with_empty_pruned_terms(self):
+        """prune_strategy='elide' should work when all terms are used.
+
+        Even when there are no pruned terms, 'elide' should produce
+        consistent behavior (no PRUNED section).
+        """
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        # source_all_terms.oct.md uses all vocabulary terms
+        source_path = FIXTURES_DIR / "source_all_terms.oct.md"
+        registry = _create_test_registry()
+        policy = HydrationPolicy(prune_strategy="elide")
+
+        result = hydrate(source_path, registry, policy)
+
+        # Should NOT have PRUNED section (elided)
+        pruned = _find_pruned_section(result)
+        assert pruned is None, "elide strategy should not produce PRUNED section even when empty"
+
+    def test_prune_strategy_count_zero_when_all_terms_used(self):
+        """prune_strategy='count' should produce COUNT::0 when all terms used."""
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        source_path = FIXTURES_DIR / "source_all_terms.oct.md"
+        registry = _create_test_registry()
+        policy = HydrationPolicy(prune_strategy="count")
+
+        result = hydrate(source_path, registry, policy)
+
+        pruned = _find_pruned_section(result)
+        assert pruned is not None
+
+        count_value = _get_field_value(pruned, "COUNT")
+        assert count_value == 0, f"Expected COUNT::0 when all terms used, got: {count_value}"
+
+    def test_manifest_records_prune_strategy(self):
+        """MANIFEST HYDRATION_POLICY should record the prune_strategy used.
+
+        The PRUNE field in HYDRATION_POLICY should show the strategy used.
+        """
+        from octave_mcp.core.hydrator import HydrationPolicy, hydrate
+
+        source_path = FIXTURES_DIR / "source.oct.md"
+        registry = _create_test_registry()
+
+        for strategy in ["list", "hash", "count", "elide"]:
+            policy = HydrationPolicy(prune_strategy=strategy)  # type: ignore
+            result = hydrate(source_path, registry, policy)
+
+            manifest = _find_manifest_section(result)
+            policy_block = _find_child_block(manifest, "HYDRATION_POLICY")
+            prune_value = _get_field_value(policy_block, "PRUNE")
+
+            assert prune_value == strategy, f"PRUNE field should be '{strategy}', got: {prune_value}"
