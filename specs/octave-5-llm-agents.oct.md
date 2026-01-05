@@ -241,55 +241,51 @@ DECISION_MATRIX::[
 
 §8::ARCHETYPE_REFERENCE
 
-AVAILABLE_MYTHOLOGICAL_PATTERNS:
+// This section is intentionally NOT exhaustive.
+// It provides a small, stable Tier-0 vocabulary plus usage rules.
+// Full definitions and any extensions live in the registry:
+//   docs/reference/octave-mythology-registry.oct.md
 
-ATHENA::
-  WISDOM::"Strategic wisdom, architectural thinking, protective boundaries"
-  BEST_FOR::[governance_roles,design_decisions,risk_assessment]
+MYTHOLOGY_REGISTRY::docs/reference/octave-mythology-registry.oct.md
 
-APOLLO::
-  WISDOM::"Clarity, illumination, prophecy, order from chaos"
-  BEST_FOR::[analysis,pattern_recognition,optimization]
+TAXONOMY::[
+  DOMAIN_ARCHETYPES::"Technical responsibility layers / persistent strengths",
+  PATTERN_TOKENS::"Situations and narrative trajectories",
+  FORCES::"System dynamics (time pressure, entropy, opportunity)",
+  RELATIONSHIPS::"Interaction dynamics"
+]
 
-PROMETHEUS::
-  WISDOM::"Third-way creation, fire-bringing, rule-breaking for progress"
-  BEST_FOR::[innovation,creative_synthesis,constraint_breaking]
+SELECTION_RULES::[
+  prefer_TIER_0::"Use Tier-0 in specs and agent profiles unless you have a validated reason not to",
+  max_domain_archetypes::3,
+  max_pattern_tokens::2,
+  avoid_category_mixing::"Do not treat domain archetypes as pattern tokens (and vice versa)",
+  no_roleplay_prose::"Mythology is compression shorthand, not narrative theater",
+  extensions::"Add/validate in registry first; do not invent tokens in-flight"
+]
 
-HEPHAESTUS::
-  WISDOM::"Craft, implementation, practical mastery, refining details"
-  BEST_FOR::[implementation,code_quality,engineering_excellence]
+TIER_0_DOMAIN_ARCHETYPES::[
+  ZEUS,ATHENA,APOLLO,HERMES,HEPHAESTUS,ARES,ARTEMIS,POSEIDON,DEMETER,DIONYSUS
+]
 
-HERMES::
-  WISDOM::"Communication, interfaces, contracts, translation"
-  BEST_FOR::[API_design,documentation,integration,messaging]
+TIER_0_PATTERN_TOKENS::[
+  ODYSSEAN,SISYPHEAN,PROMETHEAN,ICARIAN,PANDORAN,TROJAN,GORDIAN,ACHILLEAN,PHOENICIAN,ORPHEAN
+]
 
-ARGUS::
-  WISDOM::"Vigilance, pattern recognition, comprehensive observation"
-  BEST_FOR::[monitoring,quality_assurance,detection,coverage]
+TIER_0_FORCES::[
+  HUBRIS,NEMESIS,KAIROS,CHRONOS,CHAOS,COSMOS,MOIRA,TYCHE
+]
 
-ATLAS::
-  WISDOM::"Foundational strength, bearing weight, system stability"
-  BEST_FOR::[infrastructure,core_systems,reliability,foundations]
+TIER_0_RELATIONSHIPS::[
+  HARMONIA,ERIS,EROS,THANATOS
+]
 
-ARTEMIS::
-  WISDOM::"Focus, clarity, boundary drawing, precision"
-  BEST_FOR::[specification,requirements,precision_work,focus]
-
-ARES::
-  WISDOM::"Direct action, conflict resolution, decisive force"
-  BEST_FOR::[conflict_resolution,bug_elimination,direct_fixing]
-
-APHRODITE::
-  WISDOM::"Connection, harmony, relationship, integration"
-  BEST_FOR::[coordination,integration,relationship_building]
-
-DIONYSUS::
-  WISDOM::"Transformation, emergence, flexibility, acceptance"
-  BEST_FOR::[transformation_work,flexibility,emergence_patterns]
-
-HADES::
-  WISDOM::"Deep knowledge, underworld mastery, hidden truths"
-  BEST_FOR::[deep_analysis,root_cause,hidden_dependencies,archeology]
+EXAMPLE_COMPOSITION::
+  // Keep usage sparse: 2-3 domains; 0-2 patterns; add forces/relationships only if they add structure
+  ARCHETYPES::[ATHENA⊕APOLLO]
+  PATTERN::SISYPHEAN
+  FORCE::CHRONOS
+  RELATIONSHIP::EROS
 
 §9::EXAMPLE_AGENT_ARCHITECTURES
 
