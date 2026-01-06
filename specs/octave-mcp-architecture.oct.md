@@ -392,22 +392,31 @@ PRODUCT_STATEMENT::[
 POLICY::semver
 
 SURFACES::[
-  SPEC_VERSION::"1.x"[breaking_changes_only_on_major],
-  OCTAVE_VERSION::"5.1.0"[grammar_features],
-  VALIDATOR_DEFAULT::"5.0.3"[backward_compatibility_until_tests_complete],
-  VALIDATOR_FLAGS::["--version 5.1.0"→enable_new_rules]
+  SPEC_VERSION::"2.0.0"[breaking_changes_only_on_major],
+  OCTAVE_VERSION::"6.0.0"[grammar_features+generative_constraints+hermetic_anchoring],
+  VALIDATOR_DEFAULT::"6.0.0"[full_v6_feature_support],
+  VALIDATOR_FLAGS::["--version 6.0.0"→enable_new_rules]
 ]
 
 COMPATIBILITY_MATRIX::[
-  lenient_ascii_aliases::stable_across_5.x,
-  canonicalization_rules::stable_across_1.x,
-  forbidden_repairs::strict_no_change
+  lenient_ascii_aliases::stable_across_6.x,
+  canonicalization_rules::stable_across_2.x,
+  forbidden_repairs::strict_no_change,
+  generative_constraints::new_in_6.0,
+  hermetic_anchoring::new_in_6.0
+]
+
+LEGACY_SUPPORT::[
+  v5.x_documents::parsed_correctly[backward_compatible_grammar],
+  v5.x_schemas::supported_via_compatibility_layer,
+  migration_path::automated_upgrade_available
 ]
 
 MIGRATION::[
-  add_tests_for_5.1.0_rules,
+  add_tests_for_6.0.0_rules,
   bump_default_once_tests_green,
-  publish_release_notes
+  publish_release_notes,
+  document_v5_to_v6_upgrade_path
 ]
 
 §15::HESTAI_INTEGRATION
