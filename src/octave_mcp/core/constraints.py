@@ -165,7 +165,7 @@ class ConstConstraint(Constraint):
 
     def compile(self) -> str:
         """Compile CONST to exact literal match."""
-        return str(self.const_value)
+        return re.escape(str(self.const_value))
 
 
 @dataclass
@@ -227,7 +227,8 @@ class EnumConstraint(Constraint):
 
     def compile(self) -> str:
         """Compile ENUM to regex alternation pattern."""
-        return f"({'|'.join(self.allowed_values)})"
+        escaped_values = [re.escape(str(v)) for v in self.allowed_values]
+        return f"({'|'.join(escaped_values)})"
 
 
 @dataclass
