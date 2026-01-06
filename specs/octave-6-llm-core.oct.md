@@ -1,15 +1,27 @@
 ===OCTAVE_CORE===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"5.1.0"
+  VERSION::"6.0.0"
   STATUS::APPROVED
-  IMPLEMENTATION::IMPLEMENTED
-  TOKENS::"~250"
+  IMPLEMENTATION::PARTIAL
+  TOKENS::"~280"
   REQUIRES::nothing
   ENABLES::[schema,data]
   TEACHES::[§skills/octave-literacy,§skills/octave-mastery]
-  IMPLEMENTATION_NOTES::"Lexer (308 LOC), Parser (389 LOC), Emitter (140 LOC), AST (62 LOC) all production-ready. Full envelope, operators, types, structure complete."
+  IMPLEMENTATION_NOTES::"Lexer (308 LOC), Parser (389 LOC), Emitter (140 LOC), AST (62 LOC) all production-ready. Full envelope, operators, types, structure complete. v6: Generative Holographic Contracts - adds CONTRACT and GRAMMAR blocks to META."
   IMPLEMENTATION_REF::[src/octave_mcp/core/lexer.py,src/octave_mcp/core/parser.py,src/octave_mcp/core/emitter.py,src/octave_mcp/core/ast_nodes.py]
+
+  CONTRACT::HOLOGRAPHIC[
+    PRINCIPLE::"Documents carry their own validation law",
+    MECHANISM::JIT_GRAMMAR_COMPILATION[META→GBNF],
+    ANCHORING::HERMETIC[frozen@sha256|latest@local]
+  ]
+
+  GRAMMAR::[
+    GENERATOR::OCTAVE_GBNF_COMPILER[planned],
+    INTEGRATION::[llama.cpp,Outlines,vLLM],
+    BENEFIT::IMPOSSIBLE_TO_GENERATE_INVALID_SYNTAX
+  ]
 
 ---
 
@@ -21,6 +33,7 @@ META:
 FILE_EXTENSION::.oct.md[canonical][.octave.txt_deprecated]
 START::===NAME===[first_line,exact_match]
 META::required[TYPE,VERSION][immediately_after_start]
+META_OPTIONAL::[CONTRACT,GRAMMAR][v6_holographic_contracts]
 SEPARATOR::---[optional_for_discovery,signals_metadata_boundary]
 END::===END===[last_line,exact_match,mandatory]
 DUPLICATES::keys_must_be_unique_per_block

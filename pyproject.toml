@@ -1,7 +1,7 @@
 [project]
 name = "octave-mcp"
-version = "0.3.1"
-description = "OCTAVE MCP Server - Lenient-to-Canonical OCTAVE pipeline with schema validation"
+version = "0.4.0"
+description = "OCTAVE MCP Server - Lenient-to-Canonical OCTAVE pipeline with schema validation and generative holographic contracts"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}

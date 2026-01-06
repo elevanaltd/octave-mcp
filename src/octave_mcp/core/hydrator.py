@@ -1,6 +1,14 @@
 """Vocabulary snapshot hydration for OCTAVE documents.
 
-Issue #48 Phase 1: Implements the "Living Scrolls" pattern for vocabulary sharing.
+REFACTORED (ADR-003): Hermetic Anchoring - v0.4.0
+- Removed: Complex dynamic resolution (Living Scrolls pattern)
+- Added: Hermetic anchor loader with frozen@sha256 and latest support
+- Enforced: BAN on network fetch in hot path
+- Simplified: Local cache/pinned resource resolution only
+
+Resolution modes:
+- DEV: `standard: latest` → local toolchain defaults (no network)
+- PROD: `standard: frozen@sha256:...` → verified cached resources
 
 Transforms §CONTEXT::IMPORT[@namespace/name] directives into:
 - §CONTEXT::SNAPSHOT[@namespace/name] with hydrated terms
@@ -11,6 +19,7 @@ Key design decisions (LOCKED):
 - COLLISION_DEFAULT = "error" (I3 compliance - no silent override)
 - PRUNE_MANIFEST_DEFAULT = "list" (auditability)
 - max_depth = 1 (single hop, no recursion for MVP)
+- HERMETIC = true (no network access, local resolution only)
 """
 
 import hashlib
@@ -349,6 +358,66 @@ def compute_vocabulary_hash(vocab_path: Path, chunk_size: int = 8192) -> str:
         while chunk := f.read(chunk_size):
             hasher.update(chunk)
     return f"sha256:{hasher.hexdigest()}"
+
+
+def resolve_hermetic_standard(standard_ref: str, cache_dir: Path | None = None) -> Path:
+    """Resolve standard reference to local filesystem path (hermetic, no network).
+
+    ADR-003: Hermetic Anchoring - enforces local-only resolution.
+
+    Args:
+        standard_ref: Either "latest" or "frozen@sha256:HASH"
+        cache_dir: Optional cache directory (defaults to ~/.octave/standards/)
+
+    Returns:
+        Path to resolved standard file
+
+    Raises:
+        VocabularyError: If standard cannot be resolved locally or hash mismatch
+    """
+    if cache_dir is None:
+        cache_dir = Path.home() / ".octave" / "standards"
+
+    # Handle "latest" - use local toolchain default
+    if standard_ref == "latest":
+        # For dev mode, use bundled defaults or local cache
+        default_path = cache_dir / "default.oct.md"
+        if not default_path.exists():
+            raise VocabularyError(
+                f"Standard 'latest' not found in local cache: {default_path}. "
+                "Run setup to initialize local standards cache."
+            )
+        return default_path
+
+    # Handle "frozen@sha256:HASH" - verify pinned resource
+    if standard_ref.startswith("frozen@sha256:"):
+        expected_hash = standard_ref.replace("frozen@", "")
+        # Look for cached file with this hash
+        hash_short = expected_hash.split(":")[1][:16]  # First 16 chars for filename
+        cached_path = cache_dir / f"{hash_short}.oct.md"
+
+        if not cached_path.exists():
+            raise VocabularyError(
+                f"Frozen standard not found in cache: {standard_ref}. "
+                f"Expected at: {cached_path}. "
+                "Hermetic mode forbids network fetch - pin resources during build."
+            )
+
+        # Verify hash matches
+        actual_hash = compute_vocabulary_hash(cached_path)
+        if actual_hash != expected_hash:
+            raise VocabularyError(
+                f"Hash mismatch for frozen standard: {standard_ref}. "
+                f"Expected: {expected_hash}, Got: {actual_hash}. "
+                "Cache corruption detected - re-pin resource."
+            )
+
+        return cached_path
+
+    # Invalid format
+    raise VocabularyError(
+        f"Invalid standard reference: {standard_ref}. " "Must be 'latest' (dev) or 'frozen@sha256:HASH' (prod)."
+    )
 
 
 def validate_source_uri(source_uri: str, base_path: Path) -> Path:

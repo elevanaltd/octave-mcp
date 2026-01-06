@@ -1,18 +1,24 @@
-===OCTAVE_V5_SPECS===
+===OCTAVE_V6_SPECS===
 META:
   TYPE::DOCUMENTATION
-  VERSION::"5.1.0"
-  STATUS::DRAFT
+  VERSION::"6.0.0"
+  STATUS::APPROVED
   MYTHOLOGY_INTEGRATED::true[domains_map_operators→archetypes_for_semantic_compression]
   EVIDENCE::docs/research/mythology-evidence-synthesis.oct.md[60-70%_compression,88-96%_comprehension]
+  CHANGELOG::"v6.0: Generative Holographic Contracts - documents carry their own validation law (META.CONTRACT+META.GRAMMAR). Hermetic Anchoring for network-free standard resolution."
 
 §1::CANONICAL_FILES
 LLM_PROFILES::[
-  octave-5-llm-core.oct.md["~250_tokens"][always_inject],
-  octave-5-llm-schema.oct.md["~90_tokens"][for_L4_definitions],
+  octave-6-llm-core.oct.md["~280_tokens"][always_inject],
+  octave-6-llm-schema.oct.md["~120_tokens"][for_L4_definitions+document_holography],
   octave-5-llm-data.oct.md["~75_tokens"][for_compression],
   octave-5-llm-execution.oct.md["~100_tokens"][for_debugging],
   octave-5-llm-rationale.oct.md["~160_tokens"][for_training_or_design]
+]
+
+LEGACY_V5::[
+  octave-5-llm-core.oct.md[deprecated],
+  octave-5-llm-schema.oct.md[deprecated]
 ]
 
 ARCHIVE::_archive/[historical_development_artifacts]
@@ -41,7 +47,11 @@ EXECUTION::add_for[error_formats,retry_protocol,validation_flow]
 RATIONALE::add_for[design_philosophy,token_economics,training_context]
 
 §4::VERSION_HISTORY
-5.1.0::CURRENT
+6.0.0::CURRENT
+  changes::[generative_holographic_contracts,hermetic_anchoring,meta_contract_block,meta_grammar_block]
+  additions::[META.CONTRACT,META.GRAMMAR,document_level_holography]
+  impact::[jit_grammar_compilation,impossible_invalid_generation,network_free_standards]
+5.1.0::DEPRECATED
   changes::[unicode_operators,precedence_rules,lexer_specification,tension_operator]
   operators::[→,⊕,⧺,⇌,∨,∧,§]
   ascii_aliases::[->|+|~|vs|||&|§]

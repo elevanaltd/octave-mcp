@@ -1,20 +1,21 @@
 ===OCTAVE_SCHEMA===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"5.1.0"
+  VERSION::"6.0.0"
   STATUS::APPROVED
   IMPLEMENTATION::PLANNED
-  TOKENS::"~90"
-  REQUIRES::octave-5-llm-core
-  PURPOSE::L4_holographic_definitions
-  IMPLEMENTATION_NOTES::"Gap 2 (constraint chain evaluation) implemented with 12 constraint types. Holographic patterns, targets, and block inheritance pending."
+  TOKENS::"~120"
+  REQUIRES::octave-6-llm-core
+  PURPOSE::L4_holographic_definitions+document_level_holography
+  IMPLEMENTATION_NOTES::"Gap 2 (constraint chain evaluation) implemented with 12 constraint types. Holographic patterns, targets, and block inheritance pending. v6: Document-Level Holography enables schema embedding in META block."
   IMPLEMENTATION_REF::[src/octave_mcp/core/schema.py,src/octave_mcp/core/constraints.py]
-  CRITICAL_GAPS::[holographic_pattern_parsing,target_routing,block_inheritance,policy_blocks]
+  CRITICAL_GAPS::[holographic_pattern_parsing,target_routing,block_inheritance,policy_blocks,meta_schema_compilation]
   IMPLEMENTED::[constraint_evaluation,constraint_conflicts]
 
 ---
 
 // OCTAVE SCHEMA: Rules for defining document types. Inject WITH core.
+// v6: Documents can embed their own schema in META block for self-validation.
 
 §1::HOLOGRAPHIC_PATTERN
 SYNTAX::KEY::["example"∧CONSTRAINT→§TARGET]
@@ -84,7 +85,28 @@ TEMPLATE:
     STATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,DRAFT]→§INDEXER]
   ===END===
 
-§7::REFERENCE
+§7::DOCUMENT_LEVEL_HOLOGRAPHY
+// v6.0: Schema embedded in META block
+
+PRINCIPLE::"Documents carry their own validation law"
+LOCATION::META.CONTRACT[holographic_block]∧META.GRAMMAR[generation_rules]
+
+CONTRACT_BLOCK::[
+  PRINCIPLE::core_validation_philosophy,
+  MECHANISM::how_constraints_compile,
+  ANCHORING::hermetic_standard_resolution
+]
+
+GRAMMAR_BLOCK::[
+  GENERATOR::target_grammar_compiler[GBNF,Outlines,etc],
+  INTEGRATION::supported_inference_engines,
+  BENEFIT::generation_guarantee
+]
+
+USAGE::JIT_COMPILATION[META→GRAMMAR→CONSTRAINED_GENERATION]
+SECURITY::HERMETIC[frozen@sha256_for_prod|latest@local_for_dev]
+
+§8::REFERENCE
 EXAMPLES::see_core.§7.SCHEMA_PATTERN
 BLOCK_EXAMPLE::see_core.§7.BLOCK_INHERITANCE_PATTERN
 
