@@ -60,3 +60,6 @@ worktrees/
 # Existing committed debates remain as historical decision records
 # Future debates are ephemeral by default
 debates/
+
+# HestAI system governance (auto-added, not committed)
+.hestai-sys/
