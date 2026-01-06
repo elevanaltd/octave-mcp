@@ -1130,6 +1130,44 @@ def parse(content: str | list[Token]) -> Document:
     return doc
 
 
+def parse_meta_only(content: str) -> dict[str, Any]:
+    """Fast META-only extraction without parsing full document.
+
+    Performs minimal parsing to extract just the META section.
+    Significantly faster than full parse() for large documents.
+    Use when only metadata is needed (e.g., schema detection, routing).
+
+    Args:
+        content: Raw OCTAVE text
+
+    Returns:
+        Dictionary of META fields, empty dict if no META present
+    """
+    # Strip YAML frontmatter like full parser
+    stripped_content, _ = _strip_yaml_frontmatter(content)
+    tokens, _ = tokenize(stripped_content)
+
+    parser = Parser(tokens)
+    parser.skip_whitespace()
+
+    # Skip grammar sentinel if present
+    if parser.current().type == TokenType.GRAMMAR_SENTINEL:
+        parser.advance()
+        parser.skip_whitespace()
+
+    # Skip envelope start if present
+    if parser.current().type == TokenType.ENVELOPE_START:
+        parser.advance()
+        parser.skip_whitespace()
+
+    # Check if META block exists
+    if parser.current().type == TokenType.IDENTIFIER and parser.current().value == "META":
+        return parser.parse_meta_block()
+
+    # No META block found
+    return {}
+
+
 def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict]]:
     """Parse OCTAVE content into AST with I4 audit trail.
 
