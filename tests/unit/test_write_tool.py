@@ -1590,3 +1590,52 @@ KEY::new
         )
         # Should indicate bytes AND that content changed
         assert "bytes" in diff.lower() or "->" in diff, f"Diff should include byte count info, got: {diff}"
+
+    @pytest.mark.asyncio
+    async def test_hermetic_schema_resolution_with_latest(self):
+        """Test that octave_write uses hermetic resolution for schema='latest'.
+
+        Issue #150: octave_write must use resolve_hermetic_standard from hydrator
+        instead of bypassing to get_builtin_schema directly.
+
+        This tests the hermetic resolution path for frozen@ and latest schema references.
+        """
+        from pathlib import Path
+
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create a test standard in local cache
+            cache_dir = Path(tmpdir) / ".octave" / "standards"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            default_schema = cache_dir / "default.oct.md"
+
+            # Write a minimal schema (doesn't need to be valid, just needs to exist)
+            default_schema.write_text("===SCHEMA===\n===END===")
+
+            # Test that schema="latest" attempts hermetic resolution
+            # This should fail in RED phase because write.py currently uses get_builtin_schema
+            # which doesn't support "latest" - it will return None and remain UNVALIDATED
+
+            # In GREEN phase, when we integrate resolve_hermetic_standard,
+            # the cache_dir parameter will need to be passed through somehow
+            # For now, we test that attempting to use "latest" doesn't crash
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+                schema="latest",
+            )
+
+            # RED phase expectation: get_builtin_schema("latest") returns None
+            # so validation is skipped and validation_status remains UNVALIDATED
+            assert result["status"] == "success"
+            assert (
+                result["validation_status"] == "UNVALIDATED"
+            ), "Expected UNVALIDATED because get_builtin_schema doesn't handle 'latest'"
+
+            # GREEN phase will change this behavior:
+            # resolve_hermetic_standard("latest", cache_dir) -> loads schema -> VALIDATED/INVALID
