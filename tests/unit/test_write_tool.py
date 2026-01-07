@@ -669,6 +669,62 @@ class TestWriteToolI5SchemaSovereignty:
             ), "I5 violation: PENDING_INFRASTRUCTURE is a silent bypass. Must use UNVALIDATED to make bypass visible."
 
 
+class TestWriteToolDebugGrammar:
+    """Tests for debug_grammar parameter in octave_write.
+
+    Feature parity with octave_validate: debug_grammar should return
+    compiled constraint grammar for debugging constraint evaluation.
+    """
+
+    @pytest.mark.asyncio
+    async def test_write_debug_grammar_returns_compiled_regexes(self):
+        """Test debug_grammar=True returns compiled constraint regexes."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        # Valid META content with schema
+        valid_meta_content = """===TEST===
+META:
+  TYPE::"TEST_DOCUMENT"
+  VERSION::"1.0.0"
+  STATUS::ACTIVE
+---
+KEY::value
+===END==="""
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=valid_meta_content,
+                schema="META",
+                debug_grammar=True,
+            )
+
+            assert result["status"] == "success"
+
+            # debug_info should be present when debug_grammar=True and schema provided
+            assert "debug_info" in result, "debug_info should be present when debug_grammar=True"
+
+            debug_info = result["debug_info"]
+            assert "schema_name" in debug_info
+            # Schema name from loaded SchemaDefinition (may differ from parameter)
+            assert debug_info["schema_name"] in ["META", "META_SCHEMA"], f"Got schema_name: {debug_info['schema_name']}"
+            assert "field_constraints" in debug_info
+
+            # Should have constraint info for META fields
+            field_constraints = debug_info["field_constraints"]
+            assert isinstance(field_constraints, dict)
+
+            # Each field should have chain and compiled_regex
+            for field_name, constraint_info in field_constraints.items():
+                assert "chain" in constraint_info, f"Field {field_name} should have chain"
+                assert "compiled_regex" in constraint_info, f"Field {field_name} should have compiled_regex"
+                assert isinstance(constraint_info["compiled_regex"], str), "compiled_regex should be string"
+
+
 class TestWriteToolSchemaValidation:
     """Tests for schema validation wiring in octave_write.
 

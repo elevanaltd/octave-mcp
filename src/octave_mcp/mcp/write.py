@@ -22,9 +22,10 @@ from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, List
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.lexer import tokenize
 from octave_mcp.core.parser import parse
+from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
-from octave_mcp.schemas.loader import get_builtin_schema
+from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
 
 # Sentinel for DELETE operation in tri-state changes
 DELETE_SENTINEL = {"$op": "DELETE"}
@@ -195,6 +196,13 @@ class WriteTool(BaseTool):
         )
 
         schema.add_parameter("schema", "string", required=False, description="Schema name for validation (I5).")
+
+        schema.add_parameter(
+            "debug_grammar",
+            "boolean",
+            required=False,
+            description="If True, include compiled regex/grammar in output for debugging constraint evaluation.",
+        )
 
         return schema.build()
 
@@ -465,6 +473,7 @@ class WriteTool(BaseTool):
             mutations: Optional META field overrides
             base_hash: Optional CAS consistency check hash
             schema: Optional schema name for validation
+            debug_grammar: Whether to include compiled grammar in output (default: False)
 
         Returns:
             Dictionary with:
@@ -478,6 +487,7 @@ class WriteTool(BaseTool):
             - schema_name: Schema name used (when VALIDATED or INVALID)
             - schema_version: Schema version used (when VALIDATED or INVALID)
             - validation_errors: List of schema validation errors (when INVALID)
+            - debug_info: Constraint grammar debug information (when debug_grammar=True)
         """
         # Validate and extract parameters
         params = self.validate_parameters(kwargs)
@@ -487,6 +497,7 @@ class WriteTool(BaseTool):
         mutations = params.get("mutations")
         base_hash = params.get("base_hash")
         schema_name = params.get("schema")
+        debug_grammar = params.get("debug_grammar", False)
 
         # Initialize result with unified envelope per D2 design
         # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
@@ -677,11 +688,39 @@ class WriteTool(BaseTool):
         if schema_name:
             schema_def = get_builtin_schema(schema_name)
 
+            # Load SchemaDefinition for constraint grammar compilation (if debug_grammar=True)
+            schema_definition: SchemaDefinition | None = None
+            if debug_grammar:
+                try:
+                    schema_definition = load_schema_by_name(schema_name)
+                except Exception:
+                    # Schema loading may fail - continue without debug info
+                    pass
+
             if schema_def is not None:
                 # Schema found - perform validation
                 # I5: "Schema-validated documents shall record the schema name and version used"
                 result["schema_name"] = schema_def.get("name", schema_name)
                 result["schema_version"] = schema_def.get("version", "unknown")
+
+                # Add debug grammar information if requested
+                if debug_grammar and schema_definition is not None:
+                    debug_info: dict[str, Any] = {
+                        "schema_name": schema_definition.name,
+                        "schema_version": schema_definition.version or "unknown",
+                        "field_constraints": {},
+                    }
+                    # Compile constraint grammar for each field
+                    for field_name, field_def in schema_definition.fields.items():
+                        # Use field_def.pattern.constraints (matching validate.py pattern)
+                        if hasattr(field_def, "pattern") and field_def.pattern and field_def.pattern.constraints:
+                            chain = field_def.pattern.constraints
+                            compiled = chain.compile()
+                            debug_info["field_constraints"][field_name] = {
+                                "chain": chain.to_string(),
+                                "compiled_regex": compiled,
+                            }
+                    result["debug_info"] = debug_info
 
                 # Use the validator with the schema definition
                 validator = Validator(schema=schema_def)
