@@ -39,7 +39,7 @@ from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition, 
 from octave_mcp.core.sealer import SealVerificationResult, seal_document, verify_seal
 from octave_mcp.core.validator import ValidationError, Validator
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 # Canonical OCTAVE operators (per specs/octave-5-llm-core.oct.md §2)
 # These are the Unicode canonical forms. ASCII aliases are also accepted by the lexer.
