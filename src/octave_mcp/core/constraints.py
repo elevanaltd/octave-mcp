@@ -178,6 +178,10 @@ class EnumConstraint(Constraint):
 
     allowed_values: list[str]
 
+    def __post_init__(self):
+        """Normalize allowed values to strings."""
+        self.allowed_values = [str(v) for v in self.allowed_values]
+
     def evaluate(self, value: Any, path: str = "") -> ValidationResult:
         """Evaluate ENUM constraint with prefix matching."""
         value_str = str(value)
@@ -969,8 +973,8 @@ class ConstraintChain:
     def compile(self) -> str:
         """Compile constraint chain to regex pattern for grammar generation.
 
-        Combines individual constraint patterns with anchors for complete match.
-        Example: REQ∧ENUM[A,B] -> ^.+(A|B)$
+        Combines individual constraint patterns using lookahead intersection.
+        Example: REQ∧ENUM[A,B] -> ^(?=(?:.+)$)(?=(?:(A|B))$).*$
 
         Returns:
             Regex pattern string for complete chain validation
@@ -978,17 +982,17 @@ class ConstraintChain:
         if not self.constraints:
             return r".*"  # Empty chain matches anything
 
-        # Compile each constraint and join them
+        # Compile each constraint
         patterns = [c.compile() for c in self.constraints]
 
-        # Join patterns - each constraint refines the previous
-        # For now, we AND them together (all must match)
-        # More sophisticated: intersect the patterns
-        # Simple approach: concatenate with anchors
-        combined = "".join(patterns)
+        # Join patterns - intersect them using lookaheads
+        # We wrap each pattern in (?:...) to handle alternation safely
+        # and assert it matches to the end ($)
+        lookaheads = [f"(?=(?:{p})$)" for p in patterns]
+        combined = "".join(lookaheads)
 
-        # Add anchors for full match
-        return f"^{combined}$"
+        # Add start anchor and consume patterns
+        return f"^{combined}.*$"
 
     def to_string(self) -> str:
         """Return chain as string."""
