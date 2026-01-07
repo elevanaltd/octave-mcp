@@ -1,4 +1,4 @@
-# OCTAVE-MCP Public API Reference (v0.3.0)
+# OCTAVE-MCP Public API Reference (v0.4.0)
 
 This document describes the public API exports available when importing `octave_mcp`.
 
@@ -336,8 +336,54 @@ expr = f"A{OP_TENSION}B{OP_FLOW}C"  # "A⇌B→C"
 ```python
 from octave_mcp import __version__
 
-print(__version__)  # "0.3.1"
+print(__version__)  # "0.4.0"
 ```
+
+---
+
+## MCP Tools
+
+When using OCTAVE-MCP as an MCP server, the following tools are available:
+
+### `octave_validate`
+
+Schema validation and parsing with optional repair suggestions.
+
+**Parameters:**
+- `content` (string, optional): OCTAVE content to validate (mutually exclusive with `file_path`)
+- `file_path` (string, optional): Path to OCTAVE file to validate (mutually exclusive with `content`)
+- `schema` (string, required): Schema name for validation
+- `fix` (boolean, optional): If `true`, apply repairs to canonical output. If `false` (default), suggest repairs only.
+- `debug_grammar` (boolean, optional): If `true`, include compiled regex/grammar in output for debugging constraint evaluation. Default: `false`.
+
+**Returns:**
+- `status`: "success" or "error"
+- `canonical`: Normalized content (repaired if `fix=true`)
+- `validation_status`: VALIDATED | UNVALIDATED | INVALID
+- `schema_name`: Schema name used (when VALIDATED or INVALID)
+- `validation_errors`: List of schema validation errors (when INVALID)
+- `debug_info`: Constraint grammar debug information (when `debug_grammar=true`)
+
+### `octave_write`
+
+File creation and modification with CAS (Compare-And-Swap) support.
+
+**Parameters:**
+- `target_path` (string, required): File path to write to
+- `content` (string, optional): Full content for new files or overwrites
+- `changes` (object, optional): Dictionary of field updates for existing files
+- `schema` (string, optional): Schema name for validation
+- `base_hash` (string, optional): Expected SHA-256 hash for consistency check
+
+### `octave_eject`
+
+Format projection with multiple output modes.
+
+**Parameters:**
+- `content` (string, optional): OCTAVE content to eject (null for template generation)
+- `schema` (string, required): Schema name for validation or template generation
+- `mode` (string, optional): Projection mode - "canonical", "authoring", "executive", or "developer"
+- `format` (string, optional): Output format - "octave", "json", "yaml", or "markdown"
 
 ---
 

@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.4.0] - 2026-01-07
+
+### Added
+- **Generative Holographic Contracts** (ADR-003): Multi-dimensional validation with incremental integrity enforcement
+  - Hermetic Anchoring: Contextual identity binding via `odyssean_anchor` tool with RAPH vectors (Request, Assignment, Permit, Hash)
+  - v6 OCTAVE specification support with pattern-based validation and regex compilation
+  - `debug_grammar` parameter in `octave_validate` for grammar debugging output
+  - Progressive integrity model: v4 (Structural) → v5 (Syntactic) → v6 (Semantic+Hermetic)
+
+### Changed
+- Enhanced validation architecture with tier-based approach (quick/default/deep)
+- Improved schema sovereignty with regex pattern compilation
+
 ## [0.3.1] - 2026-01-04
 
 ### Added
@@ -92,7 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.1.0...v0.2.0
