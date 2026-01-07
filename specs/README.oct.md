@@ -11,14 +11,17 @@ META:
 LLM_PROFILES::[
   octave-6-llm-core.oct.md["~280_tokens"][always_inject],
   octave-6-llm-schema.oct.md["~120_tokens"][for_L4_definitions+document_holography],
-  octave-5-llm-data.oct.md["~75_tokens"][for_compression],
-  octave-5-llm-execution.oct.md["~100_tokens"][for_debugging],
-  octave-5-llm-rationale.oct.md["~160_tokens"][for_training_or_design]
+  octave-6-llm-data.oct.md["~75_tokens"][for_compression],
+  octave-6-llm-execution.oct.md["~100_tokens"][for_debugging],
+  octave-6-llm-rationale.oct.md["~160_tokens"][for_training_or_design]
 ]
 
 LEGACY_V5::[
-  octave-5-llm-core.oct.md[deprecated],
-  octave-5-llm-schema.oct.md[deprecated]
+  octave-5-llm-core.oct.md[deprecated→upgraded_to_v6],
+  octave-5-llm-schema.oct.md[deprecated→upgraded_to_v6],
+  octave-5-llm-data.oct.md[deprecated→upgraded_to_v6],
+  octave-5-llm-execution.oct.md[deprecated→upgraded_to_v6],
+  octave-5-llm-rationale.oct.md[deprecated→upgraded_to_v6]
 ]
 
 ARCHIVE::_archive/[historical_development_artifacts]
@@ -27,17 +30,17 @@ ARCHIVE::_archive/[historical_development_artifacts]
 TASK::INJECT::TOKENS::USE_CASE
 
 RUNTIME:
-  any_octave::core::"~250"::base_syntax_and_operators
-  compress_prose::core⊕data::"~325"::telegram_style_compression
-  define_schema::core⊕schema::"~340"::L4_holographic_definitions
-  debug_errors::core⊕execution::"~350"::understanding_validator_feedback
-  full_generation::core⊕schema⊕data::"~415"::complete_generation_capability
+  any_octave::v6-core::"~280"::base_syntax_and_operators+holographic_contracts
+  compress_prose::v6-core⊕v6-data::"~355"::telegram_style_compression
+  define_schema::v6-core⊕v6-schema::"~400"::L4_holographic_definitions+document_holography
+  debug_errors::v6-core⊕v6-execution::"~380"::understanding_validator_feedback
+  full_generation::v6-core⊕v6-schema⊕v6-data::"~475"::complete_generation_capability
 
 TRAINING:
-  model_fine_tune::core⊕rationale::"~410"::teaching_OCTAVE_to_base_models
-  complex_reasoning::core⊕schema⊕rationale::"~500"::designing_new_protocols
-  full_with_debug::core⊕schema⊕data⊕execution::"~515"::complete_with_error_handling
-  maximum::core⊕schema⊕data⊕execution⊕rationale::"~675"::everything
+  model_fine_tune::v6-core⊕v6-rationale::"~440"::teaching_OCTAVE_to_base_models
+  complex_reasoning::v6-core⊕v6-schema⊕v6-rationale::"~560"::designing_new_protocols
+  full_with_debug::v6-core⊕v6-schema⊕v6-data⊕v6-execution::"~575"::complete_with_error_handling
+  maximum::v6-core⊕v6-schema⊕v6-data⊕v6-execution⊕v6-rationale::"~735"::everything
 
 §3::COMPOSITION_RULES
 CORE::always_required[base_syntax∧operators∧precedence]
