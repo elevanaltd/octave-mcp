@@ -966,6 +966,30 @@ class ConstraintChain:
 
         return conflicts
 
+    def compile(self) -> str:
+        """Compile constraint chain to regex pattern for grammar generation.
+
+        Combines individual constraint patterns with anchors for complete match.
+        Example: REQ∧ENUM[A,B] -> ^.+(A|B)$
+
+        Returns:
+            Regex pattern string for complete chain validation
+        """
+        if not self.constraints:
+            return r".*"  # Empty chain matches anything
+
+        # Compile each constraint and join them
+        patterns = [c.compile() for c in self.constraints]
+
+        # Join patterns - each constraint refines the previous
+        # For now, we AND them together (all must match)
+        # More sophisticated: intersect the patterns
+        # Simple approach: concatenate with anchors
+        combined = "".join(patterns)
+
+        # Add anchors for full match
+        return f"^{combined}$"
+
     def to_string(self) -> str:
         """Return chain as string."""
         return "∧".join(c.to_string() for c in self.constraints)

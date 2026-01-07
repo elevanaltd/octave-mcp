@@ -361,10 +361,12 @@ class ValidateTool(BaseTool):
             }
             # Compile constraint grammar for each field
             for field_name, field_def in schema_definition.fields.items():
-                if hasattr(field_def, "constraint_chain") and field_def.constraint_chain:
-                    compiled = field_def.constraint_chain.compile()
+                # CORRECTNESS FIX: Use field_def.pattern.constraints (not field_def.constraint_chain)
+                if hasattr(field_def, "pattern") and field_def.pattern and field_def.pattern.constraints:
+                    chain = field_def.pattern.constraints
+                    compiled = chain.compile()
                     debug_info["field_constraints"][field_name] = {
-                        "chain": str(field_def.constraint_chain),
+                        "chain": chain.to_string(),
                         "compiled_regex": compiled,
                     }
             result["debug_info"] = debug_info
