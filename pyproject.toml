@@ -71,7 +71,7 @@ where = ["src"]
 include = ["octave_mcp*"]
 
 [tool.setuptools.package-data]
-octave_mcp = ["schemas/builtin/*.oct.md"]
+octave_mcp = ["schemas/builtin/*.oct.md", "py.typed"]
 
 [tool.black]
 line-length = 120
