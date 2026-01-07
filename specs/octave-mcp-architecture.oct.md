@@ -1,15 +1,15 @@
 ===OCTAVE_MCP_ARCHITECTURE===
 META:
   TYPE::SPECIFICATION
-  VERSION::"1.0.0"
+  VERSION::"2.0.0"
   STATUS::APPROVED
   IMPLEMENTATION::PARTIAL
-  DATE::"2025-12-22"
-  OCTAVE_VERSION::"5.1.0"
-  PURPOSE::MCP_server_architecture_for_OCTAVE_productization
-  IMPLEMENTATION_NOTES::"MCP tools (octave_validate, octave_write, octave_eject), canonicalization rules, and projection modes IMPLEMENTED. Constraint validation, repair logic (fix=true), target routing, and schema policy PLANNED."
-  IMPLEMENTATION_REF::[src/octave_mcp/mcp/validate.py,src/octave_mcp/mcp/write.py,src/octave_mcp/mcp/eject.py,src/octave_mcp/core/lexer.py,src/octave_mcp/core/projector.py]
-  CRITICAL_GAPS::[constraint_validation,target_routing,repair_logic,builtin_schema_loading,error_message_formatting]
+  DATE::"2026-01-06"
+  OCTAVE_VERSION::"6.0.0"
+  PURPOSE::MCP_server_architecture_for_OCTAVE_productization+generative_holographic_contracts
+  IMPLEMENTATION_NOTES::"MCP tools (octave_validate, octave_write, octave_eject), canonicalization rules, and projection modes IMPLEMENTED. Constraint validation, repair logic (fix=true), target routing, and schema policy PLANNED. v2.0: Generative Constraints (JIT Grammar Compilation) and Hermetic Anchoring added."
+  IMPLEMENTATION_REF::[src/octave_mcp/mcp/validate.py,src/octave_mcp/mcp/write.py,src/octave_mcp/mcp/eject.py,src/octave_mcp/core/lexer.py,src/octave_mcp/core/projector.py,src/octave_mcp/core/hydrator.py]
+  CRITICAL_GAPS::[constraint_validation,target_routing,repair_logic,builtin_schema_loading,error_message_formatting,jit_grammar_compilation,hermetic_standard_resolution]
 
 ---
 
@@ -392,22 +392,31 @@ PRODUCT_STATEMENT::[
 POLICY::semver
 
 SURFACES::[
-  SPEC_VERSION::"1.x"[breaking_changes_only_on_major],
-  OCTAVE_VERSION::"5.1.0"[grammar_features],
-  VALIDATOR_DEFAULT::"5.0.3"[backward_compatibility_until_tests_complete],
-  VALIDATOR_FLAGS::["--version 5.1.0"→enable_new_rules]
+  SPEC_VERSION::"2.0.0"[breaking_changes_only_on_major],
+  OCTAVE_VERSION::"6.0.0"[grammar_features+generative_constraints+hermetic_anchoring],
+  VALIDATOR_DEFAULT::"6.0.0"[full_v6_feature_support],
+  VALIDATOR_FLAGS::["--version 6.0.0"→enable_new_rules]
 ]
 
 COMPATIBILITY_MATRIX::[
-  lenient_ascii_aliases::stable_across_5.x,
-  canonicalization_rules::stable_across_1.x,
-  forbidden_repairs::strict_no_change
+  lenient_ascii_aliases::stable_across_6.x,
+  canonicalization_rules::stable_across_2.x,
+  forbidden_repairs::strict_no_change,
+  generative_constraints::new_in_6.0,
+  hermetic_anchoring::new_in_6.0
+]
+
+LEGACY_SUPPORT::[
+  v5.x_documents::parsed_correctly[backward_compatible_grammar],
+  v5.x_schemas::supported_via_compatibility_layer,
+  migration_path::automated_upgrade_available
 ]
 
 MIGRATION::[
-  add_tests_for_5.1.0_rules,
+  add_tests_for_6.0.0_rules,
   bump_default_once_tests_green,
-  publish_release_notes
+  publish_release_notes,
+  document_v5_to_v6_upgrade_path
 ]
 
 §15::HESTAI_INTEGRATION
@@ -425,7 +434,58 @@ MAPPING::[
 
 NOTE::"When embedded in HestAI-MCP, map tool names to the HestAI equivalents without altering semantics."
 
-§16::ORCHESTRA_MAP_INTEROP
+§16::GENERATIVE_CONSTRAINTS
+
+// v2.0: JIT Grammar Compilation from META.CONTRACT→GBNF/Outlines
+
+PRINCIPLE::"Validation precedes generation - impossible to generate invalid syntax"
+
+MECHANISM:
+  INPUT::META.CONTRACT∧META.GRAMMAR[document_schema]
+  COMPILATION::JIT_COMPILER[OCTAVE→GBNF∨Outlines∨JSON_Schema]
+  OUTPUT::constrained_grammar[llama.cpp,vLLM,Outlines]
+
+SECURITY::HERMETIC[no_network_fetch_in_hot_path]
+
+PHASES::[
+  PARSE::extract_CONTRACT_and_GRAMMAR_from_META,
+  COMPILE::transform_constraints_to_target_grammar,
+  GENERATE::apply_grammar_to_inference_engine,
+  VALIDATE::post_generation_hash_verification
+]
+
+BENEFITS::[
+  impossible_to_generate_invalid_syntax,
+  no_post_hoc_validation_theater,
+  deterministic_output_structure,
+  self_describing_documents
+]
+
+§17::HERMETIC_ANCHORING
+
+// v2.0: Network-free standard resolution with cryptographic guarantees
+
+PRINCIPLE::"Frozen Standards - no runtime dependency resolution"
+
+MODES:
+  DEV::standard_latest[local_filesystem_only,no_network]
+  PROD::standard_frozen@sha256[immutable_pinned_resources]
+
+RESOLUTION:
+  CACHE::local_cache[~/.octave/standards/]
+  PINNED::frozen@sha256_abc123[verified_against_hash]
+  LATEST::latest[local_toolchain_defaults,dev_only]
+
+FORBIDDEN::[
+  network_fetch_in_hot_path,
+  dynamic_registry_resolution,
+  runtime_schema_download,
+  unverified_remote_resources
+]
+
+IMPLEMENTATION::streamlined_hydrator[remove_living_scrolls_complexity]
+
+§18::ORCHESTRA_MAP_INTEROP
 
 PURPOSE::"Concepts claim Code via imports"
 

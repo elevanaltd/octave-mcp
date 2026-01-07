@@ -1,18 +1,19 @@
 ===OCTAVE_AGENTS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"5.1.0"
+  VERSION::"6.0.0"
   STATUS::APPROVED
   IMPLEMENTATION::REFERENCE
-  TOKENS::"~400"
-  REQUIRES::[octave-5-llm-core,octave-5-llm-schema]
-  PURPOSE::Agent_architecture_and_cognitive_foundation_patterns
-  IMPLEMENTATION_NOTES::"Reference specification for agent design. No code implementation required. Defines structured agent patterns for Claude Code skills and subagents."
+  TOKENS::"~450"
+  REQUIRES::[octave-6-llm-core,octave-5-llm-schema]
+  PURPOSE::Agent_architecture_and_cognitive_foundation_patterns_with_holographic_contracts
+  IMPLEMENTATION_NOTES::"Reference specification for agent design. No code implementation required. Defines structured agent patterns for Claude Code skills and subagents with generative contract capabilities."
 
 ---
 
-// OCTAVE AGENTS: Cognitive architecture patterns for Claude Code agents and subagents
-// Evolved from OCTAVE v4 agent patterns with v5 syntax and empirical validation
+// OCTAVE AGENTS v6: Cognitive architecture patterns with holographic contracts
+// Evolved from v5 with addition of self-validating generative grammar capabilities
+// Agents can now define their own output contracts and validation rules
 
 §0::OWNERSHIP_AND_BOUNDARIES
 
@@ -100,12 +101,73 @@ RATIONALE::[
   FLOOR_LAST::"Hard limits (§7) apply to the final output plan"
 ]
 
+§1a::HOLOGRAPHIC_AGENT_CONTRACT
+
+PURPOSE::"Enable agents to define their own generative grammar and output validation rules"
+
+PRINCIPLE::"The agent file carries the laws of its own output"
+
+MECHANISM:
+  DEFINITION_LAYER::
+    LOCATION::META.CONTRACT::GRAMMAR
+    PURPOSE::"Agent declares its own output structure constraints"
+    SCOPE::"Applies to all outputs generated during agent session"
+
+  VALIDATION_LAYER::
+    ENFORCEMENT::"Orchestration layer validates agent outputs against declared grammar"
+    FAILURE_MODE::"Contract violations trigger retry or escalation"
+    BENEFIT::"Self-documenting, self-validating agent behavior"
+
+GRAMMAR_DEFINITION_SYNTAX:
+  FORMAT::GENERATION_CONSTRAINT::[...grammar_rules...]
+  OPERATORS::[
+    REGEX[pattern]::"Field must match regex pattern",
+    ENUM[v1,v2,v3]::"Field must be one of enumerated values",
+    REQUIRED[field]::"Field must be present in output",
+    TYPE[string|number|boolean|array|object]::"Field type enforcement",
+    MIN_LENGTH[n]::"Minimum string/array length",
+    MAX_LENGTH[n]::"Maximum string/array length"
+  ]
+
+EXAMPLE_CODE_GENERATION_CONTRACT:
+  META:
+    CONTRACT::GRAMMAR::[
+      GENERATION_CONSTRAINT::[
+        file_path::REGEX[^[a-zA-Z0-9/_-]+\.(ts|js|py|go)$],
+        file_path::REQUIRED,
+        code_content::REQUIRED,
+        code_content::TYPE[string],
+        language::ENUM[typescript,javascript,python,golang]
+      ]
+    ]
+
+EXAMPLE_ANALYSIS_CONTRACT:
+  META:
+    CONTRACT::GRAMMAR::[
+      GENERATION_CONSTRAINT::[
+        findings::REQUIRED,
+        findings::TYPE[array],
+        severity::ENUM[critical,high,medium,low,info],
+        confidence::TYPE[number],
+        confidence::MIN_VALUE[0],
+        confidence::MAX_VALUE[100]
+      ]
+    ]
+
+USE_CASES::[
+  CODE_GENERATORS::"Enforce file path patterns and language constraints",
+  ANALYSIS_AGENTS::"Standardize finding formats and severity levels",
+  ORCHESTRATORS::"Validate handoff payloads between agents",
+  REPORT_GENERATORS::"Enforce structural consistency in generated reports"
+]
+
 §2::SECTION_DEFINITIONS
 
 §0::META:
   PURPOSE::"Parser hints and version tracking"
   FIELDS::[TYPE, VERSION, STATUS, PURPOSE]
   VALIDATION::"Must be first block after YAML frontmatter"
+  EXTENSIONS::[CONTRACT::GRAMMAR for holographic validation]
 
 §1::CONSTITUTIONAL_CORE:
   PURPOSE::"Universal principles and core forces (Merged)"
@@ -331,17 +393,18 @@ MYTHOLOGICAL_ENCODING::
 §11::SPECIFICATION_TO_IMPLEMENTATION_MAPPING
 
 PROFILE_COVERAGE::[
-  octave-5-llm-core::"Provides syntax foundation (::, →, ⊕, etc.)",
+  octave-6-llm-core::"Provides syntax foundation (::, →, ⊕, etc.) with holographic contract support",
   octave-5-llm-schema::"Provides holographic patterns for metadata",
   octave-5-llm-execution::"Provides validation error handling",
-  octave-5-llm-agents::"Defines cognitive architecture patterns"
+  octave-6-llm-agents::"Defines cognitive architecture patterns with generative contracts"
 ]
 
 VALIDATION_CHECKPOINT::[
   agent_follows_10_section_sequence?→MANDATORY,
   agent_has_methodology_before_verification?→CRITICAL_FOR_VARIANCE,
   agent_has_cognition_before_constraints?→CRITICAL_FOR_PERFORMANCE,
-  agent_has_quantifiable_evidence_receipts?→ANTI_THEATER_MANDATE
+  agent_has_quantifiable_evidence_receipts?→ANTI_THEATER_MANDATE,
+  agent_contract_grammar_validated?→HOLOGRAPHIC_REQUIREMENT
 ]
 
 §12::FUTURE_EXTENSIONS
@@ -352,5 +415,95 @@ DEFERRED_PATTERNS::[
   agent_versioning::"Version-aware agent loading and compatibility",
   agent_composition::"Multi-agent orchestration patterns"
 ]
+
+§13::SELF_VALIDATING_AGENTS
+
+PRINCIPLE::"The agent file carries the laws of its own output"
+
+ARCHITECTURAL_FOUNDATION:
+  HOLOGRAPHIC_PROPERTY::"Agent contract is embedded within the agent specification itself"
+  BENEFIT::"No external schema files needed—agent is self-contained validation unit"
+  ENFORCEMENT::"Orchestration layer enforces contracts during agent execution"
+
+CONTRACT_MECHANISM:
+  DECLARATION::
+    LOCATION::META.CONTRACT::GRAMMAR
+    SYNTAX::GENERATION_CONSTRAINT::[...rules...]
+    SCOPE::"All outputs generated during agent session lifecycle"
+
+  VALIDATION::
+    TIMING::"Post-generation, pre-delivery"
+    METHOD::"Mechanical validation against declared grammar constraints"
+    FAILURE::"Contract violations trigger retry loop or escalation to supervisor"
+
+PRACTICAL_EXAMPLES:
+
+  CODE_GENERATION_AGENT::
+    USE_CASE::"Agent that generates TypeScript migration files"
+    CONTRACT::
+      META.CONTRACT::GRAMMAR::[
+        GENERATION_CONSTRAINT::[
+          file_path::REGEX[^migrations/\d{4}_[a-z_]+\.ts$],
+          file_path::REQUIRED,
+          exports_default_function::REQUIRED,
+          imports_migration_interface::REQUIRED
+        ]
+      ]
+    ENFORCEMENT::"Orchestrator validates generated file paths match pattern before writing to disk"
+
+  SECURITY_ANALYSIS_AGENT::
+    USE_CASE::"Agent that analyzes code for security vulnerabilities"
+    CONTRACT::
+      META.CONTRACT::GRAMMAR::[
+        GENERATION_CONSTRAINT::[
+          findings::TYPE[array],
+          findings::REQUIRED,
+          finding.severity::ENUM[critical,high,medium,low,info],
+          finding.cwe_id::REGEX[^CWE-\d+$],
+          finding.location::REQUIRED,
+          finding.remediation::REQUIRED
+        ]
+      ]
+    ENFORCEMENT::"Orchestrator validates all findings conform to structure before reporting"
+
+  ORCHESTRATION_HANDOFF_AGENT::
+    USE_CASE::"Agent that passes work products between pipeline stages"
+    CONTRACT::
+      META.CONTRACT::GRAMMAR::[
+        GENERATION_CONSTRAINT::[
+          status::ENUM[success,partial,failure,blocked],
+          artifacts::TYPE[array],
+          artifacts::MIN_LENGTH[1],
+          next_stage::REQUIRED,
+          metadata.timestamp::REQUIRED,
+          metadata.agent_version::REQUIRED
+        ]
+      ]
+    ENFORCEMENT::"Orchestrator validates handoff payload structure before invoking next agent"
+
+BENEFITS::[
+  SELF_DOCUMENTATION::"Contract is visible in agent file—no hidden schemas",
+  VALIDATION_AUTOMATION::"Mechanical enforcement prevents malformed outputs",
+  DEBUGGING_CLARITY::"Contract violations show exact constraint that failed",
+  COMPOSABILITY::"Agents can validate inputs from upstream agents via known contracts",
+  GOVERNANCE::"Audit trails show contract compliance history"
+]
+
+IMPLEMENTATION_REQUIREMENTS::[
+  ORCHESTRATOR_SUPPORT::"Orchestration layer must parse META.CONTRACT::GRAMMAR",
+  VALIDATION_ENGINE::"Must support REGEX, ENUM, REQUIRED, TYPE, MIN/MAX operators",
+  ERROR_REPORTING::"Must provide clear violation messages with constraint details",
+  RETRY_PROTOCOL::"Must support configurable retry on validation failure"
+]
+
+FAILURE_MODES_AND_MITIGATIONS:
+  OVER_CONSTRAINT::"Contract too strict prevents valid outputs"
+    MITIGATION::"Start permissive, tighten based on observed violations"
+
+  UNDER_CONSTRAINT::"Contract too loose allows invalid outputs"
+    MITIGATION::"Add constraints incrementally as edge cases discovered"
+
+  SCHEMA_DRIFT::"Agent behavior changes but contract not updated"
+    MITIGATION::"Contract validation failures in CI trigger review requirement"
 
 ===END===

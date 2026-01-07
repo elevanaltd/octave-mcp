@@ -1,15 +1,21 @@
 ===OCTAVE_DATA===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"5.1.0"
+  VERSION::"6.0.0"
   STATUS::APPROVED
   IMPLEMENTATION::PLANNED
   TOKENS::"~75"
-  REQUIRES::octave-5-llm-core
+  REQUIRES::octave-6-llm-core
   PURPOSE::compression_and_instances
   TEACHES::[§skills/octave-compression]
-  IMPLEMENTATION_NOTES::"Compression tiers (LOSSLESS/CONSERVATIVE/AGGRESSIVE/ULTRA) are specified here for LLM compression behavior. OCTAVE-MCP v0.2.0 removed mcp/ingest.py during 3-tool consolidation; compression tier selection is not implemented in the server."
+  IMPLEMENTATION_NOTES::"Compression tiers (LOSSLESS/CONSERVATIVE/AGGRESSIVE/ULTRA) are specified here for LLM compression behavior. OCTAVE-MCP v0.2.0 removed mcp/ingest.py during 3-tool consolidation; compression tier selection is not implemented in the server. v6: Holographic pattern - META self-declares compression tier for document generation."
   CRITICAL_GAPS::[compression_rules_enforcement,tier_specific_logic,loss_profile_tracking]
+
+  CONTRACT::COMPRESSION_TIER[
+    PRINCIPLE::"Documents self-validate compression target",
+    MECHANISM::TIER_DECLARATION[COMPRESSION_TIER::LOSSLESS|CONSERVATIVE|AGGRESSIVE|ULTRA],
+    BEHAVIOR::LLM_READS_TIER_FROM_META[replaces_text_description]
+  ]
 
 ---
 

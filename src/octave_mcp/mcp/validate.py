@@ -172,6 +172,13 @@ class ValidateTool(BaseTool):
             description="If True, apply repairs to canonical output. If False (default), suggest repairs only.",
         )
 
+        schema.add_parameter(
+            "debug_grammar",
+            "boolean",
+            required=False,
+            description="If True, include compiled regex/grammar in output for debugging constraint evaluation.",
+        )
+
         return schema.build()
 
     def _error_envelope(
@@ -210,6 +217,7 @@ class ValidateTool(BaseTool):
             file_path: Path to OCTAVE file to validate (XOR with content)
             schema: Schema name for validation
             fix: Whether to apply repairs (default: False)
+            debug_grammar: Whether to include compiled grammar in output (default: False)
 
         Returns:
             Dictionary with:
@@ -223,6 +231,7 @@ class ValidateTool(BaseTool):
             - schema_version: Schema version used (when VALIDATED or INVALID)
             - validation_errors: List of schema validation errors (when INVALID)
             - routing_log: Target routing audit trail (I4 compliance, Issue #103)
+            - debug_info: Constraint grammar debug information (when debug_grammar=True)
         """
         # Validate and extract parameters
         params = self.validate_parameters(kwargs)
@@ -230,6 +239,7 @@ class ValidateTool(BaseTool):
         file_path = params.get("file_path")
         schema_name = params["schema"]
         fix = params.get("fix", False)
+        debug_grammar = params.get("debug_grammar", False)
 
         # XOR validation: exactly one of content or file_path must be provided
         if content is not None and file_path is not None:
@@ -341,6 +351,25 @@ class ValidateTool(BaseTool):
         except Exception:
             # Schema loading may fail - continue with old-style dict validation
             pass
+
+        # Phase 3: Add debug grammar information if requested
+        if debug_grammar and schema_definition is not None:
+            debug_info: dict[str, Any] = {
+                "schema_name": schema_definition.name,
+                "schema_version": schema_definition.version or "unknown",
+                "field_constraints": {},
+            }
+            # Compile constraint grammar for each field
+            for field_name, field_def in schema_definition.fields.items():
+                # CORRECTNESS FIX: Use field_def.pattern.constraints (not field_def.constraint_chain)
+                if hasattr(field_def, "pattern") and field_def.pattern and field_def.pattern.constraints:
+                    chain = field_def.pattern.constraints
+                    compiled = chain.compile()
+                    debug_info["field_constraints"][field_name] = {
+                        "chain": chain.to_string(),
+                        "compiled_regex": compiled,
+                    }
+            result["debug_info"] = debug_info
 
         # Determine if we have a schema available for validation
         # Priority: old-style builtin dict OR file-based SchemaDefinition

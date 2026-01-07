@@ -79,6 +79,16 @@ class Constraint(ABC):
         """Return constraint as string (e.g., 'REQ', 'ENUM[A,B]')."""
         pass
 
+    @abstractmethod
+    def compile(self) -> str:
+        """Compile constraint to regex pattern for grammar generation.
+
+        Returns:
+            Regex pattern string suitable for grammar construction.
+            Example: EnumConstraint(['A', 'B']).compile() -> r"(A|B)"
+        """
+        pass
+
 
 @dataclass
 class RequiredConstraint(Constraint):
@@ -105,6 +115,10 @@ class RequiredConstraint(Constraint):
     def to_string(self) -> str:
         return "REQ"
 
+    def compile(self) -> str:
+        """Compile REQ to non-empty pattern."""
+        return r".+"
+
 
 @dataclass
 class OptionalConstraint(Constraint):
@@ -116,6 +130,10 @@ class OptionalConstraint(Constraint):
 
     def to_string(self) -> str:
         return "OPT"
+
+    def compile(self) -> str:
+        """Compile OPT to allow anything including empty."""
+        return r".*"
 
 
 @dataclass
@@ -145,6 +163,10 @@ class ConstConstraint(Constraint):
     def to_string(self) -> str:
         return f"CONST[{self.const_value}]"
 
+    def compile(self) -> str:
+        """Compile CONST to exact literal match."""
+        return re.escape(str(self.const_value))
+
 
 @dataclass
 class EnumConstraint(Constraint):
@@ -155,6 +177,10 @@ class EnumConstraint(Constraint):
     """
 
     allowed_values: list[str]
+
+    def __post_init__(self):
+        """Normalize allowed values to strings."""
+        self.allowed_values = [str(v) for v in self.allowed_values]
 
     def evaluate(self, value: Any, path: str = "") -> ValidationResult:
         """Evaluate ENUM constraint with prefix matching."""
@@ -202,6 +228,11 @@ class EnumConstraint(Constraint):
 
     def to_string(self) -> str:
         return f"ENUM[{','.join(self.allowed_values)}]"
+
+    def compile(self) -> str:
+        """Compile ENUM to regex alternation pattern."""
+        escaped_values = [re.escape(str(v)) for v in self.allowed_values]
+        return f"({'|'.join(escaped_values)})"
 
 
 @dataclass
@@ -275,6 +306,16 @@ class TypeConstraint(Constraint):
     def to_string(self) -> str:
         return f"TYPE({self.expected_type})"
 
+    def compile(self) -> str:
+        """Compile TYPE to appropriate regex pattern."""
+        type_patterns = {
+            "STRING": r".+",
+            "NUMBER": r"-?\d+(\.\d+)?",
+            "BOOLEAN": r"(true|false)",
+            "LIST": r"\[.*\]",
+        }
+        return type_patterns.get(self.expected_type, r".+")
+
 
 @dataclass
 class RegexConstraint(Constraint):
@@ -314,6 +355,10 @@ class RegexConstraint(Constraint):
     def to_string(self) -> str:
         return f'REGEX["{self.pattern}"]'
 
+    def compile(self) -> str:
+        """Compile REGEX to its pattern (already a regex)."""
+        return self.pattern
+
 
 @dataclass
 class DirConstraint(Constraint):
@@ -349,6 +394,10 @@ class DirConstraint(Constraint):
     def to_string(self) -> str:
         return "DIR"
 
+    def compile(self) -> str:
+        """Compile DIR to path pattern (no null bytes)."""
+        return r"[^\x00]+"
+
 
 @dataclass
 class AppendOnlyConstraint(Constraint):
@@ -375,6 +424,10 @@ class AppendOnlyConstraint(Constraint):
 
     def to_string(self) -> str:
         return "APPEND_ONLY"
+
+    def compile(self) -> str:
+        """Compile APPEND_ONLY to list pattern."""
+        return r"\[.*\]"
 
 
 @dataclass
@@ -440,6 +493,10 @@ class RangeConstraint(Constraint):
     def to_string(self) -> str:
         return f"RANGE[{self.min_value},{self.max_value}]"
 
+    def compile(self) -> str:
+        """Compile RANGE to numeric pattern (bounds checked at validation)."""
+        return r"-?\d+(\.\d+)?"
+
 
 @dataclass
 class MaxLengthConstraint(Constraint):
@@ -501,6 +558,10 @@ class MaxLengthConstraint(Constraint):
 
     def to_string(self) -> str:
         return f"MAX_LENGTH[{self.max_length}]"
+
+    def compile(self) -> str:
+        """Compile MAX_LENGTH to bounded repetition."""
+        return f".{{0,{self.max_length}}}"
 
 
 @dataclass
@@ -564,6 +625,10 @@ class MinLengthConstraint(Constraint):
     def to_string(self) -> str:
         return f"MIN_LENGTH[{self.min_length}]"
 
+    def compile(self) -> str:
+        """Compile MIN_LENGTH to minimum repetition."""
+        return f".{{{self.min_length},}}"
+
 
 @dataclass
 class DateConstraint(Constraint):
@@ -616,6 +681,10 @@ class DateConstraint(Constraint):
     def to_string(self) -> str:
         return "DATE"
 
+    def compile(self) -> str:
+        """Compile DATE to YYYY-MM-DD pattern."""
+        return r"\d{4}-\d{2}-\d{2}"
+
 
 @dataclass
 class Iso8601Constraint(Constraint):
@@ -653,6 +722,11 @@ class Iso8601Constraint(Constraint):
 
     def to_string(self) -> str:
         return "ISO8601"
+
+    def compile(self) -> str:
+        """Compile ISO8601 to pattern supporting dates and datetimes."""
+        # Matches YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS with optional timezone
+        return r"\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})?)?"
 
 
 def _parse_atom(s: str) -> Any:
@@ -895,6 +969,30 @@ class ConstraintChain:
                     )
 
         return conflicts
+
+    def compile(self) -> str:
+        """Compile constraint chain to regex pattern for grammar generation.
+
+        Combines individual constraint patterns using lookahead intersection.
+        Example: REQ∧ENUM[A,B] -> ^(?=(?:.+)$)(?=(?:(A|B))$).*$
+
+        Returns:
+            Regex pattern string for complete chain validation
+        """
+        if not self.constraints:
+            return r".*"  # Empty chain matches anything
+
+        # Compile each constraint
+        patterns = [c.compile() for c in self.constraints]
+
+        # Join patterns - intersect them using lookaheads
+        # We wrap each pattern in (?:...) to handle alternation safely
+        # and assert it matches to the end ($)
+        lookaheads = [f"(?=(?:{p})$)" for p in patterns]
+        combined = "".join(lookaheads)
+
+        # Add start anchor and consume patterns
+        return f"^{combined}.*$"
 
     def to_string(self) -> str:
         """Return chain as string."""

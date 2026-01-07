@@ -1765,3 +1765,58 @@ TEST_HOLOGRAPHIC:
         assert result["status"] == "success"
         # Type coercion repairs would appear in repair_log with rule_id="TYPE_COERCION"
         # Currently TEST_HOLOGRAPHIC has no NUMBER fields, so we just verify no errors
+
+    @pytest.mark.asyncio
+    async def test_validate_with_debug_grammar(self):
+        """Test that debug_grammar parameter exposes compiled constraint grammar.
+
+        Phase 3 integration: When debug_grammar=True, the tool should include
+        the compiled grammar/regex in the output for debugging constraint evaluation.
+
+        CRS BLOCKING: Requires ConstraintChain.compile() method and correct field path.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Use TEST_HOLOGRAPHIC schema which has holographic patterns
+        content = """===TEST===
+TEST_HOLOGRAPHIC:
+  NAME::"test_name"
+  STATUS::ACTIVE
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="TEST_HOLOGRAPHIC",
+            fix=False,
+            debug_grammar=True,
+        )
+
+        assert result["status"] == "success"
+        # When debug_grammar is enabled, we should get grammar debugging info
+        assert "debug_info" in result, "Phase 3: debug_grammar=True should include debug_info in response"
+
+        debug_info = result["debug_info"]
+        assert "schema_name" in debug_info
+        assert debug_info["schema_name"] == "TEST_HOLOGRAPHIC"
+        assert "field_constraints" in debug_info
+
+        # Verify that field constraints include compiled_regex for STATUS field
+        field_constraints = debug_info["field_constraints"]
+        assert (
+            "STATUS" in field_constraints
+        ), f"STATUS field should be in debug_info, got fields: {list(field_constraints.keys())}"
+
+        status_constraint = field_constraints["STATUS"]
+        assert "chain" in status_constraint, "Should include constraint chain string"
+        assert "compiled_regex" in status_constraint, "Phase 3 BLOCKING: Should include compiled_regex"
+
+        # Verify the compiled regex is actually a valid regex pattern
+        compiled = status_constraint["compiled_regex"]
+        assert isinstance(compiled, str), "compiled_regex should be a string"
+        assert len(compiled) > 0, "compiled_regex should not be empty"
+        # STATUS is REQ∧ENUM[DRAFT,ACTIVE,DEPRECATED] so should compile to pattern with REQ and alternation
+        assert (
+            "|" in compiled or "DRAFT" in compiled
+        ), f"ENUM constraint should compile to pattern with alternatives, got: {compiled}"

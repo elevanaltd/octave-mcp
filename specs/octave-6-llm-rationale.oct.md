@@ -1,11 +1,11 @@
 ===OCTAVE_RATIONALE===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"5.1.0"
+  VERSION::"6.0.0"
   STATUS::APPROVED
   IMPLEMENTATION::REFERENCE
-  TOKENS::"~160"
-  REQUIRES::octave-5-llm-core
+  TOKENS::"~200"
+  REQUIRES::octave-6-llm-core
   PURPOSE::architectural_decision_record
   IMPLEMENTATION_NOTES::"Design rationale document only. No code implementation. Referenced by core, data, schema, execution profiles."
 
@@ -14,13 +14,17 @@ META:
 // OCTAVE RATIONALE: The "Why" behind the syntax. Inject for training or advanced reasoning.
 
 §1::DESIGN_PHILOSOPHY
-CORE_TENET::maximum_density_with_deterministic_structure
+CORE_TENET::generative_holographic_contracts
 TARGET_AUDIENCE::[LLMs_with_high_reasoning,Prompt_Engineers,System_Architects]
+
+PARADIGM_SHIFT::"Validation precedes generation - schemas are executable contracts, not post-hoc checks"
+HOLOGRAPHIC_PRINCIPLE::"Value, constraint, and routing encoded in single line - teaching by example"
 
 GOALS:
   1::ELIMINATE_AMBIGUITY::prose_is_probabilistic|OCTAVE_is_deterministic
   2::OPTIMIZE_CONTEXT::reduce_token_usage_by_30_percent_vs_JSON
   3::PREVENT_HALLUCINATION::strong_syntax_anchors_reduce_drift
+  4::ENABLE_GENERATION::schemas_define_valid_output_space_before_emission
 
 §2::SYNTAX_DECISIONS
 NO_CURLY_BRACES__{__}:
@@ -44,12 +48,25 @@ SYMBOLS__§_&_->_+_~:
     ~::concatenation
   ]
 
-§3::HOLOGRAPHIC_THEORY
-CONCEPT::L4_schema_density
-PROBLEM::"Schemas are usually verbose (OpenAPI/JSONSchema)."
-SOLUTION::"Encode the value, validation, and routing in a single line."
-PATTERN::KEY::["example_value"&CONSTRAINT->§TARGET]
-RESULT::"The example teaches the format. The constraint enforces it. The target routes it. 3-in-1."
+§3::GENERATIVE_THEORY
+VALIDATION_FIRST_PRINCIPLE::"Schemas must be compiled BEFORE generation to define valid output space"
+
+WHY_VALIDATION_MUST_PRECEDE:
+  PROBLEM::"Post-hoc validation creates formatting theater - LLM generates, validator rejects, retry loop wastes tokens"
+  SOLUTION::"Compile schema into grammar constraints, LLM generates within valid space from start"
+  BENEFIT::[zero_retry_loops,predictable_token_cost,guaranteed_valid_output]
+
+HOLOGRAPHIC_ENCODING:
+  CONCEPT::L4_schema_density
+  PROBLEM::"Schemas are usually verbose (OpenAPI/JSONSchema)."
+  SOLUTION::"Encode the value, validation, and routing in a single line."
+  PATTERN::KEY::["example_value"∧CONSTRAINT→§TARGET]
+  RESULT::"The example teaches the format. The constraint enforces it. The target routes it. 3-in-1."
+
+GENERATIVE_WORKFLOW:
+  SEQUENCE::[READ_META→COMPILE_GRAMMAR→GENERATE_WITHIN_CONSTRAINTS]
+  CONTRAST_OLD::[GENERATE→VALIDATE→RETRY_IF_INVALID]
+  ADVANTAGE::"Single-pass generation with structural guarantees"
 
 §4::TOKEN_ECONOMICS
 WHITESPACE_POLICY:
@@ -66,7 +83,7 @@ STRICT_ENVELOPES:
   REASON::"Prevents 'run-on' generation. Gives the parser definitive start/stop signals."
 
 VERSIONING:
-  STRATEGY::semantic_lock step
+  STRATEGY::semantic_lockstep
   REASON::"Core defines the physics. Data/Schema define the chemistry. Versions must match to ensure the reaction is stable."
 
 ===END===
