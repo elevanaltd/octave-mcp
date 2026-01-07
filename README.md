@@ -5,7 +5,7 @@
 [![Tests](https://img.shields.io/badge/tests-706%20passing-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)]()
 
-Production-grade MCP server implementing the OCTAVE document protocol for deterministic, auditable AI communication.
+Production-grade MCP server implementing the **OCTAVE v6** document protocol: **Generative Holographic Contracts**.
 
 ## Table of Contents
 
@@ -24,6 +24,14 @@ Production-grade MCP server implementing the OCTAVE document protocol for determ
 
 ```octave
 ===AGENT_BOOTSTRAP===
+META:
+  TYPE::BOOTSTRAP
+  VERSION::"6.0"
+  CONTRACT::HOLOGRAPHIC[
+    VALIDATION::JIT_GRAMMAR
+    ANCHOR::HERMETIC
+  ]
+
 GUIDANCE::AGENTS.oct.md
 QUALITY_GATES::[mypy,ruff,black,pytest]
 DEV_SETUP::docs/guides/development-setup.md
@@ -36,47 +44,41 @@ IMMUTABLES::[I1,I2,I3,I4,I5]
 
 ## What It Does
 
-This repository ships the **OCTAVE MCP Server**—a Model Context Protocol implementation that exposes the OCTAVE document protocol as deterministic tools. The MCP layer is delivery plumbing; the value is the OCTAVE protocol itself.
+This repository ships the **OCTAVE MCP Server** (v0.4.0)—a Model Context Protocol implementation that transforms OCTAVE documents from passive text into **Generative Holographic Contracts**.
 
 OCTAVE (Olympian Common Text And Vocabulary Engine) is a deterministic document format and control plane for LLM systems. It keeps meaning durable when text is compressed, routed between agents, or projected into different views.
 
-- **Non-reasoning**: OCTAVE never guesses intent; it only accepts, validates, and projects what you declare.
-- **Lenient → canonical**: ASCII aliases and flexible whitespace are accepted on ingest, then normalized to canonical Unicode with a logged repair tier.
-- **Schema-anchored**: Data and schema blocks travel together so routing and validation remain explicit.
-- **Auditable loss**: Compression and projections must declare what was dropped; nothing is silently tightened or weakened.
+**Core Philosophy: Validation Precedes Generation**
+Instead of checking if an LLM wrote a valid document *after* the fact, OCTAVE v6 compiles the document's `META` block into a strict grammar (Regex/GBNF) that *constrains* the LLM's output generation. It is structurally impossible to generate invalid syntax.
+
+- **Generative Constraints**: `META.CONTRACT` compiles to regex/grammar for LLM guidance.
+- **Holographic Sovereignty**: The document defines its own schema laws inline.
+- **Hermetic Anchoring**: No network calls in the hot path. Standards are frozen or local.
+- **Auditable Loss**: Compression tiers declared in `META` (`LOSSLESS`, `AGGRESSIVE`).
 
 ### Language, operators, and readability
 
-- **Syntax**: Unicode-first operators (`→`, `⊕`, `⧺`, `⇌`, `∨`, `∧`, `§`) with ASCII aliases (`->`, `+`, `~`, `vs`, `|`, `&`, `§`) keep documents compact while staying typable everywhere.
-- **Vocabulary**: Mythological terms are deliberate compression shorthands (e.g., `ICARIAN`, `SISYPHEAN`, `HUBRIS→NEMESIS`) that pack multiple related concepts into single tokens for higher semantic density.
-- **Authoring**: Humans typically write in the lenient view and rely on `octave validate` to normalize into canonical Unicode; both views stay human-auditable.
+- **Syntax**: Unicode-first operators (`→`, `⊕`, `⧺`, `⇌`, `∨`, `∧`, `§`) with ASCII aliases.
+- **Vocabulary**: Mythological terms as semantic compression shorthands.
+- **Authoring**: Humans write in the lenient view; tools normalize to canonical Unicode.
 
-See the [protocol specs in `specs/`](specs/README.oct.md) for the precise operators, envelopes, and schema rules (v5.1.0).
+See the [protocol specs in `specs/`](specs/README.oct.md) for v6.0.0 rules.
 
 ## What this server provides
 
 `octave-mcp` bundles the OCTAVE tooling as MCP tools and a CLI.
 
 - **3 MCP tools**: `octave_validate`, `octave_write`, `octave_eject`
-- **CLI commands**: `octave validate`, `octave write`, `octave eject`
-- **Deterministic**: Non-reasoning control plane for syntax, validation, projection
-- **Loss accounting**: Every transformation logged with audit trails
-- **Schema-anchored**: Validation travels with documents
+- **Generative Engine**: Compiles constraints to grammars (`debug_grammar=True`).
+- **Hermetic Hydrator**: Resolves standards without network dependency.
 
 ## When OCTAVE Helps
 
 Use OCTAVE when documents must survive multiple agent/tool hops, repeated compression, or auditing:
 
-- Coordination briefs, decision logs, policy artifacts that circulate between agents
-- Reusable prompts or RAG artifacts needing stable structure across context windows
-- Documents mixing prose with routing/targets (e.g., §targets for tools or indexes)
-
-**Proven efficiency:**
-- **54–68% token reduction** vs equivalent JSON while preserving fidelity
-- **90.7% comprehension rate** (zero-shot across Claude, GPT-4o, Gemini)
-- **Higher quality outputs** (9.3/10 vs 8.3/10) when compression is explicit
-
-See [docs/research/](docs/research/) for benchmarks and validation studies.
+- **Self-Validating Agents**: Agents that define their own output grammar.
+- **Coordination Briefs**: Decision logs that circulate between agents.
+- **Compressed Context**: Reusable prompts needing stable structure (54–68% token reduction).
 
 ## Installation
 
@@ -99,11 +101,11 @@ uv pip install -e ".[dev]"
 ### CLI
 
 ```bash
-# Validate and normalize to canonical form
-octave validate document.oct.md --schema DECISION_LOG
+# Validate and normalize (v6 auto-detection)
+octave validate document.oct.md
 
 # Write with validation (from content)
-echo "===DOC===\nKEY::value" | octave write output.oct.md --stdin --schema META
+echo "===DOC===\nMETA:\n  TYPE::LOG\n  CONTRACT::GRAMMAR[...]\n..." | octave write output.oct.md --stdin
 
 # Project to a view/format
 octave eject document.oct.md --mode executive --format markdown
@@ -123,31 +125,20 @@ Add to Claude Desktop (`claude_desktop_config.json`) or Claude Code (`~/.claude.
 }
 ```
 
-**Or use the setup script:**
-```bash
-./setup-mcp.sh --all              # Configure all clients
-./setup-mcp.sh --show-config      # Show config for copy/paste
-```
-
-See [docs/mcp-configuration.md](docs/mcp-configuration.md) for advanced configuration.
-
 ## MCP Tools
 
 | Tool | Purpose |
 |------|---------|
-| `octave_validate` | Schema validation + canonical normalization |
+| `octave_validate` | Schema validation + Grammar Compilation (`debug_grammar=True`) |
 | `octave_write` | Unified file creation/modification (content OR delta changes) |
 | `octave_eject` | Format projection (octave, json, yaml, markdown) |
 
-### Repair Tiers
+### Generative Holographic Contracts (v6)
 
-OCTAVE separates semantic decisions from mechanical guarantees through three repair tiers:
-
-- **NORMALIZATION (always)**: ASCII→Unicode, whitespace (semantics preserved)
-- **REPAIR (opt-in)**: Schema-bounded coercions (enum casefold, type conversion)
-- **FORBIDDEN (never)**: Semantic inference, structure invention, target guessing
-
-Every transformation is logged for auditability.
+OCTAVE v6 introduces the **Holographic Contract**:
+1.  **Read META**: The parser reads the `META` block first.
+2.  **Compile Grammar**: It compiles the constraints (`REQ`, `ENUM`, `REGEX`) into a generative grammar.
+3.  **Generate/Validate**: The body is generated/validated against this bespoke grammar.
 
 ## Documentation
 
@@ -156,7 +147,7 @@ Every transformation is logged for auditability.
 | [Usage Guide](docs/usage.md) | CLI, MCP, and API examples |
 | [API Reference](docs/api.md) | Python API documentation |
 | [MCP Configuration](docs/mcp-configuration.md) | Client setup and integration |
-| [Protocol Specs](specs/README.oct.md) | Canonical operators, envelopes, schema rules (v5.1.0) |
+| [Protocol Specs](specs/README.oct.md) | v6.0.0 Generative Holographic Specs |
 | [Development Setup](docs/guides/development-setup.md) | Dev environment, testing, quality gates |
 | [Architecture](docs/architecture/) | Decision records and design docs |
 | [Research](docs/research/) | Benchmarks and validation studies |
@@ -182,7 +173,7 @@ cd octave-mcp
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 
-# Run tests (706 passing, 87% coverage)
+# Run tests
 pytest
 
 # Quality checks
