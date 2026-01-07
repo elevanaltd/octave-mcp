@@ -1765,3 +1765,32 @@ TEST_HOLOGRAPHIC:
         assert result["status"] == "success"
         # Type coercion repairs would appear in repair_log with rule_id="TYPE_COERCION"
         # Currently TEST_HOLOGRAPHIC has no NUMBER fields, so we just verify no errors
+
+    @pytest.mark.asyncio
+    async def test_validate_with_debug_grammar(self):
+        """Test that debug_grammar parameter exposes compiled constraint grammar.
+
+        Phase 3 integration: When debug_grammar=True, the tool should include
+        the compiled grammar/regex in the output for debugging constraint evaluation.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        content = """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+            debug_grammar=True,
+        )
+
+        assert result["status"] == "success"
+        # When debug_grammar is enabled, we should get grammar debugging info
+        assert "debug_info" in result or "grammar" in result
+        # The specific structure will be determined during implementation
