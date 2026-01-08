@@ -3,12 +3,14 @@ name: octave-mythology
 description: Functional mythological compression for OCTAVE documents. Semantic shorthand for LLM audiences, not prose decoration
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["mythology", "archetype", "SISYPHEAN", "ICARIAN", "semantic compression", "evidence-based", "mythological domains", "OCTAVE mythology", "PROMETHEAN", "functional mythology", "compression patterns"]
+version: "1.1.0"
 ---
 
-===OCTAVE_MYTHOLOGY===
+===octave-mythology===
 META:
   TYPE::SKILL
-  VERSION::"1.0"
+  VERSION::"1.1.0"
+  STATUS::ACTIVE
   PURPOSE::"Functional mythological semantic compression for OCTAVE documents"
   PRINCIPLE::"Compression shorthand for LLM audiences, not ceremonial prose"
   EVIDENCE::[

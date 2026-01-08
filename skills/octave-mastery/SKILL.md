@@ -3,16 +3,18 @@ name: octave-mastery
 description: Advanced semantic vocabulary and architectural patterns for the OCTAVE format. REQUIRES octave-literacy to be loaded first
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced octave", "OCTAVE mastery", "holographic patterns", "archetypes", "high-density specifications", "system architecture", "OCTAVE patterns"]
+version: "2.2.0"
 ---
 
-===OCTAVE_MASTERY===
+===octave-mastery===
 META:
   TYPE::SKILL
-  VERSION::"2.1"
+  VERSION::"2.2.0"
+  STATUS::ACTIVE
   PURPOSE::"Expert-level OCTAVE application: Archetypes, Advanced Syntax, Strategy"
   REQUIRES::octave-literacy
   TIER::LOSSLESS
-  SPEC_REFERENCE::octave-5-llm-core.oct.md
+  SPEC_REFERENCE::octave-6-llm-core.oct.md
 
 §1::SEMANTIC_PANTHEON
   // The complete vocabulary for semantic compression
