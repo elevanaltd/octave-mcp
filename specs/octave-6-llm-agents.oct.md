@@ -27,8 +27,8 @@ META:
     MODEL_TIER::[PREMIUM|STANDARD|BASIC],
     ACTIVATION::[
       FORCE::[CONSTRAINT|POSSIBILITY|STRUCTURE],
-      ESSENCE::"Archetypal essence (e.g. The Guardian)",
-      ELEMENT::"Mythological element (e.g. The Wall)"
+      ESSENCE::[GUARDIAN|EXPLORER|ARCHITECT],
+      ELEMENT::[WALL|WIND|DOOR]
     ],
     MISSION::"The immutable core purpose",
     PRINCIPLES::"Universal constitutional constraints"
