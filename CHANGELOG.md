@@ -8,8 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Octave v6 "Dual-Lock" Schema Specification**
+  - Defines strict separation of Identity (Shank) and Behavior (Conduct)
+  - Supports `MODEL_TIER` (Premium/Standard/Basic) and `ACTIVATION` (Force/Essence/Element)
+  - Enables "Holographic Contract" self-validation within agent files
+- **Patterns Support**: Updated Spec to include `PATTERNS::[...]` in Capabilities manifest
 
-### Fixed
+### Changed
+- **Architectural Separation**: Removed specific HestAI agent implementations (Holistic Orchestrator, etc.) from `octave-mcp` repo.
+  - Moved agent/skill/pattern content to `hestai-mcp/_bundled_hub` as the reference library.
+  - `octave-mcp` now serves as the pure Language Specification and Parser.
+- **Spec Purification**:
+  - Renamed `BIND` -> `CORE` in Identity spec to correct semantic verb/noun mismatch.
+  - Removed `UNIVERSAL_LAWS` from spec to prevent polluting the language with system-specific business logic.
+- **Vocabulary Alignment**: Updated Spec Activation block to use Debate Hall metaphors (`GUARDIAN`/`EXPLORER`/`ARCHITECT`) instead of generic text.
 
 ## [0.4.1] - 2026-01-07
 
