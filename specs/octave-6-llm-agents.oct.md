@@ -31,7 +31,12 @@ META:
       ELEMENT::[WALL|WIND|DOOR]
     ],
     MISSION::"The immutable core purpose",
-    PRINCIPLES::"Universal constitutional constraints"
+    UNIVERSAL_LAWS::[
+      "Context Integrity: Declare ROLE and PHASE before action",
+      "Source Fidelity: Modify in-place, never duplicate",
+      "Intent Discipline: Loading ≠ Execution"
+    ],
+    PRINCIPLES::"Agent-specific constitutional constraints"
   ]
 
 §2::BEHAVIOR
