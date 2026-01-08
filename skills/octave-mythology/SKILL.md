@@ -6,7 +6,7 @@ triggers: ["mythology", "archetype", "SISYPHEAN", "ICARIAN", "semantic compressi
 version: "1.1.0"
 ---
 
-===octave-mythology===
+===OCTAVE_MYTHOLOGY===
 META:
   TYPE::SKILL
   VERSION::"1.1.0"

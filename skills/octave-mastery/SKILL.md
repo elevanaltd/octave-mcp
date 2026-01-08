@@ -6,7 +6,7 @@ triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced
 version: "2.2.0"
 ---
 
-===octave-mastery===
+===OCTAVE_MASTERY===
 META:
   TYPE::SKILL
   VERSION::"2.2.0"

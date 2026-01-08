@@ -6,7 +6,7 @@ triggers: ["compress to octave", "semantic compression", "documentation refactor
 version: "2.3.0"
 ---
 
-===octave-compression===
+===OCTAVE_COMPRESSION===
 META:
   TYPE::SKILL
   VERSION::"2.3.0"

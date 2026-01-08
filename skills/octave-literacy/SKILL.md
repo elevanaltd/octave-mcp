@@ -6,7 +6,7 @@ triggers: ["octave format", "write octave", "octave syntax", "structured output"
 version: "1.2.0"
 ---
 
-===octave-literacy===
+===OCTAVE_LITERACY===
 META:
   TYPE::SKILL
   VERSION::"1.2.0"
