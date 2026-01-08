@@ -3,16 +3,18 @@ name: octave-compression
 description: Specialized workflow for transforming verbose natural language into semantic OCTAVE structures. REQUIRES octave-literacy to be loaded first
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["compress to octave", "semantic compression", "documentation refactoring", "octave compression", "compress documentation", "knowledge artifact", "semantic density", "OCTAVE format conversion"]
+version: "2.3.0"
 ---
 
 ===OCTAVE_COMPRESSION===
 META:
   TYPE::SKILL
-  VERSION::"2.2"
+  VERSION::"2.3.0"
+  STATUS::ACTIVE
   PURPOSE::"Workflow for transforming prose into semantic density"
   REQUIRES::octave-literacy
   TIER::LOSSLESS
-  SPEC_REFERENCE::octave-5-llm-data.oct.md[§1b::COMPRESSION_TIERS]
+  SPEC_REFERENCE::octave-6-llm-data.oct.md[§1b::COMPRESSION_TIERS]
 
 §1::COMPRESSION_MANDATE
   TARGET::"60-80% token reduction with 100% decision-logic fidelity"
@@ -20,7 +22,7 @@ META:
   TRUTH::"Dense ≠ Obscure. Preserve the causal chain."
 
   §1b::COMPRESSION_TIER_SELECTION
-    // Full tier definitions in octave-5-llm-data.oct.md §1b
+    // Full tier definitions in octave-6-llm-data.oct.md §1b
     LOSSLESS::[target:100%_fidelity,preserve:everything,drop:none]
       USE::[critical_reasoning,legal_documents,safety_analysis,audit_trails]
     CONSERVATIVE::[target:85-90%_compression,preserve:explanatory_depth,drop:redundancy]
