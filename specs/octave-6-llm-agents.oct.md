@@ -52,6 +52,10 @@ META:
     "List of loaded skill files",
     "Domain expertise modules"
   ]
+  PATTERNS::[
+    "List of behavioral patterns",
+    "Reusable constraint sets"
+  ]
 
 §4::INTERACTION_RULES
   // HOLOGRAPHIC CONTRACT
