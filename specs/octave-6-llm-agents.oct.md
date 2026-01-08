@@ -26,9 +26,9 @@ META:
     ARCHETYPE::[Primary archetype blend with {semantic_keywords}],
     MODEL_TIER::[PREMIUM|STANDARD|BASIC],
     ACTIVATION::[
-      FORCE::"Core force",
-      ESSENCE::"Archetypal essence",
-      ELEMENT::"Mythological element"
+      FORCE::[CONSTRAINT|POSSIBILITY|STRUCTURE],
+      ESSENCE::"Archetypal essence (e.g. The Guardian)",
+      ELEMENT::"Mythological element (e.g. The Wall)"
     ],
     MISSION::"The immutable core purpose",
     PRINCIPLES::"Universal constitutional constraints"
