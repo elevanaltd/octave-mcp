@@ -5,8 +5,6 @@ allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["compress to octave", "semantic compression", "documentation refactoring", "octave compression", "compress documentation", "knowledge artifact", "semantic density", "OCTAVE format conversion"]
 ---
 
-# OCTAVE Compression Skill
-
 ===OCTAVE_COMPRESSION===
 META:
   TYPE::SKILL

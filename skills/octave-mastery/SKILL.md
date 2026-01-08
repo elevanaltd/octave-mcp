@@ -5,8 +5,6 @@ allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced octave", "OCTAVE mastery", "holographic patterns", "archetypes", "high-density specifications", "system architecture", "OCTAVE patterns"]
 ---
 
-# OCTAVE Mastery Skill
-
 ===OCTAVE_MASTERY===
 META:
   TYPE::SKILL

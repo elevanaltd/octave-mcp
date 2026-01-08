@@ -5,8 +5,6 @@ allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["mythology", "archetype", "SISYPHEAN", "ICARIAN", "semantic compression", "evidence-based", "mythological domains", "OCTAVE mythology", "PROMETHEAN", "functional mythology", "compression patterns"]
 ---
 
-# OCTAVE Mythology Skill
-
 ===OCTAVE_MYTHOLOGY===
 META:
   TYPE::SKILL
