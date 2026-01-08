@@ -31,10 +31,6 @@ META:
       ELEMENT::[WALL|WIND|DOOR]
     ],
     MISSION::"The immutable core purpose",
-    UNIVERSAL_LAWS::[
-      "List of system-wide immutable laws",
-      "Injected from System Constitution or defined locally"
-    ],
     PRINCIPLES::"Agent-specific constitutional constraints"
   ]
 
