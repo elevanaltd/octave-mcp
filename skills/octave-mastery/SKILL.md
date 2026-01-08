@@ -3,18 +3,19 @@ name: octave-mastery
 description: Advanced semantic vocabulary and architectural patterns for the OCTAVE format. REQUIRES octave-literacy to be loaded first
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced octave", "OCTAVE mastery", "holographic patterns", "archetypes", "high-density specifications", "system architecture", "OCTAVE patterns"]
-version: "2.2.0"
+version: "2.3.0"
 ---
 
 ===OCTAVE_MASTERY===
 META:
   TYPE::SKILL
-  VERSION::"2.2.0"
+  VERSION::"2.3.0"
   STATUS::ACTIVE
   PURPOSE::"Expert-level OCTAVE application: Archetypes, Advanced Syntax, Strategy"
   REQUIRES::octave-literacy
   TIER::LOSSLESS
   SPEC_REFERENCE::octave-6-llm-core.oct.md
+  V6_FEATURES::"Holographic contracts, JIT grammar compilation, constraint validation"
 
 §1::SEMANTIC_PANTHEON
   // The complete vocabulary for semantic compression
@@ -61,7 +62,25 @@ META:
     BOOL::true
   ]
 
-§4b::CONSTRAINTS
+  §4b::V6_HOLOGRAPHIC_CONTRACTS
+    // v6 innovation: Documents carry their own validation law
+    CONTRACT::HOLOGRAPHIC[
+      PRINCIPLE::"Validation rules embedded in document META block",
+      MECHANISM::JIT_GRAMMAR_COMPILATION[META→GBNF],
+      ANCHORING::HERMETIC[frozen@sha256|latest@local],
+      BENEFIT::"Self-validating documents, no external schema needed"
+    ]
+    GRAMMAR::[
+      GENERATOR::OCTAVE_GBNF_COMPILER[planned],
+      INTEGRATION::[llama.cpp,Outlines,vLLM],
+      OUTPUT::"Constrained generation - impossible to produce invalid syntax"
+    ]
+    EXAMPLE_META::[
+      CONTRACT::TYPE_CONSTRAINTS[field1::STRING,field2::NUMBER],
+      GRAMMAR::GBNF[rules_for_structured_output]
+    ]
+
+§4c::CONSTRAINTS
   // Available constraint types for holographic patterns
   CORE::[REQ,OPT,CONST,ENUM,TYPE,REGEX,DIR,APPEND_ONLY]
   EXTENDED::[RANGE,MAX_LENGTH,MIN_LENGTH,DATE,ISO8601]
@@ -73,6 +92,7 @@ META:
     "DATE"[strict_YYYY_MM_DD],
     "ISO8601"[full_datetime]
   ]
+  V6_USAGE::constraints_in_CONTRACT_block[self_contained_validation]
 
 §5::ANTI_PATTERNS
   SMELLS::[

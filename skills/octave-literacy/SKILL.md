@@ -3,17 +3,18 @@ name: octave-literacy
 description: Fundamental reading and writing capability for the OCTAVE format. Basic structural competence without full architectural specifications
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave format", "write octave", "octave syntax", "structured output", "OCTAVE basics", "OCTAVE literacy", "OCTAVE structure", "semantic format", "key::value", "OCTAVE notation"]
-version: "1.2.0"
+version: "1.3.0"
 ---
 
 ===OCTAVE_LITERACY===
 META:
   TYPE::SKILL
-  VERSION::"1.2.0"
+  VERSION::"1.3.0"
   STATUS::ACTIVE
   PURPOSE::"Essential syntax and operators for basic OCTAVE competence"
   TIER::LOSSLESS
   SPEC_REFERENCE::octave-6-llm-core.oct.md
+  V6_FEATURES::"Adds CONTRACT/GRAMMAR blocks, assembly rules, .oct.md extension"
 
 §1::CORE_SYNTAX
   ASSIGNMENT::KEY::value   // Double colon is MANDATORY for data
@@ -56,15 +57,24 @@ META:
   1::No spaces around assignment :: (KEY::value, not KEY :: value)
   2::Indent exactly 2 spaces per level (NO TABS)
   3::All keys must be [A-Z, a-z, 0-9, _] and start with letter or underscore
-  4::Envelopes are ===NAME=== at start and ===END=== at finish
+  4::Envelopes are ===NAME=== at start and ===END=== at finish (NAME must be [A-Z_][A-Z0-9_]*)
   5::Use lowercase for true, false, null (NOT True, False, NULL)
   6::∧ only appears inside brackets, never bare: [A∧B∧C] is valid, A∧B is not
   7::⇌ is binary only (A⇌B), not chained (A⇌B⇌C is invalid)
+  8::File extension .oct.md is canonical (v6), .octave.txt deprecated
 
-  §3b::ASSEMBLY_RULES
+  §3b::V6_ENVELOPE_STRUCTURE
+    FILE_STRUCTURE::[===NAME===,META_BLOCK,SEPARATOR_OPTIONAL,BODY,===END===]
+    META_REQUIRED::[TYPE,VERSION]
+    META_V6_OPTIONAL::[CONTRACT,GRAMMAR]  // New in v6 for holographic contracts
+    CONTRACT::HOLOGRAPHIC[validation_law_in_document]
+    GRAMMAR::GBNF_COMPILER[generate_constrained_output]
+
+  §3c::ASSEMBLY_RULES
     WHEN_CONCATENATING_PROFILES::omit_intermediate_===END===[only_final_===END===_terminates]
     USE_CASES::[agent_context_injection,specification_layering,multi_part_documents]
     EXAMPLE::core_profile⊕schema_profile→single_===END===_at_finish
+    V6_PATTERN::multiple_profiles_one_document[no_intermediate_terminators]
 
 §4::EXAMPLE_BLOCK
   ===EXAMPLE===
