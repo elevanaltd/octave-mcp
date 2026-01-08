@@ -6,87 +6,69 @@ META:
   TOKENS::"~180"
   REQUIRES::octave-6-llm-core
   PURPOSE::L5_skill_document_format[platform_agnostic]
-  IMPLEMENTATION_NOTES::"v6: Holographic pattern - Skills are pure OCTAVE files where META.SKILL defines triggers and tools, replacing YAML frontmatter hybrid approach."
+  IMPLEMENTATION_NOTES::"v6: Hybrid pattern - Skills require YAML frontmatter for tool compatibility, followed by a pure OCTAVE envelope (META.SKILL) for internal consistency."
 
   CONTRACT::SKILL_DEFINITION[
-    PRINCIPLE::"Skills self-declare triggers and tool constraints",
-    MECHANISM::META_SKILL_BLOCK[TRIGGERS::[...], TOOLS::[...], DESCRIPTION::...],
-    MIGRATION::YAML_FRONTMATTER_TO_META[backward_compatible_reader_support]
+    PRINCIPLE::"Skills use YAML for external discovery and OCTAVE for internal definition",
+    MECHANISM::[YAML_FRONTMATTER, OCTAVE_ENVELOPE[META, BODY]],
+    COMPATIBILITY::universal_tool_support
   ]
 
 ---
 
 // OCTAVE SKILLS: Universal format for AI agent skill documents.
-// v6: Pure OCTAVE files with META.SKILL block replacing YAML frontmatter hybrid.
+// v6: Simplified format: YAML Frontmatter + OCTAVE Envelope. No redundancy.
 
 §1::SKILL_DOCUMENT_STRUCTURE
+SEQUENCE::[YAML_FRONTMATTER, OCTAVE_ENVELOPE]
+YAML_FRONTMATTER::[name, description, allowed-tools, triggers, version]
 ENVELOPE::===SKILL_NAME===[META,body,===END===]
-META_REQUIRED::[TYPE::SKILL,VERSION,STATUS,SKILL]
-META_SKILL::[NAME,DESCRIPTION,TRIGGERS,TOOLS][self_configuring]
+META_REQUIRED::[TYPE::SKILL,VERSION,STATUS]
+META_OPTIONAL::[PURPOSE,TIER,SPEC_REFERENCE]
 BODY::octave_syntax[full_L1-L4_support]
 
-DEPRECATED_V5::[
-  yaml_frontmatter::replaced_by_META_SKILL,
-  hybrid_octave_markdown::pure_octave_preferred,
-  platform_specific_sections::unified_META_approach
+REQUIRED_V6::[
+  yaml_frontmatter::required_for_discovery,
+  octave_envelope::required_for_parsing,
+  no_markdown_headers::prevent_parser_errors
 ]
 
-META_SKILL_BLOCK::[
-  NAME::skill_identifier[lowercase_hyphens_digits],
-  DESCRIPTION::trigger_rich_summary[keywords_for_discovery],
-  TRIGGERS::[action_verbs,domain_terms,problem_patterns],
-  TOOLS::[tool_whitelist∨*_for_unrestricted][optional]
-]
-
-EXAMPLE_META::"
-  META:
-    TYPE::SKILL
-    VERSION::\"1.0.0\"
-    STATUS::ACTIVE
-    SKILL::[
-      NAME::stub-detection,
-      DESCRIPTION::\"Systematic detection of placeholder implementations. Use when auditing codebases. Triggers on placeholder audit, stub detection, technical debt.\",
-      TRIGGERS::[placeholder_audit,stub_detection,find_stubs,technical_debt],
-      TOOLS::[Read,Grep,Glob,Bash]
-    ]
-"
+// Note: No duplicate TRIGGERS/TOOLS in META. Source of truth is YAML.
 
 §2::BODY_FORMAT
 
-V6_STANDARD::pure_octave[full_L1-L4_syntax_support]
-V5_DEPRECATED::[markdown_body,hybrid_body][backward_compatible_readers]
+V6_STANDARD::hybrid_format[yaml_header + octave_envelope]
+V5_DEPRECATED::[markdown_body, missing_envelope, duplicate_meta]
 
 BENEFITS::[
-  holographic_self_configuration::META_SKILL_declares_triggers_and_tools,
-  semantic_compression::3-20x_token_efficiency,
-  machine_parseable::structured_validation_and_projection,
-  platform_agnostic::same_format_all_agents
+  simplicity::no_redundant_data,
+  compatibility::yaml_scanners_work,
+  stability::no_markdown_headers_breaking_parsers
 ]
 
 §3::DOCUMENT_TEMPLATE
 
 V6_TEMPLATE::"
+---
+name: skill-name
+description: Comprehensive description. Use when X. Triggers on Y, Z.
+allowed-tools: [Read, Bash, Grep, Glob]
+triggers: [trigger1, trigger2]
+version: 1.0.0
+---
+
 ===SKILL_NAME===
 META:
   TYPE::SKILL
   VERSION::\"1.0.0\"
   STATUS::ACTIVE
   PURPOSE::skill_mission_statement
-  SKILL::[
-    NAME::skill-name,
-    DESCRIPTION::\"Comprehensive description. Use when X. Triggers on Y, Z.\",
-    TRIGGERS::[trigger1,trigger2,trigger3],
-    TOOLS::[Read,Bash,Grep,Glob]
-  ]
-
----
 
 §1::SECTION_NAME
 CONTENT::follows_octave_syntax[L1-L4]
 
-§2::ANOTHER_SECTION
-MORE_CONTENT::structured_data
-
+===END===
+"
 ===END===
 "
 
@@ -164,10 +146,8 @@ BACKWARD_COMPATIBILITY::[
 §8::VALIDATION
 
 V6_VALIDATION::[
-  META_REQUIRED::[TYPE::SKILL,VERSION,STATUS,SKILL],
-  META_SKILL_REQUIRED::[NAME,DESCRIPTION,TRIGGERS],
-  META_SKILL_OPTIONAL::[TOOLS],
-  ENVELOPE::===NAME===[matches_META.SKILL.NAME],
+  META_REQUIRED::[TYPE::SKILL,VERSION,STATUS],
+  ENVELOPE::===NAME===[matches_YAML_NAME],
   SYNTAX::passes_octave_validation,
   SIZE::under_constraint_limits
 ]
@@ -179,14 +159,13 @@ V5_VALIDATION_DEPRECATED::[
 ]
 
 HOLOGRAPHIC_VALIDATION::[
-  SELF_DESCRIBING::META.SKILL.TRIGGERS_define_discovery,
-  SELF_CONSTRAINING::META.SKILL.TOOLS_define_permissions,
-  SELF_VALIDATING::TYPE::SKILL_triggers_schema_compilation
+  DEPRECATED::"No longer required to mirror YAML in META.SKILL"
 ]
 
 §9::FORBIDDEN
 
 NEVER::[
+  markdown_headers::breaks_octave_parser,
   auxiliary_files::[README.md,CHANGELOG.md,INSTALLATION.md],
   deeply_nested_references::max_one_level,
   duplicate_information::SKILL.md_or_resources_not_both,
