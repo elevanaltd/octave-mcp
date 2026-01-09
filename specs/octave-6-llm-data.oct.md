@@ -57,11 +57,20 @@ TIER::ULTRA[target:50%_compression,preserve:facts∧structure,drop:all_narrative
   LOSS::~50%[almost_all_explanatory_content,some_nuance,tradeoff_reasoning]
   OUTCOME::structure_∧_facts_only,poor_readability
 
+TIER::ULTRA_MYTHIC[target:60%_compression,preserve:soul∧constraints,drop:narrative]
+  USE::agent_binding_passport,identity_transmission,high_density_communication
+  METHOD::mythological_atoms,semantic_shorthand,constraint_preservation,list_compression
+  REQUIRES::octave-mythology
+  LOSS::~40%[prose,nuance]
+  GAIN::semantic_density,constraint_clarity,identity_preservation
+  OUTCOME::highly_compressed_identity_atoms
+
 SELECTION_GUIDE::
   IF[critical_decision→safety_implications]→use_LOSSLESS
   IF[research_artifact→audience_needs_context]→use_CONSERVATIVE
   IF[context_token_budget→loss_acceptable]→use_AGGRESSIVE
-  IF[embedding∨dense_index→readability_irrelevant]→use_ULTRA
+  IF[embedding∨indexing∨lookup]→use_ULTRA
+  IF[agent_binding∨identity_transfer]→use_ULTRA_MYTHIC
 
 METADATA_REQUIREMENT::
   ALL_COMPRESSED_DOCS::include_TIER_in_META[enables_reader_expectations]
