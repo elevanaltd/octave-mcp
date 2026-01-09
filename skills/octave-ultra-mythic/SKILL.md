@@ -3,13 +3,13 @@ name: octave-ultra-mythic
 description: Ultra-high density compression using mythological atoms and semantic shorthand. Preserves soul and constraints at 60% compression for identity transmission, binding protocols, and extreme token scarcity.
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["ultra mythic", "mythological compression", "semantic atoms", "identity compression", "binding passport", "cognitive passport", "60% compression", "soul preservation"]
-version: "1.0.0"
+version: "1.1.0"
 ---
 
 ===OCTAVE_ULTRA_MYTHIC===
 META:
   TYPE::SKILL
-  VERSION::"1.0.0"
+  VERSION::"1.1.0"
   STATUS::ACTIVE
   PURPOSE::"Ultra-high density compression using mythological atoms for identity and knowledge preservation"
   REQUIRES::[octave-literacy, octave-mythology]
@@ -76,12 +76,39 @@ META:
     ID::ARCHITECT[ATLAS]
     CONSTRAINT::NEVER[DIRECT_IMPL]→DELEGATE[IMPL_LEAD]
 
-§5::ANTI_PATTERNS
+§5::SEED_GRAMMAR
+  // Fixed slot structure for deterministic identity seeds
+  TEMPLATE::
+    SEED::V1
+    ARCHETYPE::{primary}⊕{secondary}[⊕{tertiary}]
+    OATH::NEVER[{critical_constraints}]∥MUST[{required_actions}]
+    DELEGATE::{from}→{to}
+    PATTERN::{pattern1}∥{pattern2}[∥{pattern3}]
+    DELTA::FOCUS[{session_intent}]∥TONE[{style}]∥DEPTH[{level}]
+
+  VERIFICATION::
+    1. All NEVER constraints from source preserved
+    2. Delegation rules intact
+    3. Within token budget (~100 tokens)
+    4. Valid OCTAVE syntax
+
+§6::MYTHOLOGY_FLEXIBILITY
+  // LLMs are polyglots - allow creative mythology when needed
+  PRIMARY_REGISTRY::Use octave-mythology canonical atoms when available
+  FALLBACK_STRATEGY::[
+    IF[unknown_concept]→use_nearest_known_atom,
+    IF[no_match]→create_descriptive_bracket[UNKNOWN[concept]],
+    IF[emergent_pattern]→allow_if_semantically_clear
+  ]
+  PRINCIPLE::"Prefer known atoms, but don't fail on innovation"
+
+§7::ANTI_PATTERNS
   AVOID::[
     "Retaining full sentences",
-    "Losing the 'Never' constraints (Critical Safety)",
-    "Inventing mythology not in octave-mythology registry",
-    "JSON formatting (Use OCTAVE syntax)"
+    "Losing NEVER constraints (Critical Safety)",
+    "Using JSON/YAML formatting (Use OCTAVE syntax)",
+    "Dropping delegation rules",
+    "Exceeding token budget without justification"
   ]
 
 ===END===
