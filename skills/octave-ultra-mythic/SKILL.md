@@ -3,13 +3,13 @@ name: octave-ultra-mythic
 description: Ultra-high density compression using mythological atoms and semantic shorthand. Preserves soul and constraints at 60% compression for identity transmission, binding protocols, and extreme token scarcity.
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["ultra mythic", "mythological compression", "semantic atoms", "identity compression", "binding passport", "cognitive passport", "60% compression", "soul preservation"]
-version: "1.1.0"
+version: "1.2.0"
 ---
 
 ===OCTAVE_ULTRA_MYTHIC===
 META:
   TYPE::SKILL
-  VERSION::"1.1.0"
+  VERSION::"1.2.0"
   STATUS::ACTIVE
   PURPOSE::"Ultra-high density compression using mythological atoms for identity and knowledge preservation"
   REQUIRES::[octave-literacy, octave-mythology]
@@ -92,15 +92,29 @@ META:
     3. Within token budget (~100 tokens)
     4. Valid OCTAVE syntax
 
-§6::MYTHOLOGY_FLEXIBILITY
-  // LLMs are polyglots - allow creative mythology when needed
-  PRIMARY_REGISTRY::Use octave-mythology canonical atoms when available
-  FALLBACK_STRATEGY::[
+§6::MYTHOLOGY_SOURCE_HIERARCHY
+  // Weighted mythology sources based on training data familiarity
+  SOURCE_PRIORITY::[
+    GREEK[highest_weight],
+    ROMAN[high_weight],
+    NORSE[medium_weight],
+    EGYPTIAN[medium_weight],
+    HINDU[lower_weight],
+    CELTIC[lower_weight],
+    AZTEC[minimal_weight],
+    JAPANESE[minimal_weight],
+    CHINESE[minimal_weight],
+    NATIVE_AMERICAN[minimal_weight]
+  ]
+
+  MYTHOLOGY_FLEXIBILITY::[
+    IF[concept_exists_in_priority_sources]→use_source_atom,
     IF[unknown_concept]→use_nearest_known_atom,
     IF[no_match]→create_descriptive_bracket[UNKNOWN[concept]],
-    IF[emergent_pattern]→allow_if_semantically_clear
+    IF[semantically_clear]→allow_emergent_pattern
   ]
-  PRINCIPLE::"Prefer known atoms, but don't fail on innovation"
+
+  PRINCIPLE::"Graceful fallback through cultural semantic density"
 
 §7::ANTI_PATTERNS
   AVOID::[
