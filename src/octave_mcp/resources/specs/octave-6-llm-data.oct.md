@@ -3,7 +3,7 @@ META:
   TYPE::LLM_PROFILE
   VERSION::"6.0.0"
   STATUS::APPROVED
-  IMPLEMENTATION::PLANNED
+
   TOKENS::"~75"
   REQUIRES::octave-6-llm-core
   PURPOSE::compression_and_instances

@@ -1,12 +1,12 @@
-===OCTAVE_PRIMER_SPEC===
+===OCTAVE_PRIMERS===
 META:
-  TYPE::SPECIFICATION
-  VERSION::"3.0.0"
+  TYPE::LLM_PROFILE
+  VERSION::"6.0.0"
   STATUS::APPROVED
+  TOKENS::"~80"
+  REQUIRES::octave-6-llm-core
   PURPOSE::"Ultra-compressed context injection for immediate capability"
-  TIER::ULTRA
   COMPRESSION_TIER::ULTRA[50%_compression,facts∧structure_only]
-  TOKENS::~40
 
 §1::DEFINITION
   OCTAVE::"Semantic DSL for LLMs"  // Universal definition for all primers
