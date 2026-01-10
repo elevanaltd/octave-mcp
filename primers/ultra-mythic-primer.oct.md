@@ -1,15 +1,14 @@
 ===ULTRA_MYTHIC_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"2.1.0"
-  TOKENS::~65
+  VERSION::"3.0.0"
+  TOKENS::~60
   TIER::ULTRA
 
 §1::ESSENCE
-PURPOSE::"Convert prose→OCTAVE preserving constraints"
-OCTAVE::semantic_shorthand_for_LLMs
-TARGET::60%_compression
-METHOD::prose→ATOMS[mythology]⊕SHORTHAND
+PURPOSE::"Ultra-compress→OCTAVE[60%]"
+OCTAVE::"Semantic DSL for LLMs"
+METHOD::prose→ATOMS[mythology]
 
 §2::MAP
 ROLE→keep

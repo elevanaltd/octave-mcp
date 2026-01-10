@@ -1,7 +1,7 @@
 ===OCTAVE_PRIMER_SPEC===
 META:
   TYPE::SPECIFICATION
-  VERSION::"2.1.0"
+  VERSION::"3.0.0"
   STATUS::APPROVED
   PURPOSE::"Ultra-compressed context injection for immediate capability"
   TIER::ULTRA
@@ -9,6 +9,7 @@ META:
   TOKENS::~40
 
 §1::DEFINITION
+  OCTAVE::"Semantic DSL for LLMs"  // Universal definition for all primers
   PRIMER::"Minimal bootstrap for execution without understanding"
   SKILL::"Complete reference with rationale and examples"
   PRIMER_VS_SKILL::PRIMER[execution] ⇌ SKILL[comprehension] → PRIMER
@@ -20,10 +21,11 @@ META:
   SEQUENCE::===NAME_PRIMER===[META,§1::ESSENCE,§2::MAP,§3::SYNTAX,§4::ONE_SHOT,§5::VALIDATE,===END===]
 
   §2a::ESSENCE
-    PURPOSE::"One-line purpose + core concept in <20 tokens"
-    CONTENT::PURPOSE_LINE+TARGET+METHOD
-    REQUIRED::[what_format_does,what_preserved]
-    EXAMPLE::"Convert prose→OCTAVE preserving constraints"
+    PURPOSE::"Skill-specific action + OCTAVE definition"
+    CONTENT::PURPOSE[action_verb]+OCTAVE[universal_def]+METHOD
+    REQUIRED::[skill_action,OCTAVE_definition,method]
+    EXAMPLE::PURPOSE::"Write OCTAVE"\nOCTAVE::"Semantic DSL for LLMs"
+    UNIVERSAL::ALL_PRIMERS_USE_SAME_OCTAVE_DEF
 
   §2b::MAP
     PURPOSE::"Direct transformation rules"

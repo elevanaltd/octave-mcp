@@ -1,13 +1,13 @@
 ===OCTAVE_LITERACY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"2.1.0"
-  TOKENS::~45
+  VERSION::"3.0.0"
+  TOKENS::~40
   TIER::ULTRA
 
 §1::ESSENCE
-PURPOSE::"Write OCTAVE: semantic shorthand format"
-OCTAVE::key::value_semantic_DSL
+PURPOSE::"Write OCTAVE"
+OCTAVE::"Semantic DSL for LLMs"
 STRUCTURE::KEY::value,[list],indent_2
 
 §2::MAP
