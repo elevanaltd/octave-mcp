@@ -1,35 +1,31 @@
 ===OCTAVE_LITERACY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"1.0.0"
-  TOKENS::~50
-  PURPOSE::"Bootstrap basic OCTAVE syntax"
+  VERSION::"1.1.0"
+  TOKENS::~45
 
-§1::SYNTAX
-ASSIGN::KEY::value
-BLOCK::KEY:[indent_2]
-LIST::[a,b,c]
-ENVELOPE::===NAME===...===END===
+§1::ESSENCE
+FORMAT::key::value_structures
+OPERATORS::flow⊕synthesis⇌tension
+RULES::no_spaces_around_::
 
-§2::OPERATORS
-FLOW::A→B→C
-SYNTHESIS::A⊕B
-TENSION::A⇌B
-CONSTRAINT::[A∧B∧C]
+§2::MAP
+KEY::value→assignment
+[a,b,c]→list
+KEY:[indent_2]→block
+===NAME===→envelope
 
-§3::RULES
-NO_SPACES::around_::
-INDENT::exactly_2_spaces
-LOWERCASE::true,false,null
+§3::SYNTAX
+::→assign
+→→flow
+⊕→synthesis
+⇌→tension
+[∧]→constraint
 
-§4::EXAMPLE
-===DATA===
-META:
-  TYPE::EXAMPLE
-  STATUS::VALID
-CONTENT::[
-  KEY::value,
-  FLOW::A→B→C
-]
-===END===
+§4::ONE_SHOT
+IN::"Data flows from input through process to output"
+OUT::FLOW::input→process→output
+
+§5::VALIDATE
+MUST::[no_spaces_around_::,indent_2,valid_envelope]
 ===END===
