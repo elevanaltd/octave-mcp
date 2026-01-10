@@ -1,27 +1,31 @@
 ===OCTAVE_LITERACY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"2.0.0"
-  TOKENS::~35
+  VERSION::"2.1.0"
+  TOKENS::~45
   TIER::ULTRA
 
 §1::ESSENCE
+PURPOSE::"Write OCTAVE format: key::value structures"
 KEY::value
 [list]
-indent_2
+indent_2_spaces
 
 §2::MAP
-::=assign
-[]=list
-:[\n  ]=block
+KEY::value→assignment
+[a,b,c]→list
+KEY:[\n  ]→block
 
 §3::SYNTAX
-⊕⇌→∧
+::→assign
+→→flow
+⊕→synthesis
+⇌→tension
 
 §4::ONE_SHOT
 IN::"flow from A to B"
 OUT::A→B
 
 §5::VALIDATE
-MUST::[::_no_spaces,===END===]
+MUST::[no_spaces_around_::,===END===]
 ===END===

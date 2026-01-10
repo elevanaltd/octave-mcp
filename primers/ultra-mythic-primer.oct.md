@@ -1,26 +1,30 @@
 ===ULTRA_MYTHIC_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"2.0.0"
-  TOKENS::~60
+  VERSION::"2.1.0"
+  TOKENS::~65
   TIER::ULTRA
 
 §1::ESSENCE
-60%→[soul,constraints]
-prose→ATOMS⊕SHORTHAND
+PURPOSE::"Convert prose→OCTAVE preserving constraints"
+TARGET::60%_compression
+METHOD::prose→ATOMS[mythology]⊕SHORTHAND
 
 §2::MAP
 ROLE→keep
-ARCHETYPE→ZEUS∨ATLAS∨HERMES
+ARCHETYPE→ZEUS∨ATLAS∨HERMES[pick_by_intent]
 CONSTRAINT→NEVER[x]→DELEGATE[y]
 
 §3::SYNTAX
-⊕⇌→NEVER[]
+⊕::synthesis
+⇌::tension
+→::transform
+NEVER[]::hard_constraint
 
 §4::ONE_SHOT
 IN::"Architect designs, never implements, delegates"
 OUT::ARCHITECT[ATLAS]::NEVER[IMPL]→DELEGATE[LEAD]
 
 §5::VALIDATE
-MUST::[NEVER_preserved,OCTAVE_valid]
+MUST::[NEVER_preserved,OCTAVE_format]
 ===END===

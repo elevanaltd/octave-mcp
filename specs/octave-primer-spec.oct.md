@@ -1,7 +1,7 @@
 ===OCTAVE_PRIMER_SPEC===
 META:
   TYPE::SPECIFICATION
-  VERSION::"2.0.0"
+  VERSION::"2.1.0"
   STATUS::APPROVED
   PURPOSE::"Ultra-compressed context injection for immediate capability"
   TIER::ULTRA
@@ -20,20 +20,23 @@ META:
   SEQUENCE::===NAME_PRIMER===[META,§1::ESSENCE,§2::MAP,§3::SYNTAX,§4::ONE_SHOT,§5::VALIDATE,===END===]
 
   §2a::ESSENCE
-    PURPOSE::"Core concept in <20 tokens"
-    CONTENT::TARGET+METHOD+PRINCIPLE
-    EXAMPLE::TARGET::60%_compression→preserve[soul,constraints]
+    PURPOSE::"One-line purpose + core concept in <20 tokens"
+    CONTENT::PURPOSE_LINE+TARGET+METHOD
+    REQUIRED::[what_format_does,what_preserved]
+    EXAMPLE::"Convert prose→OCTAVE preserving constraints"
 
   §2b::MAP
     PURPOSE::"Direct transformation rules"
-    FORMAT::INPUT::[OUTPUT_PATTERN]
+    FORMAT::INPUT→OUTPUT[selection_hint]
     NO::[explanations,rationale,why]
-    YES::[equivalencies,arrows,brackets]
+    YES::[equivalencies,arrows,selection_hints]
+    EXAMPLE::ARCHETYPE→ZEUS∨ATLAS[pick_by_intent]
 
   §2c::SYNTAX
-    PURPOSE::"Critical operators only"
-    FORMAT::OPERATOR::usage_pattern
-    TRUST::latent_LLM_knowledge
+    PURPOSE::"Operator legend with meanings"
+    FORMAT::SYMBOL::meaning
+    REQUIRED::minimum_4_operators_defined
+    EXAMPLE::⊕::synthesis, →::transform, NEVER[]::constraint
 
   §2d::ONE_SHOT
     PURPOSE::"Single perfect transformation"
@@ -68,6 +71,8 @@ META:
   VALID_PRIMER::[
     tokens<60∧
     has_one_shot∧
+    has_purpose_line∧
+    has_operator_legend∧
     no_explanations∧
     executable_immediately∧
     self_referential[uses_format_it_teaches]∧
