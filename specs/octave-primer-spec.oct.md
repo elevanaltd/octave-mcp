@@ -1,18 +1,20 @@
 ===OCTAVE_PRIMER_SPEC===
 META:
   TYPE::SPECIFICATION
-  VERSION::"1.0.0"
+  VERSION::"2.0.0"
   STATUS::APPROVED
-  PURPOSE::"Lightweight context injection for immediate capability activation"
+  PURPOSE::"Ultra-compressed context injection for immediate capability"
   TIER::ULTRA
-  TOKENS::~50
+  COMPRESSION_TIER::ULTRA[50%_compression,facts∧structure_only]
+  TOKENS::~40
 
 §1::DEFINITION
   PRIMER::"Minimal bootstrap for execution without understanding"
   SKILL::"Complete reference with rationale and examples"
   PRIMER_VS_SKILL::PRIMER[execution] ⇌ SKILL[comprehension] → PRIMER
-  TOKEN_BUDGET::MAX[100]_RECOMMENDED[50-90]
+  TOKEN_BUDGET::MAX[60]_RECOMMENDED[30-50]
   AUDIENCE::LLM_context_window[not_humans]
+  COMPRESSION_REF::skills/octave-compression[§1b::ULTRA_TIER]
 
 §2::MANDATORY_STRUCTURE
   SEQUENCE::===NAME_PRIMER===[META,§1::ESSENCE,§2::MAP,§3::SYNTAX,§4::ONE_SHOT,§5::VALIDATE,===END===]
@@ -55,19 +57,21 @@ META:
 §4::COMPARISON_MATRIX
   ASPECT::PRIMER→SKILL
   PURPOSE::execution→understanding
-  TOKENS::50-90→500-800
+  TOKENS::30-60→500-800
   EXAMPLES::one→many
   RATIONALE::none→complete
   AUDIENCE::LLM→human+LLM
   METAPHOR::cheat_sheet→textbook
+  COMPRESSION::ULTRA[50%]→LOSSLESS[100%]
 
 §5::VALIDATION_CRITERIA
   VALID_PRIMER::[
-    tokens<100∧
+    tokens<60∧
     has_one_shot∧
     no_explanations∧
     executable_immediately∧
-    self_referential[uses_format_it_teaches]
+    self_referential[uses_format_it_teaches]∧
+    compression_tier==ULTRA
   ]
 
 ===END===
