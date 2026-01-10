@@ -6,10 +6,9 @@ META:
   TIER::ULTRA
 
 §1::ESSENCE
-PURPOSE::"Write OCTAVE format: key::value structures"
-KEY::value
-[list]
-indent_2_spaces
+PURPOSE::"Write OCTAVE: semantic shorthand format"
+OCTAVE::key::value_semantic_DSL
+STRUCTURE::KEY::value,[list],indent_2
 
 §2::MAP
 KEY::value→assignment

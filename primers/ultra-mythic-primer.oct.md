@@ -7,13 +7,14 @@ META:
 
 §1::ESSENCE
 PURPOSE::"Convert prose→OCTAVE preserving constraints"
+OCTAVE::semantic_shorthand_for_LLMs
 TARGET::60%_compression
 METHOD::prose→ATOMS[mythology]⊕SHORTHAND
 
 §2::MAP
 ROLE→keep
 ARCHETYPE→ZEUS∨ATLAS∨HERMES[pick_by_intent]
-CONSTRAINT→NEVER[x]→DELEGATE[y]
+CONSTRAINT→NEVER[forbidden]∧DELEGATE[target]
 
 §3::SYNTAX
 ⊕::synthesis
