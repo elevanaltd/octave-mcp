@@ -14,14 +14,28 @@ META:
   CONTRACT::HOLOGRAPHIC[
     PRINCIPLE::"Documents carry their own validation law",
     MECHANISM::JIT_GRAMMAR_COMPILATION[META→GBNF],
-    ANCHORING::HERMETIC[frozen@sha256|latest@local]
+    ANCHORING::HERMETIC[frozen@sha256|latest@local],
+    SELF_DESCRIBING::"META block defines how to parse the document itself"
   ]
 
   GRAMMAR::[
     GENERATOR::OCTAVE_GBNF_COMPILER[planned],
     INTEGRATION::[llama.cpp,Outlines,vLLM],
-    BENEFIT::IMPOSSIBLE_TO_GENERATE_INVALID_SYNTAX
+    BENEFIT::IMPOSSIBLE_TO_GENERATE_INVALID_SYNTAX,
+    SELF_VALIDATION::"Document contains rules to validate itself"
   ]
+
+  // HOLOGRAPHIC PRINCIPLE (v6.0 Core Feature):
+  // OCTAVE documents are SELF-DESCRIBING. The META block can contain
+  // CONTRACT and GRAMMAR fields that define validation rules for the
+  // document itself. A parser reads META first, compiles the grammar,
+  // then validates the document against its own rules.
+  //
+  // This enables:
+  // - Documents that cannot be parsed incorrectly (constrained generation)
+  // - Schema evolution without parser updates
+  // - Domain-specific validation embedded in documents
+  // - Hermetic reproducibility (frozen schema versions)
 
 ---
 
@@ -119,6 +133,33 @@ BOOLEAN::true|false[lowercase_only]
 NULL::null[lowercase_only]
 LIST::[a,b,c]|[][empty_allowed]
 ESCAPES::["quote","backslash","newline","tab"][inside_quotes_only]
+
+§3b::QUOTING_RULES
+// When to use quotes - critical for spec compliance
+MUST_QUOTE::[
+  spaces["hello world"],
+  special_chars["~30%","coverage::87%","REGEX[\"^pattern$\"]"],
+  operators_as_values["::","|","&","§"],
+  curly_braces["{template}"],
+  parentheses["(grouped)"],
+  backslashes["path\\to\\file"],
+  cross_references["see octave-core-spec §6"],
+  section_markers_in_values["§SELF reference"]
+]
+
+QUOTE_GUIDELINES::
+  IF[contains_non_alphanumeric]→quote_it
+  IF[starts_with_§_but_not_anchor]→quote_it
+  IF[contains_unicode_symbols_not_operators]→quote_it
+  IF[ambiguous_parsing]→quote_it
+
+SAFE_WITHOUT_QUOTES::[
+  bare_identifiers[simple_name,STATUS,BUILD],
+  numbers[42,3.14,-1e10],
+  booleans[true,false],
+  null[null],
+  defined_operators_in_expressions[A→B,X∨Y,P∧Q]
+]
 
 §4::STRUCTURE
 INDENT::2_spaces_per_level[no_tabs_ever]
