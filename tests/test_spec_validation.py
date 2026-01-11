@@ -141,3 +141,48 @@ def test_no_known_issues_when_all_fixed():
 
     # If we get here, all KNOWN_ISSUES are still broken (expected)
     assert still_broken == KNOWN_ISSUES, "KNOWN_ISSUES has changed unexpectedly"
+
+
+def test_unclosed_list_at_eof_emits_warning():
+    """Test that unclosed lists emit I4-compliant warning instead of hanging.
+
+    Critical Engineer blocking requirement: unclosed list must NOT cause:
+    1. Infinite loop (timeout protection works) ✓
+    2. Silent corruption (warning emitted for auditability) ← THIS TEST
+
+    Per I4 (Transform Auditability): "every transformation logged with stable IDs"
+    Unclosed list is a lenient parse transformation - must emit warning.
+
+    See: CE verdict on commit a081289, continuation_id: 9a2e4f25-5ca9-42b6-ab40-e9b8733f23b1
+    """
+    # RED phase: This test will fail until parser emits warning
+    content = """===TEST===
+META:
+  TYPE::TEST
+
+FIELD::[value1, value2
+===END==="""
+
+    # Parse should succeed (lenient) but emit warning
+    doc, warnings = parse_with_warnings(content)
+
+    # Verify no timeout/hang (implicit via test completion)
+    assert doc is not None
+
+    # CE blocking requirement: Must emit warning for unclosed list
+    assert len(warnings) > 0, "Expected warning for unclosed list, got none (silent corruption path)"
+
+    # Verify warning has I4-compliant structure
+    unclosed_warnings = [w for w in warnings if w.get("subtype") == "unclosed_list"]
+    assert len(unclosed_warnings) > 0, f"Expected 'unclosed list' warning, got: {warnings}"
+
+    warning = unclosed_warnings[0]
+    # I4 requirement: warnings must include type, message, line, column
+    assert "type" in warning, "Warning missing 'type' field (I4 violation)"
+    assert "message" in warning, "Warning missing 'message' field (I4 violation)"
+    assert "line" in warning, "Warning missing 'line' field (I4 violation)"
+    assert "column" in warning, "Warning missing 'column' field (I4 violation)"
+
+    # Verify warning is actionable (identifies unclosed list specifically)
+    assert warning["type"] == "lenient_parse", f"Expected type 'lenient_parse', got {warning['type']}"
+    assert "list" in warning["message"].lower(), "Warning should mention 'list'"

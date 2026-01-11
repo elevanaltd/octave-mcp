@@ -1042,7 +1042,21 @@ class Parser:
         # This makes it lenient for unclosed lists at end of file
         if self.current().type == TokenType.LIST_END:
             self.advance()
-        elif self.current().type not in (TokenType.EOF, TokenType.ENVELOPE_END):
+        elif self.current().type in (TokenType.EOF, TokenType.ENVELOPE_END):
+            # I4 Audit: Emit warning for unclosed list at EOF/ENVELOPE_END
+            # Per I4 (Transform Auditability): lenient parsing must emit receipt
+            # This prevents silent corruption - callers know AST is incomplete
+            current_token = self.current()
+            self.warnings.append(
+                {
+                    "type": "lenient_parse",
+                    "subtype": "unclosed_list",
+                    "message": f"List not closed before {current_token.type.name}",
+                    "line": current_token.line,
+                    "column": current_token.column,
+                }
+            )
+        else:
             self.expect(TokenType.LIST_END)
 
         # Gap_2: Capture token slice for token-witnessed reconstruction (ADR-0012)
