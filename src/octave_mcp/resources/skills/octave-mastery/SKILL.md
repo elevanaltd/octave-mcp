@@ -14,7 +14,7 @@ META:
   PURPOSE::"Expert-level OCTAVE application: Archetypes, Advanced Syntax, Strategy"
   REQUIRES::octave-literacy
   TIER::LOSSLESS
-  SPEC_REFERENCE::octave-6-llm-core.oct.md
+  SPEC_REFERENCE::octave-core-spec.oct.md
   V6_FEATURES::"Holographic contracts, JIT grammar compilation, constraint validation"
 
 §1::SEMANTIC_PANTHEON

@@ -31,7 +31,7 @@ The system exhibits structural inconsistency where:
 **Required Actions**:
 1. Review if debate_transcript.oct.md is correctly placed
 2. Verify vocabularies/core/ contains expected META and SNAPSHOT files
-3. Ensure alignment with octave-6-llm-schema.oct.md spec
+3. Ensure alignment with octave-schema-spec.oct.md spec
 
 ### ISSUE 3: Missing JSON Schema Documentation
 **Finding**: JSON Schema docs deleted but not migrated

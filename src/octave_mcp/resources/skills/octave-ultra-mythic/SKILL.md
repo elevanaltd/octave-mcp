@@ -14,7 +14,7 @@ META:
   PURPOSE::"Ultra-high density compression using mythological atoms for identity and knowledge preservation"
   REQUIRES::[octave-literacy, octave-mythology]
   TIER::ULTRA_MYTHIC
-  SPEC_REFERENCE::octave-6-llm-data.oct.md[§1b::TIER::ULTRA_MYTHIC]
+  SPEC_REFERENCE::octave-data-spec.oct.md[§1b::TIER::ULTRA_MYTHIC]
 
 §1::CORE_MANDATE
   TARGET::"60% token reduction while preserving soul and constraints"

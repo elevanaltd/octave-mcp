@@ -9,14 +9,14 @@ These resources are distributed as part of the `octave-mcp` package for use by i
 ### `/specs/`
 Official OCTAVE v6.0.0 specifications defining the format, operators, and usage patterns.
 
-- **octave-6-llm-core.oct.md** - Core syntax, operators, and type system
-- **octave-6-llm-agents.oct.md** - Agent architecture patterns
-- **octave-6-llm-skills.oct.md** - Skill document format and structure
-- **octave-6-llm-data.oct.md** - Data compression tiers and patterns
-- **octave-6-llm-execution.oct.md** - Execution flow and protocols
-- **octave-6-llm-schema.oct.md** - Schema validation framework
-- **octave-6-llm-rationale.oct.md** - Design rationale and philosophy
-- **octave-6-llm-primers.oct.md** - Primer specification (v6.0.0)
+- **octave-core-spec.oct.md** - Core syntax, operators, and type system
+- **octave-agents-spec.oct.md** - Agent architecture patterns
+- **octave-skills-spec.oct.md** - Skill document format and structure
+- **octave-data-spec.oct.md** - Data compression tiers and patterns
+- **octave-execution-spec.oct.md** - Execution flow and protocols
+- **octave-schema-spec.oct.md** - Schema validation framework
+- **octave-rationale-spec.oct.md** - Design rationale and philosophy
+- **octave-primers-spec.oct.md** - Primer specification (v6.0.0)
 - **octave-mcp-architecture.oct.md** - MCP implementation architecture
 
 #### `/specs/schemas/`
@@ -64,7 +64,7 @@ with as_file(primer_file) as path:
     primer_content = path.read_text()
 
 # Read a spec
-spec_file = files('octave_mcp.resources.specs').joinpath('octave-6-llm-core.oct.md')
+spec_file = files('octave_mcp.resources.specs').joinpath('octave-core-spec.oct.md')
 with as_file(spec_file) as path:
     spec_content = path.read_text()
 
