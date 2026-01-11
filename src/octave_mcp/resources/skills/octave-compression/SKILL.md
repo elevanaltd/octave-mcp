@@ -36,6 +36,10 @@ META:
       USE::[extreme_scarcity,embedding_generation,dense_reference]
       LOSS::~50%[almost_all_explanatory_content,some_nuance,tradeoff_reasoning]
 
+    // Note: For 60% compression with mythological atoms, see octave-ultra-mythic skill
+    ULTRA_MYTHIC::[target:60%_compression,preserve:soul∧constraints,method:mythological_atoms]
+      REFERENCE::skills/octave-ultra-mythic[specialized_identity_compression]
+
     TIER_METADATA::include_in_META_block[COMPRESSION_TIER,LOSS_PROFILE,NARRATIVE_DEPTH]
 
     V6_LOSS_ACCOUNTING::[
@@ -64,7 +68,7 @@ META:
     APPLICATION::"Apply operators defined in octave-literacy",
     HIERARCHY::"Group related concepts under parent keys",
     ARRAYS::"Convert repetitive lists to [item1, item2]",
-    MYTHOLOGY::"If complex pattern, load octave-mastery for archetypes"
+    MYTHOLOGY::"For 60% compression, load octave-ultra-mythic for mythological atoms"
   ]
 
   PHASE_4_VALIDATE::[

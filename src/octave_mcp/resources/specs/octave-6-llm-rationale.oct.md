@@ -3,7 +3,7 @@ META:
   TYPE::LLM_PROFILE
   VERSION::"6.0.0"
   STATUS::APPROVED
-  IMPLEMENTATION::REFERENCE
+
   TOKENS::"~200"
   REQUIRES::octave-6-llm-core
   PURPOSE::architectural_decision_record

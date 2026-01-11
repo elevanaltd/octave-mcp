@@ -3,7 +3,7 @@ META:
   TYPE::LLM_PROFILE
   VERSION::"6.0.0"
   STATUS::APPROVED
-  IMPLEMENTATION::PLANNED
+
   TOKENS::"~120"
   REQUIRES::octave-6-llm-core
   PURPOSE::L4_holographic_definitions+document_level_holography

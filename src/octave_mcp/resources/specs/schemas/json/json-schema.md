@@ -41,7 +41,7 @@ An OCTAVE JSON document follows this high-level structure:
 ```json
 {
   "octave": {                  // Root container - required
-    "version": "6.0",          // OCTAVE version - recommended
+    "version": "6.0.0",          // OCTAVE version - recommended
     "metadata": { ... },       // Document metadata - optional
     "definitions": { ... },    // Pattern and status definitions - required
     "system": { ... },         // System state information - required
@@ -570,7 +570,7 @@ When implementing OCTAVE in JSON format, follow these guidelines for best result
 ```json
 {
   "octave": {
-    "version": "6.0",
+    "version": "6.0.0",
     "metadata": {
       "timestamp": "2025-04-21T14:30:00Z",
       "source": "System Monitoring",

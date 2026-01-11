@@ -4,7 +4,7 @@ META:
   VERSION::"6.0.0"
   STATUS::APPROVED
   PURPOSE::"Agent architecture schema using Dual-Lock Identity/Behavior separation."
-  IMPLEMENTATION::REFERENCE
+
 
 // OCTAVE AGENTS v6: The "Dual-Lock" Schema
 // Ratified by Architectural Debate (ho-octave-v6-redesign-001)

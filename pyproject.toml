@@ -1,6 +1,6 @@
 [project]
 name = "octave-mcp"
-version = "0.4.1"
+version = "0.5.0"
 description = "OCTAVE MCP Server - Lenient-to-Canonical OCTAVE pipeline with schema validation and generative holographic contracts"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -71,7 +71,15 @@ where = ["src"]
 include = ["octave_mcp*"]
 
 [tool.setuptools.package-data]
-octave_mcp = ["schemas/builtin/*.oct.md", "py.typed"]
+octave_mcp = [
+    "schemas/builtin/*.oct.md",
+    "resources/**/*.oct.md",
+    "resources/**/*.md",
+    "resources/specs/schemas/*.oct.md",
+    "resources/specs/vocabularies/*.oct.md",
+    "resources/specs/vocabularies/**/*.oct.md",
+    "py.typed"
+]
 
 [tool.black]
 line-length = 120

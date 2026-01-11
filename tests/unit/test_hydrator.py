@@ -166,7 +166,18 @@ class TestRegistryResolution:
         """Should resolve @namespace/name to file path."""
         from octave_mcp.core.hydrator import VocabularyRegistry
 
-        registry_path = Path(__file__).parent.parent.parent / "specs" / "vocabularies" / "registry.oct.md"
+        # Try new location first, fall back to old location
+        registry_path = (
+            Path(__file__).parent.parent.parent
+            / "src"
+            / "octave_mcp"
+            / "resources"
+            / "specs"
+            / "vocabularies"
+            / "registry.oct.md"
+        )
+        if not registry_path.exists():
+            registry_path = Path(__file__).parent.parent.parent / "specs" / "vocabularies" / "registry.oct.md"
         registry = VocabularyRegistry(registry_path)
 
         # @core/SNAPSHOT should resolve to core/SNAPSHOT.oct.md
@@ -571,7 +582,18 @@ class TestVersionHandling:
         """Registry should extract VERSION field from vocabulary entries."""
         from octave_mcp.core.hydrator import VocabularyRegistry
 
-        registry_path = Path(__file__).parent.parent.parent / "specs" / "vocabularies" / "registry.oct.md"
+        # Try new location first, fall back to old location
+        registry_path = (
+            Path(__file__).parent.parent.parent
+            / "src"
+            / "octave_mcp"
+            / "resources"
+            / "specs"
+            / "vocabularies"
+            / "registry.oct.md"
+        )
+        if not registry_path.exists():
+            registry_path = Path(__file__).parent.parent.parent / "specs" / "vocabularies" / "registry.oct.md"
         registry = VocabularyRegistry(registry_path)
 
         # Registry should now provide version info

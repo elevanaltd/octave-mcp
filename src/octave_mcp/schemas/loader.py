@@ -59,20 +59,32 @@ def get_schema_search_paths() -> list[Path]:
     """Get list of paths to search for schema files.
 
     Returns paths in priority order:
-    1. specs/schemas/ in project root
-    2. schemas/builtin/ in package directory
+    1. resources/specs/schemas/ in package directory (installed package)
+    2. src/octave_mcp/resources/specs/schemas/ in project root (development)
+    3. specs/schemas/ in project root (backward compatibility)
+    4. schemas/builtin/ in package directory
 
     Returns:
         List of Path objects for schema search directories
     """
     paths: list[Path] = []
 
-    # 1. specs/schemas/ relative to current working directory
+    # 1. Package resources location (for installed package)
+    package_resources = Path(__file__).parent.parent / "resources" / "specs" / "schemas"
+    if package_resources.exists():
+        paths.append(package_resources)
+
+    # 2. New consolidated location in resources (development)
+    resources_dir = Path.cwd() / "src" / "octave_mcp" / "resources" / "specs" / "schemas"
+    if resources_dir.exists():
+        paths.append(resources_dir)
+
+    # 3. specs/schemas/ for backward compatibility
     specs_dir = Path.cwd() / "specs" / "schemas"
     if specs_dir.exists():
         paths.append(specs_dir)
 
-    # 2. schemas/builtin/ in package directory
+    # 4. schemas/builtin/ in package directory
     builtin_dir = Path(__file__).parent / "builtin"
     if builtin_dir.exists():
         paths.append(builtin_dir)

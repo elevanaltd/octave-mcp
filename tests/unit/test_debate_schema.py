@@ -24,8 +24,16 @@ class TestDebateSchemaLoading:
     """Test loading debate transcript schema from specs/schemas/."""
 
     def test_debate_schema_file_exists(self):
-        """Debate schema file should exist in specs/schemas/."""
-        schema_path = Path(__file__).parent.parent.parent / "specs" / "schemas" / "debate_transcript.oct.md"
+        """Debate schema file should exist in resources."""
+        schema_path = (
+            Path(__file__).parent.parent.parent
+            / "src"
+            / "octave_mcp"
+            / "resources"
+            / "specs"
+            / "schemas"
+            / "debate_transcript.oct.md"
+        )
         assert schema_path.exists(), f"Schema file not found at {schema_path}"
 
     def test_load_debate_schema_by_name(self):
