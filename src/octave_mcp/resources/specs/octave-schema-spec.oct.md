@@ -49,7 +49,7 @@ CONFLICT_ERRORS::[
 §3::TARGETS
 BUILTIN::[§SELF,§META,§INDEXER,§DECISION_LOG,§RISK_LOG,§KNOWLEDGE_BASE]
 FILE::§./relative/path[resolved_from_document_directory]
-MULTI::§A∨§B∨§C[broadcast_to_all]
+MULTI::"§A∨§B∨§C"[broadcast_to_all]
 MULTI_FAILURE::non_transactional[partial_success_possible,handler_responsibility]
 VALIDATION::target_must_exist[declared_in_POLICY.TARGETS∨builtin]
 

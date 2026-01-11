@@ -24,7 +24,7 @@ META:
     PURPOSE::"Skill-specific action + OCTAVE definition"
     CONTENT::PURPOSE[action_verb]+OCTAVE[universal_def]+METHOD
     REQUIRED::[skill_action,OCTAVE_definition,method]
-    EXAMPLE::PURPOSE::"Write OCTAVE"\nOCTAVE::"Semantic DSL for LLMs"
+    EXAMPLE::"PURPOSE::Write_OCTAVE OCTAVE::Semantic_DSL_for_LLMs"
     UNIVERSAL::ALL_PRIMERS_USE_SAME_OCTAVE_DEF
 
   §2b::MAP

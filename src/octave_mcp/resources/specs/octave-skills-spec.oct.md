@@ -95,7 +95,7 @@ OVERFLOW_STRATEGY::progressive_disclosure[main→resources]
 DESCRIPTION_KEYWORDS::[action_verbs,domain_terms,problem_patterns]
 DENSITY::3-5_keywords_per_trigger_category
 PATTERN::"Use when [actions]. Triggers on [keywords]."
-EXAMPLE::"Use when auditing codebases, finding stubs. Triggers on placeholder audit, stub detection, technical debt."
+EXAMPLE::Use_when_auditing_codebases_finding_stubs_Triggers_on_placeholder_audit_stub_detection_technical_debt
 
 §6::RESOURCE_STRUCTURE
 
