@@ -7,21 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-01-11
+
 ### Added
 - **Octave v6 "Dual-Lock" Schema Specification**
   - Defines strict separation of Identity (Shank) and Behavior (Conduct)
   - Supports `MODEL_TIER` (Premium/Standard/Basic) and `ACTIVATION` (Force/Essence/Element)
   - Enables "Holographic Contract" self-validation within agent files
 - **Patterns Support**: Updated Spec to include `PATTERNS::[...]` in Capabilities manifest
+- **Resource Consolidation**: All specs, primers, and skills now distributed as package resources
+  - Accessible via `importlib.resources` API
+  - JSON Schema documentation restored to `resources/specs/schemas/json/`
+  - Complete Python package structure with proper `__init__.py` files
+- **Comprehensive Test Coverage**: Added tests for resource accessibility and structure validation
 
 ### Changed
-- **Architectural Separation**: Removed specific HestAI agent implementations (Holistic Orchestrator, etc.) from `octave-mcp` repo.
-  - Moved agent/skill/pattern content to `hestai-mcp/_bundled_hub` as the reference library.
-  - `octave-mcp` now serves as the pure Language Specification and Parser.
+- **Architectural Separation**: Removed specific HestAI agent implementations (Holistic Orchestrator, etc.) from `octave-mcp` repo
+  - Moved agent/skill/pattern content to `hestai-mcp/_bundled_hub` as the reference library
+  - `octave-mcp` now serves as the pure Language Specification and Parser
 - **Spec Purification**:
-  - Renamed `BIND` -> `CORE` in Identity spec to correct semantic verb/noun mismatch.
-  - Removed `UNIVERSAL_LAWS` from spec to prevent polluting the language with system-specific business logic.
-- **Vocabulary Alignment**: Updated Spec Activation block to use Debate Hall metaphors (`GUARDIAN`/`EXPLORER`/`ARCHITECT`) instead of generic text.
+  - Renamed `BIND` -> `CORE` in Identity spec to correct semantic verb/noun mismatch
+  - Removed `UNIVERSAL_LAWS` from spec to prevent polluting the language with system-specific business logic
+- **Vocabulary Alignment**: Updated Spec Activation block to use Debate Hall metaphors (`GUARDIAN`/`EXPLORER`/`ARCHITECT`) instead of generic text
+- **Resource Organization**: Consolidated all documentation into `src/octave_mcp/resources/` for single source of truth
+  - Removed duplicate `specs/`, `primers/`, and `skills/` folders at root
+  - Updated all import paths and references
+
+### Fixed
+- Removed non-existent `SESSION_LOG` vocabulary from registry that would cause `FileNotFoundError`
+- Updated test paths to use consolidated resource locations
+- Fixed package data configuration to include all resource subdirectories
 
 ## [0.4.1] - 2026-01-07
 
@@ -125,7 +140,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/elevanaltd/octave-mcp/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.2.0...v0.3.0
