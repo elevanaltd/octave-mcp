@@ -19,6 +19,20 @@ Official OCTAVE v6.0.0 specifications defining the format, operators, and usage 
 - **octave-6-llm-primers.oct.md** - Primer specification (v6.0.0)
 - **octave-mcp-architecture.oct.md** - MCP implementation architecture
 
+#### `/specs/schemas/`
+Schema definitions and templates.
+
+- **debate_transcript.oct.md** - Schema for debate hall transcripts
+- **json/** - JSON Schema for OCTAVE (see [JSON Schema README](specs/schemas/json/README.md))
+
+#### `/specs/vocabularies/`
+OCTAVE vocabulary definitions.
+
+- **registry.oct.md** - Vocabulary registry index
+- **core/** - Core vocabulary definitions
+  - **META.oct.md** - META vocabulary specification
+  - **SNAPSHOT.oct.md** - SNAPSHOT vocabulary specification
+
 ### `/skills/`
 Complete OCTAVE skills with full documentation and examples (~500-800 tokens).
 
@@ -42,16 +56,27 @@ Ultra-compressed bootstrapping documents (30-60 tokens) for instant agent compet
 ### From Python Package
 
 ```python
-from importlib import resources
-import octave_mcp.resources
+from importlib.resources import files, as_file
 
 # Read a primer
-with resources.files(octave_mcp.resources).joinpath('primers/octave-literacy-primer.oct.md').open() as f:
-    primer_content = f.read()
+primer_file = files('octave_mcp.resources.primers').joinpath('octave-literacy-primer.oct.md')
+with as_file(primer_file) as path:
+    primer_content = path.read_text()
 
 # Read a spec
-with resources.files(octave_mcp.resources).joinpath('specs/octave-6-llm-core.oct.md').open() as f:
-    spec_content = f.read()
+spec_file = files('octave_mcp.resources.specs').joinpath('octave-6-llm-core.oct.md')
+with as_file(spec_file) as path:
+    spec_content = path.read_text()
+
+# Read JSON Schema documentation
+json_schema_file = files('octave_mcp.resources.specs.schemas.json').joinpath('json-schema.md')
+with as_file(json_schema_file) as path:
+    json_schema_content = path.read_text()
+
+# Read vocabulary files
+meta_vocab_file = files('octave_mcp.resources.specs.vocabularies.core').joinpath('META.oct.md')
+with as_file(meta_vocab_file) as path:
+    meta_vocab_content = path.read_text()
 ```
 
 ### For Agents
