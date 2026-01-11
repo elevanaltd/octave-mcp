@@ -26,7 +26,6 @@ SPEC_FILES = sorted(SPECS_DIR.glob("octave-*-spec.oct.md"))
 # Known issues - specs that have parsing problems
 # Format: {filename: "reason for exclusion"}
 KNOWN_ISSUES = {
-    "octave-execution-spec.oct.md": "Timeout issue - parser hangs (under investigation)",
     "octave-primers-spec.oct.md": "LexerError E005 line 45 col 24: Unexpected character '\\'",
     "octave-skills-spec.oct.md": "LexerError E005 line 97 col 54: Unexpected character '\"'",
 }

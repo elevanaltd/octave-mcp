@@ -1006,7 +1006,8 @@ class Parser:
                 self.advance()
 
             # Check for end of list
-            if self.current().type == TokenType.LIST_END:
+            # Issue #162 Fix: Check for EOF to prevent infinite loop
+            if self.current().type in (TokenType.LIST_END, TokenType.EOF, TokenType.ENVELOPE_END):
                 break
 
             # Parse item value
@@ -1030,9 +1031,19 @@ class Parser:
                 # The loop structure handles it: it tries to parse item.
                 # If it's not a valid value start, parse_value might consume it as bare word.
                 # So we rely on LIST_END check.
+
+                # Issue #162: If we are stuck at EOF, break
+                if self.current().type == TokenType.EOF:
+                    break
+
                 pass
 
-        self.expect(TokenType.LIST_END)
+        # Expect LIST_END only if we didn't hit EOF/ENVELOPE_END prematurely
+        # This makes it lenient for unclosed lists at end of file
+        if self.current().type == TokenType.LIST_END:
+            self.advance()
+        elif self.current().type not in (TokenType.EOF, TokenType.ENVELOPE_END):
+            self.expect(TokenType.LIST_END)
 
         # Gap_2: Capture token slice for token-witnessed reconstruction (ADR-0012)
         # Slice includes LIST_START through LIST_END (exclusive end, so pos is after ])
