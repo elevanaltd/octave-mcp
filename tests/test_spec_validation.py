@@ -32,15 +32,19 @@ KNOWN_ISSUES = {
 }
 
 
+@pytest.mark.timeout(10)
 @pytest.mark.parametrize("spec_file", SPEC_FILES, ids=lambda f: f.name)
 def test_spec_parses_successfully(spec_file: Path):
-    """Validate that each OCTAVE spec file parses successfully.
+    """Validate that each OCTAVE spec file parses successfully within timeout.
 
-    This test ensures specs comply with their own syntax rules (dogfooding).
+    This test ensures specs comply with their own syntax rules (dogfooding) AND
+    that parsing completes within reasonable time (10s timeout prevents CI hangs).
+
     Failure indicates either:
     1. Spec syntax violation (fix the spec)
     2. Parser bug (fix the parser)
     3. Grammar definition error (update grammar)
+    4. Parser hang/infinite loop (timeout triggers)
 
     Args:
         spec_file: Path to OCTAVE spec file to validate
@@ -78,29 +82,6 @@ def test_spec_parses_successfully(spec_file: Path):
     # This is informational - not a failure condition
     if len(warnings) > 10:
         print(f"\nNote: {spec_file.name} has {len(warnings)} parser warnings (lenient mode)")
-
-
-@pytest.mark.timeout(10)
-@pytest.mark.parametrize("spec_file", SPEC_FILES, ids=lambda f: f.name)
-def test_spec_parsing_completes_within_timeout(spec_file: Path):
-    """Ensure spec parsing completes within reasonable time (10s).
-
-    This prevents hanging parsers from blocking CI. If this test fails:
-    1. Parser has infinite loop or exponential complexity
-    2. Spec has pathological structure triggering parser bug
-
-    Args:
-        spec_file: Path to OCTAVE spec file to validate
-    """
-    # Check for known issues
-    if spec_file.name in KNOWN_ISSUES:
-        pytest.skip(f"Known issue: {KNOWN_ISSUES[spec_file.name]}")
-
-    content = spec_file.read_text()
-
-    # Parse should complete within timeout (handled by @pytest.mark.timeout)
-    doc, warnings = parse_with_warnings(content)
-    assert doc is not None
 
 
 def test_all_specs_discovered():
