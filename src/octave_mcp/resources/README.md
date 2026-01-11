@@ -10,12 +10,26 @@ These resources are distributed as part of the `octave-mcp` package for use by i
 Official OCTAVE v6.0.0 specifications defining the format, operators, and usage patterns.
 
 - **octave-6-llm-core.oct.md** - Core syntax, operators, and type system
+- **octave-6-llm-agents.oct.md** - Agent architecture patterns
 - **octave-6-llm-skills.oct.md** - Skill document format and structure
 - **octave-6-llm-data.oct.md** - Data compression tiers and patterns
-- **octave-primer-spec.oct.md** - Primer specification (v3.0.0)
+- **octave-6-llm-execution.oct.md** - Execution flow and protocols
+- **octave-6-llm-schema.oct.md** - Schema validation framework
+- **octave-6-llm-rationale.oct.md** - Design rationale and philosophy
+- **octave-6-llm-primers.oct.md** - Primer specification (v6.0.0)
+- **octave-mcp-architecture.oct.md** - MCP implementation architecture
+
+### `/skills/`
+Complete OCTAVE skills with full documentation and examples (~500-800 tokens).
+
+- **octave-literacy/** - Basic OCTAVE syntax and structure
+- **octave-compression/** - Compression workflows and tiers
+- **octave-mastery/** - Advanced patterns and archetypes
+- **octave-mythology/** - Mythological encoding patterns
+- **octave-ultra-mythic/** - Ultra-high density compression
 
 ### `/primers/`
-Ultra-compressed bootstrapping documents (~40-60 tokens) for instant agent competence.
+Ultra-compressed bootstrapping documents (30-60 tokens) for instant agent competence.
 
 - **octave-literacy-primer.oct.md** - Write basic OCTAVE syntax
 - **octave-compression-primer.oct.md** - Compress prose to OCTAVE
@@ -59,7 +73,7 @@ OCTAVE::"Semantic DSL for LLMs"
 
 ## Version Alignment
 
-All primers are v3.0.0, part of the Universal Anchor release, ensuring consistency across the ecosystem.
+All resources are v6.0.0, part of the Universal Anchor release, ensuring consistency across the ecosystem.
 
 ## Implementation Notes
 

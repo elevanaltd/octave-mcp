@@ -75,6 +75,8 @@ octave_mcp = [
     "schemas/builtin/*.oct.md",
     "resources/specs/*.oct.md",
     "resources/primers/*.oct.md",
+    "resources/skills/**/*.md",
+    "resources/README.md",
     "py.typed"
 ]
 

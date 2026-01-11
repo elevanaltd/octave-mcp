@@ -35,7 +35,9 @@ META:
 GUIDANCE::AGENTS.oct.md
 QUALITY_GATES::[mypy,ruff,black,pytest]
 DEV_SETUP::docs/guides/development-setup.md
-SPECS::specs/README.oct.md
+SPECS::src/octave_mcp/resources/specs/
+SKILLS::src/octave_mcp/resources/skills/
+PRIMERS::src/octave_mcp/resources/primers/
 IMMUTABLES::[I1,I2,I3,I4,I5]
 ===END===
 ```
