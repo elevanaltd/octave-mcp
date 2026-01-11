@@ -4,7 +4,7 @@ This package provides a complete implementation of the OCTAVE specification,
 including lexer, parser, emitter, validator, and vocabulary hydration.
 
 Public API exports:
-- Core functions: parse(), emit(), tokenize(), repair(), project()
+- Core functions: parse(), parse_with_warnings(), emit(), tokenize(), repair(), project()
 - Core classes: Parser, Validator, TokenType, Token
 - AST nodes: Document, Block, Assignment, Section, ListValue, InlineMap, Absent
 - Hydration: hydrate(), HydrationPolicy, VocabularyRegistry
@@ -30,7 +30,7 @@ from octave_mcp.core.hydrator import (
     hydrate,
 )
 from octave_mcp.core.lexer import LexerError, Token, TokenType, tokenize
-from octave_mcp.core.parser import Parser, ParserError, parse
+from octave_mcp.core.parser import Parser, ParserError, parse, parse_with_warnings
 from octave_mcp.core.projector import ProjectionResult, project
 from octave_mcp.core.repair import repair
 from octave_mcp.core.repair_log import RepairEntry, RepairLog, RepairTier
@@ -100,6 +100,7 @@ def list_exports(category: str | None = None) -> list[str]:
     categories = {
         "functions": [
             "parse",
+            "parse_with_warnings",
             "emit",
             "tokenize",
             "repair",
@@ -171,6 +172,7 @@ __all__ = [
     "list_exports",
     # Core functions
     "parse",
+    "parse_with_warnings",
     "emit",
     "tokenize",
     "repair",
