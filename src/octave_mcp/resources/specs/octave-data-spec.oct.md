@@ -5,7 +5,7 @@ META:
   STATUS::APPROVED
 
   TOKENS::"~75"
-  REQUIRES::octave-6-llm-core
+  REQUIRES::octave-core-spec
   PURPOSE::compression_and_instances
   TEACHES::[§skills/octave-compression]
   IMPLEMENTATION_NOTES::"Compression tiers (LOSSLESS/CONSERVATIVE/AGGRESSIVE/ULTRA) are specified here for LLM compression behavior. OCTAVE-MCP v0.2.0 removed mcp/ingest.py during 3-tool consolidation; compression tier selection is not implemented in the server. v6: Holographic pattern - META self-declares compression tier for document generation."

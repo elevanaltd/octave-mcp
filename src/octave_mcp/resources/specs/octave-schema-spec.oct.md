@@ -5,7 +5,7 @@ META:
   STATUS::APPROVED
 
   TOKENS::"~120"
-  REQUIRES::octave-6-llm-core
+  REQUIRES::octave-core-spec
   PURPOSE::L4_holographic_definitions+document_level_holography
   IMPLEMENTATION_NOTES::"Gap 2 (constraint chain evaluation) implemented with 12 constraint types. Holographic patterns, targets, and block inheritance pending. v6: Document-Level Holography enables schema embedding in META block."
   IMPLEMENTATION_REF::[src/octave_mcp/core/schema.py,src/octave_mcp/core/constraints.py]

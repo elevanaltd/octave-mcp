@@ -4,7 +4,7 @@ META:
   VERSION::"6.0.0"
   STATUS::APPROVED
   TOKENS::"~180"
-  REQUIRES::octave-6-llm-core
+  REQUIRES::octave-core-spec
   PURPOSE::L5_skill_document_format[platform_agnostic]
   IMPLEMENTATION_NOTES::"v6: Hybrid pattern - Skills require YAML frontmatter for tool compatibility, followed by a pure OCTAVE envelope (META.SKILL) for internal consistency."
 

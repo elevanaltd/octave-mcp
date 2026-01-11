@@ -4,7 +4,7 @@ META:
   VERSION::"6.0.0"
   STATUS::APPROVED
   TOKENS::"~80"
-  REQUIRES::octave-6-llm-core
+  REQUIRES::octave-core-spec
   PURPOSE::"Ultra-compressed context injection for immediate capability"
   COMPRESSION_TIER::ULTRA[50%_compression,facts∧structure_only]
 

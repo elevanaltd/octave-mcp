@@ -5,7 +5,7 @@ META:
   STATUS::APPROVED
 
   TOKENS::"~200"
-  REQUIRES::octave-6-llm-core
+  REQUIRES::octave-core-spec
   PURPOSE::architectural_decision_record
   IMPLEMENTATION_NOTES::"Design rationale document only. No code implementation. Referenced by core, data, schema, execution profiles."
 

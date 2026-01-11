@@ -5,7 +5,7 @@ META:
   STATUS::APPROVED
 
   TOKENS::"~130"
-  REQUIRES::octave-6-llm-core
+  REQUIRES::octave-core-spec
   PURPOSE::validation_and_error_handling
   IMPLEMENTATION_NOTES::"Validator (134 LOC) handles META and basic structure validation. Parse errors caught. Constraint validation, error formatting, and retry protocol not implemented."
   IMPLEMENTATION_REF::[src/octave_mcp/core/validator.py]
