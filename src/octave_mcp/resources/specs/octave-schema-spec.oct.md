@@ -5,7 +5,7 @@ META:
   STATUS::APPROVED
 
   TOKENS::"~120"
-  REQUIRES::octave-6-llm-core
+  REQUIRES::octave-core-spec
   PURPOSE::L4_holographic_definitions+document_level_holography
   IMPLEMENTATION_NOTES::"Gap 2 (constraint chain evaluation) implemented with 12 constraint types. Holographic patterns, targets, and block inheritance pending. v6: Document-Level Holography enables schema embedding in META block."
   IMPLEMENTATION_REF::[src/octave_mcp/core/schema.py,src/octave_mcp/core/constraints.py]
@@ -30,7 +30,7 @@ TARGET::extraction_destination[§prefixed]
 AVAILABLE::[REQ,OPT,CONST,REGEX,ENUM,TYPE,DIR,APPEND_ONLY,RANGE,MAX_LENGTH,MIN_LENGTH,DATE,ISO8601]
 CHAIN::constraint∧constraint∧constraint[left_to_right]
 EVALUATION::fail_fast[stop_on_first_failure]
-REGEX_BRACKETS::quote_if_contains_brackets[REGEX["^[a-z]+$"]_not_REGEX[^[a-z]+$]]
+REGEX_BRACKETS::quote_if_contains_brackets[REGEX["^[a-z]+$"]_not_REGEX["^[a-z]+$"]]
 
 CONSTRAINT_SYNTAX::[
   RANGE::"RANGE[min,max]"[numeric_bounds_inclusive],
@@ -49,7 +49,7 @@ CONFLICT_ERRORS::[
 §3::TARGETS
 BUILTIN::[§SELF,§META,§INDEXER,§DECISION_LOG,§RISK_LOG,§KNOWLEDGE_BASE]
 FILE::§./relative/path[resolved_from_document_directory]
-MULTI::§A∨§B∨§C[broadcast_to_all]
+MULTI::"§A∨§B∨§C"[broadcast_to_all]
 MULTI_FAILURE::non_transactional[partial_success_possible,handler_responsibility]
 VALIDATION::target_must_exist[declared_in_POLICY.TARGETS∨builtin]
 

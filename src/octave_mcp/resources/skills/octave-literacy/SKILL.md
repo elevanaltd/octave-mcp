@@ -13,7 +13,7 @@ META:
   STATUS::ACTIVE
   PURPOSE::"Essential syntax and operators for basic OCTAVE competence"
   TIER::LOSSLESS
-  SPEC_REFERENCE::octave-6-llm-core.oct.md
+  SPEC_REFERENCE::octave-core-spec.oct.md
   V6_FEATURES::"Adds CONTRACT/GRAMMAR blocks, assembly rules, .oct.md extension"
 
 §1::CORE_SYNTAX

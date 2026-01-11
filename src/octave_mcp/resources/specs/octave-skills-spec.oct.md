@@ -4,7 +4,7 @@ META:
   VERSION::"6.0.0"
   STATUS::APPROVED
   TOKENS::"~180"
-  REQUIRES::octave-6-llm-core
+  REQUIRES::octave-core-spec
   PURPOSE::L5_skill_document_format[platform_agnostic]
   IMPLEMENTATION_NOTES::"v6: Hybrid pattern - Skills require YAML frontmatter for tool compatibility, followed by a pure OCTAVE envelope (META.SKILL) for internal consistency."
 
@@ -95,7 +95,7 @@ OVERFLOW_STRATEGY::progressive_disclosure[main→resources]
 DESCRIPTION_KEYWORDS::[action_verbs,domain_terms,problem_patterns]
 DENSITY::3-5_keywords_per_trigger_category
 PATTERN::"Use when [actions]. Triggers on [keywords]."
-EXAMPLE::"Use when auditing codebases, finding stubs. Triggers on placeholder audit, stub detection, technical debt."
+EXAMPLE::Use_when_auditing_codebases_finding_stubs_Triggers_on_placeholder_audit_stub_detection_technical_debt
 
 §6::RESOURCE_STRUCTURE
 
@@ -159,7 +159,7 @@ V5_VALIDATION_DEPRECATED::[
 ]
 
 HOLOGRAPHIC_VALIDATION::[
-  DEPRECATED::"No longer required to mirror YAML in META.SKILL"
+  DEPRECATED::no_longer_required_to_mirror_YAML_in_META_SKILL
 ]
 
 §9::FORBIDDEN

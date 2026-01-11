@@ -4,9 +4,9 @@ META:
   VERSION::"6.0.0"
   STATUS::APPROVED
   TOKENS::"~80"
-  REQUIRES::octave-6-llm-core
+  REQUIRES::octave-core-spec
   PURPOSE::"Ultra-compressed context injection for immediate capability"
-  COMPRESSION_TIER::ULTRA[50%_compression,facts∧structure_only]
+  COMPRESSION_TIER::ULTRA["50%_compression",facts∧structure_only]
 
 §1::DEFINITION
   OCTAVE::"Semantic DSL for LLMs"  // Universal definition for all primers
@@ -24,7 +24,7 @@ META:
     PURPOSE::"Skill-specific action + OCTAVE definition"
     CONTENT::PURPOSE[action_verb]+OCTAVE[universal_def]+METHOD
     REQUIRED::[skill_action,OCTAVE_definition,method]
-    EXAMPLE::PURPOSE::"Write OCTAVE"\nOCTAVE::"Semantic DSL for LLMs"
+    EXAMPLE::"PURPOSE::Write_OCTAVE OCTAVE::Semantic_DSL_for_LLMs"
     UNIVERSAL::ALL_PRIMERS_USE_SAME_OCTAVE_DEF
 
   §2b::MAP

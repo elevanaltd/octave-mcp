@@ -156,9 +156,16 @@ class ParserError(Exception):
 class Parser:
     """OCTAVE parser with lenient input support."""
 
-    def __init__(self, tokens: list[Token]):
-        """Initialize parser with token stream."""
+    def __init__(self, tokens: list[Token], strict_structure: bool = False):
+        """Initialize parser with token stream.
+
+        Args:
+            tokens: List of tokens to parse
+            strict_structure: If True, raise ParserError on structural issues (e.g. unclosed lists)
+                            instead of leniently recovering.
+        """
         self.tokens = tokens
+        self.strict_structure = strict_structure
         self.pos = 0
         self.current_indent = 0
         self.warnings: list[dict] = []  # I4 audit trail for lenient parsing events
@@ -1006,7 +1013,8 @@ class Parser:
                 self.advance()
 
             # Check for end of list
-            if self.current().type == TokenType.LIST_END:
+            # Issue #162 Fix: Check for EOF to prevent infinite loop
+            if self.current().type in (TokenType.LIST_END, TokenType.EOF, TokenType.ENVELOPE_END):
                 break
 
             # Parse item value
@@ -1030,9 +1038,40 @@ class Parser:
                 # The loop structure handles it: it tries to parse item.
                 # If it's not a valid value start, parse_value might consume it as bare word.
                 # So we rely on LIST_END check.
+
+                # Issue #162: If we are stuck at EOF, break
+                if self.current().type == TokenType.EOF:
+                    break
+
                 pass
 
-        self.expect(TokenType.LIST_END)
+        # Expect LIST_END only if we didn't hit EOF/ENVELOPE_END prematurely
+        # This makes it lenient for unclosed lists at end of file
+        if self.current().type == TokenType.LIST_END:
+            self.advance()
+        elif self.current().type in (TokenType.EOF, TokenType.ENVELOPE_END):
+            if self.strict_structure:
+                raise ParserError(
+                    f"Unclosed list at end of content. Expected ']' before {self.current().type.name}",
+                    self.current(),
+                    "E007",
+                )
+
+            # I4 Audit: Emit warning for unclosed list at EOF/ENVELOPE_END
+            # Per I4 (Transform Auditability): lenient parsing must emit receipt
+            # This prevents silent corruption - callers know AST is incomplete
+            current_token = self.current()
+            self.warnings.append(
+                {
+                    "type": "lenient_parse",
+                    "subtype": "unclosed_list",
+                    "message": f"List not closed before {current_token.type.name}",
+                    "line": current_token.line,
+                    "column": current_token.column,
+                }
+            )
+        else:
+            self.expect(TokenType.LIST_END)
 
         # Gap_2: Capture token slice for token-witnessed reconstruction (ADR-0012)
         # Slice includes LIST_START through LIST_END (exclusive end, so pos is after ])
@@ -1100,7 +1139,15 @@ class Parser:
 
 
 def parse(content: str | list[Token]) -> Document:
-    """Parse OCTAVE content into AST.
+    """Parse OCTAVE content into AST with strict structural validation.
+
+    Ensures no silent data loss by enforcing closure of structural elements
+    (e.g., lists, blocks). Use parse_with_warnings() for lenient parsing recovery.
+
+    **Operational Note**: The CLI (`octave-mcp` command) uses strict mode by
+    default to prevent malformed documents from silently corrupting data.
+    For recovery workflows on slightly malformed inputs, use the Python API:
+    `parse_with_warnings()` which returns warnings instead of raising errors.
 
     Args:
         content: Raw OCTAVE text (lenient or canonical) or list of tokens
@@ -1109,7 +1156,7 @@ def parse(content: str | list[Token]) -> Document:
         Document AST
 
     Raises:
-        ParserError: On syntax errors
+        ParserError: On syntax errors or unclosed structural elements (e.g., E007)
     """
     raw_frontmatter: str | None = None
 
@@ -1121,7 +1168,8 @@ def parse(content: str | list[Token]) -> Document:
     else:
         tokens = content
 
-    parser = Parser(tokens)
+    # Use strict_structure=True to prevent silent data loss (Issue #162)
+    parser = Parser(tokens, strict_structure=True)
     doc = parser.parse_document()
 
     # Preserve frontmatter in Document AST for I4 auditability
