@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-01-11
+## [0.5.0] - 2026-01-11 - "Universal Anchor" Release
+
+This release introduces OCTAVE Primers for ultra-efficient agent bootstrapping and completes
+the architectural separation of the OCTAVE language specification from implementation details.
 
 ### Added
+- **OCTAVE Primers** - Ultra-compressed bootstrapping documents (40-60 tokens vs 500-800 for full skills)
+  - Universal OCTAVE definition: "Semantic DSL for LLMs"
+  - Complete primer set: literacy, compression, mastery, mythology, ultra-mythic
+  - Primer Specification v3.0.0 with 5-section structure (ESSENCE, MAP, SYNTAX, ONE_SHOT, VALIDATE)
+  - Self-referential compression (primers use the format they teach)
+  - 93.75% token savings for agent initialization
 - **Octave v6 "Dual-Lock" Schema Specification**
   - Defines strict separation of Identity (Shank) and Behavior (Conduct)
   - Supports `MODEL_TIER` (Premium/Standard/Basic) and `ACTIVATION` (Force/Essence/Element)
