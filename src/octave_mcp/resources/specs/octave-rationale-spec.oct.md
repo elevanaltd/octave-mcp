@@ -27,7 +27,7 @@ GOALS:
   4::ENABLE_GENERATION::schemas_define_valid_output_space_before_emission
 
 §2::SYNTAX_DECISIONS
-NO_CURLY_BRACES__{__}:
+NO_CURLY_BRACES:
   REASON::avoids_json_bias
   EXPLANATION::"The moment an LLM sees '{', it biases towards valid JSON, requiring quoted keys and trailing commas. OCTAVE uses indentation for hierarchy."
   BENEFIT::[template_safety_for_jinja,token_savings,no_escaping_needed]

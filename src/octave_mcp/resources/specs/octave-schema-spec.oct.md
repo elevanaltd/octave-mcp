@@ -30,7 +30,7 @@ TARGET::extraction_destination[§prefixed]
 AVAILABLE::[REQ,OPT,CONST,REGEX,ENUM,TYPE,DIR,APPEND_ONLY,RANGE,MAX_LENGTH,MIN_LENGTH,DATE,ISO8601]
 CHAIN::constraint∧constraint∧constraint[left_to_right]
 EVALUATION::fail_fast[stop_on_first_failure]
-REGEX_BRACKETS::quote_if_contains_brackets[REGEX["^[a-z]+$"]_not_REGEX[^[a-z]+$]]
+REGEX_BRACKETS::quote_if_contains_brackets[REGEX["^[a-z]+$"]_not_REGEX["^[a-z]+$"]]
 
 CONSTRAINT_SYNTAX::[
   RANGE::"RANGE[min,max]"[numeric_bounds_inclusive],

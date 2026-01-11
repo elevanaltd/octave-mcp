@@ -159,7 +159,7 @@ V5_VALIDATION_DEPRECATED::[
 ]
 
 HOLOGRAPHIC_VALIDATION::[
-  DEPRECATED::"No longer required to mirror YAML in META.SKILL"
+  DEPRECATED::no_longer_required_to_mirror_YAML_in_META_SKILL
 ]
 
 §9::FORBIDDEN

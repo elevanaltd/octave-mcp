@@ -6,7 +6,7 @@ META:
   TOKENS::"~80"
   REQUIRES::octave-core-spec
   PURPOSE::"Ultra-compressed context injection for immediate capability"
-  COMPRESSION_TIER::ULTRA[50%_compression,facts∧structure_only]
+  COMPRESSION_TIER::ULTRA["50%_compression",facts∧structure_only]
 
 §1::DEFINITION
   OCTAVE::"Semantic DSL for LLMs"  // Universal definition for all primers
