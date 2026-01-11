@@ -23,7 +23,7 @@ META:
   CORE::[
     ROLE::"Name of the agent",
     COGNITION::[LOGOS|ETHOS|PATHOS],
-    ARCHETYPE::[Primary archetype blend with {semantic_keywords}],
+    ARCHETYPE::["Primary archetype blend with semantic_keywords"],
     MODEL_TIER::[PREMIUM|STANDARD|BASIC],
     ACTIVATION::[
       FORCE::[CONSTRAINT|POSSIBILITY|STRUCTURE],

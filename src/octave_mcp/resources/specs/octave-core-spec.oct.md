@@ -96,7 +96,7 @@ PREFIX:
   //    comment     //text[to_end_of_line]
 
 §2b::LEXER_RULES
-LONGEST_MATCH::`::`_recognized_before_`:`
+LONGEST_MATCH::"::_recognized_before_:"
 UNICODE_NORMALIZATION::NFC[canonical_composition]
 ASCII_ALIASES::accepted_normalized_to_unicode
 
@@ -118,7 +118,7 @@ NUMBER::42|3.14|-1e10[no_quotes]
 BOOLEAN::true|false[lowercase_only]
 NULL::null[lowercase_only]
 LIST::[a,b,c]|[][empty_allowed]
-ESCAPES::[\",\\,\n,\t][inside_quotes_only]
+ESCAPES::["quote","backslash","newline","tab"][inside_quotes_only]
 
 §4::STRUCTURE
 INDENT::2_spaces_per_level[no_tabs_ever]
@@ -157,33 +157,33 @@ ERRORS::[
 §6b::VALIDATION_CHECKLIST
 // Quick validation checklist for OCTAVE documents (Issue #107)
 ENVELOPE::[
-  ✓_starts_with_===NAME===,
-  ✓_META_block_with_TYPE_and_VERSION,
-  ✓_ends_with_===END===
+  starts_with_===NAME===,
+  META_block_with_TYPE_and_VERSION,
+  ends_with_===END===
 ]
 STRUCTURE::[
-  ✓_2_space_indent_per_level,
-  ✓_no_tabs_anywhere,
-  ✓_keys_unique_per_block,
-  ✓_no_whitespace_around_::
+  2_space_indent_per_level,
+  no_tabs_anywhere,
+  keys_unique_per_block,
+  no_whitespace_around_double_colon
 ]
 OPERATORS::[
-  ✓_::_for_assignment,
-  ✓_:_for_blocks,
-  ✓_→_for_flow[or_->],
-  ✓_⇌_for_tension[or_vs_with_spaces],
-  ✓_∧_only_inside_brackets
+  double_colon_for_assignment,
+  single_colon_for_blocks,
+  arrow_for_flow,
+  tension_for_binary_opposition,
+  constraint_only_inside_brackets
 ]
 TYPES::[
-  ✓_true_false_lowercase,
-  ✓_null_lowercase,
-  ✓_strings_quoted_if_special_chars,
-  ✓_lists_use_square_brackets
+  true_false_lowercase,
+  null_lowercase,
+  strings_quoted_if_special_chars,
+  lists_use_square_brackets
 ]
 SCHEMA_MODE::[
-  ✓_holographic_pattern_in_brackets,
-  ✓_constraints_before_target,
-  ✓_target_uses_§_prefix
+  holographic_pattern_in_brackets,
+  constraints_before_target,
+  target_uses_section_prefix
 ]
 
 §7::CANONICAL_EXAMPLES
@@ -197,7 +197,7 @@ DATA_PATTERN:
   EMPTY_LIST::[]
   FLOW::[INIT→BUILD→TEST]
   BLOCKERS::issue_1∨issue_2
-  QUALITY::[tests::5/5,lint::ok,coverage::87%]
+  QUALITY::[tests::5/5,lint::ok,coverage::"87%"]
   PATH::src⧺components⧺auth
 
 // TENSION PATTERN (binary only, followed by resolution)
@@ -214,10 +214,10 @@ GOOD:
     NESTED::value
 
 SCHEMA_PATTERN:
-  ID::["user_123"∧REQ∧REGEX[^user_\w+$]→§INDEXER]
+  ID::["user_123"∧REQ∧REGEX["^user_\\w+$"]→§INDEXER]
   STATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,SUSPENDED]→§META]
-  EMAIL::["user@example.com"∧REQ∧TYPE(STRING)→§INDEXER]
-  ROLES::[["admin","viewer"]∧OPT∧TYPE(LIST)→§INDEXER]
+  EMAIL::["user@example.com"∧REQ∧TYPE[STRING]→§INDEXER]
+  ROLES::[["admin","viewer"]∧OPT∧TYPE[LIST]→§INDEXER]
   NOTES::["Optional context"∧OPT→§SELF]
 
 BLOCK_INHERITANCE_PATTERN:
@@ -227,9 +227,9 @@ BLOCK_INHERITANCE_PATTERN:
 
 // PRECEDENCE EXAMPLES
 PARSE_AS:
-  A⊕B→C        means (A⊕B)→C         // synthesis binds tighter
-  A⇌B→C        means (A⇌B)→C         // tension binds tighter
-  A→B→C        means A→(B→C)         // flow is right-associative
-  [A∧B∧C]      means [(A∧B)∧C]       // constraints chain left
+  A⊕B→C::"(A⊕B)→C"         // synthesis binds tighter
+  A⇌B→C::"(A⇌B)→C"         // tension binds tighter
+  A→B→C::"A→(B→C)"         // flow is right-associative
+  [A∧B∧C]::"[(A∧B)∧C]"       // constraints chain left
 
 ===END===
