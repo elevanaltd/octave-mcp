@@ -1,10 +1,13 @@
 ---
 project: OCTAVE-MCP
-version: 1.0.0
+scope: system
+phase: D1_03
+version: 1.0.1
 created: 2025-12-28
 status: approved
 approved_by: user
 approved_date: 2025-12-28
+updated: 2026-01-12
 ---
 
 # OCTAVE-MCP North Star
@@ -97,7 +100,8 @@ Each layer answers one question about information fidelity. Together they form a
 **Current Enforcement**: PARTIAL → ENFORCED
 - TIER_FORBIDDEN documented
 - E001-E006 error messages exist with rationale
-- Schema bypass now visible: `validation_status: "UNVALIDATED"` in all tool outputs
+- `validation_status` is always present in tool outputs (VISIBLE bypass surface)
+- UNVALIDATED only when schema was not applied / not found; VALIDATED/INVALID when schema is available and checked
 
 **What Breaks If Not Honored**: Attack surface for malicious instructions executed because system "helpfully" inferred intent.
 
@@ -133,9 +137,10 @@ Each layer answers one question about information fidelity. Together they form a
 - Still true in 3 years? YES - schema versioning becomes more important as systems mature
 
 **Current Enforcement**: PARTIAL (was BLOCKED)
-- All tools now include `validation_status: "UNVALIDATED"` in output
-- Schema bypass is visible, never silent
-- Full validation (VALIDATED with schema/version) deferred to P2.5
+- All tools include `validation_status` in output (VALIDATED | UNVALIDATED | INVALID)
+- Schema bypass is visible, never silent (UNVALIDATED is an explicit state)
+- When a schema is available and applied, tools record schema name/version and return VALIDATED/INVALID
+- Holographic principle note: documents may declare their own validation law via META.CONTRACT / META.GRAMMAR; enforcement is planned, not fully implemented in v0.6.0
 
 **What Breaks If Not Honored**: False sense of safety. Schema claims not enforced. Semantic drift through schema version mismatch.
 
@@ -151,7 +156,7 @@ Each layer answers one question about information fidelity. Together they form a
 - I5: Schema Sovereignty
 
 ### Flexible (implementation decisions)
-- Number of MCP tools (currently 4, planned consolidation to 3)
+- Number of MCP tools (currently 3: octave_validate, octave_write, octave_eject)
 - Specific error codes (E001-E006 pattern, content may evolve)
 - Compression tier names (NORMALIZATION, REPAIR, FORBIDDEN)
 - Specific schema formats (can add new schemas without changing immutables)
@@ -192,10 +197,10 @@ Each layer answers one question about information fidelity. Together they form a
 - **Impact**: HIGH
 - **Validation**: User feedback (GH#56) indicates strong preference
 
-### A3: 3-Tool Design Is Simpler Than 4
-- **Confidence**: 75%
+### A3: 3-Tool Surface Is Stable
+- **Confidence**: 95%
 - **Impact**: MEDIUM
-- **Validation**: Prototype consolidation, measure API complexity reduction
+- **Validation**: Implemented (v0.6.x). Keep tool count stable; treat any new tool as a breaking design decision requiring explicit justification + migration story
 
 ### A4: LLMs Comprehend OCTAVE Syntax
 - **Confidence**: 92%
@@ -225,9 +230,9 @@ Each layer answers one question about information fidelity. Together they form a
 - **Description**: Architecture spec claims features not yet implemented (schema validation, compression tiers)
 - **Mitigation**: I5 makes gaps visible; enforcement status tracked per immutable
 
-### R2: Tool Consolidation Breaking Changes
-- **Description**: 4→3 tool migration may break existing consumers
-- **Mitigation**: Migration documentation, deprecation timeline, backward compatibility period
+### R2: Validator Drift (Multiple Validators, Divergent Rules)
+- **Description**: If repo tooling and runtime validation use different rule engines, documents can "pass" one validator and fail another
+- **Mitigation**: Prefer core parser/validator as single source of truth; any extra lint rules must be explicitly labeled as style guidance, not validity
 
 ### R3: Lenient Parsing Edge Cases
 - **Description**: Lenient parser may accept semantically invalid inputs
@@ -235,21 +240,25 @@ Each layer answers one question about information fidelity. Together they form a
 
 ---
 
-## APPROVAL
-
-**Status**: APPROVED
-
+## COMMITMENT CEREMONY
+**Approved**: 2025-12-28
+**Approved By**: User
 This North Star document represents the immutable requirements for OCTAVE-MCP.
 All work must align with these requirements.
+Protection clause: if any work contradicts an immutable, STOP, CITE the violating I#, and ESCALATE.
 
-**Approved**: YES
-**Approved By**: User
-**Date**: 2025-12-28
+## APPROVAL
+**Status**: APPROVED
 
 ---
 
-## SUMMARY
+## EVIDENCE SUMMARY
+- Total Immutables: 5 (within 5-9 range)
+- Assumptions Tracked: 7
+- Commitment Ceremony: Completed (2025-12-28)
+- Current validator surface: core parser + core validator used by CLI/MCP tools; schema enforcement is partial and explicitly surfaced via validation_status
 
+## SUMMARY
 | Immutable | Name | Status |
 |-----------|------|--------|
 | I1 | Syntactic Fidelity | ENFORCED |
