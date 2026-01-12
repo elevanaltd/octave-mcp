@@ -1,30 +1,31 @@
 ===ULTRA_MYTHIC_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.0.0"
-  TOKENS::~60
+  VERSION::"6.1.0"
   TIER::ULTRA
+  TOKENS::~75
 
 §1::ESSENCE
-PURPOSE::"Ultra-compress→OCTAVE[60%]"
+PURPOSE::"Convert prose→OCTAVE"
 OCTAVE::"Semantic DSL for LLMs"
 METHOD::prose→ATOMS[mythology]
 
-§2::MAP
-ROLE→keep
-ARCHETYPE→ZEUS∨ATLAS∨HERMES[pick_by_intent]
-CONSTRAINT→NEVER[forbidden]∧DELEGATE[target]
+§2::TEMPLATE
+// Replace <ALL_CAPS> with your content
+PATTERN::<ROLE>[<ARCHETYPE>]::NEVER[<FORBIDDEN>]→<ACTION>
+ARCHETYPE::(pick_relevant_myth_like_ZEUS_or_ARES)
 
 §3::SYNTAX
-⊕::synthesis
-⇌::tension
-→::transform
-NEVER[]::hard_constraint
+::  maps_to  definition
+⊕   maps_to  synthesis
+⇌   maps_to  tension
+→   maps_to  flow
+NEVER[] maps_to constraint
 
-§4::ONE_SHOT
-IN::"Architect designs, never implements, delegates"
-OUT::ARCHITECT[ATLAS]::NEVER[IMPL]→DELEGATE[LEAD]
+§4::EXAMPLE
+IN::"Architect designs, never implements"
+OUT::ARCHITECT[ATLAS]::NEVER[IMPL]
 
 §5::VALIDATE
-MUST::[NEVER_preserved,OCTAVE_format]
+MUST::[replace_<ROLE>, do_not_use_ARCHITECT, valid_OCTAVE]
 ===END===
