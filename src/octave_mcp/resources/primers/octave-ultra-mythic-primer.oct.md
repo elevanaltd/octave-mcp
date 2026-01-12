@@ -10,8 +10,8 @@ PURPOSE::"Convert prose→OCTAVE"
 OCTAVE::"Semantic DSL for LLMs"
 METHOD::prose→ATOMS[mythology]
 
-§2::TEMPLATE
-// Replace <ALL_CAPS> with your content
+§2::MAP
+// Template guides structure (replaces <ALL_CAPS>)
 PATTERN::<ROLE>[<ARCHETYPE>]::NEVER[<FORBIDDEN>]→<ACTION>
 ARCHETYPE::(pick_relevant_myth_like_ZEUS_or_ARES)
 
@@ -22,7 +22,7 @@ ARCHETYPE::(pick_relevant_myth_like_ZEUS_or_ARES)
 →   maps_to  flow
 NEVER[] maps_to constraint
 
-§4::EXAMPLE
+§4::ONE_SHOT
 IN::"Architect designs, never implements"
 OUT::ARCHITECT[ATLAS]::NEVER[IMPL]
 
