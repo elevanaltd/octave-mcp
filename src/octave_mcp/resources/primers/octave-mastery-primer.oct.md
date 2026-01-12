@@ -19,7 +19,7 @@ REGISTER→CREATE∨UPDATE∨DELETE
 §3::SYNTAX
 ⊕::synthesis
 ⇌::tension→resolution
-§::target_reference
+"§"::target_reference
 CONTRACT[]::enforcement
 
 §4::ONE_SHOT
@@ -27,5 +27,5 @@ IN::"System validates input then processes"
 OUT::VALIDATOR[input]→PROCESSOR[data]::CONTRACT[valid∧processed]
 
 §5::VALIDATE
-MUST::[patterns_applied,archetypes_used,holographic_valid]
+MUST::[valid_OCTAVE,preserve_§_names_verbatim,patterns_applied,archetypes_used,holographic_valid]
 ===END===

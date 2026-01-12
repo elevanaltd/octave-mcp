@@ -28,5 +28,5 @@ IN::"Leader who builds systems"
 OUT::ZEUS⊕ATLAS[executive_architect]
 
 §5::VALIDATE
-MUST::[archetype_fits,atoms_combined,semantic_preserved]
+MUST::[valid_OCTAVE,preserve_§_names_verbatim,archetype_fits,atoms_combined,semantic_preserved]
 ===END===

@@ -13,7 +13,7 @@ STRUCTURE::KEY::value,[list],indent_2
 §2::MAP
 KEY::value→assignment
 [a,b,c]→list
-KEY:[\n  ]→block
+KEY:[newline_indent]→block
 
 §3::SYNTAX
 ::→assign
@@ -26,5 +26,5 @@ IN::"flow from A to B"
 OUT::A→B
 
 §5::VALIDATE
-MUST::[no_spaces_around_::,===END===]
+MUST::[valid_OCTAVE,preserve_§_names_verbatim,no_spaces_around_::,"===END==="]
 ===END===

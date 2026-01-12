@@ -8,7 +8,7 @@ META:
 §1::ESSENCE
 PURPOSE::"Compress prose→OCTAVE"
 OCTAVE::"Semantic DSL for LLMs"
-TARGET::60-80%_reduction
+TARGET::"60-80%_reduction"
 
 §2::MAP
 VERBOSE→DENSE
@@ -27,5 +27,5 @@ IN::"The system processes input data and generates output results"
 OUT::SYSTEM::input→process→output
 
 §5::VALIDATE
-MUST::[logic_intact,60%_reduction,navigable]
+MUST::[valid_OCTAVE,preserve_§_names_verbatim,logic_intact,"60%_reduction",navigable]
 ===END===

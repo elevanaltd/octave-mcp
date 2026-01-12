@@ -164,6 +164,7 @@ SAFE_WITHOUT_QUOTES::[
 §4::STRUCTURE
 INDENT::2_spaces_per_level[no_tabs_ever]
 KEYS::[A-Z,a-z,0-9,_][start_with_letter_or_underscore]
+SECTION_NAMES::preserve_exactly[§1::NAME_not_§1::N][no_compression_allowed]
 NESTING::indent_creates_child_relationship
 BLANK_LINES::allowed_for_readability
 EMPTY_BLOCK::KEY:[valid_with_no_children]

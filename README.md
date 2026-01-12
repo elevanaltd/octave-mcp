@@ -46,7 +46,7 @@ IMMUTABLES::[I1,I2,I3,I4,I5]
 
 ## What It Does
 
-This repository ships the **OCTAVE MCP Server** (v0.4.0)—a Model Context Protocol implementation that transforms OCTAVE documents from passive text into **Generative Holographic Contracts**.
+This repository ships the **OCTAVE MCP Server** (v0.6.0)—a Model Context Protocol implementation that transforms OCTAVE documents from passive text into **Generative Holographic Contracts**.
 
 OCTAVE (Olympian Common Text And Vocabulary Engine) is a deterministic document format and control plane for LLM systems. It keeps meaning durable when text is compressed, routed between agents, or projected into different views.
 
