@@ -48,6 +48,7 @@ META:
   §2e::VALIDATE
     PURPOSE::"Success criteria"
     FORMAT::MUST::[criterion_list]
+    REQUIRED::[valid_OCTAVE,preserve_§_names_verbatim]
     TOKENS::<10
 
 §3::ANTI_PATTERNS

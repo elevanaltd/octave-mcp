@@ -27,5 +27,5 @@ IN::"Architect designs, never implements"
 OUT::ARCHITECT[ATLAS]::NEVER[IMPL]
 
 §5::VALIDATE
-MUST::[replace_<ROLE>, do_not_use_ARCHITECT, valid_OCTAVE]
+MUST::[valid_OCTAVE,preserve_§_names_verbatim,replace_<ROLE>,do_not_use_ARCHITECT]
 ===END===

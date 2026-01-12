@@ -26,5 +26,5 @@ IN::"flow from A to B"
 OUT::A→B
 
 §5::VALIDATE
-MUST::[no_spaces_around_::,===END===]
+MUST::[valid_OCTAVE,preserve_§_names_verbatim,no_spaces_around_::,===END===]
 ===END===
