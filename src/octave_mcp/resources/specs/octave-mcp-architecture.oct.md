@@ -1,15 +1,34 @@
 ===OCTAVE_MCP_ARCHITECTURE===
 META:
   TYPE::SPECIFICATION
-  VERSION::"2.0.0"
+  VERSION::"2.0.1"
   STATUS::APPROVED
   IMPLEMENTATION::PARTIAL
   DATE::"2026-01-06"
   OCTAVE_VERSION::"6.0.0"
   PURPOSE::MCP_server_architecture_for_OCTAVE_productization+generative_holographic_contracts
-  IMPLEMENTATION_NOTES::"MCP tools (octave_validate, octave_write, octave_eject), canonicalization rules, and projection modes IMPLEMENTED. Constraint validation, repair logic (fix=true), target routing, and schema policy PLANNED. v2.0: Generative Constraints (JIT Grammar Compilation) and Hermetic Anchoring added."
-  IMPLEMENTATION_REF::[src/octave_mcp/mcp/validate.py,src/octave_mcp/mcp/write.py,src/octave_mcp/mcp/eject.py,src/octave_mcp/core/lexer.py,src/octave_mcp/core/projector.py,src/octave_mcp/core/hydrator.py]
-  CRITICAL_GAPS::[constraint_validation,target_routing,repair_logic,builtin_schema_loading,error_message_formatting,jit_grammar_compilation,hermetic_standard_resolution]
+  IMPLEMENTATION_NOTES::"This spec is normative for OCTAVE-MCP behavior. v0.6.0 state: MCP tool surface exists (octave_validate, octave_write, octave_eject) with I5-visible validation_status and canonicalization. Constraint evaluation and holographic schema extraction are partially implemented (SchemaDefinition + ConstraintChain evaluation). Target routing is implemented as an audit surface (routing_log) but not as a full execution router. Generative holographic contracts (META.CONTRACT/META.GRAMMAR) are a v6 principle; JIT grammar compilation is not yet enforced by tools (compiler is stub). Hermetic anchoring is implemented for vocabulary hydration and schema reference resolution, but hermetic schema validation is not yet a hard gate."
+  IMPLEMENTATION_REF::[
+    src/octave_mcp/mcp/validate.py,
+    src/octave_mcp/mcp/write.py,
+    src/octave_mcp/mcp/eject.py,
+    src/octave_mcp/core/lexer.py,
+    src/octave_mcp/core/parser.py,
+    src/octave_mcp/core/emitter.py,
+    src/octave_mcp/core/validator.py,
+    src/octave_mcp/core/schema_extractor.py,
+    src/octave_mcp/schemas/loader.py,
+    src/octave_mcp/core/projector.py,
+    src/octave_mcp/core/hydrator.py,
+    src/octave_mcp/core/grammar.py
+  ]
+  CRITICAL_GAPS::[
+    meta_contract_grammar_extraction,
+    jit_grammar_compilation,
+    schema_policy_unknown_fields,
+    repair_tier_repair_completeness,
+    projection_mode_field_filtering_completeness
+  ]
 
 ---
 
@@ -66,8 +85,7 @@ CRITICAL_BOUNDARY::tolerance_is_syntactic_not_semantic
 §3::LENIENT_GRAMMAR
 
 ACCEPTED:
-  SCHEMA_SELECTOR::@<schema_id>[@<version>][required_if_no_envelope]
-  ENVELOPE::===<NAME>===[optional_if_schema_selector]
+  ENVELOPE::"===NAME==="[preferred_for_standalone_docs]
   ASSIGNMENT::KEY::value[double_colon_required]
   FLEXIBLE_ASSIGNMENT::KEY :: value[whitespace_tolerated]
   ASCII_FLOW::A -> B[normalized_to→]
@@ -79,11 +97,17 @@ ACCEPTED:
   ASCII_TARGET_SELECTOR::#TARGET[normalized_to§TARGET]
   ASCII_FLOW_TARGET::A -> #TARGET[normalized_to→§TARGET]
 
+RESERVED_FOR_FUTURE:
+  SCHEMA_SELECTOR::"@SCHEMA_ID[@VERSION]"[reserved_for_inline_schema_selection]
+
+TOOL_LEVEL_SCHEMA_SELECTION[v0.6.0]:
+  MCP_SCHEMA_PARAM::"schema is selected by tool parameter (e.g., octave_validate(schema=...))"
+  NO_SCHEMA_INFERENCE::"tools do not infer schema/type from document content"
+
 REJECTED[errors_not_repairs]:
   SINGLE_COLON::key: value[ERROR::ambiguous_with_block_operator]
-  EQUALS::key = value[ERROR::not_OCTAVE_syntax]
+  EQUALS::"key = value"[ERROR::not_OCTAVE_syntax]
   TABS::any_tab_character[ERROR::indent_must_be_2_spaces]
-  MISSING_SCHEMA::no_@selector_and_no_envelope[ERROR::type_unknown]
 
 §4::CANONICALIZATION_RULES
 
@@ -103,7 +127,7 @@ RULE_TABLE:
   R10::NFC_normalization::canonical_unicode::no
 
 PROPERTIES:
-  IDEMPOTENT::canon(canon(x))==canon(x)
+  IDEMPOTENT::"canon(canon(x))==canon(x)"
   DETERMINISTIC::same_input→same_output_always
   TOTAL::every_valid_lenient_input_has_exactly_one_canonical_form
 
@@ -122,7 +146,7 @@ TIER_NORMALIZATION[always_on]:
     envelope_completion
   ]
 
-TIER_REPAIR[opt_in_via_fix=true]:
+TIER_REPAIR[opt_in_via_fix_true]:
   SCOPE::schema_bounded_value_transforms
   SEMANTICS::may_change_value[not_structure]
   LOGGING::required_with_before_after
@@ -158,16 +182,14 @@ FORBIDDEN_RATIONALE::[
 // Mandatory. No silent drift.
 
 STRUCTURE:
-  REPAIRS::[
-    {
-      RULE_ID::"R01",
-      BEFORE::"->" ,
-      AFTER::"→",
-      TIER::NORMALIZATION,
-      SAFE::true,
+  REPAIRS:
+    ENTRY:
+      RULE_ID::"R01"
+      BEFORE::"->"
+      AFTER::"→"
+      TIER::NORMALIZATION
+      SAFE::true
       SEMANTICS_CHANGED::false
-    }
-  ]
 
 REQUIREMENTS::[
   every_change_logged,
@@ -179,6 +201,13 @@ REQUIREMENTS::[
 §7::MCP_TOOL_SURFACE
 
 // Three tools: validate, write, eject. Orthogonal concerns.
+// This section is normative for the v0.6.0 tool envelopes.
+// Additive fields are allowed; breaking removals require a spec bump.
+
+ENVELOPE_CONVENTIONS:
+  STATUS::"success"|"error"[string]
+  I5::validation_status_always_present[VALIDATED|UNVALIDATED|INVALID]
+  CANONICALIZATION::tools_may_return_canonical_text_or_hashes_or_both
 
 TOOL_VALIDATE:
   NAME::octave_validate
@@ -187,16 +216,39 @@ TOOL_VALIDATE:
   PARAMETERS:
     CONTENT::["OCTAVE content to validate"∧OPT∧mutually_exclusive_with_FILE_PATH]
     FILE_PATH::["path to OCTAVE file to validate"∧OPT∧mutually_exclusive_with_CONTENT]
-    SCHEMA::["DECISION_LOG"∧REQ∧validates_against_schema_repo]
+    SCHEMA::["TEST_HOLOGRAPHIC"∧REQ∧validates_against_schema_repo]
     FIX::[false∧OPT∧BOOLEAN→apply_repairs_to_canonical_output]
+    DEBUG_GRAMMAR::[false∧OPT∧BOOLEAN→include_compiled_constraint_debug_info]
 
   RETURNS:
-    CANONICAL::["===DOC===\n..."∧REQ→validated_OCTAVE]
-    VALID::[true∧REQ∧BOOLEAN→whether_document_passed_validation]
-    VALIDATION_ERRORS::[[...]∧REQ→schema_violations_found]
-    REPAIR_LOG::[[...]∧REQ→transformation_log_always_present]
+    STATUS::["success"∧REQ∧ENUM[success,error]]
+    CANONICAL::["===DOC===\n..."∧REQ→canonical_OCTAVE]
+    REPAIRS::[[...]∧REQ→transform_log_always_present]
+    REPAIR_LOG::[[...]∧REQ→alias_of_REPAIRS]
+    WARNINGS::[[...]∧REQ]
+    ERRORS::[[...]∧REQ]
 
-  PIPELINE::[PREPARSE→PARSE→NORMALIZE→VALIDATE→REPAIR(if_fix)→VALIDATE]
+    VALIDATION_STATUS::["UNVALIDATED"∧REQ∧ENUM[VALIDATED,UNVALIDATED,INVALID]]
+    VALID::[false∧REQ∧BOOLEAN→derived_from_VALIDATION_STATUS]
+    VALIDATION_ERRORS::[[...]∧REQ→schema_violations_found]
+
+    SCHEMA_NAME::["TEST_HOLOGRAPHIC"∧OPT→present_when_schema_loaded]
+    SCHEMA_VERSION::["1.0.0"∧OPT→present_when_schema_loaded]
+    ROUTING_LOG::[[...]∧OPT→audit_surface_for_targets]
+    DEBUG_INFO::["..."∧OPT→present_when_DEBUG_GRAMMAR_true]
+
+  PIPELINE::[PARSE_WITH_WARNINGS→NORMALIZE→VALIDATE→REPAIR_if_fix→VALIDATE→EMIT]
+
+  NOTES:
+    INSTANCE_MODEL[v0.6.0]::[
+      "SchemaDefinition validation is section-scoped, not whole-document scoped",
+      "A SchemaDefinition named X applies only to Block sections whose key is exactly X",
+      "Example schema X='TEST_HOLOGRAPHIC' validates blocks like: TEST_HOLOGRAPHIC: ...",
+      "Root-level assignments outside such a block are not validated by that SchemaDefinition",
+      "META validation (required keys, types) is separate and uses builtin dict schemas when present",
+      "If whole-document validation is desired, define an explicit top-level block to serve as the schema instance"
+    ]
+    META_VALIDATION::"Builtin META schema validation exists; full policy enforcement is still evolving"
 
 TOOL_WRITE:
   NAME::octave_write
@@ -206,15 +258,28 @@ TOOL_WRITE:
     TARGET_PATH::["file path to write to"∧REQ]
     CONTENT::["full content for new files or overwrites"∧OPT∧mutually_exclusive_with_CHANGES]
     CHANGES::["dictionary of field updates for existing files"∧OPT∧mutually_exclusive_with_CONTENT]
-    SCHEMA::["DECISION_LOG"∧OPT∧for_validation]
+    SCHEMA::["TEST_HOLOGRAPHIC"∧OPT∧for_validation]
     MUTATIONS::["META field overrides"∧OPT∧applies_to_both_modes]
     BASE_HASH::["SHA-256 hash for consistency check (CAS)"∧OPT]
+    DEBUG_GRAMMAR::[false∧OPT∧BOOLEAN→include_compiled_constraint_debug_info]
 
   RETURNS:
-    SUCCESS::[true∧REQ∧BOOLEAN→whether_write_succeeded]
-    PATH::["absolute path to written file"∧REQ]
-    DIFF::["summary of changes made"∧REQ]
-    CANONICAL::["final canonical content"∧REQ]
+    STATUS::["success"∧REQ∧ENUM[success,error]]
+    PATH::["path to written file"∧REQ]
+    CANONICAL_HASH::["sha256"∧REQ]
+    CORRECTIONS::[[...]∧REQ→audit_log_for_normalization]
+    DIFF::["summary"∧REQ]
+    ERRORS::[[...]∧REQ]
+
+    VALIDATION_STATUS::["UNVALIDATED"∧REQ∧ENUM[VALIDATED,UNVALIDATED,INVALID]]
+    SCHEMA_NAME::["TEST_HOLOGRAPHIC"∧OPT→present_when_schema_loaded]
+    SCHEMA_VERSION::["1.0.0"∧OPT→present_when_schema_loaded]
+    VALIDATION_ERRORS::[[...]∧OPT→present_when_INVALID]
+    DEBUG_INFO::["..."∧OPT→present_when_DEBUG_GRAMMAR_true]
+
+  NOTES:
+    CANONICAL_CONTENT_RETURN::"Current implementation returns canonical_hash, not canonical content; returning content may be added later behind an explicit flag"
+    HERMETIC_SCHEMA_REFERENCES::"Schema may be referenced via frozen@sha256:... or latest; existence may be checked even when validation is not enforced"
 
 TOOL_EJECT:
   NAME::octave_eject
@@ -222,18 +287,23 @@ TOOL_EJECT:
 
   PARAMETERS:
     CONTENT::["canonical OCTAVE"∧OPT→null_for_template_generation]
-    SCHEMA::["DECISION_LOG"∧REQ∧for_validation_or_template]
+    SCHEMA::["DEBATE_TRANSCRIPT"∧REQ∧for_template_and_projection_context]
     MODE::["authoring"∧OPT∧ENUM[canonical,authoring,executive,developer]]
     FORMAT::["octave"∧OPT∧ENUM[octave,json,yaml,markdown]]
 
   RETURNS:
-    OUTPUT::["@DECISION_LOG\n..."∧REQ→formatted_content]
+    OUTPUT::["..."∧REQ→formatted_content]
     LOSSY::[true∧REQ∧BOOLEAN→true_if_mode_discards_fields]
-    FIELDS_OMITTED::[[...]∧OPT→list_of_dropped_fields_if_lossy]
+    FIELDS_OMITTED::[[...]∧REQ→list_of_dropped_fields_if_lossy]
+    VALIDATION_STATUS::["UNVALIDATED"∧REQ∧ENUM[VALIDATED,UNVALIDATED,INVALID]]
+
+  NOTES:
+    PROJECTION_FILTERS::"All output formats must reflect the projection filter, not only OCTAVE output"
 
 §8::ERROR_MESSAGES
 
 // Educational, not just informative. Defends against forbidden repair pressure.
+// NOTE: Implementations may wrap core spec errors with transport-level codes.
 
 PATTERN::ERROR_ID::MESSAGE::RATIONALE
 
@@ -241,8 +311,8 @@ ERRORS:
   E001::"Single colon assignment not allowed. Use KEY::value (double colon)."::
     "OCTAVE uses :: for assignment because : is the block operator. This prevents ambiguity."
 
-  E002::"Schema selector required. Add @SCHEMA_NAME or explicit ===ENVELOPE===."::
-    "OCTAVE cannot infer document type. Schema selection must be explicit for safety."
+  E002::"Schema selection required. Provide schema via tool parameter (MCP) or use explicit envelope for standalone documents."::
+    "OCTAVE tools do not infer document type. Schema selection must be explicit for safety."
 
   E003::"Cannot auto-fill missing required field '{field}'. Author must provide value."::
     "Required fields represent author intent. The system cannot guess what you meant."
@@ -255,6 +325,13 @@ ERRORS:
 
   E006::"Ambiguous enum match for '{value}'. Multiple options: {options}. Be explicit."::
     "Schema-driven repair only works when there's exactly one valid correction."
+
+TRANSPORT_WRAPPERS:
+  E_TOKENIZE::"Tokenization error"[may_include_spec_code]
+  E_PARSE::"Parse error"[may_include_spec_code]
+  E_INPUT::"Invalid parameter combination"[content_XOR_file_path]
+
+WRAPPER_RULE::"When wrapping, preserve the underlying spec error as spec_code when available"
 
 §9::PROJECTION_MODES
 
@@ -338,7 +415,7 @@ PHASE_3[ecosystem]:
 PROPERTIES_TO_TEST::[
   canonicalize_is_idempotent,
   parse_AST_is_unique[no_ambiguity],
-  lenient_round_trip[ingest(eject(doc,canonical))==doc],
+  lenient_round_trip["ingest(eject(doc,canonical))==doc"],
   fix_true_never_adds_new_fields,
   forbidden_repairs_always_error,
   repair_log_always_present,
@@ -361,7 +438,7 @@ POLICY::[
   LENIENT_MODE::warn_unknown_fields[logged_only]
 ]
 
-SCOPE::initial_META_only[v1];_document_body_in_v1.1
+SCOPE::initial_META_only[v1]→document_body_in_v1.1
 
 ERROR::
   E007::"Unknown field '{field}' not allowed in STRICT mode."::
@@ -460,6 +537,11 @@ BENEFITS::[
   deterministic_output_structure,
   self_describing_documents
 ]
+
+CURRENT_STATE[v0.6.0]:
+  COMPILER::stub_only[compile_document_grammar]
+  TOOLING::validate_and_write_do_not_enforce_meta_contracts_yet
+  PARSING_LIMITATION::"Constructor payload for IDENTIFIER[...] in META (e.g., CONTRACT::HOLOGRAPHIC[...]) may not be preserved in AST; full holographic enforcement requires meta constructor preservation"
 
 §17::HERMETIC_ANCHORING
 

@@ -37,16 +37,21 @@ Features:
 - Preserves document structure
 
 ### `octave-validator.py`
-**Purpose**: Comprehensive OCTAVE v5.1.0 validator
-**Note**: More complex validation with operator checks and v5.1.0 feature support
+**Purpose**: Repo validator that wraps the OCTAVE-MCP core parser/validator
 
-**v5.1.0 Features Supported**:
-- Constraint chaining with `&` operator inside brackets: `["val"&REQ&REGEX->§TARGET]`
-- Plus operator `+` chaining now allowed: `A+B+C`
-- Inline maps: `[k::v,k2::v2]`
-- Empty blocks: `KEY:` with no children
-- Block inheritance: `BLOCK[->§TARGET]:` with children
- - Target selector normalization: `A -> #TARGET` canonicalizes to `A→§TARGET`
+This tool exists to prevent drift between:
+- Runtime validation (CLI/MCP tools, `src/octave_mcp/core/*`)
+- Repo/document validation (e.g., `.hestai-sys/library/**`)
+
+Supports:
+- Required envelope markers (`===NAME=== ... ===END===`)
+- Profile-based YAML frontmatter policy (HestAI agent/skill docs)
+  - Default: missing YAML frontmatter is a warning
+  - Use `--require-frontmatter` to hard-fail missing YAML frontmatter
+- Core parsing via `parse_with_warnings`
+  - Note: non-protocol profiles may apply a small lenient preprocess for HestAI dialect tokens (e.g., quoting NAME{tag})
+- Minimal META sanity (TYPE + VERSION required)
+- Optional schema validation via `--schema` (when schemas exist)
 
 ## Round-Trip Example
 

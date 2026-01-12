@@ -5,7 +5,7 @@ META:
   PROJECT::"OCTAVE-MCP"
   STATUS::APPROVED
   APPROVED_DATE::"2025-12-28"
-  UPDATED::"2025-12-30"
+  UPDATED::"2026-01-12"
   FULL_DOC::".hestai/workflow/000-OCTAVE-MCP-NORTH-STAR.md"
 CORE_IDENTITY::"OCTAVE-MCP is a loss accounting system for LLM communication"
 STRUCTURAL_PATTERN::LAYERED_FIDELITY
@@ -35,14 +35,14 @@ I5::SCHEMA_SOVEREIGNTY
 STATEMENT::validation_status_visible_in_output
 RATIONALE::if_you_cant_validate_say_so
 STATUS::PARTIAL[validation_status_field_added]
-ASSUMPTIONS::[[A1::SCHEMA_VALIDATION_VALUABLE],[confidence_85],"→HIGH_IMPACT",[A2::LENIENT_PARSING_PREFERRED],[confidence_90],"→VALIDATED",[A3::THREE_TOOL_DESIGN_SIMPLER],[confidence_75],"→MEDIUM_IMPACT",[A4::LLM_COMPREHENDS_OCTAVE],[confidence_92],"→VALIDATED",[A5::TOKEN_REDUCTION_SIGNIFICANT],[confidence_95],"→VALIDATED",[A6::REPAIRLOG_STRUCTURE_SUFFICIENT],[confidence_70],"→MEDIUM_IMPACT",[A7::PARSE_ERROR_CONTRACT_FORMALIZABLE],[confidence_85],"→MEDIUM_IMPACT"]
+ASSUMPTIONS::[[A1::SCHEMA_VALIDATION_VALUABLE],[confidence_85],"→HIGH_IMPACT",[A2::LENIENT_PARSING_PREFERRED],[confidence_90],"→VALIDATED",[A3::THREE_TOOL_SURFACE_STABLE],[confidence_95],"→VALIDATED",[A4::LLM_COMPREHENDS_OCTAVE],[confidence_92],"→VALIDATED",[A5::TOKEN_REDUCTION_SIGNIFICANT],[confidence_95],"→VALIDATED",[A6::REPAIRLOG_STRUCTURE_SUFFICIENT],[confidence_70],"→MEDIUM_IMPACT",[A7::PARSE_ERROR_CONTRACT_FORMALIZABLE],[confidence_85],"→MEDIUM_IMPACT"]
 SCOPE_BOUNDARIES:
   IS::[deterministic_document_format_processor,loss_accounting_system_for_LLM_communication,lenient_to_canonical_normalizer,schema_validation_framework,audit_trail_generator]
   IS_NOT::[LLM_or_reasoning_engine,agent_orchestration_system,database_or_persistence_layer,identity_authentication_system]
   CONSTRAINED_VARIABLES:
     IMMUTABLE::[I1,I2,I3,I4,I5]
-    FLEXIBLE::[tool_count,error_codes,tier_names,schema_formats]
+    FLEXIBLE::[tool_count_3_stable,error_codes,tier_names,schema_formats]
     NEGOTIABLE::[default_strictness,feature_priority,integration_timeline]
-    RISKS::[[R1::spec_claims_vs_implementation],[[mitigation::I5_makes_gaps_visible]],[R2::tool_consolidation_breaking_changes],[[mitigation::migration_docs]],[R3::lenient_parsing_edge_cases],[[mitigation::I3_errors_not_guesses]]]
+    RISKS::[[R1::spec_claims_vs_implementation],[[mitigation::I5_makes_gaps_visible]],[R2::validator_drift_multiple_validators],[[mitigation::single_source_of_truth_core_parser_validator]],[R3::lenient_parsing_edge_cases],[[mitigation::I3_errors_not_guesses]]]
     APPROVAL::APPROVED[2025-12-28]
 ===END===

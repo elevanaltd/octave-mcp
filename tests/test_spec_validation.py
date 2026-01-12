@@ -19,9 +19,9 @@ import pytest
 
 from octave_mcp.core.parser import ParserError, parse_with_warnings
 
-# Discover all OCTAVE spec files
+# Discover all OCTAVE spec files (including architecture docs, vocabularies, and schemas)
 SPECS_DIR = Path(__file__).parent.parent / "src" / "octave_mcp" / "resources" / "specs"
-SPEC_FILES = sorted(SPECS_DIR.glob("octave-*-spec.oct.md"))
+SPEC_FILES = sorted(SPECS_DIR.rglob("*.oct.md"))
 
 # Known issues - specs that have parsing problems
 # Format: {filename: "reason for exclusion"}
@@ -84,24 +84,19 @@ def test_spec_parses_successfully(spec_file: Path):
 
 
 def test_all_specs_discovered():
-    """Ensure test suite discovers all expected spec files.
-
-    This meta-test validates that the test discovery glob pattern
-    correctly finds all OCTAVE specification files.
-    """
-    # We expect at least 8 spec files based on current repository
-    assert len(SPEC_FILES) >= 8, (
-        f"Expected at least 8 spec files, found {len(SPEC_FILES)}\n"
-        f"Files discovered: {[f.name for f in SPEC_FILES]}\n"
+    """Ensure test suite discovers all expected OCTAVE .oct.md spec documents."""
+    # This test is intentionally broad: we validate that *all* .oct.md files under
+    # resources/specs/ are parseable by the parser they document.
+    assert len(SPEC_FILES) >= 10, (
+        f"Expected at least 10 spec documents, found {len(SPEC_FILES)}\n"
+        f"Files discovered: {[f.relative_to(SPECS_DIR) for f in SPEC_FILES]}\n"
         f"Check SPECS_DIR path: {SPECS_DIR}"
     )
 
-    # Verify all discovered files exist
     for spec_file in SPEC_FILES:
         assert spec_file.exists(), f"Spec file not found: {spec_file}"
-        assert spec_file.suffix == ".md", f"Invalid spec file extension: {spec_file}"
-        assert "octave-" in spec_file.name, f"Invalid spec file naming: {spec_file}"
-        assert "-spec.oct.md" in spec_file.name, f"Invalid spec file naming: {spec_file}"
+        assert spec_file.is_file(), f"Spec path is not a file: {spec_file}"
+        assert spec_file.name.endswith(".oct.md"), f"Invalid OCTAVE spec extension: {spec_file}"
 
 
 def test_no_known_issues_when_all_fixed():
