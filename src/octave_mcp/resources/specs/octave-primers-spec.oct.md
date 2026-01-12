@@ -18,7 +18,7 @@ META:
   COMPRESSION_REF::skills/octave-compression[§1b::ULTRA_TIER]
 
 §2::MANDATORY_STRUCTURE
-  SEQUENCE::===NAME_PRIMER===[META,§1::ESSENCE,§2::MAP,§3::SYNTAX,§4::ONE_SHOT,§5::VALIDATE,===END===]
+  SEQUENCE::===NAME===[META,§1::ESSENCE,§2::MAP,§3::SYNTAX,§4::ONE_SHOT,§5::VALIDATE,===END===]
 
   §2a::ESSENCE
     PURPOSE::"Skill-specific action + OCTAVE definition"
