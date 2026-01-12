@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-01-12 - "Structural Integrity" Release
+
+This release strengthens OCTAVE's structural validation, fixes critical parser issues, and refines the specification suite through dogfooding and systematic cleanup.
+
+### Added
+- **Section Name Preservation Rule** - Three-layer defense preventing compression of section identifiers
+  - Core spec: `SECTION_NAMES::preserve_exactly` in §4::STRUCTURE
+  - Primers spec: Required validation items in §2e::VALIDATE
+  - All primers: `preserve_§_names_verbatim` in §5::VALIDATE sections
+  - Prevents §1::ESSENCE → §1::ESS compression that breaks parsers
+- **Strict Structural Validation** - Parser now has `strict_structure` mode
+  - `parse()` uses strict mode by default (fail fast on malformed documents)
+  - `parse_with_warnings()` remains lenient for recovery workflows
+  - Exported `parse_with_warnings()` for discoverability
+- **CI Specification Validation** - All OCTAVE spec files now validated in CI pipeline
+  - Ensures specs comply with their own syntax rules (dogfooding)
+  - Catches regressions in specification quality
+
+### Changed
+- **Specification Naming Convention** - Renamed all spec files for clarity
+  - `octave-6-llm-*` → `octave-*-spec` (e.g., `octave-core-spec.oct.md`)
+  - Updated all REQUIRES references across specification suite
+  - Cleaner, more intuitive naming pattern
+- **Primer Structural Alignment** - Ultra-mythic primer updated to v6.1.0
+  - §2::TEMPLATE → §2::MAP (matches spec structure)
+  - §4::EXAMPLE → §4::ONE_SHOT (matches spec structure)
+  - Simplified primer naming: `===NAME===` instead of `===NAME_PRIMER===`
+- **Enhanced Core Specification** - Comprehensive quoting rules and holographic principle documentation
+  - Added §3b::QUOTING_RULES with explicit guidance
+  - Enhanced §6b::VALIDATION_CHECKLIST
+  - Clarified holographic contract principles
+
+### Fixed
+- **Parser Silent Data Loss** (Issue #162) - Critical fix for unclosed lists at EOF
+  - Parser now raises E007 error in strict mode for unclosed lists
+  - Lenient mode emits I4 warning with audit trail
+  - Prevents silent acceptance of malformed documents
+  - Constitutional compliance: I3 (Mirror Constraint), I4 (Transform Auditability)
+- **Specification Dogfooding** - Fixed syntax violations in 10+ spec files
+  - All specs now comply with octave-core-spec rules
+  - Systematic cleanup of quoting, spacing, structure issues
+  - Validates OCTAVE's ability to describe itself correctly
+- **Test Infrastructure** - Added timeout protection to spec validation tests
+  - Prevents CI hangs on malformed specifications
+  - 1221 tests passing, 9 skipped
+
+### Quality Gates
+- All changes reviewed by Critical Review Specialist (Gemini/LOGOS)
+- Critical Engineer approval on parser fixes
+- Constitutional compliance verified: I1, I3, I4, I5
+- Strict mode prevents I3 violations (accepting incomplete structures)
+
 ## [0.5.0] - 2026-01-11 - "Universal Anchor" Release
 
 This release introduces OCTAVE Primers for ultra-efficient agent bootstrapping and completes
@@ -149,7 +201,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/elevanaltd/octave-mcp/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.3.1...v0.4.0
