@@ -19,7 +19,7 @@ REGISTER→CREATE∨UPDATE∨DELETE
 §3::SYNTAX
 ⊕::synthesis
 ⇌::tension→resolution
-§::target_reference
+"§"::target_reference
 CONTRACT[]::enforcement
 
 §4::ONE_SHOT

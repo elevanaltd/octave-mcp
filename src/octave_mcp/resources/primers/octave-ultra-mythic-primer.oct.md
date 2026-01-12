@@ -11,9 +11,9 @@ OCTAVE::"Semantic DSL for LLMs"
 METHOD::prose→ATOMS[mythology]
 
 §2::MAP
-// Template guides structure (replaces <ALL_CAPS>)
-PATTERN::<ROLE>[<ARCHETYPE>]::NEVER[<FORBIDDEN>]→<ACTION>
-ARCHETYPE::(pick_relevant_myth_like_ZEUS_or_ARES)
+// Template guides structure (replace ROLE/ARCHETYPE/FORBIDDEN/ACTION)
+PATTERN::ROLE[ARCHETYPE]::NEVER[FORBIDDEN]→ACTION
+ARCHETYPE::pick_relevant_myth[ZEUS,ARES,ATLAS,HERMES]
 
 §3::SYNTAX
 ::  maps_to  definition
@@ -27,5 +27,5 @@ IN::"Architect designs, never implements"
 OUT::ARCHITECT[ATLAS]::NEVER[IMPL]
 
 §5::VALIDATE
-MUST::[valid_OCTAVE,preserve_§_names_verbatim,replace_<ROLE>,do_not_use_ARCHITECT]
+MUST::[valid_OCTAVE,preserve_§_names_verbatim,replace_ROLE_placeholders,do_not_use_ARCHITECT]
 ===END===
