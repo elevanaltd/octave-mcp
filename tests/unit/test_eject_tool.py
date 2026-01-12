@@ -9,6 +9,7 @@ Tests projection modes:
 
 import pytest
 
+from octave_mcp.core.parser import parse
 from octave_mcp.mcp.eject import EjectTool
 
 
@@ -139,6 +140,15 @@ TESTS::passing
         assert result["lossy"] is False
         # Template generation returns minimal structure
         assert len(result["output"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_eject_template_is_parseable_octave(self, eject_tool):
+        """Template output must be parseable OCTAVE (dogfooding)."""
+        result = await eject_tool.execute(content=None, schema="DEBATE_TRANSCRIPT", format="octave")
+        doc = parse(result["output"])
+        assert doc is not None
+        assert doc.meta is not None
+        assert doc.meta.get("TYPE") == "DEBATE_TRANSCRIPT"
 
     @pytest.mark.asyncio
     async def test_eject_default_mode_is_canonical(self, eject_tool):

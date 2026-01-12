@@ -233,7 +233,7 @@ META:
   TYPE::{schema_name}
   VERSION::"1.0"
 
-# Template generated for schema: {schema_name}
+// Template generated for schema: {schema_name}
 ===END==="""
             # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
             # "Schema bypass shall be visible, never silent" - North Star I5
@@ -251,7 +251,7 @@ META:
             # If parsing fails, return error
             # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
             return {
-                "output": f"# Parse error: {str(e)}\n{content}",
+                "output": f"// Parse error: {str(e)}\n{content}",
                 "lossy": False,
                 "fields_omitted": [],
                 "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
