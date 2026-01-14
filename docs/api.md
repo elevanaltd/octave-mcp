@@ -244,6 +244,94 @@ result = await client.call_tool(
 
 Direct Python API for programmatic integration without MCP.
 
+### Public Exports
+
+The octave-mcp package exposes the following public API exports for external use:
+
+#### Core Functions
+```python
+from octave_mcp import parse, emit, tokenize, repair, project
+```
+- `parse(content: str) -> Document` - Parse OCTAVE text to document tree
+- `emit(doc: Document, mode: str = "canonical") -> str` - Emit document as OCTAVE
+- `tokenize(content: str) -> list[Token]` - Tokenize OCTAVE text
+- `repair(doc: Document, schema: Schema) -> tuple[Document, RepairLog]` - Apply repairs
+- `project(doc: Document, mode: str) -> Document` - Project document to view
+
+#### Core Classes
+```python
+from octave_mcp import Parser, Validator, TokenType, Token
+```
+
+#### AST Nodes
+```python
+from octave_mcp.core.ast import (
+    Document, Block, Assignment, Section,
+    ListValue, InlineMap, Absent
+)
+```
+
+#### Hydration System
+```python
+from octave_mcp import hydrate, HydrationPolicy, VocabularyRegistry
+```
+- `hydrate(doc: Document, policy: HydrationPolicy) -> Document` - Hydrate document
+- `HydrationPolicy` - Configuration for hydration behavior
+- `VocabularyRegistry` - Registry for vocabulary patterns
+
+#### Schema System
+```python
+from octave_mcp import (
+    SchemaDefinition, FieldDefinition,
+    extract_schema_from_document
+)
+```
+- `SchemaDefinition` - Schema structure definition
+- `FieldDefinition` - Individual field definition
+- `extract_schema_from_document(doc: Document) -> SchemaDefinition` - Extract schema
+
+#### Repair System (I4)
+```python
+from octave_mcp import RepairLog, RepairEntry, RepairTier
+```
+- `RepairLog` - Collection of repair operations
+- `RepairEntry` - Individual repair record
+- `RepairTier` - Classification of repair type (NORMALIZATION or REPAIR)
+
+#### Routing System (I4)
+```python
+from octave_mcp import RoutingLog, RoutingEntry
+```
+- `RoutingLog` - Transformation routing audit trail
+- `RoutingEntry` - Individual routing record
+
+#### Document Sealing
+```python
+from octave_mcp import seal_document, verify_seal, SealVerificationResult
+```
+- `seal_document(doc: Document) -> Document` - Add integrity seal
+- `verify_seal(doc: Document) -> SealVerificationResult` - Verify seal
+- `SealVerificationResult` - Verification outcome details
+
+#### Exceptions
+```python
+from octave_mcp import (
+    OctaveError, ParseError, ValidationError,
+    SchemaError, RepairError, SealError,
+    HydrationError, ProjectionError, EmitError
+)
+```
+
+#### Operators
+```python
+from octave_mcp import (
+    OCTAVE_OPERATORS,
+    OP_ASSIGN, OP_BLOCK, OP_FLOW, OP_SYNTHESIS,
+    OP_CONCAT, OP_TENSION, OP_ALTERNATIVE,
+    OP_CONSTRAINT, OP_TARGET, OP_REFERENCE
+)
+```
+
 ### Parser Module
 
 `octave_mcp.core.parser`
