@@ -38,7 +38,15 @@ DEV_SETUP::docs/guides/development-setup.md
 SPECS::src/octave_mcp/resources/specs/
 SKILLS::src/octave_mcp/resources/skills/
 PRIMERS::src/octave_mcp/resources/primers/
-IMMUTABLES::[I1,I2,I3,I4,I5]
+
+// Five core immutables that define OCTAVE's behavior
+IMMUTABLES::[
+  I1::SYNTACTIC_FIDELITY,     // Preserve semantic meaning exactly
+  I2::DETERMINISTIC_ABSENCE,  // Distinguish absent vs null vs default
+  I3::MIRROR_CONSTRAINT,      // Reflect only what exists, create nothing
+  I4::TRANSFORM_AUDITABILITY, // Log every transformation with IDs
+  I5::SCHEMA_SOVEREIGNTY      // Make validation status visible
+]
 ===END===
 ```
 
