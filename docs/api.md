@@ -709,4 +709,4 @@ Equivalent Python:
 
 - [Usage Guide](usage.md) - Detailed usage examples and workflows
 - [MCP Configuration](mcp-configuration.md) - Setup guide for MCP clients
-- [OCTAVE Specification](https://github.com/elevanaltd/octave-mcp/tree/main/specs) - Full protocol specification
+- [OCTAVE Specification](https://github.com/elevanaltd/octave-mcp/tree/main/src/octave_mcp/resources/specs) - Full protocol specification
