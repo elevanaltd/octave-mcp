@@ -159,7 +159,7 @@ the architectural separation of the OCTAVE language specification from implement
   - Sealing: `seal_document()`, `verify_seal()`, `SealVerificationResult`
   - Exceptions: 9 exception types for granular error handling
   - Operators: `OCTAVE_OPERATORS` dict + 10 `OP_*` constants
-- Comprehensive API documentation in `docs/public-api-reference.md`
+- Comprehensive API documentation in `docs/api.md`
 - PyPI package distribution
 
 ### Fixed
