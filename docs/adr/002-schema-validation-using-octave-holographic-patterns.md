@@ -16,7 +16,7 @@ Without schema validation:
 - "BLOCK not warn" gates cannot actually block
 
 ### The Discovery
-During P2.5 planning, we initially considered inventing a schema format. However, **OCTAVE v5.1.0 already defines a schema language** using the holographic pattern:
+During P2.5 planning, we initially considered inventing a schema format. However, **OCTAVE v6.0.0 already defines a schema language** using the holographic pattern:
 
 ```octave
 KEY::["example"∧CONSTRAINT→§TARGET]
@@ -24,7 +24,7 @@ KEY::["example"∧CONSTRAINT→§TARGET]
      example  constraints target
 ```
 
-From `specs/octave-5-llm-schema.oct.md` §1:
+From `src/octave_mcp/resources/specs/octave-schema-spec.oct.md` §1:
 > HOLOGRAPHIC_PATTERN
 > SYNTAX::KEY::["example"∧CONSTRAINT→§TARGET]
 > COMPONENTS::[EXAMPLE,CONSTRAINT,TARGET][all_required_for_L4]
@@ -39,7 +39,7 @@ This means:
 
 ### Use OCTAVE Holographic Patterns for Schema Definitions
 
-**Schema documents will be OCTAVE documents** using the holographic pattern from the OCTAVE v5.1.0 specification. No new schema format will be invented.
+**Schema documents will be OCTAVE documents** using the holographic pattern from the OCTAVE v6.0.0 specification. No new schema format will be invented.
 
 ### Example Schema
 ```octave
@@ -98,7 +98,7 @@ RISKS[→§RISK_LOG]:
 
 ### Directory Structure
 ```
-specs/schemas/              ← Schema definitions (pure OCTAVE)
+src/octave_mcp/resources/specs/schemas/              ← Schema definitions (pure OCTAVE)
 ├── builtin/               ← System schemas (always available)
 │   ├── META.oct.md
 │   ├── SESSION_LOG.oct.md
@@ -146,12 +146,12 @@ def extract_schema_rules(doc: dict) -> Schema:
 
 def load_schema(schema_name: str) -> Schema:
     """
-    Load schema from specs/schemas/{schema_name}.oct.md
+    Load schema from src/octave_mcp/resources/specs/schemas/{schema_name}.oct.md
 
     Search order:
-    1. specs/schemas/builtin/{schema_name}.oct.md
-    2. specs/schemas/agents/{schema_name}.oct.md
-    3. specs/schemas/skills/{schema_name}.oct.md
+    1. src/octave_mcp/resources/specs/schemas/builtin/{schema_name}.oct.md
+    2. src/octave_mcp/resources/specs/schemas/agents/{schema_name}.oct.md
+    3. src/octave_mcp/resources/specs/schemas/skills/{schema_name}.oct.md
     4. Custom paths from config
     """
     # 1. Find schema file in search paths
@@ -342,7 +342,7 @@ def test_load_schema_not_found():
 # RED: Test schema search order
 def test_schema_search_order():
     # Custom schemas override builtins
-    create_custom_schema("specs/schemas/agents/TEST.oct.md")
+    create_custom_schema("src/octave_mcp/resources/specs/schemas/agents/TEST.oct.md")
     schema = load_schema("TEST")
     assert schema.version == "custom"
 
@@ -391,11 +391,11 @@ def test_validation_blocking():
 1. **No New Format**: Schemas are OCTAVE documents, using existing parser
 2. **Self-Documenting**: Holographic pattern includes example values
 3. **Modular by Design**: Any agent/skill can define schemas
-4. **Already Specified**: Using OCTAVE v5.1.0 spec (§1-§4 of schema spec)
+4. **Already Specified**: Using OCTAVE v6.0.0 spec (§1-§4 of schema spec)
 5. **Agent-Friendly**: Agents already know OCTAVE syntax
 6. **Incremental Adoption**: Can add schemas gradually
 7. **Type Safety**: Validation enforces structure at runtime
-8. **Discoverable**: Schemas live in specs/schemas/ directory
+8. **Discoverable**: Schemas live in src/octave_mcp/resources/specs/schemas/ directory
 
 ### Negative
 1. **Parsing Complexity**: Must parse nested holographic patterns (but spec defines this)
@@ -453,9 +453,9 @@ def test_constraint_chain_fail_fast():
 
 ### Schema Definitions (OCTAVE format)
 ```
-specs/schemas/builtin/SESSION_LOG.oct.md    (~40 lines)
-specs/schemas/builtin/META.oct.md           (~25 lines)
-specs/schemas/builtin/AGENT_OUTPUT.oct.md   (~30 lines)
+src/octave_mcp/resources/specs/schemas/builtin/SESSION_LOG.oct.md    (~40 lines)
+src/octave_mcp/resources/specs/schemas/builtin/META.oct.md           (~25 lines)
+src/octave_mcp/resources/specs/schemas/builtin/AGENT_OUTPUT.oct.md   (~30 lines)
 ```
 
 ### Implementation
@@ -490,8 +490,8 @@ tests/e2e/test_schema_enforcement.py        (~50 lines)
 ## References
 
 ### Specifications
-- `specs/octave-5-llm-schema.oct.md` - Holographic pattern definition (§1-§7)
-- `specs/octave-5-llm-core.oct.md` - Core OCTAVE syntax (§1-§7)
+- `src/octave_mcp/resources/specs/octave-schema-spec.oct.md` - Holographic pattern definition (§1-§7)
+- `src/octave_mcp/resources/specs/octave-core-spec.oct.md` - Core OCTAVE syntax (§1-§7)
 
 ### Related ADRs
 - ADR-001: Configurability and Modularity Architecture
@@ -501,20 +501,20 @@ tests/e2e/test_schema_enforcement.py        (~50 lines)
 
 ## Alignment with OCTAVE Specification
 
-This ADR implements the schema validation system defined in OCTAVE v5.1.0 specification:
+This ADR implements the schema validation system defined in OCTAVE v6.0.0 specification:
 
-**From octave-5-llm-schema.oct.md §1**:
+**From octave-schema-spec.oct.md §1**:
 > HOLOGRAPHIC_PATTERN
 > SYNTAX::KEY::["example"∧CONSTRAINT→§TARGET]
 > COMPONENTS::[EXAMPLE,CONSTRAINT,TARGET][all_required_for_L4]
 
-**From octave-5-llm-schema.oct.md §2**:
+**From octave-schema-spec.oct.md §2**:
 > CONSTRAINTS
 > AVAILABLE::[REQ,OPT,CONST,REGEX,ENUM,TYPE,DIR,APPEND_ONLY]
 > CHAIN::constraint∧constraint∧constraint[left_to_right]
 > EVALUATION::fail_fast[stop_on_first_failure]
 
-**From octave-5-llm-schema.oct.md §6**:
+**From octave-schema-spec.oct.md §6**:
 > SCHEMA_SKELETON
 > TEMPLATE: [Minimal valid schema document structure provided]
 
@@ -525,7 +525,7 @@ This ADR translates the specification into a concrete implementation while maint
 **ACCEPTED**: Use OCTAVE holographic patterns for schema definitions.
 
 **Rationale**:
-- Format already specified in OCTAVE v5.1.0
+- Format already specified in OCTAVE v6.0.0
 - No new syntax to invent or learn
 - Self-documenting with example values
 - Modular and extensible by design
@@ -533,7 +533,7 @@ This ADR translates the specification into a concrete implementation while maint
 
 **Next Steps**:
 1. Implement schema_extractor (parse holographic patterns)
-2. Implement schema_loader (load from specs/schemas/)
+2. Implement schema_loader (load from src/octave_mcp/resources/specs/schemas/)
 3. Enhance validator (add constraint checking)
 4. Wire into ingest tool
 5. Create builtin schemas (SESSION_LOG, META, AGENT_OUTPUT)
@@ -541,4 +541,4 @@ This ADR translates the specification into a concrete implementation while maint
 
 **Estimated Effort**: ~6 hours with TDD discipline
 
-This approach makes schema validation a first-class feature of OCTAVE MCP while staying 100% true to the OCTAVE v5.1.0 specification.
+This approach makes schema validation a first-class feature of OCTAVE MCP while staying 100% true to the OCTAVE v6.0.0 specification.

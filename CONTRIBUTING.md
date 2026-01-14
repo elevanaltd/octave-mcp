@@ -102,7 +102,7 @@ octave-mcp/
 │   ├── unit/         # Fast isolated tests
 │   ├── integration/  # End-to-end tests
 │   └── properties/   # Property-based (hypothesis)
-├── specs/            # OCTAVE protocol specifications (v5.1.0)
+├── src/octave_mcp/resources/specs/            # OCTAVE protocol specifications (v6.0.0)
 ├── docs/             # Documentation
 │   ├── guides/       # Usage and development guides
 │   ├── architecture/ # Decision records

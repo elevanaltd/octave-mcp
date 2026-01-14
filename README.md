@@ -64,7 +64,7 @@ Instead of checking if an LLM wrote a valid document *after* the fact, OCTAVE v6
 - **Vocabulary**: Mythological terms as semantic compression shorthands.
 - **Authoring**: Humans write in the lenient view; tools normalize to canonical Unicode.
 
-See the [protocol specs in `specs/`](specs/README.oct.md) for v6.0.0 rules.
+See the [protocol specs in `src/octave_mcp/resources/specs/`](src/octave_mcp/resources/specs/) for v6.0.0 rules.
 
 ## What this server provides
 
@@ -149,7 +149,7 @@ OCTAVE v6 introduces the **Holographic Contract**:
 | [Usage Guide](docs/usage.md) | CLI, MCP, and API examples |
 | [API Reference](docs/api.md) | Python API documentation |
 | [MCP Configuration](docs/mcp-configuration.md) | Client setup and integration |
-| [Protocol Specs](specs/README.oct.md) | v6.0.0 Generative Holographic Specs |
+| [Protocol Specs](src/octave_mcp/resources/specs/) | v6.0.0 Generative Holographic Specs |
 | [Development Setup](docs/guides/development-setup.md) | Dev environment, testing, quality gates |
 | [Architecture](docs/architecture/) | Decision records and design docs |
 | [Research](docs/research/) | Benchmarks and validation studies |
