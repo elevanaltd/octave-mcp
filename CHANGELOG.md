@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-01-12
+
+### Added
+- **Validator Frontmatter Support** - Added `--require-frontmatter` flag to `octave-validator` tool
+  - Aligns repo validator with core parser/validator behavior
+  - Broadens spec parsing coverage for documents with frontmatter
+  - Backward compatible - flag is optional
+
+### Fixed
+- **Template Generation** - Fixed `octave_eject` template to produce valid OCTAVE
+  - Replaced markdown-style `#` comments with OCTAVE `//` syntax
+  - Templates now parse correctly without syntax errors
+  - Added regression test to prevent future template syntax issues
+
 ## [0.6.0] - 2026-01-12 - "Structural Integrity" Release
 
 This release strengthens OCTAVE's structural validation, fixes critical parser issues, and refines the specification suite through dogfooding and systematic cleanup.
@@ -201,7 +215,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/elevanaltd/octave-mcp/compare/v0.4.0...v0.4.1
