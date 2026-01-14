@@ -48,7 +48,7 @@ This plan synthesizes 5 debate rounds (18 comments) from multi-model Wind/Wall/D
 ### 2. Living Scrolls with §SEAL (Debate Round 3)
 
 ```octave
-§OCTAVE::5.1.0
+§OCTAVE::6.0.0
 ===VOCABULARY_CAPSULE===
 META:
   TYPE::CAPSULE
@@ -63,14 +63,14 @@ META:
   SCOPE::LINES[1,N-1]
   ALGORITHM::SHA256
   HASH::"a1b2c3..."
-  GRAMMAR::5.1.0
+  GRAMMAR::6.0.0
 ===END===
 ```
 
 ### 3. Companion Documents with Bidirectional Links (Debate Round 4)
 
 ```octave
-# In spec (specs/octave-5-llm-core.oct.md):
+# In spec (src/octave_mcp/resources/specs/octave-core-spec.oct.md):
 META:
   TEACHES::[§skills/octave-literacy,§skills/octave-mastery]
 ```
@@ -78,7 +78,7 @@ META:
 ```yaml
 # In skill (skills/octave-literacy/SKILL.md):
 ---
-implements: specs/octave-5-llm-core
+implements: src/octave_mcp/resources/specs/octave-core-spec
 coverage:
   §MAPS_TO::
     SKILL_§1::[SPEC_§1,SPEC_§4]
@@ -122,7 +122,7 @@ NOVEL::[SKILL_§4]
 ## Vocabulary Storage Structure (Approved)
 
 ```
-specs/
+src/octave_mcp/resources/specs/
 └── vocabularies/
     ├── registry.oct.md          # Machine-readable index
     ├── core/                     # Ships with octave-mcp
@@ -155,9 +155,9 @@ specs/
 
 | Task | Description | Files | Priority |
 |------|-------------|-------|----------|
-| 1.1 | Create `specs/vocabularies/` directory structure | New directory | HIGH |
-| 1.2 | Create `registry.oct.md` index | `specs/vocabularies/registry.oct.md` | HIGH |
-| 1.3 | Define TYPE::CAPSULE schema | `specs/schemas/capsule.oct.md` | HIGH |
+| 1.1 | Create `src/octave_mcp/resources/specs/vocabularies/` directory structure | New directory | HIGH |
+| 1.2 | Create `registry.oct.md` index | `src/octave_mcp/resources/specs/vocabularies/registry.oct.md` | HIGH |
+| 1.3 | Define TYPE::CAPSULE schema | `src/octave_mcp/resources/specs/schemas/capsule.oct.md` | HIGH |
 | 1.4 | Create golden-master test fixtures | `tests/fixtures/hydration/` | HIGH |
 | 1.5 | Create hydration logic module with HydrationPolicy | `src/octave_mcp/core/hydrator.py` (new) | HIGH |
 | 1.6 | Add §SNAPSHOT.MANIFEST generation | Part of hydrator | HIGH |
@@ -165,7 +165,7 @@ specs/
 | 1.8 | Implement `octave hydrate` CLI command | `src/octave_mcp/cli/main.py` | HIGH |
 | 1.9 | Unit tests for hydration | `tests/test_hydrator.py` | HIGH |
 | 1.10 | Integration tests | `tests/integration/test_hydrate_cli.py` | HIGH |
-| 1.11 | Add Companion Documents: `TEACHES::` to specs | `specs/octave-5-llm-*.oct.md` | MEDIUM |
+| 1.11 | Add Companion Documents: `TEACHES::` to specs | `src/octave_mcp/resources/specs/octave-*-spec.oct.md` | MEDIUM |
 | 1.12 | Add Companion Documents: `implements:` to skills | Skills YAML frontmatter | MEDIUM |
 | 1.13 | Document ASSIST vs INVENT convention | `docs/CONTRIBUTING.md` or similar | MEDIUM |
 
@@ -255,7 +255,7 @@ specs/
 | Round 2 | Audited Capsule | APPROVED (§SNAPSHOT.* blocks) |
 | Risk Analysis | PRUNE_MANIFEST options | DECIDED: `list` default |
 | Round 3 | Living Scrolls | APPROVED (§SEAL, §OCTAVE sentinel → Phase 2) |
-| Package Structure | Path 1.7 | APPROVED (`specs/vocabularies/`) |
+| Package Structure | Path 1.7 | APPROVED (`src/octave_mcp/resources/specs/vocabularies/`) |
 | Project Structure | Layered Content | SUPERSEDED (no dir reorg) |
 | Round 4 | Companion Documents | APPROVED (bidirectional links) |
 | Round 5 | Spec-Skill Tooling | VOID MAPPER approved, Scaffolder de-prioritized |

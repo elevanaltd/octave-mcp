@@ -23,7 +23,7 @@ The test successfully validated that a core set of mythological patterns are uni
 
 ### Methodology
 1.  **Obfuscation Strategy**: The test prompt was deliberately weakened to establish baseline robustness. All contextual hints were removed, and mythological terms were mixed with non-mythological elements to prevent simple pattern matching.
-2.  **Elements Tested**: All non-asterisked elements from the legacy v3 semantics spec (now archived at `specs/_archive/octave-semantics-v3.oct.md.archive`) were included.
+2.  **Elements Tested**: All non-asterisked elements from the legacy v3 semantics spec (now archived at `_archive/specs/octave-semantics-v3.oct.md.archive`) were included.
 3.  **Format**: While the test document itself was not in a valid OCTAVE file format, the notation *within* the examples correctly used OCTAVE semantics.
 
 ---
@@ -52,7 +52,7 @@ The following elements demonstrated high comprehension rates across the model po
 3.  **Differentiation Achieved**: The test successfully separated deep semantic understanding from surface-level matching.
 
 ### Recommendation
-Based on these results, it is recommended to **mark these elements as empirically validated in the canonical v4 spec (`specs/octave-4.oct.md`)** (e.g., with asterisks `*` or an equivalent notation) to indicate they have been tested for universal LLM comprehension without context:
+Based on these results, it is recommended to **mark these elements as empirically validated in the canonical v4 spec (`_archive/specs/octave-4.oct.md`)** (e.g., with asterisks `*` or an equivalent notation) to indicate they have been tested for universal LLM comprehension without context:
 
 -   All **SEMANTIC_OPERATORS** (`⊕`/`+`, `⇌`/`vs`, `→`/`->`).
 -   A core set of **DOMAINS** including `ZEUS`, `ATHENA`, `APOLLO`, `HERMES`.

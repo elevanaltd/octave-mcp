@@ -194,6 +194,6 @@ The tool returns:
 
 For complete details:
 
-- **Core syntax**: [specs/octave-5-llm-core.oct.md](../specs/octave-5-llm-core.oct.md)
-- **DATA mode**: [specs/octave-5-llm-data.oct.md](../specs/octave-5-llm-data.oct.md)
-- **SCHEMA mode**: [specs/octave-5-llm-schema.oct.md](../specs/octave-5-llm-schema.oct.md)
+- **Core syntax**: [src/octave_mcp/resources/specs/octave-core-spec.oct.md](../src/octave_mcp/resources/specs/octave-core-spec.oct.md)
+- **DATA mode**: [src/octave_mcp/resources/specs/octave-data-spec.oct.md](../src/octave_mcp/resources/specs/octave-data-spec.oct.md)
+- **SCHEMA mode**: [src/octave_mcp/resources/specs/octave-schema-spec.oct.md](../src/octave_mcp/resources/specs/octave-schema-spec.oct.md)

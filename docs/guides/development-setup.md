@@ -2,9 +2,9 @@
 
 ## Project Status
 
-This is the OCTAVE MCP Server (v0.1.0) - a lenient-to-canonical pipeline for structured AI communication using the OCTAVE protocol.
+This is the OCTAVE MCP Server (v0.6.1) - a lenient-to-canonical pipeline for structured AI communication using the OCTAVE protocol.
 
-**Version**: 0.1.0
+**Version**: 0.6.1
 **Python**: >=3.11
 **License**: Apache 2.0
 
@@ -70,7 +70,7 @@ pytest --cov=octave_mcp
 ├── pyproject.toml              # Package configuration
 ├── setup-mcp.sh                # MCP server setup script for AI clients
 ├── src/octave_mcp/
-│   ├── __init__.py             # Package root (version: 0.1.0)
+│   ├── __init__.py             # Package root (version: 0.6.1)
 │   ├── core/                   # Core parsing/validation
 │   │   ├── lexer.py           # ASCII normalization → Unicode
 │   │   ├── parser.py          # Lenient parser + envelope completion
@@ -103,11 +103,11 @@ pytest --cov=octave_mcp
 │   ├── mcp-configuration.md    # MCP setup guide
 │   ├── usage.md                # Usage examples
 │   └── configurability-analysis.md  # Schema/projection architecture
-├── specs/                      # OCTAVE protocol specifications
-│   ├── octave-5-llm-core.oct.md
-│   ├── octave-5-llm-data.oct.md
-│   ├── octave-5-llm-schema.oct.md
-│   ├── octave-5-llm-execution.oct.md
+├── src/octave_mcp/resources/specs/                      # OCTAVE protocol specifications
+│   ├── octave-core-spec.oct.md
+│   ├── octave-data-spec.oct.md
+│   ├── octave-schema-spec.oct.md
+│   ├── octave-execution-spec.oct.md
 │   └── octave-mcp-architecture.oct.md
 └── .venv/                      # Python 3.11 virtual environment (uv-managed)
 ```
@@ -392,8 +392,8 @@ See `docs/configurability-analysis.md` for detailed architectural decisions.
 
 ## Resources
 
-- **Protocol Specs**: `specs/octave-5-llm-core.oct.md` (syntax and operators)
-- **Architecture**: `specs/octave-mcp-architecture.oct.md` (MCP integration design)
+- **Protocol Specs**: `src/octave_mcp/resources/specs/octave-core-spec.oct.md` (syntax and operators)
+- **Architecture**: `src/octave_mcp/resources/specs/octave-mcp-architecture.oct.md` (MCP integration design)
 - **API Guide**: `docs/api.md` (detailed API reference)
 - **MCP Setup**: `docs/mcp-configuration.md` (Claude Desktop integration)
 - **Usage**: `docs/usage.md` (practical examples)

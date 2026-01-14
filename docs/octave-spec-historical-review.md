@@ -1,5 +1,5 @@
 ---
-title: "OCTAVE v5.1.0 Specification Review"
+title: "OCTAVE v6.0.0 Specification Review"
 date: 2026-01-02
 reviewer: Claude Opus 4.5
 status: complete
@@ -11,12 +11,12 @@ context: GREENFIELD - no existing users, no backwards compatibility required
 
 ## Executive Summary
 
-OCTAVE v5.1.0 represents a significant maturation of the format, with clear operator precedence, explicit mode distinction (DATA vs SCHEMA), and production-ready implementation. However, the spec omits valuable content from earlier versions that would improve user adoption and completeness.
+OCTAVE v6.0.0 represents a significant maturation of the format, with clear operator precedence, explicit mode distinction (DATA vs SCHEMA), and production-ready implementation. However, the spec omits valuable content from earlier versions that would improve user adoption and completeness.
 
 **Context:** This is a greenfield project with no existing users. Historical versions are reference material only - there are no backwards compatibility constraints.
 
 **Key Findings:**
-- v5.1.0 is technically rigorous but lacks onboarding material
+- v6.0.0 is technically rigorous but lacks onboarding material
 - Several useful features from older specs are undocumented (design decisions needed)
 - Compression tier rules are specified but not implemented
 
@@ -30,11 +30,11 @@ OCTAVE v5.1.0 represents a significant maturation of the format, with clear oper
 | LLM-Optimized | 3.0 | Token efficiency, ultra-compact notation |
 | Protocol Formalization | 4.0 (archive) | Strict envelope, validation regex, artifacts |
 | Balanced Hybrid | 4.0-5.4 (thymos) | Multiple representation formats |
-| Implementation-Ready | 5.1.0 (current) | Parseable spec with precedence rules |
+| Implementation-Ready | 6.0.0 (current) | Parseable spec with precedence rules |
 
 ---
 
-## What v5.1.0 Does Well
+## What v6.0.0 Does Well
 
 ### 1. Formal Operator Specification
 The precedence table in §2 is a major improvement:
@@ -63,7 +63,7 @@ META fields like `IMPLEMENTATION::IMPLEMENTED` and `IMPLEMENTATION_REF` provide 
 
 ---
 
-## Missing From v5.1.0 (Found in Older Specs)
+## Missing From v6.0.0 (Found in Older Specs)
 
 ### Priority 1: Critical for Adoption
 
@@ -74,7 +74,7 @@ Old specs defined graduated complexity levels:
 - **Tier 3 (Complex)**: Multi-component with events and patterns
 - **Tier 4 (Advanced)**: Cross-domain transformations
 
-**Recommendation:** Add implementation tiers to octave-5-llm-data.oct.md
+**Recommendation:** Add implementation tiers to octave-data-spec.oct.md
 
 #### 1.2 "When NOT to Use OCTAVE" Section (from thymos OCTAVE.md 1.0.0)
 Previously documented anti-patterns:
@@ -125,15 +125,15 @@ Multiple specs defined JSON mapping:
 }
 ```
 
-**Status in v5.1:** Not mentioned. Critical for tooling integration.
+**Status in v6.0:** Not mentioned. Critical for tooling integration.
 
-#### 2.2 Confidence Scores (from v5.0-5.1 thymos)
+#### 2.2 Confidence Scores (from v5.0-6.0 thymos)
 ```
 PTN:OLYMPIAN-CASCADE[0.97]
 REL:DB-IDX→DB-P→N1→USR[0.95]
 ```
 
-**Status in v5.1:** Completely absent from current spec
+**Status in v6.0:** Completely absent from current spec
 
 #### 2.3 Delta Updates (from v3.0)
 ```
@@ -142,7 +142,7 @@ DELTA:N3.CPU=94→97%,DB-P.LAT=350→412ms
 NEW:USR.IMP=SEV
 ```
 
-**Status in v5.1:** Not mentioned
+**Status in v6.0:** Not mentioned
 
 #### 2.4 Component Aliasing Rules (from v3.0, v4.0)
 How to establish and reference aliases:
@@ -150,7 +150,7 @@ How to establish and reference aliases:
 - Subsequent references use alias only
 - Standard aliases: N1, DB-P, APP, USR
 
-**Status in v5.1:** Implicit in examples but not formalized
+**Status in v6.0:** Implicit in examples but not formalized
 
 #### 2.5 Mythological Pattern Library
 Patterns defined in older specs:
@@ -162,14 +162,14 @@ Patterns defined in older specs:
 - PROMETHEUS-BOUND: Healing attempts causing suffering
 - CHARYBDIS-VORTEX: Resource drain spiraling
 
-**Status in v5.1:** Only mentioned in comment, no definitions
+**Status in v6.0:** Only mentioned in comment, no definitions
 
 #### 2.6 Domain-Specific Templates (from v2.0, v4.0)
 - System Monitoring Template
 - Pattern Recognition Template
 - Implementation Template
 
-**Status in v5.1:** Not included
+**Status in v6.0:** Not included
 
 ### Priority 3: Nice to Have
 
@@ -178,7 +178,7 @@ Patterns defined in older specs:
 {{key:value, key2:value2}}  // single colon inside
 ```
 
-**Status in v5.1:** Not mentioned (DATA mode uses [k::v,k2::v2])
+**Status in v6.0:** Not mentioned (DATA mode uses [k::v,k2::v2])
 
 #### 3.2 Multiline String Specification (from v1.0 archive)
 ```
@@ -188,14 +188,14 @@ DESCRIPTION::"""
 """
 ```
 
-**Status in v5.1:** Not specified
+**Status in v6.0:** Not specified
 
 #### 3.3 Ultra-Compact Alternative (from v5.0-5.4 thymos)
 ```
 CMP:db.primary=CRIT;CPU=[65→82→94%];LAT=[12→78→325ms]
 ```
 
-**Status in v5.1:** Not mentioned
+**Status in v6.0:** Not mentioned
 
 #### 3.4 Hybrid/Narrative Integration (from thymos OCTAVE.md 1.0.0)
 Mixing prose with structure:
@@ -207,7 +207,7 @@ framework.translation (HRM):
   PRINCIPLES=[meaning→recognition]
 ```
 
-**Status in v5.1:** Not addressed
+**Status in v6.0:** Not addressed
 
 ---
 
@@ -288,10 +288,10 @@ These features existed in old specs. Decision needed: adopt, modify, or explicit
 
 | Feature | Old Behavior | Decision Needed |
 |---------|--------------|-----------------|
-| Confidence scores | `PTN:NAME[0.95]` | Include in v5.1? |
-| Delta updates | `DELTA:` / `CTX:REF-123` | Include in v5.1? |
+| Confidence scores | `PTN:NAME[0.95]` | Include in v6.0? |
+| Delta updates | `DELTA:` / `CTX:REF-123` | Include in v6.0? |
 | Component aliasing | Formal rules for `(ALIAS)` | Formalize or leave implicit? |
-| Ultra-compact format | `CMP:` single-line | Include in v5.1? |
+| Ultra-compact format | `CMP:` single-line | Include in v6.0? |
 | JSON mapping | Interop schema | Define or defer? |
 
 ### Longer-Term: Tooling
@@ -306,9 +306,9 @@ These features existed in old specs. Decision needed: adopt, modify, or explicit
 
 ## Files Reviewed
 
-### Current v5.1.0
-- `specs/octave-5-llm-core.oct.md` (159 lines)
-- `specs/octave-5-llm-data.oct.md` (131 lines)
+### Current v6.0.0
+- `src/octave_mcp/resources/specs/octave-core-spec.oct.md` (159 lines)
+- `src/octave_mcp/resources/specs/octave-data-spec.oct.md` (131 lines)
 
 ### Archive (octave-mcp)
 - `_archive/specs/octave-4.oct.md`
@@ -328,7 +328,7 @@ These features existed in old specs. Decision needed: adopt, modify, or explicit
 
 ## Conclusion
 
-OCTAVE v5.1.0 is a technically sound specification with clear implementation in the codebase. For a greenfield project, the main gaps are:
+OCTAVE v6.0.0 is a technically sound specification with clear implementation in the codebase. For a greenfield project, the main gaps are:
 
 1. **Onboarding material** (quick start, tiers) - critical for adoption
 2. **Design decisions** on historical features (confidence scores, patterns, aliases)
@@ -343,7 +343,7 @@ The bones are good. The documentation needs flesh.
 To review and implement these recommendations in depth, use the following prompt:
 
 ```
-I need to review and implement the OCTAVE v5.1.0 spec improvements identified in
+I need to review and implement the OCTAVE v6.0.0 spec improvements identified in
 docs/octave-spec-historical-review.md. This is a greenfield project with no existing users.
 
 Please work through the following systematically:
@@ -353,19 +353,19 @@ Please work through the following systematically:
 For each item, read the relevant spec section and propose concrete changes:
 
 1. **File extension** (core spec §1)
-   - Review: specs/octave-5-llm-core.oct.md
+   - Review: src/octave_mcp/resources/specs/octave-core-spec.oct.md
    - Add explicit statement that `.oct.md` is the canonical extension
 
 2. **Validation checklist** (core spec §6)
-   - Review: specs/octave-5-llm-core.oct.md NEVER section
+   - Review: src/octave_mcp/resources/specs/octave-core-spec.oct.md NEVER section
    - Add a simple validation checklist based on the one from thymos OCTAVE.md
 
 3. **ASSEMBLY rules** (core spec §1)
-   - Review: specs/octave-5-llm-core.oct.md ENVELOPE section
+   - Review: src/octave_mcp/resources/specs/octave-core-spec.oct.md ENVELOPE section
    - Clarify when/why profiles are concatenated with a concrete example
 
 4. **Block inheritance** (core spec §5)
-   - Review: specs/octave-5-llm-core.oct.md SCHEMA section
+   - Review: src/octave_mcp/resources/specs/octave-core-spec.oct.md SCHEMA section
    - Document the `[→§TARGET]` pattern on block keys
 
 ## PHASE 2: Design Decisions
@@ -401,7 +401,7 @@ Create `docs/octave-quick-start.md` with:
 
 ## PHASE 4: Implementation Tiers
 
-Add to specs/octave-5-llm-data.oct.md:
+Add to src/octave_mcp/resources/specs/octave-data-spec.oct.md:
 - Tier 1 (Simple): Single section, basic key::value
 - Tier 2 (Standard): Multiple sections with relationships
 - Tier 3 (Complex): Full document with patterns and constraints

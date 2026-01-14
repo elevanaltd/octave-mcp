@@ -39,8 +39,8 @@ The OCTAVE MCP server has **strong foundations** (lexer, parser, emitter, canoni
 
 | Spec | Status | Purpose |
 |------|--------|---------|
-| **octave-5-llm-agents** | ✅ REFERENCE | Agent cognitive architecture patterns |
-| **octave-5-llm-rationale** | ✅ REFERENCE | Design rationale and decision records |
+| **octave-agents-spec** | ✅ REFERENCE | Agent cognitive architecture patterns |
+| **octave-rationale-spec** | ✅ REFERENCE | Design rationale and decision records |
 
 ---
 
@@ -57,7 +57,7 @@ The OCTAVE MCP server has **strong foundations** (lexer, parser, emitter, canoni
   - **CONSTRAINT**: Validation chain (∧-separated)
   - **TARGET**: Extraction destination (§-prefixed)
 
-**Specification Reference**: `octave-5-llm-schema.oct.md` § 1
+**Specification Reference**: `octave-schema-spec.oct.md` § 1
 
 **Implementation Tasks**:
 1. Add holographic pattern regex/parser to lexer
@@ -126,7 +126,7 @@ The OCTAVE MCP server has **strong foundations** (lexer, parser, emitter, canoni
 - `§RISK_LOG` - Risk tracking
 - `§KNOWLEDGE_BASE` - External knowledge storage
 
-**Specification Reference**: `octave-5-llm-schema.oct.md` § 3, § 4
+**Specification Reference**: `octave-schema-spec.oct.md` § 3, § 4
 
 **Implementation Tasks**:
 1. Create `Target` dataclass with path, type, broadcast_flag
@@ -153,7 +153,7 @@ The OCTAVE MCP server has **strong foundations** (lexer, parser, emitter, canoni
 - Unbounded semantic nesting (implementation caps at 100 levels)
 - Target override detection and enforcement
 
-**Specification Reference**: `octave-5-llm-schema.oct.md` § 4
+**Specification Reference**: `octave-schema-spec.oct.md` § 4
 
 **Implementation Tasks**:
 1. Add semantic nesting tracking to Block AST node
@@ -178,7 +178,7 @@ The OCTAVE MCP server has **strong foundations** (lexer, parser, emitter, canoni
 - Schema versioning and compatibility rules
 - Unknown field detection in strict mode
 
-**Specification Reference**: `octave-5-llm-schema.oct.md` § 5
+**Specification Reference**: `octave-schema-spec.oct.md` § 5
 
 **Implementation Tasks**:
 1. Create `PolicyBlock` dataclass with VERSION, UNKNOWN_FIELDS, TARGETS
@@ -209,7 +209,7 @@ The OCTAVE MCP server has **strong foundations** (lexer, parser, emitter, canoni
 - Apply forbidden rewrites rules (never introduce absolutes, collapse boundaries, strengthen claims, etc.)
 - Metadata requirement: Include COMPRESSION_TIER in output META
 
-**Specification Reference**: `octave-5-llm-data.oct.md` § 1b, § 6
+**Specification Reference**: `octave-data-spec.oct.md` § 1b, § 6
 
 **Implementation Tasks**:
 1. Create `CompressionStrategy` class per tier with rule definitions
@@ -300,7 +300,7 @@ The OCTAVE MCP server has **strong foundations** (lexer, parser, emitter, canoni
 - Feedback loop: generate→validate→error→fix→retry
 - Guidance for common errors (tabs, spaces, syntax)
 
-**Specification Reference**: `octave-5-llm-execution.oct.md` § 4
+**Specification Reference**: `octave-execution-spec.oct.md` § 4
 
 **Implementation Tasks**:
 1. Wrap validator in retry loop (max 3 retries)
@@ -348,7 +348,7 @@ The OCTAVE MCP server has **strong foundations** (lexer, parser, emitter, canoni
 ### Integration Tests
 - End-to-end schema validation workflows
 - Multi-component interactions (parsing → validation → routing)
-- Real schema files from `/specs/` directory
+- Real schema files from `/src/octave_mcp/resources/specs/` directory
 
 ### Property Tests (Optional)
 - Constraint chain evaluation is deterministic
@@ -411,29 +411,29 @@ tests/unit/
 ## Specification Dependencies
 
 ```
-octave-5-llm-core ✅ IMPLEMENTED
-  ├── octave-5-llm-data ❌ PLANNED (Gap 6)
-  ├── octave-5-llm-schema ❌ PLANNED (Gaps 1-5)
-  │   └── octave-5-llm-execution ⚠️ PARTIAL (Gaps 8-9)
+octave-core-spec ✅ IMPLEMENTED
+  ├── octave-data-spec ❌ PLANNED (Gap 6)
+  ├── octave-schema-spec ❌ PLANNED (Gaps 1-5)
+  │   └── octave-execution-spec ⚠️ PARTIAL (Gaps 8-9)
   ├── octave-mcp-architecture ⚠️ PARTIAL (Gap 7)
-  └── octave-5-llm-agents 📖 REFERENCE (no code implementation)
-      └── octave-5-llm-rationale 📖 REFERENCE (design decisions)
+  └── octave-agents-spec 📖 REFERENCE (no code implementation)
+      └── octave-rationale-spec 📖 REFERENCE (design decisions)
 ```
 
 ### Specification Coverage Summary
 
 **Implemented Specs** (Ready for production use):
-- `octave-5-llm-core`: Full syntax, operators, envelope, types (IMPLEMENTED)
+- `octave-core-spec`: Full syntax, operators, envelope, types (IMPLEMENTED)
 - `octave-mcp-architecture`: MCP tools, canonicalization, normalization rules (PARTIAL - core done, validation deferred)
 
 **Planned Specs** (Require implementation):
-- `octave-5-llm-schema`: Holographic patterns, constraint validation, target routing (PLANNED)
-- `octave-5-llm-data`: Compression tiers LOSSLESS→ULTRA (PLANNED)
-- `octave-5-llm-execution`: Advanced validation, error formatting, retry protocol (PARTIAL)
+- `octave-schema-spec`: Holographic patterns, constraint validation, target routing (PLANNED)
+- `octave-data-spec`: Compression tiers LOSSLESS→ULTRA (PLANNED)
+- `octave-execution-spec`: Advanced validation, error formatting, retry protocol (PARTIAL)
 
 **Reference Specs** (No code implementation required - reference only):
-- `octave-5-llm-agents`: Agent architecture patterns, cognitive foundations, validation requirements (REFERENCE)
-- `octave-5-llm-rationale`: Design philosophy, syntax decisions, token economics (REFERENCE)
+- `octave-agents-spec`: Agent architecture patterns, cognitive foundations, validation requirements (REFERENCE)
+- `octave-rationale-spec`: Design philosophy, syntax decisions, token economics (REFERENCE)
 
 ---
 
@@ -450,7 +450,7 @@ octave-5-llm-core ✅ IMPLEMENTED
 
 ## References
 
-- **Specification**: `/specs/octave-*.oct.md`
+- **Specification**: `/src/octave_mcp/resources/specs/octave-*.oct.md`
 - **Implementation**: `/src/octave_mcp/`
 - **Tests**: `/tests/unit/`
 - **Architecture**: `octave-mcp-architecture.oct.md` § 7-13

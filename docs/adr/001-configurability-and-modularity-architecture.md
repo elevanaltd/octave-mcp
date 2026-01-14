@@ -4,7 +4,7 @@
 PROPOSED
 
 ## Context
-The OCTAVE MCP Server implements the OCTAVE v5.1.0 specification, which defines:
+The OCTAVE MCP Server implements the OCTAVE v6.0.0 specification, which defines:
 - Core grammar (operators, syntax, structure)
 - Repair tiers (NORMALIZATION, REPAIR, FORBIDDEN)
 - Error codes and validation rules
@@ -37,7 +37,7 @@ The OCTAVE grammar and core operators are **intentionally static** and should re
 #### 1. Core Grammar and Operators
 **RATIONALE**: These are part of the OCTAVE language specification itself, not configuration.
 
-**HARDCODED IN CODE** (specs/octave-5-llm-core.oct.md §2):
+**HARDCODED IN CODE** (src/octave_mcp/resources/specs/octave-core-spec.oct.md §2):
 ```python
 # lexer.py lines 79-87
 ASCII_ALIASES = {
@@ -52,14 +52,14 @@ ASCII_ALIASES = {
 ```
 
 **WHY THIS IS CORRECT**:
-- Operators are part of the language syntax definition (OCTAVE v5.1.0)
+- Operators are part of the language syntax definition (OCTAVE v6.0.0)
 - Changing operators would create incompatible OCTAVE dialects
 - These map directly to spec §2::OPERATORS which is versioned with the spec
 - ASCII aliases are canonicalization rules (spec §4::CANONICALIZATION_RULES)
 - All implementations must agree on operator semantics for interoperability
 
 **SPEC REFERENCE**:
-- `octave-5-llm-core.oct.md` §2::OPERATORS defines precedence and semantics
+- `octave-core-spec.oct.md` §2::OPERATORS defines precedence and semantics
 - `octave-mcp-architecture.oct.md` §4::CANONICALIZATION_RULES (R01-R10)
 
 **LITMUS TEST**: "If two systems disagree on what → means, they cannot exchange OCTAVE documents reliably."
@@ -67,7 +67,7 @@ ASCII_ALIASES = {
 #### 2. Repair Tier Classification
 **RATIONALE**: The three-tier system (NORMALIZATION/REPAIR/FORBIDDEN) is a core architectural principle.
 
-**HARDCODED IN CODE** (specs/octave-mcp-architecture.oct.md §5):
+**HARDCODED IN CODE** (src/octave_mcp/resources/specs/octave-mcp-architecture.oct.md §5):
 ```python
 # repair.py classification logic
 TIER_NORMALIZATION = always_on    # ASCII→unicode, whitespace, quotes
@@ -88,7 +88,7 @@ TIER_FORBIDDEN = never_automatic  # Target inference, field insertion
 #### 3. Error Codes and Core Validation Rules
 **RATIONALE**: Standard error codes enable cross-implementation tooling.
 
-**HARDCODED IN CODE** (specs/octave-mcp-architecture.oct.md §8):
+**HARDCODED IN CODE** (src/octave_mcp/resources/specs/octave-mcp-architecture.oct.md §8):
 ```python
 # validator.py error definitions
 E001 = "Single colon assignment not allowed. Use KEY::value (double colon)."
@@ -110,7 +110,7 @@ E005 = "Tabs not allowed. Use 2 spaces for indentation."
 #### 4. Envelope Format and Structural Rules
 **RATIONALE**: Document structure is part of the OCTAVE format specification.
 
-**HARDCODED IN CODE** (specs/octave-5-llm-core.oct.md §1):
+**HARDCODED IN CODE** (src/octave_mcp/resources/specs/octave-core-spec.oct.md §1):
 ```python
 # parser.py envelope handling
 ENVELOPE_START = "===NAME==="
@@ -125,7 +125,7 @@ SEPARATOR = "---"  # optional
 - Meta block placement is spec'd for parsability
 - Changing these would create format incompatibility
 
-**SPEC REFERENCE**: `octave-5-llm-core.oct.md` §1::ENVELOPE
+**SPEC REFERENCE**: `octave-core-spec.oct.md` §1::ENVELOPE
 
 ### What SHOULD Be Configurable (NEEDS IMPROVEMENT)
 
@@ -167,7 +167,7 @@ schema:
 - Users should be able to define domain-specific schemas
 - Schema versioning enables evolution (e.g., SESSION_LOG v2.0)
 
-**SPEC REFERENCE**: `octave-5-llm-schema.oct.md` §6::SCHEMA_SKELETON
+**SPEC REFERENCE**: `octave-schema-spec.oct.md` §6::SCHEMA_SKELETON
 
 **IMPLEMENTATION PRIORITY**: P0 (blocking for real-world use)
 
@@ -227,7 +227,7 @@ compression_tiers:
 - Current hardcoded tiers match spec exactly
 - Less critical for MVP functionality
 
-**SPEC REFERENCE**: `octave-5-llm-data.oct.md` §1b::COMPRESSION_TIERS
+**SPEC REFERENCE**: `octave-data-spec.oct.md` §1b::COMPRESSION_TIERS
 
 **IMPLEMENTATION PRIORITY**: P2 (enhancement)
 
@@ -267,7 +267,7 @@ compression_tiers:
 2. **Interoperability**: Hardcoded grammar ensures all OCTAVE implementations agree
 3. **Safety**: Forbidden repairs remain non-configurable, preventing security issues
 4. **Extensibility**: Schema repository enables domain-specific extensions without code changes
-5. **Evolution**: Spec versioning (5.0.3 → 5.1.0) handled through code updates, not config drift
+5. **Evolution**: Spec versioning (5.0.3 → 6.0.0) handled through code updates, not config drift
 
 ### Negative
 1. **Grammar Changes Require Code Updates**: True, but this is correct - grammar changes are spec changes
@@ -505,9 +505,9 @@ def test_projection_modes_schema_specific():
 ## References
 
 ### Specifications
-- `specs/octave-5-llm-core.oct.md` - Core grammar, operators, structure
-- `specs/octave-5-llm-schema.oct.md` - Schema definition patterns
-- `specs/octave-mcp-architecture.oct.md` - MCP server architecture, repair tiers
+- `src/octave_mcp/resources/specs/octave-core-spec.oct.md` - Core grammar, operators, structure
+- `src/octave_mcp/resources/specs/octave-schema-spec.oct.md` - Schema definition patterns
+- `src/octave_mcp/resources/specs/octave-mcp-architecture.oct.md` - MCP server architecture, repair tiers
 
 ### Implementation Files
 - `src/octave_mcp/core/lexer.py` - Operators and ASCII aliases (lines 79-87)

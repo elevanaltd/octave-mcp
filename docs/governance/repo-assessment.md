@@ -7,7 +7,7 @@
 
 ## Architecture and Scope
 - Canonical Python package under `src/octave_mcp/` with core parsing, validation, and emission logic, plus CLI entrypoints and MCP tooling.
-- Protocol specifications and developer docs live alongside code (`specs/`, `docs/`, `guides/`, `examples/`).
+- Protocol specifications and developer docs live alongside code (`src/octave_mcp/resources/specs/`, `docs/`, `guides/`, `examples/`).
 - Control plane explicitly non-reasoning: repairs are tiered into normalization (always), repair (opt-in), and forbidden (never automatic) to preserve author intent.
 
 ## Quality Signals
@@ -30,10 +30,10 @@
 - Publish reproducible artifacts (PyPI package, Docker image) and a short “try in 5 minutes” guide that uses `octave ingest` and `octave eject` end-to-end.
 - Maintain a compatibility matrix that lists supported OCTAVE spec versions, MCP client versions, and known-good environments.
 - Provide a default “core” projection set and mark additional modes as optional extensions to reduce decision paralysis.
-- Add one canonical example per projection mode and schema, linked directly from the README and `specs/` to make discovery easy.
+- Add one canonical example per projection mode and schema, linked directly from the README and `src/octave_mcp/resources/specs/` to make discovery easy.
 
 ## Surface Area Simplification
 - **Default core profile**: Keep the core syntax and a small set of projections (e.g., executive, developer) as the default bundle. Treat other projections as opt-in extensions to avoid overwhelming users.
-- **`@specs/` add-ons**: Continue to store optional modes under `@specs/`, but document their stability level (stable/experimental/deprecated) and ensure they do not alter core grammar. This keeps modularity while signaling maturity.
+- **`@src/octave_mcp/resources/specs/` add-ons**: Continue to store optional modes under `@src/octave_mcp/resources/specs/`, but document their stability level (stable/experimental/deprecated) and ensure they do not alter core grammar. This keeps modularity while signaling maturity.
 - **Change control**: Require spec and implementation changes to land together with tests per projection mode. Prefer additive extensions over breaking changes; if a mode is seldom used, consider deprecating it in an “extensions” appendix before removal.
 - **CLI simplification**: Offer presets such as `octave eject --profile core` and `octave ingest --strict` so users can start with a narrow, well-supported path and only opt into advanced behaviors when needed.
