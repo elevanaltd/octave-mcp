@@ -26,7 +26,7 @@ from octave_mcp.core.parser import parse
 from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
-from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
+from octave_mcp.schemas.loader import get_builtin_schema, load_schema, load_schema_by_name
 
 # Sentinel for DELETE operation in tri-state changes
 DELETE_SENTINEL = {"$op": "DELETE"}
@@ -387,22 +387,26 @@ class WriteTool(BaseTool):
 
         return doc
 
-    def _apply_mutations(self, content: str, mutations: dict[str, Any] | None) -> str:
-        """Apply META field mutations to content.
+    def _apply_mutations(self, doc: Document, mutations: dict[str, Any] | None) -> None:
+        """Apply META field mutations to document AST.
 
         Args:
-            content: Content to mutate
+            doc: Parsed document to mutate
             mutations: Dictionary of META fields to inject/override
 
-        Returns:
-            Mutated content
+        Mutations support:
+        - Set/override fields (including None/null)
+        - DELETE sentinel removes field
+        - Python lists normalized to ListValue for canonical emission
         """
         if not mutations:
-            return content
+            return
 
-        # TODO: Implement META field injection
-        # For now, return content as-is
-        return content
+        for key, value in mutations.items():
+            if _is_delete_sentinel(value):
+                doc.meta.pop(key, None)
+                continue
+            doc.meta[key] = _normalize_value_for_ast(value)
 
     def _generate_diff(
         self,
@@ -600,6 +604,9 @@ class WriteTool(BaseTool):
                     [{"code": "E_APPLY", "message": f"Apply changes error: {str(e)}"}],
                 )
 
+            # Apply META mutations (if any) before canonical emission
+            self._apply_mutations(doc, mutations)
+
             # Emit canonical form
             try:
                 canonical_content = emit(doc)
@@ -666,6 +673,9 @@ class WriteTool(BaseTool):
                     corrections,
                 )
 
+            # Apply META mutations (if any) before canonical emission
+            self._apply_mutations(doc, mutations)
+
             # Emit canonical form
             try:
                 canonical_content = emit(doc)
@@ -681,82 +691,68 @@ class WriteTool(BaseTool):
         corrections = self._track_corrections(original_content, canonical_content, tokenize_repairs)
         result["corrections"] = corrections
 
-        # Apply mutations (if any)
-        if mutations:
-            canonical_content = self._apply_mutations(canonical_content, mutations)
-
         # Schema Validation (I5 Schema Sovereignty)
         if schema_name:
-            # Issue #150: Use hermetic resolution for frozen@ and latest schema references
-            # Check if schema_name uses hermetic format (frozen@sha256:... or latest)
-            if schema_name.startswith("frozen@") or schema_name == "latest":
-                # Use hermetic resolution path
-                try:
-                    # Attempt hermetic resolution to verify schema exists in cache
-                    _schema_path = resolve_hermetic_standard(schema_name)
-                    # Hermetic schema found - for MVP, we don't perform validation yet
-                    # but we record that hermetic resolution succeeded
-                    # TODO: Integrate SchemaDefinition with Validator for full validation
-                    schema_def = None  # No validation for hermetic schemas yet
-                except Exception:
-                    # Hermetic resolution failed - schema not found in cache
-                    # This is expected if the cache isn't set up
-                    schema_def = None
-            else:
-                # Legacy path: use builtin schema loader for backward compatibility
-                schema_def = get_builtin_schema(schema_name)
+            # Old-style dict schemas (META-only, backwards compatibility)
+            schema_def = get_builtin_schema(schema_name)
 
-            # Load SchemaDefinition for constraint grammar compilation (if debug_grammar=True)
+            # New-style SchemaDefinition schemas (constraint validation via section_schemas)
             schema_definition: SchemaDefinition | None = None
-            if debug_grammar:
+            section_schemas: dict[str, SchemaDefinition] | None = None
+
+            # Issue #150: Hermetic resolution for frozen@ and latest schema references
+            if schema_name.startswith("frozen@") or schema_name == "latest":
+                try:
+                    schema_path = resolve_hermetic_standard(schema_name)
+                    schema_definition = load_schema(schema_path)
+                except Exception:
+                    schema_definition = None
+            else:
                 try:
                     schema_definition = load_schema_by_name(schema_name)
                 except Exception:
-                    # Schema loading may fail - continue without debug info
-                    pass
+                    schema_definition = None
 
-            if schema_def is not None:
-                # Schema found - perform validation
-                # I5: "Schema-validated documents shall record the schema name and version used"
-                result["schema_name"] = schema_def.get("name", schema_name)
-                result["schema_version"] = schema_def.get("version", "unknown")
+            if schema_definition is not None and schema_definition.fields:
+                # Map only the schema's name to its definition (validate.py Gap_1 pattern)
+                section_schemas = {schema_definition.name: schema_definition}
 
-                # Add debug grammar information if requested
-                if debug_grammar and schema_definition is not None:
-                    debug_info: dict[str, Any] = {
-                        "schema_name": schema_definition.name,
-                        "schema_version": schema_definition.version or "unknown",
-                        "field_constraints": {},
-                    }
-                    # Compile constraint grammar for each field
-                    for field_name, field_def in schema_definition.fields.items():
-                        # Use field_def.pattern.constraints (matching validate.py pattern)
-                        if hasattr(field_def, "pattern") and field_def.pattern and field_def.pattern.constraints:
-                            chain = field_def.pattern.constraints
-                            compiled = chain.compile()
-                            debug_info["field_constraints"][field_name] = {
-                                "chain": chain.to_string(),
-                                "compiled_regex": compiled,
-                            }
-                    result["debug_info"] = debug_info
+            has_schema = schema_def is not None or (schema_definition is not None and bool(schema_definition.fields))
 
-                # Use the validator with the schema definition
+            # Add debug grammar information if requested
+            if debug_grammar and schema_definition is not None:
+                debug_info: dict[str, Any] = {
+                    "schema_name": schema_definition.name,
+                    "schema_version": schema_definition.version or "unknown",
+                    "field_constraints": {},
+                }
+                for field_name, field_def in schema_definition.fields.items():
+                    if hasattr(field_def, "pattern") and field_def.pattern and field_def.pattern.constraints:
+                        chain = field_def.pattern.constraints
+                        debug_info["field_constraints"][field_name] = {
+                            "chain": chain.to_string(),
+                            "compiled_regex": chain.compile(),
+                        }
+                result["debug_info"] = debug_info
+
+            if has_schema:
+                # I5: Schema-validated documents shall record schema name and version used
+                if schema_def is not None:
+                    result["schema_name"] = schema_def.get("name", schema_name)
+                    result["schema_version"] = schema_def.get("version", "unknown")
+                elif schema_definition is not None:
+                    result["schema_name"] = schema_definition.name
+                    result["schema_version"] = schema_definition.version or "unknown"
+
                 validator = Validator(schema=schema_def)
-                validation_errors = validator.validate(doc, strict=False)
+                validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
 
                 if validation_errors:
-                    # I5: Schema validation failed - mark as INVALID
                     result["validation_status"] = "INVALID"
                     result["validation_errors"] = [
-                        {
-                            "code": err.code,
-                            "message": err.message,
-                            "field": err.field_path,
-                        }
-                        for err in validation_errors
+                        {"code": err.code, "message": err.message, "field": err.field_path} for err in validation_errors
                     ]
                 else:
-                    # I5: Schema validation passed - mark as VALIDATED
                     result["validation_status"] = "VALIDATED"
             # else: schema not found - remain UNVALIDATED (bypass is visible)
 

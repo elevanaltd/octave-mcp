@@ -369,6 +369,72 @@ class TestWriteTool:
 
             # Should succeed (mutations accepted)
             assert result["status"] == "success"
+            assert os.path.exists(target_path)
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+            assert "META:" in written
+            assert '  VERSION::"2.0"' in written
+            assert "  STATUS::DRAFT" in written
+
+    @pytest.mark.asyncio
+    async def test_write_schema_definition_validation_missing_required_field(self):
+        """SchemaDefinition-backed validation should mark INVALID when required fields are missing."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = """===TEST===
+DEBATE_TRANSCRIPT:
+  TOPIC::topic
+  MODE::fixed
+  STATUS::active
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                schema="DEBATE_TRANSCRIPT",
+            )
+
+            assert result["status"] == "success"
+            assert result["validation_status"] == "INVALID"
+            assert "validation_errors" in result
+            assert any(err.get("field", "").endswith(".THREAD_ID") for err in result["validation_errors"])
+
+    @pytest.mark.asyncio
+    async def test_write_schema_definition_validation_valid_document(self):
+        """SchemaDefinition-backed validation should mark VALIDATED for valid content."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = """===TEST===
+DEBATE_TRANSCRIPT:
+  THREAD_ID::test-debate-001
+  TOPIC::Whether AI should use OCTAVE format
+  MODE::fixed
+  STATUS::active
+  PARTICIPANTS::[Wind, Wall, Door]
+  TURNS::[turn1, turn2]
+  MAX_ROUNDS::4
+  MAX_TURNS::12
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                schema="DEBATE_TRANSCRIPT",
+            )
+
+            assert result["status"] == "success"
+            assert result["validation_status"] == "VALIDATED"
 
     @pytest.mark.asyncio
     async def test_write_schema_validation(self):

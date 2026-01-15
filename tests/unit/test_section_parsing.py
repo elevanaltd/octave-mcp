@@ -129,10 +129,24 @@ META:
         Example: →§./path/to/target
         This test ensures we don't break existing functionality.
         """
-        # This test validates that § in other contexts still works
-        # (if such usage exists in codebase)
-        # TODO: Verify if this edge case needs handling
-        pass
+        content = """===TEST===
+ROUTE::→§./path/to/target
+SIBLING::value
+===END===
+"""
+        doc = parse(content)
+
+        assert len(doc.sections) == 2
+        assert doc.sections[0].key == "ROUTE"
+        assert doc.sections[0].value == "→§./path/to/target"
+        assert doc.sections[1].key == "SIBLING"
+
+        # Round-trip should preserve the value semantics
+        emitted = emit(doc)
+        doc2 = parse(emitted)
+        assert len(doc2.sections) == 2
+        assert doc2.sections[0].key == "ROUTE"
+        assert doc2.sections[0].value == "→§./path/to/target"
 
     def test_parses_section_with_suffix_id(self):
         """Should parse §2b::NAME pattern with suffix IDs (BLOCKING-1)."""
