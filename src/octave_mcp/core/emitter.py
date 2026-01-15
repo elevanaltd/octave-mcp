@@ -20,7 +20,7 @@ from typing import Any
 
 from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue, Section
 
-IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
+IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*\Z")
 
 
 def needs_quotes(value: Any) -> bool:
@@ -30,6 +30,12 @@ def needs_quotes(value: Any) -> bool:
 
     # Empty string needs quotes
     if not value:
+        return True
+
+    # Newlines/tabs must be escaped, so they must be quoted.
+    # NOTE: Regex `$` matches before a trailing newline; IDENTIFIER_PATTERN uses `\\Z`
+    # to avoid treating "A\\n" as a bare identifier.
+    if "\n" in value or "\t" in value or "\r" in value:
         return True
 
     # Reserved words need quotes to avoid becoming literals or operators

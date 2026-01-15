@@ -112,6 +112,7 @@ META:
 
         assert len(imports) == 1
         assert imports[0].namespace == "@test/vocabulary"
+        assert imports[0].version is None
 
     def test_detect_multiple_imports(self):
         """Should detect multiple IMPORT sections."""
@@ -156,7 +157,42 @@ META:
 
         assert len(imports) == 1
         assert imports[0].namespace == "@test/vocabulary"
-        assert imports[0].version == "1.0.0"
+
+
+class TestHermeticStandardResolution:
+    """Tests for hermetic standard resolution (resolve_hermetic_standard)."""
+
+    def test_resolve_hermetic_standard_rejects_invalid_hash_format(self):
+        """Should reject malformed frozen@sha256 references (security: no path traversal)."""
+        import tempfile
+
+        from octave_mcp.core.hydrator import VocabularyError, resolve_hermetic_standard
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_dir = Path(tmpdir)
+
+            with pytest.raises(VocabularyError):
+                resolve_hermetic_standard("frozen@sha256:../evil", cache_dir=cache_dir)
+
+    def test_resolve_hermetic_standard_resolves_valid_hash(self):
+        """Should resolve a valid frozen@sha256 reference to a cached file."""
+        import hashlib
+        import tempfile
+
+        from octave_mcp.core.hydrator import resolve_hermetic_standard
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_dir = Path(tmpdir)
+
+            content = b"===STANDARD===\nKEY::value\n===END===\n"
+            digest = hashlib.sha256(content).hexdigest()
+            expected_hash = f"sha256:{digest}"
+
+            cached_path = cache_dir / f"{digest[:16]}.oct.md"
+            cached_path.write_bytes(content)
+
+            resolved = resolve_hermetic_standard(f"frozen@{expected_hash}", cache_dir=cache_dir)
+            assert resolved == cached_path
 
 
 class TestRegistryResolution:

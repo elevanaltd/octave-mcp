@@ -391,10 +391,19 @@ def resolve_hermetic_standard(standard_ref: str, cache_dir: Path | None = None) 
 
     # Handle "frozen@sha256:HASH" - verify pinned resource
     if standard_ref.startswith("frozen@sha256:"):
-        expected_hash = standard_ref.replace("frozen@", "")
-        # Look for cached file with this hash
-        hash_short = expected_hash.split(":")[1][:16]  # First 16 chars for filename
-        cached_path = cache_dir / f"{hash_short}.oct.md"
+        # Security: validate full hash format to prevent path traversal.
+        # Example malicious input: frozen@sha256:../evil
+        m = re.fullmatch(r"frozen@sha256:([0-9a-fA-F]{64})", standard_ref)
+        if m is None:
+            raise VocabularyError(
+                f"Invalid standard reference: {standard_ref}. " "Must be 'latest' (dev) or 'frozen@sha256:HASH' (prod)."
+            )
+
+        digest = m.group(1).lower()
+        expected_hash = f"sha256:{digest}"
+
+        # Look for cached file with this hash (first 16 hex chars for filename)
+        cached_path = cache_dir / f"{digest[:16]}.oct.md"
 
         if not cached_path.exists():
             raise VocabularyError(

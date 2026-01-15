@@ -13,7 +13,7 @@ Validates AST against schema definitions with:
 from dataclasses import dataclass
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document
+from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue
 from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
 from octave_mcp.core.routing import RoutingLog, compute_value_hash
 from octave_mcp.core.schema_extractor import SchemaDefinition
@@ -37,6 +37,14 @@ class Validator:
         self.schema = schema or {}
         self.errors: list[ValidationError] = []
         self.routing_log: RoutingLog = RoutingLog()
+
+    def _to_python_value(self, value: Any) -> Any:
+        """Convert AST values to Python primitives for constraint evaluation."""
+        if isinstance(value, ListValue):
+            return [self._to_python_value(item) for item in value.items]
+        if isinstance(value, InlineMap):
+            return {k: self._to_python_value(v) for k, v in value.pairs.items()}
+        return value
 
     def validate(
         self,
@@ -137,7 +145,7 @@ class Validator:
         present_fields: dict[str, Any] = {}
         for child in section.children:
             if isinstance(child, Assignment):
-                present_fields[child.key] = child.value
+                present_fields[child.key] = self._to_python_value(child.value)
 
         # Get block-level default target (feudal inheritance)
         default_target = getattr(section_schema, "default_target", None)
