@@ -51,6 +51,9 @@ class TestWriteTool:
         assert "mutations" in schema["properties"]
         assert "base_hash" in schema["properties"]
         assert "schema" in schema["properties"]
+        assert "lenient" in schema["properties"]
+        assert "corrections_only" in schema["properties"]
+        assert "parse_error_policy" in schema["properties"]
 
         # content and changes are optional (mutually exclusive)
         assert "content" not in schema.get("required", [])
@@ -86,6 +89,125 @@ class TestWriteTool:
 
             # Verify file was written
             assert os.path.exists(target_path)
+
+    @pytest.mark.asyncio
+    async def test_write_corrections_only_does_not_write(self):
+        """Test corrections_only mode returns preview but does not write file."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "preview.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+                corrections_only=True,
+            )
+
+            assert result["status"] == "success"
+            assert result["path"] == target_path
+            assert "canonical_hash" in result
+            assert "diff_unified" in result
+            assert isinstance(result["corrections"], list)
+            assert not os.path.exists(target_path)
+
+    @pytest.mark.asyncio
+    async def test_write_lenient_plain_text_wraps_into_canonical_doc(self):
+        """Test lenient mode can canonicalize plain text input without OCTAVE syntax."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "plain.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="Design system needs authentication before allowing access\nSecond line of notes",
+                lenient=True,
+            )
+
+            assert result["status"] == "success"
+            assert os.path.exists(target_path)
+            assert any(c.get("code") == "W_STRUCT_RAW_WRAP" for c in result.get("corrections", []))
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+            assert "BODY:" in written
+            assert "RAW::" in written
+
+    @pytest.mark.asyncio
+    async def test_write_lenient_schema_repair_enum_casefold(self):
+        """Test lenient mode applies safe schema repairs (enum casefold) when schema provided."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "meta.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content='===META_SCHEMA===\nMETA:\n  TYPE::META\n  VERSION::"1.0.0"\n  STATUS::draft\n===END===',
+                schema="META",
+                lenient=True,
+            )
+
+            assert result["status"] == "success"
+            assert result["validation_status"] == "VALIDATED"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+            assert "STATUS::DRAFT" in written
+
+            # Repair log should be reflected in corrections
+            assert any(c.get("code") == "ENUM_CASEFOLD" for c in result.get("corrections", []))
+
+    @pytest.mark.asyncio
+    async def test_write_lenient_parse_error_policy_salvage_handles_lexer_errors(self):
+        """Test optional salvage mode can emit canonical carrier on lexer errors."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "salvage.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===DOC===\nKEY::a\tb\n===END===",
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+            assert os.path.exists(target_path)
+            assert any(c.get("code") == "W_SALVAGE_WRAP" for c in result.get("corrections", []))
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+            assert "RAW::" in written
+
+    @pytest.mark.asyncio
+    async def test_write_lenient_parse_error_policy_error_fails_on_lexer_error(self):
+        """Test default error policy returns an error when lenient parsing fails."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "error.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===DOC===\nKEY::a\tb\n===END===",
+                lenient=True,
+                parse_error_policy="error",
+            )
+
+            assert result["status"] == "error"
 
     @pytest.mark.asyncio
     async def test_write_content_mode_overwrite_existing(self):

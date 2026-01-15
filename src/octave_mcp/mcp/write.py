@@ -13,8 +13,10 @@ Implements octave_write tool - replaces octave_create + octave_amend with:
 
 import hashlib
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field
+from difflib import unified_diff
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +24,8 @@ from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, List
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.hydrator import resolve_hermetic_standard
 from octave_mcp.core.lexer import tokenize
-from octave_mcp.core.parser import parse
+from octave_mcp.core.parser import parse, parse_with_warnings
+from octave_mcp.core.repair import repair
 from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
@@ -121,6 +124,80 @@ class WriteTool(BaseTool):
     # Security: allowed file extensions
     ALLOWED_EXTENSIONS = {".oct.md", ".octave", ".md"}
 
+    def _build_unified_diff(self, before: str, after: str) -> str:
+        """Build a compact unified diff string for diff-first responses."""
+        before_lines = before.splitlines(keepends=True)
+        after_lines = after.splitlines(keepends=True)
+        diff_iter = unified_diff(before_lines, after_lines, fromfile="original", tofile="canonical", n=3)
+
+        max_chars = 200_000
+        out: list[str] = []
+        total = 0
+        for line in diff_iter:
+            # Stop once we exceed the cap (streaming to avoid allocating huge diffs)
+            if total + len(line) > max_chars:
+                out.append("\n... (diff truncated)\n")
+                break
+            out.append(line)
+            total += len(line)
+
+        return "".join(out)
+
+    def _wrap_plain_text_as_doc(self, raw_text: str, schema_name: str | None) -> tuple[str, list[dict[str, Any]]]:
+        """Deterministically wrap plain text into a canonical OCTAVE carrier doc."""
+        doc = Document(name="DOC")
+        doc.meta = {"TYPE": schema_name or "UNKNOWN", "VERSION": "1.0"}
+        doc.sections = [Block(key="BODY", children=[Assignment(key="RAW", value=raw_text)])]
+
+        corrections: list[dict[str, Any]] = [
+            {
+                "code": "W_STRUCT_RAW_WRAP",
+                "tier": "LENIENT_PARSE",
+                "message": "Wrapped plain text into BODY: RAW carrier to produce parseable canonical OCTAVE",
+                "safe": True,
+                "semantics_changed": False,
+            }
+        ]
+        return emit(doc), corrections
+
+    def _map_parse_warnings_to_corrections(self, warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Convert parser/lexer warnings (I4) into octave_write corrections entries."""
+        corrections: list[dict[str, Any]] = []
+        for w in warnings:
+            w_type = w.get("type", "")
+            if w_type == "normalization":
+                corrections.append(
+                    {
+                        "code": "W002",
+                        "tier": "NORMALIZATION",
+                        "message": f"ASCII operator -> Unicode: {w.get('original', '')} -> {w.get('normalized', '')}",
+                        "line": w.get("line", 0),
+                        "column": w.get("column", 0),
+                        "before": w.get("original", ""),
+                        "after": w.get("normalized", ""),
+                        "safe": True,
+                        "semantics_changed": False,
+                    }
+                )
+                continue
+
+            if w_type == "lenient_parse":
+                subtype = w.get("subtype", "unknown")
+                corrections.append(
+                    {
+                        "code": f"W_LENIENT_{subtype}".upper(),
+                        "tier": "LENIENT_PARSE",
+                        "message": f"Lenient parse: {subtype}",
+                        "line": w.get("line", 0),
+                        "column": w.get("column", 0),
+                        "before": w.get("original", ""),
+                        "after": w.get("result", ""),
+                        "safe": True,
+                        "semantics_changed": False,
+                    }
+                )
+        return corrections
+
     def _error_envelope(
         self,
         target_path: str,
@@ -145,6 +222,7 @@ class WriteTool(BaseTool):
             "canonical_hash": "",
             "corrections": corrections if corrections is not None else [],
             "diff": "",
+            "diff_unified": "",
             "errors": errors,
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
         }
@@ -205,6 +283,28 @@ class WriteTool(BaseTool):
             description="If True, include compiled regex/grammar in output for debugging constraint evaluation.",
         )
 
+        schema.add_parameter(
+            "lenient",
+            "boolean",
+            required=False,
+            description="If True, enable deterministic lenient parsing + optional schema repairs.",
+        )
+
+        schema.add_parameter(
+            "corrections_only",
+            "boolean",
+            required=False,
+            description="If True, return corrections/diff without writing to disk (dry run).",
+        )
+
+        schema.add_parameter(
+            "parse_error_policy",
+            "string",
+            required=False,
+            description='Policy when tokenization/parsing fails in lenient mode: "error" (default) or "salvage".',
+            enum=["error", "salvage"],
+        )
+
         return schema.build()
 
     def _validate_path(self, target_path: str) -> tuple[bool, str | None]:
@@ -217,6 +317,13 @@ class WriteTool(BaseTool):
             Tuple of (is_valid, error_message)
         """
         path = Path(target_path)
+
+        # Reject path traversal early (before any filesystem resolution)
+        try:
+            if any(part == ".." for part in path.parts):
+                return False, "Path traversal not allowed (..)"
+        except Exception as e:
+            return False, f"Invalid path: {str(e)}"
 
         # Check for symlinks anywhere in path (security: prevent symlink-based exfiltration)
         # This includes both the final component AND any parent directories
@@ -263,15 +370,6 @@ class WriteTool(BaseTool):
         except Exception as e:
             return False, f"Path resolution failed: {str(e)}"
 
-        # Check for path traversal (..)
-        try:
-            # Check if path contains .. as a component (not substring)
-            if any(part == ".." for part in path.parts):
-                return False, "Path traversal not allowed (..)"
-
-        except Exception as e:
-            return False, f"Invalid path: {str(e)}"
-
         # Check file extension
         if path.suffix not in self.ALLOWED_EXTENSIONS:
             compound_suffix = "".join(path.suffixes[-2:]) if len(path.suffixes) >= 2 else path.suffix
@@ -308,15 +406,15 @@ class WriteTool(BaseTool):
         corrections = []
 
         # Map tokenize repairs to W002 (ASCII operator -> Unicode)
-        for repair in tokenize_repairs:
+        for token_repair in tokenize_repairs:
             corrections.append(
                 {
                     "code": "W002",
-                    "message": f"ASCII operator -> Unicode: {repair.get('original', '')} -> {repair.get('normalized', '')}",
-                    "line": repair.get("line", 0),
-                    "column": repair.get("column", 0),
-                    "before": repair.get("original", ""),
-                    "after": repair.get("normalized", ""),
+                    "message": f"ASCII operator -> Unicode: {token_repair.get('original', '')} -> {token_repair.get('normalized', '')}",
+                    "line": token_repair.get("line", 0),
+                    "column": token_repair.get("column", 0),
+                    "before": token_repair.get("original", ""),
+                    "after": token_repair.get("normalized", ""),
                 }
             )
 
@@ -503,6 +601,15 @@ class WriteTool(BaseTool):
         base_hash = params.get("base_hash")
         schema_name = params.get("schema")
         debug_grammar = params.get("debug_grammar", False)
+        lenient = params.get("lenient", False)
+        corrections_only = params.get("corrections_only", False)
+        parse_error_policy = params.get("parse_error_policy", "error")
+
+        if parse_error_policy not in ("error", "salvage"):
+            return self._error_envelope(
+                target_path,
+                [{"code": "E_INPUT", "message": f"Invalid parse_error_policy: {parse_error_policy}"}],
+            )
 
         # Initialize result with unified envelope per D2 design
         # I5 (Schema Sovereignty): validation_status must be UNVALIDATED to make bypass visible
@@ -513,6 +620,7 @@ class WriteTool(BaseTool):
             "canonical_hash": "",
             "corrections": [],
             "diff": "",
+            "diff_unified": "",
             "errors": [],
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass until validated
         }
@@ -547,10 +655,11 @@ class WriteTool(BaseTool):
         file_exists = path_obj.exists()
 
         # Handle modes based on content vs changes
-        original_content = ""
-        tokenize_repairs: list[dict[str, Any]] = []
+        baseline_content_for_diff = ""
         original_metrics: StructuralMetrics | None = None
         canonical_metrics: StructuralMetrics | None = None
+        canonical_content = ""
+        corrections: list[dict[str, Any]] = []
 
         if changes is not None:
             # CHANGES MODE (Amend) - file must exist
@@ -563,7 +672,7 @@ class WriteTool(BaseTool):
             # Read existing file
             try:
                 with open(target_path, encoding="utf-8") as f:
-                    original_content = f.read()
+                    baseline_content_for_diff = f.read()
             except Exception as e:
                 return self._error_envelope(
                     target_path,
@@ -572,7 +681,7 @@ class WriteTool(BaseTool):
 
             # Check base_hash if provided
             if base_hash:
-                current_hash = self._compute_hash(original_content)
+                current_hash = self._compute_hash(baseline_content_for_diff)
                 if current_hash != base_hash:
                     return self._error_envelope(
                         target_path,
@@ -584,10 +693,9 @@ class WriteTool(BaseTool):
                         ],
                     )
 
-            # Parse existing content
+            # Parse existing content (strict)
             try:
-                doc = parse(original_content)
-                # Extract metrics from original document BEFORE applying changes
+                doc = parse(baseline_content_for_diff)
                 original_metrics = extract_structural_metrics(doc)
             except Exception as e:
                 return self._error_envelope(
@@ -604,91 +712,115 @@ class WriteTool(BaseTool):
                     [{"code": "E_APPLY", "message": f"Apply changes error: {str(e)}"}],
                 )
 
-            # Apply META mutations (if any) before canonical emission
+            # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)
-
-            # Emit canonical form
-            try:
-                canonical_content = emit(doc)
-                # Extract metrics from modified document AFTER applying changes
-                canonical_metrics = extract_structural_metrics(doc)
-            except Exception as e:
-                return self._error_envelope(
-                    target_path,
-                    [{"code": "E_EMIT", "message": f"Emit error: {str(e)}"}],
-                )
-
-            # Track repairs from canonical
-            try:
-                _, tokenize_repairs = tokenize(canonical_content)
-            except Exception:
-                pass  # Non-fatal
 
         else:
             # CONTENT MODE (Create/Overwrite)
             assert content is not None
-            original_content = content
+
+            # baseline for diff: existing file content if overwriting
+            if file_exists:
+                try:
+                    with open(target_path, encoding="utf-8") as f:
+                        baseline_content_for_diff = f.read()
+                except Exception:
+                    baseline_content_for_diff = ""
+                if baseline_content_for_diff:
+                    try:
+                        baseline_doc = parse(baseline_content_for_diff)
+                    except Exception:
+                        baseline_doc, _ = parse_with_warnings(baseline_content_for_diff)
+                    original_metrics = extract_structural_metrics(baseline_doc)
 
             # Check base_hash if provided AND file exists (CAS guard)
             if base_hash and file_exists:
+                current_hash = self._compute_hash(baseline_content_for_diff)
+                if current_hash != base_hash:
+                    return self._error_envelope(
+                        target_path,
+                        [
+                            {
+                                "code": "E_HASH",
+                                "message": f"Hash mismatch - file has been modified (expected {base_hash[:8]}..., got {current_hash[:8]}...)",
+                            }
+                        ],
+                    )
+
+            parse_input = content
+
+            if lenient:
+                # Detect likely OCTAVE structure using line-anchored patterns to avoid false positives in prose.
+                # Example false positive to avoid: "use Foo::Bar" in a sentence.
+                assignment_line = re.search(r"(?m)^[ \t]*[A-Za-z_][A-Za-z0-9_.]*::", parse_input) is not None
+                block_line = re.search(r"(?m)^[ \t]*[A-Za-z_][A-Za-z0-9_.]*:\s*$", parse_input) is not None
+                meta_block = re.search(r"(?m)^META:\s*$", parse_input) is not None
+                envelope_line = re.search(r"(?m)^===.+===\s*$", parse_input) is not None
+                looks_structured = assignment_line or block_line or meta_block or envelope_line
+                if not looks_structured and parse_input.strip():
+                    parse_input, wrap_corrections = self._wrap_plain_text_as_doc(parse_input, schema_name)
+                    corrections.extend(wrap_corrections)
+
                 try:
-                    with open(target_path, encoding="utf-8") as f:
-                        existing_content = f.read()
-                    current_hash = self._compute_hash(existing_content)
-                    if current_hash != base_hash:
+                    doc, parse_warnings = parse_with_warnings(parse_input)
+                    corrections.extend(self._map_parse_warnings_to_corrections(parse_warnings))
+                except Exception as e:
+                    if parse_error_policy == "salvage":
+                        doc = Document(name="DOC")
+                        doc.meta = {"TYPE": schema_name or "UNKNOWN", "VERSION": "1.0"}
+                        doc.sections = [Block(key="BODY", children=[Assignment(key="RAW", value=content)])]
+                        corrections.append(
+                            {
+                                "code": "W_SALVAGE_WRAP",
+                                "tier": "LENIENT_PARSE",
+                                "message": "Tokenization/parsing failed; wrapped raw input into BODY: RAW carrier",
+                                "safe": True,
+                                "semantics_changed": False,
+                            }
+                        )
+                    else:
                         return self._error_envelope(
                             target_path,
-                            [
-                                {
-                                    "code": "E_HASH",
-                                    "message": f"Hash mismatch - file has been modified (expected {base_hash[:8]}..., got {current_hash[:8]}...)",
-                                }
-                            ],
+                            [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
+                            corrections,
                         )
+
+            else:
+                # Strict tokenization + strict parse
+                try:
+                    _, tokenize_repairs = tokenize(parse_input)
                 except Exception as e:
                     return self._error_envelope(
                         target_path,
-                        [{"code": "E_READ", "message": f"Read error: {str(e)}"}],
+                        [{"code": "E_TOKENIZE", "message": f"Tokenization error: {str(e)}"}],
                     )
 
-            # Tokenize with repairs
-            try:
-                _, tokenize_repairs = tokenize(content)
-            except Exception as e:
-                return self._error_envelope(
-                    target_path,
-                    [{"code": "E_TOKENIZE", "message": f"Tokenization error: {str(e)}"}],
-                )
+                try:
+                    doc = parse(parse_input)
+                except Exception as e:
+                    strict_corrections = self._track_corrections(parse_input, parse_input, tokenize_repairs)
+                    return self._error_envelope(
+                        target_path,
+                        [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
+                        strict_corrections,
+                    )
 
-            # Parse to AST
-            try:
-                doc = parse(content)
-                # Extract metrics from input document
-                original_metrics = extract_structural_metrics(doc)
-            except Exception as e:
-                corrections = self._track_corrections(content, content, tokenize_repairs)
-                return self._error_envelope(
-                    target_path,
-                    [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
-                    corrections,
-                )
+                corrections.extend(self._track_corrections(parse_input, parse_input, tokenize_repairs))
 
-            # Apply META mutations (if any) before canonical emission
+            # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)
 
-            # Emit canonical form
-            try:
-                canonical_content = emit(doc)
-                # Extract metrics from canonical document (same doc after emit)
-                canonical_metrics = extract_structural_metrics(doc)
-            except Exception as e:
-                return self._error_envelope(
-                    target_path,
-                    [{"code": "E_EMIT", "message": f"Emit error: {str(e)}"}],
-                )
+        # Emit canonical form (may be re-emitted after schema repair)
+        try:
+            canonical_content = emit(doc)
+            canonical_metrics = extract_structural_metrics(doc)
+        except Exception as e:
+            return self._error_envelope(
+                target_path,
+                [{"code": "E_EMIT", "message": f"Emit error: {str(e)}"}],
+                corrections,
+            )
 
-        # Track corrections
-        corrections = self._track_corrections(original_content, canonical_content, tokenize_repairs)
         result["corrections"] = corrections
 
         # Schema Validation (I5 Schema Sovereignty)
@@ -747,6 +879,72 @@ class WriteTool(BaseTool):
                 validator = Validator(schema=schema_def)
                 validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
 
+                # Lenient mode: apply minimal safe repairs for builtin dict schemas (META-only)
+                if lenient and schema_def is not None and validation_errors:
+                    meta_schema = schema_def.get("META", {})
+                    fields = meta_schema.get("fields", {})
+                    did_repair = False
+
+                    for field_name, field_spec in fields.items():
+                        if field_spec.get("type") != "ENUM":
+                            continue
+                        allowed_values = field_spec.get("values", [])
+                        current = doc.meta.get(field_name)
+                        if not isinstance(current, str):
+                            continue
+
+                        if current in allowed_values:
+                            continue
+
+                        matches = [v for v in allowed_values if isinstance(v, str) and v.lower() == current.lower()]
+                        if len(matches) != 1:
+                            continue
+
+                        canonical_value = matches[0]
+                        doc.meta[field_name] = canonical_value
+                        did_repair = True
+                        result["corrections"].append(
+                            {
+                                "code": "ENUM_CASEFOLD",
+                                "tier": "REPAIR",
+                                "before": current,
+                                "after": canonical_value,
+                                "safe": True,
+                                "semantics_changed": False,
+                                "message": f"Schema repair: enum casefold {field_name}",
+                            }
+                        )
+
+                    if did_repair:
+                        canonical_content = emit(doc)
+                        canonical_metrics = extract_structural_metrics(doc)
+                        validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
+
+                # Lenient mode may apply safe schema repairs (enum casefold, type coercion)
+                if lenient and schema_definition is not None and validation_errors:
+                    try:
+                        doc, repair_log = repair(doc, validation_errors, fix=True, schema=schema_definition)
+                        for entry in repair_log.repairs:
+                            result["corrections"].append(
+                                {
+                                    "code": entry.rule_id,
+                                    "tier": entry.tier.value,
+                                    "before": entry.before,
+                                    "after": entry.after,
+                                    "safe": entry.safe,
+                                    "semantics_changed": entry.semantics_changed,
+                                    "message": f"Schema repair: {entry.rule_id}",
+                                }
+                            )
+                        # Re-emit canonical after repairs
+                        canonical_content = emit(doc)
+                        canonical_metrics = extract_structural_metrics(doc)
+                        # Revalidate
+                        validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
+                    except Exception:
+                        # Best-effort: if repair fails, preserve original validation_errors
+                        pass
+
                 if validation_errors:
                     result["validation_status"] = "INVALID"
                     result["validation_errors"] = [
@@ -755,6 +953,23 @@ class WriteTool(BaseTool):
                 else:
                     result["validation_status"] = "VALIDATED"
             # else: schema not found - remain UNVALIDATED (bypass is visible)
+
+        # Diff-first output + hashes (works for dry-run)
+        result["diff_unified"] = self._build_unified_diff(baseline_content_for_diff, canonical_content)
+        result["canonical_hash"] = self._compute_hash(canonical_content)
+
+        content_changed = baseline_content_for_diff != canonical_content
+        result["diff"] = self._generate_diff(
+            len(baseline_content_for_diff),
+            len(canonical_content),
+            original_metrics,
+            canonical_metrics,
+            content_changed=content_changed,
+        )
+
+        if corrections_only:
+            # Explicit dry-run: no filesystem writes, no mkdir side effects
+            return result
 
         # WRITE FILE (atomic + symlink-safe)
         try:
@@ -766,7 +981,7 @@ class WriteTool(BaseTool):
                 return self._error_envelope(
                     target_path,
                     [{"code": "E_WRITE", "message": "Cannot write to symlink target"}],
-                    corrections,
+                    result["corrections"],
                 )
 
             # Preserve permissions if file exists
@@ -801,7 +1016,7 @@ class WriteTool(BaseTool):
                                     "message": f"Hash mismatch before write - file was modified during operation (expected {base_hash[:8]}..., got {verify_hash[:8]}...)",
                                 }
                             ],
-                            corrections,
+                            result["corrections"],
                         )
 
                 # Atomic replace
@@ -816,22 +1031,7 @@ class WriteTool(BaseTool):
             return self._error_envelope(
                 target_path,
                 [{"code": "E_WRITE", "message": f"Write error: {str(e)}"}],
-                corrections,
+                result["corrections"],
             )
-
-        # Compute hash of written content
-        canonical_hash = self._compute_hash(canonical_content)
-
-        # Build success response
-        result["canonical_hash"] = canonical_hash
-        # I4 Auditability: Detect content changes even when byte count/structure identical
-        content_changed = original_content != canonical_content
-        result["diff"] = self._generate_diff(
-            len(original_content),
-            len(canonical_content),
-            original_metrics,
-            canonical_metrics,
-            content_changed=content_changed,
-        )
 
         return result
