@@ -2,36 +2,41 @@
 META:
   TYPE::PROJECT_CONTEXT
   NAME::"OCTAVE MCP Server"
-  VERSION::"0.2.0"
+  VERSION::"0.6.1"
   PHASE::B3_INTEGRATION
-  STATUS::v0_2_0_released
-  LAST_UPDATED::"2025-12-31T12:00:00Z"
-PURPOSE::"MCP server implementing OCTAVE protocol for structured AI communication"
+  STATUS::active_development
+  LAST_UPDATED::"2026-01-29T17:00:00Z"
+PURPOSE::"MCP server implementing OCTAVE v6 protocol for structured AI communication"
 ARCHITECTURE:
-  CORE::[parser,normalizer,validator,emitter]
+  CORE::[parser,normalizer,validator,emitter,lexer]
   CLI::[octave_validate,octave_eject,octave_write]
   MCP::[octave_validate,octave_write,octave_eject]
   DEPRECATED::[octave_ingest,octave_create,octave_amend]
 QUALITY_GATES:
-  pytest::"516 tests passing"
+  pytest::"1061 tests passing"
   mypy::PASSING
   ruff::PASSING
   black::PASSING
-  coverage::"88%"
+  coverage::"83%"
 IMMUTABLES:
   I1::ENFORCED
   I2::ENFORCED
   I3::ENFORCED
   I4::ENFORCED
   I5::ENFORCED
-PHASE_STATUS:
-  D0::COMPLETE
-  D1::APPROVED
-  D2::COMPLETE
-  D3::COMPLETE
-  B0::COMPLETE
-  B1::COMPLETE
-  B2::COMPLETE
-  B3::COMPLETE
-NEXT_ACTIONS::[complete_documentation_update,complete_I5_schema_validation,implement_vocabulary_snapshot]
+RECENT_FIXES:
+  GH_176::nested_dict_serialization_fixed
+  GH_177::localized_salvage_implemented
+  GH_169::lenient_mode_resolved
+OPEN_ISSUES:
+  QUICK_WINS::[GH_145,GH_179,GH_180]
+  MEDIUM_EFFORT::[GH_181,GH_182,GH_183,GH_184,GH_185,GH_192,GH_193]
+  LARGE_FEATURES::[GH_171,GH_187,GH_188,GH_189,GH_190,GH_191]
+  DESIGN_DECISIONS::[GH_110,GH_111,GH_112,GH_113,GH_153]
+  DEFERRED::[GH_135,GH_186]
+SPEC_COMPLIANCE:
+  IMPLEMENTED::[envelope,operators,types,structure,lenient_parsing,salvage_mode]
+  PARTIAL::[constraint_evaluation,validation_status]
+  NOT_IMPLEMENTED::[holographic_patterns,target_routing,block_inheritance,policy_blocks,meta_schema_compilation,gbnf_integration]
+NEXT_ACTIONS::[implement_quick_wins,address_spec_compliance_gaps,plan_schema_mode_foundation]
 ===END===
