@@ -2,15 +2,15 @@
 META:
   TYPE::PROJECT_ROADMAP
   NAME::"OCTAVE-MCP Development Roadmap"
-  VERSION::"0.3.0"
-  UPDATED::"2026-01-29T17:00:00Z"
+  VERSION::"0.4.0"
+  UPDATED::"2026-01-29T22:45:00Z"
 VISION::"Production-ready MCP server implementing OCTAVE v6 protocol with full spec compliance"
 CURRENT_STATE:
   PHASE::B3_COMPLETE
-  TESTS::"1061 passing"
-  COVERAGE::"83%"
+  TESTS::"1312 passing"
+  COVERAGE::"90%"
   QUALITY::all_passing
-  RELEASE::"v0.6.1"
+  RELEASE::"v0.7.0"
 PHASES_COMPLETED:
   D0::COMPLETE
   D1::APPROVED
@@ -25,6 +25,8 @@ PHASES_REMAINING:
   B5::PENDING
 MILESTONES:
   v0_7_0:
+    STATUS::COMPLETE
+    COMPLETED_AT::"2026-01-29T22:45:00Z"
     FOCUS::"Parser hardening and spec compliance"
     ISSUES::[GH_145,GH_179,GH_180,GH_184,GH_185]
     DELIVERABLES::[duplicate_key_detection,unbalanced_bracket_detection,spec_compliance_warnings,inline_map_validation,error_message_improvements]
