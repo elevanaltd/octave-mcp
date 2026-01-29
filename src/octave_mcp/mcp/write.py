@@ -20,7 +20,7 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, ListValue, Section
+from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, Section
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.hydrator import resolve_hermetic_standard
 from octave_mcp.core.lexer import tokenize
@@ -104,16 +104,27 @@ def _normalize_value_for_ast(value: Any) -> Any:
     Python lists must be wrapped in ListValue to emit correct OCTAVE syntax.
     Without this, str(list) produces "['a', 'b']" which is invalid OCTAVE.
 
+    Python dicts must be wrapped in InlineMap to emit correct OCTAVE syntax.
+    Without this, str(dict) produces "{'key': 'value'}" which is invalid OCTAVE.
+    Issue #176: Nested dicts should produce valid OCTAVE like [key::value], not Python repr.
+
     Args:
         value: Python value from changes dict
 
     Returns:
-        AST-compatible value (ListValue for lists, original for others)
+        AST-compatible value (ListValue for lists, InlineMap for dicts, original for others)
     """
     if isinstance(value, list):
         # Recursively normalize list items
         normalized_items = [_normalize_value_for_ast(item) for item in value]
         return ListValue(items=normalized_items)
+    elif isinstance(value, dict):
+        # Issue #176: Convert dicts to InlineMap to produce valid OCTAVE syntax
+        # InlineMap emits as [key::value,key2::value2] which is valid OCTAVE
+        # Without this, str(dict) produces "{'key': 'value'}" which is INVALID OCTAVE
+        # Recursively normalize all values in the dict
+        normalized_pairs = {k: _normalize_value_for_ast(v) for k, v in value.items()}
+        return InlineMap(pairs=normalized_pairs)
     # Other types (str, int, bool, None, etc.) are handled by emit_value directly
     return value
 

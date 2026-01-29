@@ -1827,3 +1827,180 @@ KEY::new
 
             # GREEN phase will change this behavior:
             # resolve_hermetic_standard("latest", cache_dir) -> loads schema -> VALIDATED/INVALID
+
+
+class TestWriteToolNestedDictSerialization:
+    """Tests for Issue #176: Nested dicts should produce valid OCTAVE, not Python repr.
+
+    ROOT CAUSE:
+    - _normalize_value_for_ast() handles lists (wrapping in ListValue) but passes dicts unchanged
+    - emit_value() falls back to str(value) for unknown types
+    - str(dict) produces Python repr like "{'sub': 1}" which is INVALID OCTAVE
+
+    REQUIREMENT:
+    - Nested dicts in changes parameter must emit valid OCTAVE syntax
+    - Either as InlineMap [key::value] or Block structure
+    - NOT as Python repr {'key': 'value'}
+    """
+
+    @pytest.mark.asyncio
+    async def test_changes_nested_dict_produces_valid_octave_not_python_repr(self):
+        """Issue #176: Nested dicts should produce valid OCTAVE, not Python repr.
+
+        RED PHASE: This test proves the bug exists.
+
+        When changes parameter contains a nested dict like {'my_field': {'sub': 1}},
+        the output should contain valid OCTAVE syntax like my_field::[sub::1]
+        NOT my_field::{'sub': 1} (Python repr - INVALID OCTAVE).
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create initial file
+            initial = """===TEST===
+KEY::old_value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Apply changes with nested dict
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"CONFIG": {"sub_key": "sub_value", "num": 42}},
+            )
+
+            assert result["status"] == "success"
+
+            # Read the output file
+            with open(target_path) as f:
+                content = f.read()
+
+            # CRITICAL: Must NOT contain Python dict repr syntax
+            assert "{'sub_key'" not in content, (
+                f"BUG (Issue #176): Nested dict produced Python repr instead of valid OCTAVE. "
+                f"Found Python dict syntax in output:\n{content}"
+            )
+            assert "{'num'" not in content, (
+                f"BUG (Issue #176): Nested dict produced Python repr instead of valid OCTAVE. "
+                f"Found Python dict syntax in output:\n{content}"
+            )
+            # Check for various Python repr forms
+            assert "'sub_key':" not in content, f"Found Python dict syntax:\n{content}"
+            assert '"sub_key":' not in content.replace("sub_key::", ""), f"Found Python dict syntax:\n{content}"
+
+            # MUST contain valid OCTAVE structure
+            # Either InlineMap: CONFIG::[sub_key::sub_value,num::42]
+            # Or Block: CONFIG:\n  sub_key::sub_value\n  num::42
+            assert "CONFIG::" in content or "CONFIG:" in content, f"CONFIG field should be present. Content:\n{content}"
+
+            # The nested values should be accessible
+            assert "sub_value" in content, f"sub_value should be in output:\n{content}"
+            assert "42" in content, f"42 should be in output:\n{content}"
+
+    @pytest.mark.asyncio
+    async def test_changes_deeply_nested_dict_produces_valid_octave(self):
+        """Issue #176: Deeply nested dicts should also produce valid OCTAVE.
+
+        Tests recursive normalization of nested structures.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create initial file
+            initial = """===TEST===
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Apply changes with deeply nested dict
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"OUTER": {"inner": {"deep": "value"}}},
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path) as f:
+                content = f.read()
+
+            # CRITICAL: Must NOT contain any Python dict repr
+            assert "{'" not in content, f"BUG (Issue #176): Deeply nested dict produced Python repr:\n{content}"
+            assert "': " not in content, f"BUG (Issue #176): Deeply nested dict produced Python repr:\n{content}"
+
+            # Deep value should be accessible
+            assert "value" in content
+
+    @pytest.mark.asyncio
+    async def test_changes_dict_with_list_values_produces_valid_octave(self):
+        """Issue #176: Dict containing list values should produce valid OCTAVE.
+
+        Tests mixed nested structures (dict with list).
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create initial file
+            initial = """===TEST===
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Apply changes with dict containing list
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"CONFIG": {"items": ["a", "b", "c"]}},
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path) as f:
+                content = f.read()
+
+            # CRITICAL: Must NOT contain Python dict repr
+            assert "{'" not in content, f"BUG (Issue #176): Dict with list produced Python repr:\n{content}"
+            # Also must NOT contain Python list repr
+            assert "['a'" not in content, f"BUG: List produced Python repr:\n{content}"
+
+            # Values should be present in valid OCTAVE format
+            assert "a" in content
+            assert "b" in content
+            assert "c" in content
+
+    @pytest.mark.asyncio
+    async def test_normalize_value_for_ast_handles_nested_dict(self):
+        """Unit test for _normalize_value_for_ast with nested dicts.
+
+        This directly tests the normalization function to verify it converts
+        dicts to proper AST structures.
+        """
+        from octave_mcp.core.ast_nodes import Block, InlineMap
+        from octave_mcp.mcp.write import _normalize_value_for_ast
+
+        # Test simple nested dict
+        nested_dict = {"key1": "value1", "key2": 42}
+        result = _normalize_value_for_ast(nested_dict)
+
+        # Result should be an AST type, not a raw dict
+        assert not isinstance(result, dict), (
+            f"BUG (Issue #176): _normalize_value_for_ast should convert dict to AST type, "
+            f"got {type(result).__name__}"
+        )
+
+        # Should be either InlineMap or Block
+        assert isinstance(
+            result, InlineMap | Block
+        ), f"Expected InlineMap or Block for nested dict, got {type(result).__name__}"
