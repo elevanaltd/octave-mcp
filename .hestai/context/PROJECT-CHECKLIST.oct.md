@@ -2,20 +2,22 @@
 META:
   TYPE::PROJECT_CHECKLIST
   NAME::"OCTAVE-MCP Task Checklist"
-  VERSION::"0.4.0"
-  LAST_UPDATE::"2026-01-29T22:45:00Z"
+  VERSION::"0.5.0"
+  LAST_UPDATE::"2026-01-29T23:00:00Z"
   REVIEWED_BY::"holistic-orchestrator"
-SESSION_2026_01_29_v070:
+  RELEASE_NOTE::"All milestones are internal labels - no releases until v1.0.0"
+SESSION_2026_01_29_M1:
   STATUS::COMPLETE
   ACCOMPLISHMENTS:
-    milestone_completed::v0_7_0
+    milestone_completed::M1_parser_hardening
     issues_implemented::[GH_145,GH_179,GH_180,GH_184,GH_185]
-    tests_added::51
+    tests_added::251
     test_total::1312
     coverage::"90%"
     quality_gates::all_passing
     crs_review::APPROVED[Gemini,98/100]
-MILESTONE_v0_7_0:
+M1_PARSER_HARDENING:
+  LABEL::v0.7.0
   STATUS::COMPLETE
   FOCUS::"Parser hardening and spec compliance"
   COMPLETED_AT::"2026-01-29T22:45:00Z"
@@ -26,7 +28,8 @@ MILESTONE_v0_7_0:
     GH_184::COMPLETE[spec_compliance_warnings]
     GH_185::COMPLETE[inline_map_nesting_validation]
   COMMITS::[645bbde,d837040,13406ed,08a6388,5941a1f]
-MILESTONE_v0_8_0:
+M2_DEVELOPER_EXPERIENCE:
+  LABEL::v0.8.0
   STATUS::READY_TO_START
   FOCUS::"Developer experience and formatting"
   TASKS:
@@ -35,8 +38,8 @@ MILESTONE_v0_8_0:
     GH_183::QUEUED[validation_profiles]
     GH_192::QUEUED[deep_nesting_warning]
     GH_193::QUEUED[auto_format_options]
-  ESTIMATED_EFFORT::"20-28 hours"
-MILESTONE_v0_9_0:
+M3_SCHEMA_FOUNDATION:
+  LABEL::v0.9.0
   STATUS::QUEUED
   FOCUS::"Schema mode foundation"
   TASKS:
@@ -44,15 +47,14 @@ MILESTONE_v0_9_0:
     GH_188::QUEUED[target_routing]
     GH_189::QUEUED[block_inheritance]
     GH_190::QUEUED[policy_blocks]
-  ESTIMATED_EFFORT::"24-36 hours"
-MILESTONE_v1_0_0:
+M4_FULL_SPEC:
+  LABEL::v1.0.0
   STATUS::QUEUED
-  FOCUS::"Full v6 spec compliance"
+  FOCUS::"Full v6 spec compliance - ONLY ACTUAL RELEASE"
   TASKS:
     GH_171::QUEUED[gbnf_integration]
     GH_191::QUEUED[meta_schema_compilation]
     GH_186::QUEUED[emoji_key_support]
-  ESTIMATED_EFFORT::"30-40 hours"
 DESIGN_DECISIONS_PENDING:
   STATUS::REQUIRES_CONSENSUS
   TASKS:
@@ -68,5 +70,5 @@ QUALITY_GATES:
   ruff::PASSING
   black::PASSING
   coverage::"90%"
-IMMEDIATE_ACTIONS::[start_v0_8_0_milestone,schedule_design_sessions]
+IMMEDIATE_ACTIONS::[continue_M2_developer_experience,schedule_design_sessions]
 ===END===

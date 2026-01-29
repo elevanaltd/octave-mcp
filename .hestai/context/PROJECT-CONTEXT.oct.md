@@ -2,10 +2,11 @@
 META:
   TYPE::PROJECT_CONTEXT
   NAME::"OCTAVE MCP Server"
-  VERSION::"0.7.0"
+  VERSION::"pre-1.0.0-dev"
+  INTERNAL_MILESTONE::M1_parser_hardening[COMPLETE]
   PHASE::B3_INTEGRATION
   STATUS::active_development
-  LAST_UPDATED::"2026-01-29T22:45:00Z"
+  LAST_UPDATED::"2026-01-29T23:00:00Z"
 PURPOSE::"MCP server implementing OCTAVE v6 protocol for structured AI communication"
 ARCHITECTURE:
   CORE::[parser,normalizer,validator,emitter,lexer]
@@ -25,11 +26,11 @@ IMMUTABLES:
   I4::ENFORCED
   I5::ENFORCED
 RECENT_FIXES:
-  GH_145::envelope_identifier_error_messages[v0.7.0]
-  GH_179::duplicate_key_detection[v0.7.0]
-  GH_180::unbalanced_bracket_detection[v0.7.0]
-  GH_184::spec_compliance_warnings[v0.7.0]
-  GH_185::inline_map_nesting_validation[v0.7.0]
+  GH_145::envelope_identifier_error_messages[M1]
+  GH_179::duplicate_key_detection[M1]
+  GH_180::unbalanced_bracket_detection[M1]
+  GH_184::spec_compliance_warnings[M1]
+  GH_185::inline_map_nesting_validation[M1]
 OPEN_ISSUES:
   QUICK_WINS::[]
   MEDIUM_EFFORT::[GH_181,GH_182,GH_183,GH_192,GH_193]
@@ -40,5 +41,5 @@ SPEC_COMPLIANCE:
   IMPLEMENTED::[envelope,operators,types,structure,lenient_parsing,salvage_mode,duplicate_key_detection,bracket_validation,never_rules]
   PARTIAL::[constraint_evaluation,validation_status]
   NOT_IMPLEMENTED::[holographic_patterns,target_routing,block_inheritance,policy_blocks,meta_schema_compilation,gbnf_integration]
-NEXT_ACTIONS::[start_v0_8_0_milestone,schedule_design_sessions]
+NEXT_ACTIONS::[continue_M2_developer_experience,schedule_design_sessions]
 ===END===
