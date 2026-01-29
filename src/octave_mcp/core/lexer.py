@@ -120,7 +120,9 @@ TOKEN_PATTERNS = [
     # Envelope markers (must come before SEPARATOR)
     # ENVELOPE_END must come before ENVELOPE_START to match first
     (r"===END===", TokenType.ENVELOPE_END),
-    (r"===([A-Z_][A-Z0-9_]*)===", TokenType.ENVELOPE_START),
+    # GH#145: Accept both upper and lowercase letters in envelope identifiers
+    # Per spec §4::STRUCTURE: KEYS::[A-Z,a-z,0-9,_][start_with_letter_or_underscore]
+    (r"===([A-Za-z_][A-Za-z0-9_]*)===", TokenType.ENVELOPE_START),
     # Separator
     (r"---", TokenType.SEPARATOR),
     # Comments (must come before operators)
@@ -167,6 +169,94 @@ TOKEN_PATTERNS = [
     # Newlines
     (r"\n", TokenType.NEWLINE),
 ]
+
+
+# GH#145: Pattern to detect malformed envelope markers
+# Matches ===...=== with any content between
+_INVALID_ENVELOPE_PATTERN = re.compile(r"===([^=\n]*)===")
+
+# Valid envelope identifier pattern (for error detection)
+_VALID_ENVELOPE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _check_invalid_envelope(content: str, pos: int, line: int, column: int) -> LexerError | None:
+    """Check if we're looking at an invalid envelope pattern.
+
+    GH#145: Provides specific error messages for invalid envelope identifiers.
+
+    Args:
+        content: Full content string
+        pos: Current position in content
+        line: Current line number
+        column: Current column number
+
+    Returns:
+        LexerError if invalid envelope detected, None otherwise
+    """
+    match = _INVALID_ENVELOPE_PATTERN.match(content, pos)
+    if not match:
+        # Not a complete ===...=== pattern
+        return None
+
+    identifier = match.group(1)
+
+    # Check for empty identifier
+    if not identifier:
+        return LexerError(
+            "Envelope identifier is empty. Use a valid name like ===MY_DOC=== or ===MyDoc===.",
+            line,
+            column,
+            "E_INVALID_ENVELOPE_ID",
+        )
+
+    # Check if it's already valid (shouldn't reach here, but safety check)
+    if _VALID_ENVELOPE_ID_PATTERN.match(identifier):
+        return None
+
+    # Find the first invalid character
+    first_invalid_char = None
+    first_invalid_pos = 0
+
+    for i, char in enumerate(identifier):
+        if i == 0:
+            # First character must be letter or underscore
+            if not (char.isalpha() or char == "_"):
+                first_invalid_char = char
+                first_invalid_pos = i
+                break
+        else:
+            # Subsequent characters must be alphanumeric or underscore
+            if not (char.isalnum() or char == "_"):
+                first_invalid_char = char
+                first_invalid_pos = i
+                break
+
+    if first_invalid_char is None:
+        # Shouldn't happen, but safety
+        return None
+
+    # Build helpful error message based on the character
+    char_desc = first_invalid_char
+    if first_invalid_char == "-":
+        char_desc = "hyphen '-'"
+    elif first_invalid_char == " ":
+        char_desc = "space"
+    elif first_invalid_char.isdigit() and first_invalid_pos == 0:
+        return LexerError(
+            f"Envelope identifier '{identifier}' cannot start with a digit. "
+            "Use a letter or underscore as the first character.",
+            line,
+            column,
+            "E_INVALID_ENVELOPE_ID",
+        )
+
+    return LexerError(
+        f"Envelope identifier '{identifier}' contains invalid character {char_desc}. "
+        "Use underscores or CamelCase instead (e.g., my_document or MyDocument).",
+        line,
+        column,
+        "E_INVALID_ENVELOPE_ID",
+    )
 
 
 def tokenize(content: str) -> tuple[list[Token], list[Any]]:
@@ -348,6 +438,13 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 break
 
         if not matched:
+            # GH#145: Check for invalid envelope identifier patterns
+            # Detect ===...=== that didn't match the valid envelope pattern
+            if content[pos : pos + 3] == "===":
+                error = _check_invalid_envelope(content, pos, line, column)
+                if error:
+                    raise error
+
             # Handle special case: + operator (need to distinguish from number)
             if content[pos] == "+":
                 # Look ahead - is this part of a number or an operator?

@@ -162,6 +162,124 @@ class TestEnvelopeTokenization:
         assert tokens[0].type == TokenType.ENVELOPE_END
 
 
+class TestEnvelopeIdentifierErrors:
+    """Test improved error messages for invalid envelope identifiers (GH#145).
+
+    Current behavior: Input like ===architectural-gaps-analysis=== produces
+    'Unexpected character: =' which is confusing.
+
+    Expected behavior: Specific error messages that identify the invalid
+    character(s) in the envelope identifier and suggest valid alternatives.
+
+    Spec reference:
+    - octave-core-spec.oct.md §1::ENVELOPE: START::===NAME===[first_line,exact_match]
+    - octave-core-spec.oct.md §4::STRUCTURE: KEYS::[A-Z,a-z,0-9,_][start_with_letter_or_underscore]
+    """
+
+    def test_hyphen_in_envelope_identifier(self):
+        """Should report specific error for hyphen in envelope identifier.
+
+        Input: ===architectural-gaps-analysis===
+        Expected: Clear error about '-' being invalid in envelope identifiers.
+        """
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===architectural-gaps-analysis===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "-" in error.message or "hyphen" in error.message.lower()
+        assert "underscore" in error.message.lower() or "CamelCase" in error.message
+        assert error.line == 1
+        assert error.column == 1
+
+    def test_space_in_envelope_identifier(self):
+        """Should report specific error for space in envelope identifier."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===MY DOCUMENT===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "space" in error.message.lower()
+        assert error.line == 1
+
+    def test_special_char_in_envelope_identifier(self):
+        """Should report specific error for special characters."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===MY@DOC===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "@" in error.message
+        assert error.line == 1
+
+    def test_lowercase_envelope_identifier_valid(self):
+        """Should accept lowercase envelope identifiers (not just uppercase).
+
+        Per spec: KEYS::[A-Z,a-z,0-9,_] means both upper and lowercase are valid.
+        """
+        tokens, _ = tokenize("===my_document===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "my_document"
+
+    def test_mixed_case_envelope_identifier_valid(self):
+        """Should accept CamelCase envelope identifiers."""
+        tokens, _ = tokenize("===MyDocument===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "MyDocument"
+
+    def test_underscore_envelope_identifier_valid(self):
+        """Should accept underscore-separated envelope identifiers."""
+        tokens, _ = tokenize("===architectural_gaps_analysis===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "architectural_gaps_analysis"
+
+    def test_numeric_suffix_envelope_identifier_valid(self):
+        """Should accept envelope identifiers with numeric suffixes."""
+        tokens, _ = tokenize("===VERSION_2===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "VERSION_2"
+
+    def test_empty_envelope_identifier(self):
+        """Should report error for empty envelope identifier."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("======")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "empty" in error.message.lower()
+
+    def test_starts_with_number(self):
+        """Should report error for identifier starting with number."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===123START===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert error.line == 1
+
+    def test_multiple_invalid_chars(self):
+        """Should report the first invalid character found."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===bad-name@here===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        # Should mention the first invalid char (hyphen)
+        assert "-" in error.message
+
+    def test_unclosed_envelope_start(self):
+        """Should handle envelope patterns that don't close properly."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===INCOMPLETE")
+        error = exc_info.value
+        # This might be E005 or E_INVALID_ENVELOPE_ID depending on implementation
+        assert error.line == 1
+
+    def test_error_message_suggests_fix(self):
+        """Error message should suggest using underscores or CamelCase."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===my-kebab-case===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        # Should suggest alternatives
+        assert "underscore" in error.message.lower() or "_" in error.message
+        assert "CamelCase" in error.message or "camelcase" in error.message.lower()
+
+
 class TestStringTokenization:
     """Test string literal handling."""
 
