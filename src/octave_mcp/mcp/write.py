@@ -290,9 +290,9 @@ class WriteTool(BaseTool):
 
         # Add error markers for each failing line
         for line_num, line_content in error_lines:
-            # Escape the line content for safe inclusion
-            escaped_content = line_content.replace("\\", "\\\\").replace('"', '\\"')
-            salvaged_sections.append(Assignment(key=f"_PARSE_ERROR_LINE_{line_num}", value=escaped_content))
+            # I1 (Syntactic Fidelity): emit_value handles escaping, don't pre-escape
+            # Pre-escaping would cause double-escaping of backslashes and quotes
+            salvaged_sections.append(Assignment(key=f"_PARSE_ERROR_LINE_{line_num}", value=line_content))
             corrections.append(
                 {
                     "code": "W_SALVAGE_LINE",

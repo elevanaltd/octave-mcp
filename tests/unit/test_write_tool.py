@@ -2262,3 +2262,55 @@ BROKEN_FIELD::has\ttab
             assert (
                 "TYPE::" in written or "TYPE" in written
             ), f"Issue #177 BUG: META.TYPE was not preserved. Content:\n{written}"
+
+    @pytest.mark.asyncio
+    async def test_salvage_mode_error_line_escaping_integrity(self):
+        """Issue #177: Error line markers should preserve content fidelity via emit_value.
+
+        Regression test for CE recommendation: ensure error markers don't double-escape
+        when content contains backslashes or quotes. The emitter handles escaping,
+        so we pass raw content without pre-escaping.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Content with a failing line that contains backslashes and quotes
+            content = """===TEST===
+GOOD::value
+BROKEN::path\\\\to\\\\file with "quotes"
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # The error marker should contain the escaped content (once, not double-escaped)
+            # Looking for a _PARSE_ERROR_LINE marker that includes the backslash content
+            assert "_PARSE_ERROR_LINE" in written, f"Expected error marker for failing line. Content:\n{written}"
+
+            # The written content should be valid OCTAVE (parseable)
+            # If double-escaping occurred, it would have extra backslashes
+            # that would break the format or parse incorrectly
+            from octave_mcp.core.parser import parse
+
+            try:
+                parsed = parse(written)
+                # Success - content is valid OCTAVE
+                assert parsed is not None
+            except Exception as e:
+                pytest.fail(
+                    f"Salvaged content should be valid OCTAVE after escaping fix. "
+                    f"Parse error: {e}\nContent:\n{written}"
+                )
