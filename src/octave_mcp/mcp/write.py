@@ -171,6 +171,159 @@ class WriteTool(BaseTool):
         ]
         return emit(doc), corrections
 
+    def _localized_salvage(
+        self, content: str, parse_error: str, schema_name: str | None
+    ) -> tuple[Document, list[dict[str, Any]]]:
+        """Issue #177: Attempt localized salvaging that preserves document structure.
+
+        Instead of wrapping the entire file into a generic DOC with BODY::RAW,
+        this method:
+        1. Extracts and preserves the document envelope name (===NAME===)
+        2. Parses line-by-line to identify which specific lines fail
+        3. Preserves valid sections/fields
+        4. Wraps only failing lines with _PARSE_ERROR_LINE_N markers
+
+        Args:
+            content: The original content that failed to parse
+            parse_error: The error message from the failed parse attempt
+            schema_name: Optional schema name for META.TYPE
+
+        Returns:
+            Tuple of (Document, corrections list)
+        """
+        corrections: list[dict[str, Any]] = []
+
+        # Extract document envelope name from content
+        envelope_match = re.search(r"^===([A-Za-z_][A-Za-z0-9_]*)===\s*$", content, re.MULTILINE)
+        doc_name = envelope_match.group(1) if envelope_match else "DOC"
+
+        # Create document with extracted name
+        doc = Document(name=doc_name)
+
+        # Try to extract and preserve META block if present
+        meta_match = re.search(
+            r"^META:\s*\n((?:[ \t]+[^\n]+\n)*)",
+            content,
+            re.MULTILINE,
+        )
+        if meta_match:
+            meta_content = meta_match.group(1)
+            # Try to parse META fields
+            meta_dict: dict[str, Any] = {}
+            for line in meta_content.split("\n"):
+                line = line.strip()
+                if "::" in line:
+                    key_value = line.split("::", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip()
+                        value = key_value[1].strip().strip('"')
+                        meta_dict[key] = value
+            if meta_dict:
+                doc.meta = meta_dict
+            else:
+                doc.meta = {"TYPE": schema_name or "UNKNOWN", "VERSION": "1.0"}
+        else:
+            doc.meta = {"TYPE": schema_name or "UNKNOWN", "VERSION": "1.0"}
+
+        # Parse content line-by-line to identify valid vs failing lines
+        lines = content.split("\n")
+        salvaged_sections: list[ASTNode] = []
+        error_lines: list[tuple[int, str]] = []
+        current_valid_lines: list[str] = []
+
+        # Skip envelope and end markers for line-by-line processing
+        in_content = False
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+
+            # Track envelope markers
+            if re.match(r"^===.+===\s*$", stripped):
+                in_content = not in_content
+                continue
+
+            # Skip META block lines (already processed)
+            if stripped.startswith("META:") or (meta_match and line in meta_match.group(0)):
+                continue
+            if stripped == "---":  # META separator
+                continue
+
+            if not in_content:
+                continue
+
+            # Try to parse this line as valid OCTAVE
+            if stripped:
+                # Wrap in minimal document for parsing
+                test_content = f"===TEST===\n{line}\n===END==="
+                try:
+                    parse(test_content)
+                    current_valid_lines.append(line)
+                except Exception:
+                    # This line has an error - record it
+                    error_lines.append((i, line))
+                    # Flush any accumulated valid lines before the error
+                    if current_valid_lines:
+                        # Try to parse accumulated valid lines as a block
+                        try:
+                            valid_block_content = "===TEST===\n" + "\n".join(current_valid_lines) + "\n===END==="
+                            valid_doc = parse(valid_block_content)
+                            salvaged_sections.extend(valid_doc.sections)
+                        except Exception:
+                            # Even accumulated lines failed together - wrap as error
+                            for vl in current_valid_lines:
+                                salvaged_sections.append(Assignment(key="_SALVAGED_LINE", value=vl))
+                        current_valid_lines = []
+            else:
+                # Empty line - keep in current valid block
+                if current_valid_lines:
+                    current_valid_lines.append(line)
+
+        # Flush remaining valid lines
+        if current_valid_lines:
+            try:
+                valid_block_content = "===TEST===\n" + "\n".join(current_valid_lines) + "\n===END==="
+                valid_doc = parse(valid_block_content)
+                salvaged_sections.extend(valid_doc.sections)
+            except Exception:
+                for vl in current_valid_lines:
+                    if vl.strip():
+                        salvaged_sections.append(Assignment(key="_SALVAGED_LINE", value=vl))
+
+        # Add error markers for each failing line
+        for line_num, line_content in error_lines:
+            # Escape the line content for safe inclusion
+            escaped_content = line_content.replace("\\", "\\\\").replace('"', '\\"')
+            salvaged_sections.append(Assignment(key=f"_PARSE_ERROR_LINE_{line_num}", value=escaped_content))
+            corrections.append(
+                {
+                    "code": "W_SALVAGE_LINE",
+                    "tier": "LENIENT_PARSE",
+                    "message": f"Line {line_num} failed to parse: wrapped as _PARSE_ERROR_LINE_{line_num}",
+                    "line": line_num,
+                    "original": line_content,
+                    "safe": True,
+                    "semantics_changed": False,
+                }
+            )
+
+        doc.sections = salvaged_sections if salvaged_sections else []
+
+        # Add overall salvage correction
+        corrections.insert(
+            0,
+            {
+                "code": "W_SALVAGE_LOCALIZED",
+                "tier": "LENIENT_PARSE",
+                "message": f"Localized salvage: preserved document envelope '{doc_name}', "
+                f"salvaged {len(salvaged_sections) - len(error_lines)} valid elements, "
+                f"wrapped {len(error_lines)} failing line(s)",
+                "safe": True,
+                "semantics_changed": False,
+                "parse_error": parse_error,
+            },
+        )
+
+        return doc, corrections
+
     def _map_parse_warnings_to_corrections(self, warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Convert parser/lexer warnings (I4) into octave_write corrections entries."""
         corrections: list[dict[str, Any]] = []
@@ -777,18 +930,9 @@ class WriteTool(BaseTool):
                     corrections.extend(self._map_parse_warnings_to_corrections(parse_warnings))
                 except Exception as e:
                     if parse_error_policy == "salvage":
-                        doc = Document(name="DOC")
-                        doc.meta = {"TYPE": schema_name or "UNKNOWN", "VERSION": "1.0"}
-                        doc.sections = [Block(key="BODY", children=[Assignment(key="RAW", value=content)])]
-                        corrections.append(
-                            {
-                                "code": "W_SALVAGE_WRAP",
-                                "tier": "LENIENT_PARSE",
-                                "message": "Tokenization/parsing failed; wrapped raw input into BODY: RAW carrier",
-                                "safe": True,
-                                "semantics_changed": False,
-                            }
-                        )
+                        # Issue #177: Use localized salvaging to preserve document structure
+                        doc, salvage_corrections = self._localized_salvage(content, str(e), schema_name)
+                        corrections.extend(salvage_corrections)
                     else:
                         return self._error_envelope(
                             target_path,
