@@ -313,8 +313,14 @@ class Parser:
         return doc
 
     def parse_meta_block(self) -> dict[str, Any]:
-        """Parse META block into dictionary."""
+        """Parse META block into dictionary.
+
+        Issue #179: Detects duplicate keys and emits warnings per I4 auditability.
+        Per spec: DUPLICATES::keys_must_be_unique_per_block
+        """
         meta: dict[str, Any] = {}
+        # Issue #179: Track key positions for duplicate detection
+        key_positions: dict[str, int] = {}  # key -> first occurrence line number
 
         # Consume META identifier
         self.expect(TokenType.IDENTIFIER)
@@ -358,11 +364,34 @@ class Parser:
                     break  # Dedent to 0 (implicit)
 
                 key = self.current().value
+                key_line = self.current().line
                 self.advance()
 
                 if self.current().type == TokenType.ASSIGN:
                     self.advance()
                     value = self.parse_value()
+
+                    # Issue #179: Check for duplicate key
+                    if key in key_positions:
+                        # I4 Audit: Emit warning for duplicate key
+                        # Per I4: "If bits lost must have receipt"
+                        self.warnings.append(
+                            {
+                                "type": "lenient_parse",
+                                "subtype": "duplicate_key",
+                                "key": key,
+                                "first_line": key_positions[key],
+                                "duplicate_line": key_line,
+                                "message": (
+                                    f"W_DUPLICATE_KEY::{key} at line {key_line} "
+                                    f"overwrites previous definition at line {key_positions[key]}"
+                                ),
+                            }
+                        )
+                    else:
+                        # Track first occurrence
+                        key_positions[key] = key_line
+
                     meta[key] = value
                 else:
                     # Skip malformed field
@@ -999,12 +1028,17 @@ class Parser:
         Gap_2 ADR-0012: Captures token slice for token-witnessed reconstruction.
         This enables correct reconstruction of holographic patterns containing
         quoted operator symbols (e.g., ["∧"∧REQ→§SELF]).
+
+        Issue #179: Detects duplicate keys in inline maps [k::v, k::v2].
         """
         # Gap_2: Record token position BEFORE consuming LIST_START
         # We want tokens from [ to ] inclusive for reconstruction
         start_pos = self.pos
         self.expect(TokenType.LIST_START)
         items: list[Any] = []
+
+        # Issue #179: Track inline map keys for duplicate detection
+        inline_map_keys: dict[str, int] = {}  # key -> first occurrence line
 
         # Parse list items
         while True:
@@ -1017,9 +1051,33 @@ class Parser:
             if self.current().type in (TokenType.LIST_END, TokenType.EOF, TokenType.ENVELOPE_END):
                 break
 
+            # Issue #179: Capture line before parsing item for accurate duplicate reporting
+            item_line = self.current().line
+
             # Parse item value
             item = self.parse_list_item()
             items.append(item)
+
+            # Issue #179: Check for duplicate keys in inline maps
+            if isinstance(item, InlineMap):
+                for key in item.pairs.keys():
+                    if key in inline_map_keys:
+                        # I4 Audit: Emit warning for duplicate key in inline map
+                        self.warnings.append(
+                            {
+                                "type": "lenient_parse",
+                                "subtype": "duplicate_key",
+                                "key": key,
+                                "first_line": inline_map_keys[key],
+                                "duplicate_line": item_line,
+                                "message": (
+                                    f"W_DUPLICATE_KEY::{key} at line {item_line} "
+                                    f"overwrites previous definition at line {inline_map_keys[key]}"
+                                ),
+                            }
+                        )
+                    else:
+                        inline_map_keys[key] = item_line
 
             # Check for comma
             if self.current().type == TokenType.COMMA:
