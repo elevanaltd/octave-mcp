@@ -27,8 +27,7 @@ class TestSchemaLoaderImports:
 
         # Create a temporary schema file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 ===TEST_SCHEMA===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -37,8 +36,7 @@ META:
 FIELDS:
   NAME::["example"∧REQ→§SELF]
 ===END===
-"""
-            )
+""")
             f.flush()
             schema = load_schema(f.name)
             assert isinstance(schema, SchemaDefinition)
@@ -52,8 +50,7 @@ class TestSchemaLoaderFunctionality:
         from octave_mcp.schemas.loader import load_schema
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 ===MY_SCHEMA===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -62,8 +59,7 @@ META:
 FIELDS:
   ID::["abc"∧REQ→§SELF]
 ===END===
-"""
-            )
+""")
             f.flush()
             schema = load_schema(f.name)
             assert schema.name == "MY_SCHEMA"
@@ -73,8 +69,7 @@ FIELDS:
         from octave_mcp.schemas.loader import load_schema
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -83,8 +78,7 @@ META:
 FIELDS:
   NAME::["test"∧REQ→§SELF]
 ===END===
-"""
-            )
+""")
             f.flush()
             schema = load_schema(f.name)
             assert schema.version == "2.5.0"
@@ -94,8 +88,7 @@ FIELDS:
         from octave_mcp.schemas.loader import load_schema
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -104,8 +97,7 @@ FIELDS:
   AGENT::["impl-lead"∧REQ→§INDEXER]
   STATUS::["ACTIVE"∧REQ→§SELF]
 ===END===
-"""
-            )
+""")
             f.flush()
             schema = load_schema(f.name)
             assert len(schema.fields) == 2
@@ -117,8 +109,7 @@ FIELDS:
         from octave_mcp.schemas.loader import load_schema
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -130,8 +121,7 @@ POLICY:
 FIELDS:
   NAME::["test"∧REQ→§SELF]
 ===END===
-"""
-            )
+""")
             f.flush()
             schema = load_schema(f.name)
             assert schema.policy.version == "1.0"
@@ -205,8 +195,7 @@ class TestSchemaLoaderIntegration:
         from octave_mcp.schemas.loader import load_schema
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -214,8 +203,7 @@ META:
 FIELDS:
   STATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,INACTIVE,DRAFT]→§SELF]
 ===END===
-"""
-            )
+""")
             f.flush()
             schema = load_schema(f.name)
             field = schema.fields["STATUS"]
@@ -227,8 +215,7 @@ FIELDS:
         from octave_mcp.schemas.loader import load_schema
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -236,8 +223,7 @@ META:
 FIELDS:
   AGENT::["impl-lead"∧REQ→§INDEXER]
 ===END===
-"""
-            )
+""")
             f.flush()
             schema = load_schema(f.name)
             field = schema.fields["AGENT"]
@@ -248,8 +234,7 @@ FIELDS:
         from octave_mcp.schemas.loader import load_schema
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -258,8 +243,7 @@ FIELDS:
   REQUIRED_FIELD::["value"∧REQ→§SELF]
   OPTIONAL_FIELD::["value"∧OPT→§SELF]
 ===END===
-"""
-            )
+""")
             f.flush()
             schema = load_schema(f.name)
             assert schema.fields["REQUIRED_FIELD"].is_required is True

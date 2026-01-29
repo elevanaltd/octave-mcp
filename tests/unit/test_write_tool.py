@@ -167,7 +167,11 @@ class TestWriteTool:
 
     @pytest.mark.asyncio
     async def test_write_lenient_parse_error_policy_salvage_handles_lexer_errors(self):
-        """Test optional salvage mode can emit canonical carrier on lexer errors."""
+        """Test optional salvage mode can emit canonical carrier on lexer errors.
+
+        Issue #177: Now uses localized salvaging that preserves document envelope
+        and wraps only failing lines.
+        """
         from octave_mcp.mcp.write import WriteTool
 
         tool = WriteTool()
@@ -184,11 +188,18 @@ class TestWriteTool:
 
             assert result["status"] == "success"
             assert os.path.exists(target_path)
-            assert any(c.get("code") == "W_SALVAGE_WRAP" for c in result.get("corrections", []))
+            # Issue #177: Check for localized salvage correction codes
+            correction_codes = [c.get("code", "") for c in result.get("corrections", [])]
+            assert any(
+                code in ("W_SALVAGE_LOCALIZED", "W_SALVAGE_LINE", "W_SALVAGE_WRAP") for code in correction_codes
+            ), f"Expected salvage correction code, got: {correction_codes}"
 
             with open(target_path, encoding="utf-8") as f:
                 written = f.read()
-            assert "RAW::" in written
+            # Issue #177: Document envelope should be preserved (DOC not replaced)
+            assert "===DOC===" in written
+            # Should have error marker for the failing line
+            assert "_PARSE_ERROR_LINE_" in written or "RAW::" in written
 
     @pytest.mark.asyncio
     async def test_write_lenient_parse_error_policy_error_fails_on_lexer_error(self):
@@ -1827,3 +1838,479 @@ KEY::new
 
             # GREEN phase will change this behavior:
             # resolve_hermetic_standard("latest", cache_dir) -> loads schema -> VALIDATED/INVALID
+
+
+class TestWriteToolNestedDictSerialization:
+    """Tests for Issue #176: Nested dicts should produce valid OCTAVE, not Python repr.
+
+    ROOT CAUSE:
+    - _normalize_value_for_ast() handles lists (wrapping in ListValue) but passes dicts unchanged
+    - emit_value() falls back to str(value) for unknown types
+    - str(dict) produces Python repr like "{'sub': 1}" which is INVALID OCTAVE
+
+    REQUIREMENT:
+    - Nested dicts in changes parameter must emit valid OCTAVE syntax
+    - Either as InlineMap [key::value] or Block structure
+    - NOT as Python repr {'key': 'value'}
+    """
+
+    @pytest.mark.asyncio
+    async def test_changes_nested_dict_produces_valid_octave_not_python_repr(self):
+        """Issue #176: Nested dicts should produce valid OCTAVE, not Python repr.
+
+        RED PHASE: This test proves the bug exists.
+
+        When changes parameter contains a nested dict like {'my_field': {'sub': 1}},
+        the output should contain valid OCTAVE syntax like my_field::[sub::1]
+        NOT my_field::{'sub': 1} (Python repr - INVALID OCTAVE).
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create initial file
+            initial = """===TEST===
+KEY::old_value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Apply changes with nested dict
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"CONFIG": {"sub_key": "sub_value", "num": 42}},
+            )
+
+            assert result["status"] == "success"
+
+            # Read the output file
+            with open(target_path) as f:
+                content = f.read()
+
+            # CRITICAL: Must NOT contain Python dict repr syntax
+            assert "{'sub_key'" not in content, (
+                f"BUG (Issue #176): Nested dict produced Python repr instead of valid OCTAVE. "
+                f"Found Python dict syntax in output:\n{content}"
+            )
+            assert "{'num'" not in content, (
+                f"BUG (Issue #176): Nested dict produced Python repr instead of valid OCTAVE. "
+                f"Found Python dict syntax in output:\n{content}"
+            )
+            # Check for various Python repr forms
+            assert "'sub_key':" not in content, f"Found Python dict syntax:\n{content}"
+            assert '"sub_key":' not in content.replace("sub_key::", ""), f"Found Python dict syntax:\n{content}"
+
+            # MUST contain valid OCTAVE structure
+            # Either InlineMap: CONFIG::[sub_key::sub_value,num::42]
+            # Or Block: CONFIG:\n  sub_key::sub_value\n  num::42
+            assert "CONFIG::" in content or "CONFIG:" in content, f"CONFIG field should be present. Content:\n{content}"
+
+            # The nested values should be accessible
+            assert "sub_value" in content, f"sub_value should be in output:\n{content}"
+            assert "42" in content, f"42 should be in output:\n{content}"
+
+    @pytest.mark.asyncio
+    async def test_changes_deeply_nested_dict_produces_valid_octave(self):
+        """Issue #176: Deeply nested dicts should also produce valid OCTAVE.
+
+        Tests recursive normalization of nested structures.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create initial file
+            initial = """===TEST===
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Apply changes with deeply nested dict
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"OUTER": {"inner": {"deep": "value"}}},
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path) as f:
+                content = f.read()
+
+            # CRITICAL: Must NOT contain any Python dict repr
+            assert "{'" not in content, f"BUG (Issue #176): Deeply nested dict produced Python repr:\n{content}"
+            assert "': " not in content, f"BUG (Issue #176): Deeply nested dict produced Python repr:\n{content}"
+
+            # Deep value should be accessible
+            assert "value" in content
+
+    @pytest.mark.asyncio
+    async def test_changes_dict_with_list_values_produces_valid_octave(self):
+        """Issue #176: Dict containing list values should produce valid OCTAVE.
+
+        Tests mixed nested structures (dict with list).
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Create initial file
+            initial = """===TEST===
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Apply changes with dict containing list
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"CONFIG": {"items": ["a", "b", "c"]}},
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path) as f:
+                content = f.read()
+
+            # CRITICAL: Must NOT contain Python dict repr
+            assert "{'" not in content, f"BUG (Issue #176): Dict with list produced Python repr:\n{content}"
+            # Also must NOT contain Python list repr
+            assert "['a'" not in content, f"BUG: List produced Python repr:\n{content}"
+
+            # Values should be present in valid OCTAVE format
+            assert "a" in content
+            assert "b" in content
+            assert "c" in content
+
+    @pytest.mark.asyncio
+    async def test_normalize_value_for_ast_handles_nested_dict(self):
+        """Unit test for _normalize_value_for_ast with nested dicts.
+
+        This directly tests the normalization function to verify it converts
+        dicts to proper AST structures.
+        """
+        from octave_mcp.core.ast_nodes import Block, InlineMap
+        from octave_mcp.mcp.write import _normalize_value_for_ast
+
+        # Test simple nested dict
+        nested_dict = {"key1": "value1", "key2": 42}
+        result = _normalize_value_for_ast(nested_dict)
+
+        # Result should be an AST type, not a raw dict
+        assert not isinstance(result, dict), (
+            f"BUG (Issue #176): _normalize_value_for_ast should convert dict to AST type, "
+            f"got {type(result).__name__}"
+        )
+
+        # Should be either InlineMap or Block
+        assert isinstance(
+            result, InlineMap | Block
+        ), f"Expected InlineMap or Block for nested dict, got {type(result).__name__}"
+
+
+class TestSalvageModeLocalizedErrorWrapping:
+    """Tests for Issue #177: Salvage mode should wrap only failing lines, not entire file.
+
+    PROBLEM:
+    When salvage mode encounters a parse error (like unterminated string), it wraps
+    the ENTIRE file content into a generic ===DOC=== with BODY::RAW. This destroys
+    the document's top-level structure.
+
+    REQUIREMENT:
+    - Preserve document envelope name (===MY_PROJECT=== not ===DOC===)
+    - Preserve valid sections/fields that parsed successfully
+    - Wrap only the failing line/content with appropriate error markers
+    - I4 (Auditability): corrections must log exactly what was salvaged and why
+    - I3 (Mirror Constraint): reflect what's present, don't invent structure
+
+    ROOT CAUSE:
+    write.py lines 779-790 wraps everything into generic DOC envelope on any parse failure.
+    """
+
+    @pytest.mark.asyncio
+    async def test_salvage_mode_preserves_document_envelope_name(self):
+        """Issue #177: Salvage mode should preserve document envelope name, not replace with DOC.
+
+        When parsing fails, the original document name should be preserved, not replaced
+        with a generic 'DOC' envelope.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Content with valid envelope but a parse error (unterminated string)
+            # The tab character causes a lexer error
+            content = """===MY_PROJECT===
+META:
+  TYPE::CONFIG
+FIELD1::value1
+BROKEN::a\tb
+FIELD2::value2
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+            assert os.path.exists(target_path)
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # CRITICAL: Document envelope name should be preserved
+            assert "===MY_PROJECT===" in written, (
+                f"Issue #177 BUG: Document envelope name was not preserved. "
+                f"Expected '===MY_PROJECT===' but got content:\n{written}"
+            )
+            # Should NOT have generic DOC envelope
+            assert "===DOC===" not in written, (
+                f"Issue #177 BUG: Salvage mode replaced document name with generic DOC. " f"Content:\n{written}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_salvage_mode_preserves_valid_fields(self):
+        """Issue #177: Salvage mode should preserve valid fields that parsed successfully.
+
+        Fields that parse correctly should remain accessible in their original form,
+        not wrapped into BODY::RAW.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Content with some valid fields and one broken field
+            content = """===CONFIG===
+VALID1::good_value
+BROKEN::has\ttab
+VALID2::also_good
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # Valid fields should be preserved as-is, not wrapped in BODY::RAW
+            assert "VALID1::good_value" in written or "VALID1" in written, (
+                f"Issue #177 BUG: Valid field VALID1 was not preserved. " f"Content:\n{written}"
+            )
+            assert "VALID2::also_good" in written or "VALID2" in written, (
+                f"Issue #177 BUG: Valid field VALID2 was not preserved. " f"Content:\n{written}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_salvage_mode_wraps_only_failing_line(self):
+        """Issue #177: Salvage mode should wrap only the failing line, not entire content.
+
+        Only the problematic content should be wrapped with an error marker.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Content with one broken line
+            content = """===TEST===
+GOOD::value
+BAD::has\ttab\there
+ALSO_GOOD::fine
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # The entire content should NOT be in a single BODY::RAW field
+            # If it is, that means localized salvaging failed
+            raw_field_count = written.count("RAW::")
+
+            # BODY::RAW wrapping entire content is the bug - should have at most one
+            # error marker for the broken line, not the entire file as RAW
+            if "BODY:" in written and raw_field_count == 1:
+                # Check if the RAW content contains the entire file (bug)
+                # by looking for valid fields inside RAW
+                # If GOOD::value appears inside RAW, that's wrong
+                raw_start = written.find("RAW::")
+                if raw_start != -1:
+                    raw_content = written[raw_start:]
+                    if "GOOD::value" in raw_content:
+                        pytest.fail(
+                            f"Issue #177 BUG: Entire file wrapped in RAW instead of only failing line. "
+                            f"Content:\n{written}"
+                        )
+
+    @pytest.mark.asyncio
+    async def test_salvage_mode_corrections_log_what_was_salvaged(self):
+        """Issue #177: I4 Auditability - corrections must log what was salvaged.
+
+        When content is salvaged, the corrections log should describe:
+        - Which line(s) had errors
+        - What the original content was
+        - Why it was wrapped (the error)
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = """===AUDIT===
+OK::value
+PROBLEM::a\tb
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            # Should have salvage-related corrections
+            corrections = result.get("corrections", [])
+            salvage_corrections = [c for c in corrections if "SALVAGE" in c.get("code", "").upper()]
+
+            assert len(salvage_corrections) > 0, (
+                f"Issue #177: No salvage corrections found. "
+                f"I4 requires auditability of what was salvaged. "
+                f"Corrections: {corrections}"
+            )
+
+            # At least one correction should indicate line-level salvaging
+            # not just "wrapped entire file"
+            # Check that corrections have meaningful messages about salvaging
+            assert any(
+                "salvage" in c.get("message", "").lower() or "line" in c.get("message", "").lower()
+                for c in salvage_corrections
+            ), f"Expected salvage corrections to mention salvaging or line, got: {salvage_corrections}"
+
+    @pytest.mark.asyncio
+    async def test_salvage_mode_meta_block_preserved(self):
+        """Issue #177: META block should be preserved even when body has errors.
+
+        The META block, if valid, should remain intact when only the body has issues.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = """===WITH_META===
+META:
+  TYPE::TEST
+  VERSION::"1.0"
+---
+GOOD_FIELD::value
+BROKEN_FIELD::has\ttab
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # META block should be preserved
+            assert "META:" in written, f"Issue #177 BUG: META block was not preserved. Content:\n{written}"
+            assert (
+                "TYPE::" in written or "TYPE" in written
+            ), f"Issue #177 BUG: META.TYPE was not preserved. Content:\n{written}"
+
+    @pytest.mark.asyncio
+    async def test_salvage_mode_error_line_escaping_integrity(self):
+        """Issue #177: Error line markers should preserve content fidelity via emit_value.
+
+        Regression test for CE recommendation: ensure error markers don't double-escape
+        when content contains backslashes or quotes. The emitter handles escaping,
+        so we pass raw content without pre-escaping.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Content with a failing line that contains backslashes and quotes
+            content = """===TEST===
+GOOD::value
+BROKEN::path\\\\to\\\\file with "quotes"
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # The error marker should contain the escaped content (once, not double-escaped)
+            # Looking for a _PARSE_ERROR_LINE marker that includes the backslash content
+            assert "_PARSE_ERROR_LINE" in written, f"Expected error marker for failing line. Content:\n{written}"
+
+            # The written content should be valid OCTAVE (parseable)
+            # If double-escaping occurred, it would have extra backslashes
+            # that would break the format or parse incorrectly
+            from octave_mcp.core.parser import parse
+
+            try:
+                parsed = parse(written)
+                # Success - content is valid OCTAVE
+                assert parsed is not None
+            except Exception as e:
+                pytest.fail(
+                    f"Salvaged content should be valid OCTAVE after escaping fix. "
+                    f"Parse error: {e}\nContent:\n{written}"
+                )

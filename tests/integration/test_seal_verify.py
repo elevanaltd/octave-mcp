@@ -31,12 +31,10 @@ class TestVerifySealFlag:
 
         # First create a sealed document
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -63,12 +61,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -100,12 +96,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -122,12 +116,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -159,12 +151,10 @@ class TestVerifySealOutput:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -193,12 +183,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -222,12 +210,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -257,12 +243,10 @@ class TestVerifySealWithValidation:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -285,12 +269,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -330,12 +312,10 @@ class TestVerifySealExitCodes:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -366,12 +346,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -398,12 +376,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -424,12 +400,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -450,12 +424,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -477,12 +449,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -513,12 +483,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:

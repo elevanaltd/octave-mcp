@@ -38,14 +38,12 @@ class TestSchemaExtractorBasic:
         """Extracting from empty document returns empty schema."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert schema is not None
         assert len(schema.fields) == 0
@@ -54,8 +52,7 @@ META:
         """Should extract single field definition."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST_SCHEMA===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -64,8 +61,7 @@ META:
 FIELDS:
   NAME::["example"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert len(schema.fields) == 1
         assert "NAME" in schema.fields
@@ -75,8 +71,7 @@ FIELDS:
         """Should extract multiple field definitions."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===SESSION_LOG===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -87,8 +82,7 @@ FIELDS:
   PHASE::["B2"∧REQ∧ENUM[D0,D1,D2,D3,B0,B1,B2,B3]→§INDEXER]
   STATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,DRAFT]→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert len(schema.fields) == 3
         assert "AGENT" in schema.fields
@@ -100,8 +94,7 @@ FIELDS:
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
         # Using ENUM constraint which the lexer understands (brackets not parens)
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -109,8 +102,7 @@ META:
 FIELDS:
   STATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,INACTIVE]→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         field = schema.fields["STATUS"]
         assert len(field.pattern.constraints.constraints) == 2
@@ -119,8 +111,7 @@ FIELDS:
         """Extracted field should preserve target."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -128,8 +119,7 @@ META:
 FIELDS:
   ID::["abc123"∧REQ→§INDEXER]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         field = schema.fields["ID"]
         assert field.pattern.target == "INDEXER"
@@ -142,8 +132,7 @@ class TestSchemaExtractorPolicy:
         """Should extract POLICY VERSION."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -155,8 +144,7 @@ POLICY:
 FIELDS:
   NAME::["test"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert schema.policy.version == "1.0"
 
@@ -164,8 +152,7 @@ FIELDS:
         """Should extract POLICY UNKNOWN_FIELDS setting."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -177,8 +164,7 @@ POLICY:
 FIELDS:
   NAME::["test"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert schema.policy.unknown_fields == "REJECT"
 
@@ -186,8 +172,7 @@ FIELDS:
         """Should extract POLICY TARGETS list."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -200,8 +185,7 @@ POLICY:
 FIELDS:
   NAME::["test"∧REQ→§INDEXER]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert "INDEXER" in schema.policy.targets
         assert "DECISION_LOG" in schema.policy.targets
@@ -214,8 +198,7 @@ class TestSchemaExtractorErrors:
         """Should handle fields with invalid holographic patterns gracefully."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -223,8 +206,7 @@ META:
 FIELDS:
   INVALID::not_a_holographic_pattern
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         # Should either skip invalid fields or raise a clear error
         # For robustness, we prefer skipping with a warning
@@ -234,8 +216,7 @@ FIELDS:
         """Should return empty fields when no FIELDS block exists."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -243,8 +224,7 @@ META:
 POLICY:
   VERSION::"1.0"
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert len(schema.fields) == 0
 
@@ -256,8 +236,7 @@ class TestSchemaDefinitionStructure:
         """SchemaDefinition should have name attribute."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===MY_SCHEMA===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -265,8 +244,7 @@ META:
 FIELDS:
   NAME::["test"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert schema.name == "MY_SCHEMA"
 
@@ -274,8 +252,7 @@ FIELDS:
         """SchemaDefinition should extract version from META block."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -284,8 +261,7 @@ META:
 FIELDS:
   NAME::["test"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert schema.version == "2.5.0"
 
@@ -293,8 +269,7 @@ FIELDS:
         """SchemaDefinition.fields should be a dict."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -303,8 +278,7 @@ FIELDS:
   A::["a"∧REQ→§SELF]
   B::["b"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert isinstance(schema.fields, dict)
         assert len(schema.fields) == 2
@@ -317,8 +291,7 @@ class TestFieldDefinitionStructure:
         """FieldDefinition should have name attribute."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -326,8 +299,7 @@ META:
 FIELDS:
   AGENT::["impl-lead"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert schema.fields["AGENT"].name == "AGENT"
 
@@ -336,8 +308,7 @@ FIELDS:
         from octave_mcp.core.holographic import HolographicPattern
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -345,8 +316,7 @@ META:
 FIELDS:
   NAME::["test"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert isinstance(schema.fields["NAME"].pattern, HolographicPattern)
 
@@ -354,8 +324,7 @@ FIELDS:
         """FieldDefinition should expose is_required property."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -364,8 +333,7 @@ FIELDS:
   REQUIRED_FIELD::["value"∧REQ→§SELF]
   OPTIONAL_FIELD::["value"∧OPT→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
         assert schema.fields["REQUIRED_FIELD"].is_required is True
         assert schema.fields["OPTIONAL_FIELD"].is_required is False
@@ -380,8 +348,7 @@ class TestRealWorldSchemaExtraction:
 
         # Note: TYPE(X) constraints use parentheses which the lexer doesn't support
         # Using simpler constraints that the lexer understands
-        doc = parse(
-            """
+        doc = parse("""
 ===SESSION_LOG===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -398,8 +365,7 @@ FIELDS:
   PHASE::["B2"∧REQ∧ENUM[D0,D1,D2,D3,B0,B1,B2,B3]→§INDEXER]
   OUTCOMES::["5 tests passing"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
 
         # Verify structure
@@ -448,8 +414,7 @@ class TestTokenWitnessedReconstruction:
         """
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -457,8 +422,7 @@ META:
 FIELDS:
   FIELD::["∧"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
 
         # Verify field was extracted
@@ -487,8 +451,7 @@ FIELDS:
         """
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -496,8 +459,7 @@ META:
 FIELDS:
   FIELD::["→"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
 
         assert "FIELD" in schema.fields
@@ -522,8 +484,7 @@ FIELDS:
         """
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -531,8 +492,7 @@ META:
 FIELDS:
   FIELD::["§"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
 
         assert "FIELD" in schema.fields
@@ -562,8 +522,7 @@ class TestSchemaExtractorDefaultTarget:
         """
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST_SCHEMA===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -577,8 +536,7 @@ POLICY:
 FIELDS:
   NAME::["example"∧REQ]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
 
         # DEFAULT_TARGET should be extracted from POLICY and set on schema
@@ -596,8 +554,7 @@ FIELDS:
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
         # Using quoted string to preserve the section marker in value
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST_SCHEMA===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -608,8 +565,7 @@ POLICY:
 FIELDS:
   RISK::["auth_bypass"∧REQ]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
 
         # Value should be extracted (quotes stripped by parser)
@@ -628,8 +584,7 @@ FIELDS:
         from octave_mcp.core.validator import Validator
 
         # Parse schema with DEFAULT_TARGET
-        schema_doc = parse(
-            """
+        schema_doc = parse("""
 ===TEST_SCHEMA===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -640,8 +595,7 @@ POLICY:
 FIELDS:
   AGENT::["impl-lead"∧REQ]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(schema_doc)
 
         # Verify schema has default_target set
@@ -668,8 +622,7 @@ FIELDS:
         """Schema without POLICY.DEFAULT_TARGET should have None."""
         from octave_mcp.core.schema_extractor import extract_schema_from_document
 
-        doc = parse(
-            """
+        doc = parse("""
 ===TEST_SCHEMA===
 META:
   TYPE::PROTOCOL_DEFINITION
@@ -680,8 +633,7 @@ POLICY:
 FIELDS:
   NAME::["example"∧REQ→§SELF]
 ===END===
-"""
-        )
+""")
         schema = extract_schema_from_document(doc)
 
         # No DEFAULT_TARGET specified, should be None
