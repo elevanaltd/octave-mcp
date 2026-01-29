@@ -72,14 +72,12 @@ class TestVocabularyParsing:
         from octave_mcp.core.hydrator import VocabularyError, parse_vocabulary
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===NOT_A_CAPSULE===
+            f.write("""===NOT_A_CAPSULE===
 META:
   TYPE::"SPEC"
   VERSION::"1.0.0"
 ===END===
-"""
-            )
+""")
             temp_path = Path(f.name)
 
         try:
@@ -1507,8 +1505,7 @@ class TestCrossDirectoryLayout:
 
             # Create vocabulary in specs/
             vocab_path = specs_dir / "vocabulary.oct.md"
-            vocab_path.write_text(
-                """===VOCAB===
+            vocab_path.write_text("""===VOCAB===
 META:
   TYPE::"CAPSULE"
   VERSION::"1.0.0"
@@ -1518,13 +1515,11 @@ META:
   BETA::"Second term"
 
 ===END===
-"""
-            )
+""")
 
             # Create source document (will import the vocabulary)
             source_path = base / "source.oct.md"
-            source_path.write_text(
-                """===SOURCE===
+            source_path.write_text("""===SOURCE===
 META:
   TYPE::"SPEC"
   VERSION::"1.0.0"
@@ -1535,8 +1530,7 @@ META:
   REF::"Uses ALPHA term"
 
 ===END===
-"""
-            )
+""")
 
             # Create registry pointing to vocab in specs/
             registry = VocabularyRegistry.from_mappings({"@test/vocabulary": vocab_path})
@@ -2111,8 +2105,7 @@ class TestCycleDetection:
 
             # Create a document that imports itself
             self_importing = base / "self_import.oct.md"
-            self_importing.write_text(
-                """===SELF_IMPORT===
+            self_importing.write_text("""===SELF_IMPORT===
 META:
   TYPE::"SPEC"
   VERSION::"1.0.0"
@@ -2123,8 +2116,7 @@ META:
   KEY::"value"
 
 ===END===
-"""
-            )
+""")
 
             # Registry that maps the namespace back to the same file
             registry = VocabularyRegistry.from_mappings({"@test/self": self_importing})
@@ -2155,8 +2147,7 @@ META:
             # Create two documents that import each other
             # A imports B (via @test/b namespace)
             doc_a = base / "doc_a.oct.md"
-            doc_a.write_text(
-                """===DOC_A===
+            doc_a.write_text("""===DOC_A===
 META:
   TYPE::"SPEC"
   VERSION::"1.0.0"
@@ -2167,8 +2158,7 @@ META:
   KEY::"value"
 
 ===END===
-"""
-            )
+""")
 
             # B is a CAPSULE that conceptually would import A
             # For MVP with max_depth=1, we simulate the cycle by having
@@ -2176,8 +2166,7 @@ META:
             # NOTE: This test validates the infrastructure for cycle detection
             # The actual A->B->A would require depth>1 which is future work
             doc_b = base / "doc_b.oct.md"
-            doc_b.write_text(
-                """===DOC_B===
+            doc_b.write_text("""===DOC_B===
 META:
   TYPE::"CAPSULE"
   VERSION::"1.0.0"
@@ -2186,8 +2175,7 @@ META:
   TERM::"definition"
 
 ===END===
-"""
-            )
+""")
 
             # For this test, we simulate by making @test/b point back to doc_a
             # This creates the simplest possible cycle: A -> A
@@ -2235,8 +2223,7 @@ META:
             # Create a SPEC document that tries to import itself
             # (SPEC is not a CAPSULE, so parsing as vocab would fail)
             doc = base / "spec.oct.md"
-            doc.write_text(
-                """===SPEC===
+            doc.write_text("""===SPEC===
 META:
   TYPE::"SPEC"
   VERSION::"1.0.0"
@@ -2247,8 +2234,7 @@ META:
   KEY::"value"
 
 ===END===
-"""
-            )
+""")
 
             registry = VocabularyRegistry.from_mappings({"@test/myself": doc})
             policy = HydrationPolicy()

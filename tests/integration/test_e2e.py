@@ -133,11 +133,9 @@ class TestCLIIntegration:
 
         # Create lenient input file
         input_file = tmp_path / "input.oct.md"
-        input_file.write_text(
-            """===TEST===
+        input_file.write_text("""===TEST===
 TYPE :: "demo"
-===END==="""
-        )
+===END===""")
 
         # Run validate (replacement for deprecated ingest)
         result = runner.invoke(cli, ["validate", str(input_file), "--schema", "TEST"])
@@ -163,15 +161,13 @@ TYPE :: "demo"
 
         # Create canonical input
         input_file = tmp_path / "canonical.oct.md"
-        input_file.write_text(
-            """===TEST===
+        input_file.write_text("""===TEST===
 META:
   TYPE::"DEMO"
   VERSION::"1.0"
 
 STATUS::active
-===END==="""
-        )
+===END===""")
 
         # Test different modes (without --schema, which was removed per Issue #51)
         for mode in ["canonical", "authoring"]:
@@ -190,10 +186,8 @@ STATUS::active
 
         # Create invalid input (missing envelope)
         input_file = tmp_path / "invalid.oct.md"
-        input_file.write_text(
-            """TYPE::"test"
-STATUS::active"""
-        )
+        input_file.write_text("""TYPE::"test"
+STATUS::active""")
 
         # Run validate
         result = runner.invoke(cli, ["validate", str(input_file), "--schema", "TEST"])

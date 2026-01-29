@@ -231,8 +231,7 @@ META:
     def test_vocab_list_empty_registry(self, runner, tmp_path):
         """Should handle registry with no vocabularies gracefully."""
         empty_registry = tmp_path / "empty_registry.oct.md"
-        empty_registry.write_text(
-            """===VOCABULARY_REGISTRY===
+        empty_registry.write_text("""===VOCABULARY_REGISTRY===
 META:
   TYPE::"REGISTRY"
   VERSION::"1.0.0"
@@ -241,8 +240,7 @@ META:
   DESCRIPTION::"Empty"
 
 ===END===
-"""
-        )
+""")
 
         result = runner.invoke(
             cli,

@@ -170,8 +170,7 @@ class TestNormalizeEndToEnd:
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create input file with ASCII aliases
             input_path = Path(tmpdir) / "input.oct.md"
-            input_path.write_text(
-                """\
+            input_path.write_text("""\
 ===MY_DOC===
 META:
   TYPE::"TEST"
@@ -181,8 +180,7 @@ REF::#SECTION
 TENSION::Fast vs Accurate
 CONCAT::A~B
 ===END===
-"""
-            )
+""")
 
             # Normalize
             output_path = Path(tmpdir) / "output.oct.md"

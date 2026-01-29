@@ -30,12 +30,10 @@ class TestSealCommand:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -55,12 +53,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -83,12 +79,10 @@ META:
             input_path = Path(tmpdir) / "input.oct.md"
             output_path = Path(tmpdir) / "output.oct.md"
 
-            input_path.write_text(
-                """===DOC===
+            input_path.write_text("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
 
             result = runner.invoke(cli, ["seal", str(input_path), "--output", str(output_path)])
 
@@ -105,12 +99,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -145,12 +137,10 @@ META:
 
         # Create document with non-canonical formatting (e.g., different spacing)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE:: "TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -168,13 +158,11 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """OCTAVE::5.1.0
+            f.write("""OCTAVE::5.1.0
 ===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -199,12 +187,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -226,12 +212,10 @@ class TestSealOutputFormat:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -267,12 +251,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:
@@ -289,12 +271,10 @@ META:
         runner = CliRunner()
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".oct.md", delete=False) as f:
-            f.write(
-                """===DOC===
+            f.write("""===DOC===
 META:
   TYPE::"TEST"
-===END==="""
-            )
+===END===""")
             temp_path = Path(f.name)
 
         try:

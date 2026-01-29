@@ -52,13 +52,11 @@ class TestValidateCommand:
         """Should validate a valid OCTAVE file and return exit code 0."""
         # Create a valid OCTAVE file
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["validate", str(octave_file), "--schema", "META"])
@@ -70,12 +68,10 @@ META:
         # Create an OCTAVE file with META but missing required TYPE and VERSION fields
         # (META schema requires TYPE and VERSION)
         octave_file = tmp_path / "invalid.oct.md"
-        octave_file.write_text(
-            """===INVALID===
+        octave_file.write_text("""===INVALID===
 META:
   STATUS::"DRAFT"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["validate", str(octave_file), "--schema", "META"])
@@ -99,13 +95,11 @@ META:
         """Should apply repairs when --fix flag is set."""
         # Create OCTAVE with repairable content
         octave_file = tmp_path / "repairable.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["validate", str(octave_file), "--schema", "META", "--fix"])
@@ -114,13 +108,11 @@ META:
     def test_validate_outputs_validation_status(self, tmp_path):
         """Should output validation_status (VALIDATED|UNVALIDATED|INVALID)."""
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["validate", str(octave_file), "--schema", "META"])
@@ -131,12 +123,10 @@ META:
     def test_validate_schema_required_for_validation(self, tmp_path):
         """Validate should require --schema for schema validation."""
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         # Without schema, should still work but show UNVALIDATED
@@ -151,13 +141,11 @@ META:
         Exactly ONE input source must be provided.
         """
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         content = """===STDIN===
@@ -177,13 +165,11 @@ class TestEjectCommand:
     def test_eject_file_default_format(self, tmp_path):
         """Should eject file in OCTAVE format by default."""
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file)])
@@ -194,13 +180,11 @@ META:
     def test_eject_json_format(self, tmp_path):
         """Should eject file in JSON format when --format json."""
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file), "--format", "json"])
@@ -218,14 +202,12 @@ META:
         "Object of type ListValue is not JSON serializable".
         """
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
   TAGS::[a, b, c]
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file), "--format", "json"])
@@ -238,13 +220,11 @@ META:
     def test_eject_yaml_format(self, tmp_path):
         """Should eject file in YAML format when --format yaml."""
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file), "--format", "yaml"])
@@ -255,13 +235,11 @@ META:
     def test_eject_markdown_format(self, tmp_path):
         """Should eject file in Markdown format when --format markdown."""
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file), "--format", "markdown"])
@@ -272,8 +250,7 @@ META:
     def test_eject_executive_mode(self, tmp_path):
         """Should filter to executive fields in executive mode."""
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
@@ -281,8 +258,7 @@ META:
 STATUS::"Active"
 RISKS::"Low"
 TESTS::"Passed"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file), "--mode", "executive"])
@@ -294,8 +270,7 @@ TESTS::"Passed"
     def test_eject_developer_mode(self, tmp_path):
         """Should filter to developer fields in developer mode."""
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
@@ -303,8 +278,7 @@ META:
 STATUS::"Active"
 TESTS::"Passed"
 CI::"Green"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file), "--mode", "developer"])
@@ -319,13 +293,11 @@ CI::"Green"
         Since CLI always operates on existing files, --schema serves no purpose.
         """
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         # --schema should not be a valid option
@@ -341,8 +313,7 @@ META:
         process block children like the MCP version does.
         """
         octave_file = tmp_path / "test.oct.md"
-        octave_file.write_text(
-            """===TEST===
+        octave_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
@@ -350,8 +321,7 @@ META:
 SECTION:
   FIELD1::"value1"
   FIELD2::"value2"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file), "--format", "markdown"])
@@ -398,13 +368,11 @@ META:
         """Should apply changes to existing file."""
         # Create existing file first
         target_file = tmp_path / "existing.oct.md"
-        target_file.write_text(
-            """===EXISTING===
+        target_file.write_text("""===EXISTING===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         # Apply changes to update META.VERSION
@@ -498,13 +466,11 @@ META:
     def test_write_rejects_stdin_and_changes_together(self, tmp_path):
         """CRS-FIX #3: Should reject --stdin + --changes with clear error."""
         target_file = tmp_path / "xor.oct.md"
-        target_file.write_text(
-            """===XOR===
+        target_file.write_text("""===XOR===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
         changes = '{"META.VERSION": "2.0"}'
         stdin_content = """===STDIN===
 META:
@@ -520,13 +486,11 @@ META:
     def test_write_rejects_content_and_changes_together(self, tmp_path):
         """CRS-FIX #3: Should reject --content + --changes with clear error."""
         target_file = tmp_path / "xor.oct.md"
-        target_file.write_text(
-            """===XOR===
+        target_file.write_text("""===XOR===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
         content = """===NEW===
 META:
   TYPE::"TEST"
@@ -582,8 +546,7 @@ class TestEjectEdgeCases:
     def test_eject_json_with_nested_blocks(self, tmp_path):
         """JSON format should handle deeply nested blocks."""
         octave_file = tmp_path / "nested.oct.md"
-        octave_file.write_text(
-            """===NESTED===
+        octave_file.write_text("""===NESTED===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
@@ -591,8 +554,7 @@ META:
 OUTER:
   INNER:
     DEEP::"value"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file), "--format", "json"])
@@ -603,15 +565,13 @@ OUTER:
     def test_eject_markdown_with_root_assignment(self, tmp_path):
         """Markdown format should handle root-level assignments."""
         octave_file = tmp_path / "root_assign.oct.md"
-        octave_file.write_text(
-            """===ROOT===
+        octave_file.write_text("""===ROOT===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
 
 ROOT_FIELD::"root value"
-===END==="""
-        )
+===END===""")
 
         runner = CliRunner()
         result = runner.invoke(cli, ["eject", str(octave_file), "--format", "markdown"])
@@ -635,13 +595,11 @@ class TestWriteEdgeCases:
     def test_write_changes_update_meta_block(self, tmp_path):
         """Should update entire META block when using META key."""
         target_file = tmp_path / "meta_update.oct.md"
-        target_file.write_text(
-            """===META_UPDATE===
+        target_file.write_text("""===META_UPDATE===
 META:
   TYPE::"OLD"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         changes = '{"META": {"TYPE": "NEW", "VERSION": "2.0"}}'
         runner = CliRunner()
@@ -651,13 +609,11 @@ META:
     def test_write_changes_add_new_field(self, tmp_path):
         """Should add new field when field doesn't exist."""
         target_file = tmp_path / "add_field.oct.md"
-        target_file.write_text(
-            """===ADD_FIELD===
+        target_file.write_text("""===ADD_FIELD===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         changes = '{"NEW_FIELD": "new value"}'
         runner = CliRunner()
@@ -667,13 +623,11 @@ META:
     def test_write_invalid_json_changes(self, tmp_path):
         """Should error on invalid JSON in --changes."""
         target_file = tmp_path / "invalid_json.oct.md"
-        target_file.write_text(
-            """===TEST===
+        target_file.write_text("""===TEST===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
-===END==="""
-        )
+===END===""")
 
         invalid_json = "{invalid json"
         runner = CliRunner()
