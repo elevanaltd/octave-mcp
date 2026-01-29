@@ -179,7 +179,7 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
         Tuple of (tokens, repairs)
 
     Raises:
-        LexerError: On invalid syntax (tabs, malformed operators)
+        LexerError: On invalid syntax (tabs, malformed operators, unbalanced brackets)
     """
     # Apply NFC unicode normalization
     content = unicodedata.normalize("NFC", content)
@@ -197,6 +197,10 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
     line = 1
     column = 1
     pos = 0
+
+    # Track bracket depth for unbalanced bracket detection (GH#180)
+    # Stack of (bracket_char, line, column) for each opening bracket
+    bracket_stack: list[tuple[str, int, int]] = []
 
     # Compile all patterns
     compiled_patterns = [(re.compile(pattern), token_type) for pattern, token_type in TOKEN_PATTERNS]
@@ -305,6 +309,19 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 token = Token(token_type, value, line, column, normalized_from, raw_lexeme)
                 tokens.append(token)
 
+                # Track bracket balance (GH#180)
+                if token_type == TokenType.LIST_START:
+                    bracket_stack.append(("[", line, column))
+                elif token_type == TokenType.LIST_END:
+                    if not bracket_stack:
+                        raise LexerError(
+                            f"closing ']' at line {line}, column {column} has no matching '['",
+                            line,
+                            column,
+                            "E_UNBALANCED_BRACKET",
+                        )
+                    bracket_stack.pop()
+
                 if normalized_from:
                     repairs.append(
                         {
@@ -349,6 +366,17 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
 
             # Unrecognized character
             raise LexerError(f"Unexpected character: '{content[pos]}'", line, column, "E005")
+
+    # Check for unclosed brackets at end of input (GH#180)
+    if bracket_stack:
+        # Report the first unclosed bracket
+        bracket_char, bracket_line, bracket_column = bracket_stack[0]
+        raise LexerError(
+            f"opening '{bracket_char}' at line {bracket_line}, column {bracket_column} has no matching ']'",
+            bracket_line,
+            bracket_column,
+            "E_UNBALANCED_BRACKET",
+        )
 
     # Add EOF token
     tokens.append(Token(TokenType.EOF, None, line, column))

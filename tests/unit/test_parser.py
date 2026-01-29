@@ -7,6 +7,7 @@ and nested block structure.
 import pytest
 
 from octave_mcp.core.ast_nodes import Assignment, Block, ListValue
+from octave_mcp.core.lexer import LexerError
 from octave_mcp.core.parser import ParserError, parse, parse_with_warnings
 
 
@@ -225,63 +226,49 @@ KEY::value
         doc = parse(content)
         assert doc.name == "TEST"
 
-    def test_strict_mode_raises_on_unclosed_list_at_eof(self):
-        """Strict parse() must raise ParserError on unclosed list at EOF (Issue #162).
+    def test_unclosed_list_raises_lexer_error(self):
+        """Unclosed list must raise LexerError with clear bracket position (GH#180).
 
-        Regression test: parse() uses strict_structure=True by default,
-        which prevents infinite loop on unclosed lists at end of file.
+        Regression test: Lexer now detects unbalanced brackets early,
+        providing clearer error messages than parser-level detection.
 
-        Before fix: Parser would loop infinitely on "LIST::[a, b" at EOF
-        After fix: Parser raises E007 ParserError with "Unclosed list" message
+        Before GH#180: Parser would either loop or raise E007 ParserError
+        After GH#180: Lexer raises E_UNBALANCED_BRACKET with exact position
 
-        Note: Changed from E002 to E007 per CE review - E002 is reserved for
-        schema selector errors per octave-mcp-architecture.oct.md:244
-
-        This test ensures the strict mode behavior persists in CI.
+        This test ensures the lexer-level bracket detection persists in CI.
         """
         content = "MY_LIST::[a, b, c"
 
-        with pytest.raises(ParserError) as exc_info:
+        with pytest.raises(LexerError) as exc_info:
             parse(content)
 
         # Verify error code and message
-        assert exc_info.value.error_code == "E007"
-        assert "Unclosed list" in exc_info.value.message
+        error = exc_info.value
+        assert error.error_code == "E_UNBALANCED_BRACKET"
+        assert "opening '['" in error.message
+        assert "no matching ']'" in error.message
+        assert error.line == 1
+        assert error.column == 10  # Position of opening bracket
 
-    def test_lenient_mode_emits_warning_for_unclosed_list_at_eof(self):
-        """Lenient parse_with_warnings() must emit I4 receipt for unclosed list at EOF.
+    def test_unclosed_list_lexer_error_in_lenient_mode(self):
+        """Unclosed list raises LexerError even in lenient mode (GH#180).
 
-        Regression test: parse_with_warnings() uses strict_structure=False,
-        which allows parsing to succeed with warnings instead of raising.
+        Lexer-level bracket detection cannot be bypassed by lenient parsing
+        because tokenization happens before parsing. This is intentional -
+        unbalanced brackets are a fundamental syntax error.
 
-        Per I4 (Transform Auditability): lenient parsing must emit receipt
-        to prevent silent corruption - callers know AST is incomplete.
-
-        This ensures lenient mode behavior and I4 compliance persist in CI.
+        Per GH#180: Clear error messages for unbalanced brackets.
         """
         content = "MY_LIST::[a, b, c"
 
-        # Should not raise - lenient mode returns document with warnings
-        doc, warnings = parse_with_warnings(content)
+        # Lexer raises before parsing can begin
+        with pytest.raises(LexerError) as exc_info:
+            parse_with_warnings(content)
 
-        # Verify document parsed successfully
-        assert doc is not None
-        assert doc.name == "INFERRED"  # Envelope inference
-        assert len(doc.sections) == 1
-        assert isinstance(doc.sections[0], Assignment)
-
-        # Verify I4 warning emitted
-        assert len(warnings) > 0, "Should emit at least one warning"
-        unclosed_warning = next((w for w in warnings if w.get("subtype") == "unclosed_list"), None)
-        assert unclosed_warning is not None, "Should emit warning for unclosed list"
-        assert unclosed_warning.get("type") == "lenient_parse"
-        assert unclosed_warning.get("line") == 1
-        assert unclosed_warning.get("column") is not None
-        assert (
-            "not closed" in unclosed_warning.get("message", "").lower()
-            or "unclosed" in unclosed_warning.get("message", "").lower()
-        )
-        assert "EOF" in unclosed_warning.get("message", "")
+        error = exc_info.value
+        assert error.error_code == "E_UNBALANCED_BRACKET"
+        assert error.line == 1
+        assert error.column == 10
 
 
 class TestSchemaSelection:
