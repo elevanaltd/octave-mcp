@@ -97,6 +97,17 @@ ASCII_ALIASES = {
     "#": "§",
 }
 
+# GH#184: Wrong case patterns for boolean/null (spec §6::NEVER)
+# These match case-insensitive versions that are NOT the correct lowercase form
+WRONG_CASE_PATTERNS = {
+    "True": "true",
+    "TRUE": "true",
+    "False": "false",
+    "FALSE": "false",
+    "Null": "null",
+    "NULL": "null",
+}
+
 # Token patterns (order matters for longest match)
 TOKEN_PATTERNS = [
     # Grammar sentinel (Issue #48 Phase 2) - must come first
@@ -398,6 +409,52 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
 
                 token = Token(token_type, value, line, column, normalized_from, raw_lexeme)
                 tokens.append(token)
+
+                # GH#184: Check for wrong-case boolean/null patterns (spec §6::NEVER)
+                # Emit spec_violation warning for True, False, TRUE, FALSE, Null, NULL
+                if token_type == TokenType.IDENTIFIER and matched_text in WRONG_CASE_PATTERNS:
+                    correct_form = WRONG_CASE_PATTERNS[matched_text]
+                    repairs.append(
+                        {
+                            "type": "spec_violation",
+                            "subtype": "wrong_case",
+                            "original": matched_text,
+                            "correct": correct_form,
+                            "line": line,
+                            "column": column,
+                            "message": (
+                                f"W_WRONG_CASE::{matched_text} should be {correct_form}. "
+                                f"OCTAVE spec requires lowercase for boolean and null literals."
+                            ),
+                        }
+                    )
+
+                # GH#184: Check for 'vs' without word boundaries (spec §6::NEVER)
+                # Detect patterns like "SpeedvsQuality" where 'vs' lacks boundaries
+                if token_type == TokenType.IDENTIFIER and "vs" in matched_text.lower():
+                    # Find 'vs' (case-insensitive) and check if it has proper boundaries
+                    lower_text = matched_text.lower()
+                    vs_pos = lower_text.find("vs")
+                    if vs_pos != -1:
+                        # Check if 'vs' is at boundaries or has non-alphanumeric neighbors
+                        has_left_boundary = vs_pos == 0
+                        has_right_boundary = vs_pos + 2 >= len(matched_text)
+                        if not has_left_boundary and not has_right_boundary:
+                            # 'vs' is embedded within identifier without boundaries
+                            repairs.append(
+                                {
+                                    "type": "spec_violation",
+                                    "subtype": "boundary_missing",
+                                    "original": matched_text,
+                                    "line": line,
+                                    "column": column,
+                                    "message": (
+                                        f"W_BOUNDARY_MISSING::'{matched_text}' contains 'vs' without "
+                                        f"word boundaries. Use 'Speed vs Quality' (with spaces) or "
+                                        f"bracket syntax [Speed vs Quality]."
+                                    ),
+                                }
+                            )
 
                 # Track bracket balance (GH#180)
                 if token_type == TokenType.LIST_START:

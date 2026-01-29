@@ -169,6 +169,7 @@ class Parser:
         self.pos = 0
         self.current_indent = 0
         self.warnings: list[dict] = []  # I4 audit trail for lenient parsing events
+        self.bracket_depth = 0  # GH#184: Track bracket nesting for NEVER rule validation
 
     def current(self) -> Token:
         """Get current token."""
@@ -566,6 +567,22 @@ class Parser:
         # Check for assignment or block
         # Lenient: allow FLOW (->) as assignment
         if self.current().type in (TokenType.ASSIGN, TokenType.FLOW):
+            operator_token = self.current()
+            # GH#184: Emit W_BARE_FLOW warning when flow arrow used as assignment
+            if operator_token.type == TokenType.FLOW:
+                self.warnings.append(
+                    {
+                        "type": "spec_violation",
+                        "subtype": "bare_flow",
+                        "line": operator_token.line,
+                        "column": operator_token.column,
+                        "message": (
+                            f"W_BARE_FLOW::Flow operator '{operator_token.value}' "
+                            f"at line {operator_token.line} used as assignment. "
+                            f"Use '::' for assignment and brackets for flow: KEY::[A{operator_token.value}B]"
+                        ),
+                    }
+                )
             self.advance()
             value = self.parse_value()
             return Assignment(key=key, value=value, line=self.current().line, column=self.current().column)
@@ -1035,6 +1052,7 @@ class Parser:
         # We want tokens from [ to ] inclusive for reconstruction
         start_pos = self.pos
         self.expect(TokenType.LIST_START)
+        self.bracket_depth += 1  # GH#184: Track bracket nesting for NEVER rule validation
         items: list[Any] = []
 
         # Issue #179: Track inline map keys for duplicate detection
@@ -1107,7 +1125,9 @@ class Parser:
         # This makes it lenient for unclosed lists at end of file
         if self.current().type == TokenType.LIST_END:
             self.advance()
+            self.bracket_depth -= 1  # GH#184: Track bracket nesting for NEVER rule validation
         elif self.current().type in (TokenType.EOF, TokenType.ENVELOPE_END):
+            self.bracket_depth -= 1  # GH#184: Decrement even on unclosed list
             if self.strict_structure:
                 raise ParserError(
                     f"Unclosed list at end of content. Expected ']' before {self.current().type.name}",
@@ -1130,6 +1150,7 @@ class Parser:
             )
         else:
             self.expect(TokenType.LIST_END)
+            self.bracket_depth -= 1  # GH#184: Track bracket nesting for NEVER rule validation
 
         # Gap_2: Capture token slice for token-witnessed reconstruction (ADR-0012)
         # Slice includes LIST_START through LIST_END (exclusive end, so pos is after ])
@@ -1277,8 +1298,15 @@ class Parser:
 
         Gap 9 fix: Also handles SECTION tokens (§) in flow expressions.
         Example: START->§DESTINATION should capture '§DESTINATION' as single unit.
+
+        GH#184: Emits spec violation warnings for NEVER rules:
+        - W_BARE_FLOW: Flow arrow outside brackets
+        - W_CONSTRAINT_OUTSIDE_BRACKETS: Constraint operator outside brackets
+        - W_CHAINED_TENSION: Multiple tension operators in same expression
         """
         parts = []
+        tension_count = 0  # GH#184: Track tension operators for chained tension detection
+        first_tension_token: Token | None = None  # For error location
 
         # Collect all parts of expression using unified EXPRESSION_OPERATORS set
         # Gap 9: Include SECTION token type in valid expression components
@@ -1287,6 +1315,46 @@ class Parser:
             or self.current().type in EXPRESSION_OPERATORS
         ):
             if self.current().type in EXPRESSION_OPERATORS:
+                operator_token = self.current()
+
+                # GH#184: Detect NEVER rule violations
+                if operator_token.type == TokenType.FLOW and self.bracket_depth == 0:
+                    # W_BARE_FLOW: Flow arrow outside brackets
+                    self.warnings.append(
+                        {
+                            "type": "spec_violation",
+                            "subtype": "bare_flow",
+                            "line": operator_token.line,
+                            "column": operator_token.column,
+                            "message": (
+                                f"W_BARE_FLOW::Flow operator '{operator_token.value}' "
+                                f"at line {operator_token.line} is outside brackets. "
+                                f"Use list syntax: KEY::[A{operator_token.value}B]"
+                            ),
+                        }
+                    )
+
+                if operator_token.type == TokenType.CONSTRAINT and self.bracket_depth == 0:
+                    # W_CONSTRAINT_OUTSIDE_BRACKETS: Constraint outside brackets
+                    self.warnings.append(
+                        {
+                            "type": "spec_violation",
+                            "subtype": "constraint_outside_brackets",
+                            "line": operator_token.line,
+                            "column": operator_token.column,
+                            "message": (
+                                f"W_CONSTRAINT_OUTSIDE_BRACKETS::Constraint operator "
+                                f"'{operator_token.value}' at line {operator_token.line} "
+                                f"is only valid inside brackets. Use: [A{operator_token.value}B]"
+                            ),
+                        }
+                    )
+
+                if operator_token.type == TokenType.TENSION:
+                    tension_count += 1
+                    if first_tension_token is None:
+                        first_tension_token = operator_token
+
                 parts.append(self.current().value)
                 self.advance()
             elif self.current().type == TokenType.SECTION:
@@ -1306,6 +1374,22 @@ class Parser:
                 self.advance()
             else:
                 break
+
+        # GH#184: Check for chained tension (more than one tension operator)
+        if tension_count > 1 and first_tension_token is not None:
+            self.warnings.append(
+                {
+                    "type": "spec_violation",
+                    "subtype": "chained_tension",
+                    "line": first_tension_token.line,
+                    "column": first_tension_token.column,
+                    "message": (
+                        f"W_CHAINED_TENSION::Expression at line {first_tension_token.line} "
+                        f"contains {tension_count} tension operators. "
+                        f"Tension is binary only (A vs B). Use separate expressions or list syntax."
+                    ),
+                }
+            )
 
         return "".join(str(p) for p in parts)
 
