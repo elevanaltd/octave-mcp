@@ -1139,20 +1139,134 @@ class Parser:
         return ListValue(items=items, tokens=token_slice)
 
     def parse_list_item(self) -> Any:
-        """Parse a single list item."""
+        """Parse a single list item.
+
+        Issue #185: Validates INLINE_MAP_NESTING::forbidden[values_must_be_atoms]
+        from octave-core-spec.oct.md section 5::MODES.
+        Inline map values must be atoms - nested inline maps are forbidden.
+        Only enforced in strict mode; lenient mode emits warning.
+        """
         # Check for inline map [k::v, k2::v2]
         if self.current().type == TokenType.IDENTIFIER and self.peek().type == TokenType.ASSIGN:
             # Inline map item
             pairs: dict[str, Any] = {}
             key = self.current().value
+            key_token = self.current()  # Capture for error reporting
             self.advance()
             self.expect(TokenType.ASSIGN)
             value = self.parse_value()
+
+            # Issue #185: Validate inline map values are atoms (no nested inline maps)
+            # Per spec: INLINE_MAP_NESTING::forbidden[values_must_be_atoms]
+            # Only error in strict mode; lenient mode emits warning per I4
+            self._validate_inline_map_value_is_atom(key, value, key_token)
+
             pairs[key] = value
             return InlineMap(pairs=pairs)
 
         # Regular value
         return self.parse_value()
+
+    def _validate_inline_map_value_is_atom(self, key: str, value: Any, token: Token) -> None:
+        """Validate that an inline map value is atomic (not a nested inline map).
+
+        Issue #185: Enforces INLINE_MAP_NESTING::forbidden[values_must_be_atoms]
+        from octave-core-spec.oct.md section 5::MODES.
+
+        In strict mode: raises ParserError for nested inline maps
+        In lenient mode: emits I4 warning but allows parsing to continue
+
+        Args:
+            key: The inline map key (for error context)
+            value: The parsed value to validate
+            token: Token for error location reporting
+
+        Raises:
+            ParserError: If value contains nested inline maps (strict mode only)
+        """
+        # Direct nesting: value is an InlineMap
+        if isinstance(value, InlineMap):
+            if self.strict_structure:
+                raise ParserError(
+                    f"E_NESTED_INLINE_MAP::inline maps cannot contain inline maps. "
+                    f"Key '{key}' has an inline map as value. "
+                    f"Use block structure instead:\n"
+                    f"  {key.upper()}:\n"
+                    f"    NESTED_KEY::value",
+                    token,
+                    "E_NESTED_INLINE_MAP",
+                )
+            else:
+                # I4 Audit: Emit warning for nested inline map in lenient mode
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "nested_inline_map",
+                        "key": key,
+                        "line": token.line,
+                        "column": token.column,
+                        "message": (
+                            f"W_NESTED_INLINE_MAP::{key} at line {token.line} "
+                            f"has inline map as value. Consider using block structure."
+                        ),
+                    }
+                )
+            return
+
+        # Recursive check: value is a ListValue - check all items recursively
+        if isinstance(value, ListValue):
+            self._check_list_for_nested_inline_maps(key, value, token)
+
+    def _check_list_for_nested_inline_maps(self, key: str, list_value: ListValue, token: Token) -> None:
+        """Recursively check a list for inline maps at any depth.
+
+        Issue #185: Ensures inline map values don't contain inline maps
+        even when nested inside lists.
+
+        In strict mode: raises ParserError
+        In lenient mode: emits I4 warning
+
+        Args:
+            key: The inline map key (for error context)
+            list_value: The list to check
+            token: Token for error location reporting
+
+        Raises:
+            ParserError: If any item in the list (at any depth) is an InlineMap (strict mode only)
+        """
+        for item in list_value.items:
+            if isinstance(item, InlineMap):
+                if self.strict_structure:
+                    raise ParserError(
+                        f"E_NESTED_INLINE_MAP::inline maps cannot contain inline maps. "
+                        f"Key '{key}' has a list containing inline maps. "
+                        f"Use block structure instead:\n"
+                        f"  {key.upper()}:\n"
+                        f"    - NESTED_KEY::value",
+                        token,
+                        "E_NESTED_INLINE_MAP",
+                    )
+                else:
+                    # I4 Audit: Emit warning for nested inline map in lenient mode
+                    self.warnings.append(
+                        {
+                            "type": "lenient_parse",
+                            "subtype": "nested_inline_map",
+                            "key": key,
+                            "line": token.line,
+                            "column": token.column,
+                            "message": (
+                                f"W_NESTED_INLINE_MAP::{key} at line {token.line} "
+                                f"has list containing inline maps. Consider using block structure."
+                            ),
+                        }
+                    )
+                    # In lenient mode, continue to allow but don't recurse further
+                    # (one warning per key is enough)
+                    return
+            # Recursive check for nested lists
+            if isinstance(item, ListValue):
+                self._check_list_for_nested_inline_maps(key, item, token)
 
     def parse_flow_expression(self) -> str:
         """Parse expression with operators like A→B→C, X⊕Y, A@B, A⧺B, or Speed⇌Quality.
