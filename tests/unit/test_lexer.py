@@ -162,6 +162,124 @@ class TestEnvelopeTokenization:
         assert tokens[0].type == TokenType.ENVELOPE_END
 
 
+class TestEnvelopeIdentifierErrors:
+    """Test improved error messages for invalid envelope identifiers (GH#145).
+
+    Current behavior: Input like ===architectural-gaps-analysis=== produces
+    'Unexpected character: =' which is confusing.
+
+    Expected behavior: Specific error messages that identify the invalid
+    character(s) in the envelope identifier and suggest valid alternatives.
+
+    Spec reference:
+    - octave-core-spec.oct.md §1::ENVELOPE: START::===NAME===[first_line,exact_match]
+    - octave-core-spec.oct.md §4::STRUCTURE: KEYS::[A-Z,a-z,0-9,_][start_with_letter_or_underscore]
+    """
+
+    def test_hyphen_in_envelope_identifier(self):
+        """Should report specific error for hyphen in envelope identifier.
+
+        Input: ===architectural-gaps-analysis===
+        Expected: Clear error about '-' being invalid in envelope identifiers.
+        """
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===architectural-gaps-analysis===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "-" in error.message or "hyphen" in error.message.lower()
+        assert "underscore" in error.message.lower() or "CamelCase" in error.message
+        assert error.line == 1
+        assert error.column == 1
+
+    def test_space_in_envelope_identifier(self):
+        """Should report specific error for space in envelope identifier."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===MY DOCUMENT===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "space" in error.message.lower()
+        assert error.line == 1
+
+    def test_special_char_in_envelope_identifier(self):
+        """Should report specific error for special characters."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===MY@DOC===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "@" in error.message
+        assert error.line == 1
+
+    def test_lowercase_envelope_identifier_valid(self):
+        """Should accept lowercase envelope identifiers (not just uppercase).
+
+        Per spec: KEYS::[A-Z,a-z,0-9,_] means both upper and lowercase are valid.
+        """
+        tokens, _ = tokenize("===my_document===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "my_document"
+
+    def test_mixed_case_envelope_identifier_valid(self):
+        """Should accept CamelCase envelope identifiers."""
+        tokens, _ = tokenize("===MyDocument===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "MyDocument"
+
+    def test_underscore_envelope_identifier_valid(self):
+        """Should accept underscore-separated envelope identifiers."""
+        tokens, _ = tokenize("===architectural_gaps_analysis===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "architectural_gaps_analysis"
+
+    def test_numeric_suffix_envelope_identifier_valid(self):
+        """Should accept envelope identifiers with numeric suffixes."""
+        tokens, _ = tokenize("===VERSION_2===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "VERSION_2"
+
+    def test_empty_envelope_identifier(self):
+        """Should report error for empty envelope identifier."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("======")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "empty" in error.message.lower()
+
+    def test_starts_with_number(self):
+        """Should report error for identifier starting with number."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===123START===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert error.line == 1
+
+    def test_multiple_invalid_chars(self):
+        """Should report the first invalid character found."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===bad-name@here===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        # Should mention the first invalid char (hyphen)
+        assert "-" in error.message
+
+    def test_unclosed_envelope_start(self):
+        """Should handle envelope patterns that don't close properly."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===INCOMPLETE")
+        error = exc_info.value
+        # This might be E005 or E_INVALID_ENVELOPE_ID depending on implementation
+        assert error.line == 1
+
+    def test_error_message_suggests_fix(self):
+        """Error message should suggest using underscores or CamelCase."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===my-kebab-case===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        # Should suggest alternatives
+        assert "underscore" in error.message.lower() or "_" in error.message
+        assert "CamelCase" in error.message or "camelcase" in error.message.lower()
+
+
 class TestStringTokenization:
     """Test string literal handling."""
 
@@ -662,3 +780,129 @@ class TestGrammarSentinelScoping:
         assert relevant[3].type == TokenType.ASSIGN
         assert relevant[4].type == TokenType.VERSION
         assert relevant[4].value == "5.1.0"
+
+
+class TestUnbalancedBracketDetection:
+    """Test unbalanced bracket detection (GH#180).
+
+    The lexer should detect unbalanced brackets and emit clear error messages
+    that point to the location of the opening bracket, not where the parser
+    gave up.
+
+    Error format: E_UNBALANCED_BRACKET::opening '[' at line N, column M has no matching ']'
+    """
+
+    def test_unclosed_square_bracket_simple(self):
+        """Should detect unclosed [ with clear error message."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("[a, b, c")
+        error = exc_info.value
+        assert error.error_code == "E_UNBALANCED_BRACKET"
+        assert "opening '['" in error.message
+        assert "no matching ']'" in error.message
+        assert error.line == 1
+        assert error.column == 1  # Points to opening bracket
+
+    def test_unclosed_square_bracket_with_content(self):
+        """Should detect unclosed [ in assignment context."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("ITEMS::[a, b, c")
+        error = exc_info.value
+        assert error.error_code == "E_UNBALANCED_BRACKET"
+        assert error.line == 1
+        assert error.column == 8  # Opening bracket at column 8
+
+    def test_unclosed_square_bracket_multiline(self):
+        """Should detect unclosed [ across multiple lines."""
+        content = """ITEMS::[
+  a,
+  b,
+  c"""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize(content)
+        error = exc_info.value
+        assert error.error_code == "E_UNBALANCED_BRACKET"
+        assert error.line == 1
+        assert error.column == 8
+
+    def test_extra_closing_bracket(self):
+        """Should detect ] without matching [."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("a, b, c]")
+        error = exc_info.value
+        assert error.error_code == "E_UNBALANCED_BRACKET"
+        assert "']'" in error.message
+        assert "no matching '['" in error.message
+        assert error.line == 1
+        assert error.column == 8  # Points to the unmatched ]
+
+    def test_nested_brackets_balanced(self):
+        """Balanced nested brackets should tokenize successfully."""
+        tokens, _ = tokenize("[[a, b], [c, d]]")
+        list_starts = [t for t in tokens if t.type == TokenType.LIST_START]
+        list_ends = [t for t in tokens if t.type == TokenType.LIST_END]
+        assert len(list_starts) == 3
+        assert len(list_ends) == 3
+
+    def test_nested_brackets_unclosed(self):
+        """Should detect unclosed inner bracket."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("[[a, b], [c, d]")
+        error = exc_info.value
+        assert error.error_code == "E_UNBALANCED_BRACKET"
+        # Should point to first unclosed bracket
+        assert error.line == 1
+        assert error.column == 1
+
+    def test_brackets_in_string_not_counted(self):
+        """Brackets inside strings should not be counted."""
+        tokens, _ = tokenize('MSG::"contains [ and ] but balanced"')
+        # Should succeed because brackets are in string
+        assert any(t.type == TokenType.STRING for t in tokens)
+
+    def test_brackets_in_comment_not_counted(self):
+        """Brackets inside comments should not be counted."""
+        tokens, _ = tokenize("VALUE::42 // note: [unbalanced")
+        # Should succeed because bracket is in comment
+        assert any(t.type == TokenType.COMMENT for t in tokens)
+
+    def test_multiple_unclosed_brackets_reports_first(self):
+        """With multiple unclosed brackets, report the first."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("[[[a")
+        error = exc_info.value
+        assert error.error_code == "E_UNBALANCED_BRACKET"
+        assert error.column == 1  # First opening bracket
+
+    def test_mismatched_bracket_types(self):
+        """Should detect mismatched bracket types."""
+        # Note: OCTAVE lexer only uses [] for lists, not () or {}
+        # This test validates that [ must be closed with ]
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("[a, b, c")
+        error = exc_info.value
+        assert error.error_code == "E_UNBALANCED_BRACKET"
+
+    def test_balanced_brackets_complex(self):
+        """Complex balanced structure should tokenize correctly."""
+        content = """META:
+  ITEMS::[
+    [a, b],
+    [c, d]
+  ]
+  VALUES::[1, 2, 3]"""
+        tokens, _ = tokenize(content)
+        list_starts = [t for t in tokens if t.type == TokenType.LIST_START]
+        list_ends = [t for t in tokens if t.type == TokenType.LIST_END]
+        assert len(list_starts) == len(list_ends)
+
+    def test_error_message_format(self):
+        """Error message should follow specified format."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("[unclosed")
+        error = exc_info.value
+        # Verify full error string format
+        error_str = str(error)
+        assert "E_UNBALANCED_BRACKET" in error_str
+        assert "line 1" in error_str
+        assert "column 1" in error_str

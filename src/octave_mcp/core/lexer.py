@@ -97,6 +97,17 @@ ASCII_ALIASES = {
     "#": "§",
 }
 
+# GH#184: Wrong case patterns for boolean/null (spec §6::NEVER)
+# These match case-insensitive versions that are NOT the correct lowercase form
+WRONG_CASE_PATTERNS = {
+    "True": "true",
+    "TRUE": "true",
+    "False": "false",
+    "FALSE": "false",
+    "Null": "null",
+    "NULL": "null",
+}
+
 # Token patterns (order matters for longest match)
 TOKEN_PATTERNS = [
     # Grammar sentinel (Issue #48 Phase 2) - must come first
@@ -120,7 +131,9 @@ TOKEN_PATTERNS = [
     # Envelope markers (must come before SEPARATOR)
     # ENVELOPE_END must come before ENVELOPE_START to match first
     (r"===END===", TokenType.ENVELOPE_END),
-    (r"===([A-Z_][A-Z0-9_]*)===", TokenType.ENVELOPE_START),
+    # GH#145: Accept both upper and lowercase letters in envelope identifiers
+    # Per spec §4::STRUCTURE: KEYS::[A-Z,a-z,0-9,_][start_with_letter_or_underscore]
+    (r"===([A-Za-z_][A-Za-z0-9_]*)===", TokenType.ENVELOPE_START),
     # Separator
     (r"---", TokenType.SEPARATOR),
     # Comments (must come before operators)
@@ -169,6 +182,94 @@ TOKEN_PATTERNS = [
 ]
 
 
+# GH#145: Pattern to detect malformed envelope markers
+# Matches ===...=== with any content between
+_INVALID_ENVELOPE_PATTERN = re.compile(r"===([^=\n]*)===")
+
+# Valid envelope identifier pattern (for error detection)
+_VALID_ENVELOPE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _check_invalid_envelope(content: str, pos: int, line: int, column: int) -> LexerError | None:
+    """Check if we're looking at an invalid envelope pattern.
+
+    GH#145: Provides specific error messages for invalid envelope identifiers.
+
+    Args:
+        content: Full content string
+        pos: Current position in content
+        line: Current line number
+        column: Current column number
+
+    Returns:
+        LexerError if invalid envelope detected, None otherwise
+    """
+    match = _INVALID_ENVELOPE_PATTERN.match(content, pos)
+    if not match:
+        # Not a complete ===...=== pattern
+        return None
+
+    identifier = match.group(1)
+
+    # Check for empty identifier
+    if not identifier:
+        return LexerError(
+            "Envelope identifier is empty. Use a valid name like ===MY_DOC=== or ===MyDoc===.",
+            line,
+            column,
+            "E_INVALID_ENVELOPE_ID",
+        )
+
+    # Check if it's already valid (shouldn't reach here, but safety check)
+    if _VALID_ENVELOPE_ID_PATTERN.match(identifier):
+        return None
+
+    # Find the first invalid character
+    first_invalid_char = None
+    first_invalid_pos = 0
+
+    for i, char in enumerate(identifier):
+        if i == 0:
+            # First character must be letter or underscore
+            if not (char.isalpha() or char == "_"):
+                first_invalid_char = char
+                first_invalid_pos = i
+                break
+        else:
+            # Subsequent characters must be alphanumeric or underscore
+            if not (char.isalnum() or char == "_"):
+                first_invalid_char = char
+                first_invalid_pos = i
+                break
+
+    if first_invalid_char is None:
+        # Shouldn't happen, but safety
+        return None
+
+    # Build helpful error message based on the character
+    char_desc = first_invalid_char
+    if first_invalid_char == "-":
+        char_desc = "hyphen '-'"
+    elif first_invalid_char == " ":
+        char_desc = "space"
+    elif first_invalid_char.isdigit() and first_invalid_pos == 0:
+        return LexerError(
+            f"Envelope identifier '{identifier}' cannot start with a digit. "
+            "Use a letter or underscore as the first character.",
+            line,
+            column,
+            "E_INVALID_ENVELOPE_ID",
+        )
+
+    return LexerError(
+        f"Envelope identifier '{identifier}' contains invalid character {char_desc}. "
+        "Use underscores or CamelCase instead (e.g., my_document or MyDocument).",
+        line,
+        column,
+        "E_INVALID_ENVELOPE_ID",
+    )
+
+
 def tokenize(content: str) -> tuple[list[Token], list[Any]]:
     """Tokenize OCTAVE content with ASCII alias normalization.
 
@@ -179,7 +280,7 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
         Tuple of (tokens, repairs)
 
     Raises:
-        LexerError: On invalid syntax (tabs, malformed operators)
+        LexerError: On invalid syntax (tabs, malformed operators, unbalanced brackets)
     """
     # Apply NFC unicode normalization
     content = unicodedata.normalize("NFC", content)
@@ -197,6 +298,10 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
     line = 1
     column = 1
     pos = 0
+
+    # Track bracket depth for unbalanced bracket detection (GH#180)
+    # Stack of (bracket_char, line, column) for each opening bracket
+    bracket_stack: list[tuple[str, int, int]] = []
 
     # Compile all patterns
     compiled_patterns = [(re.compile(pattern), token_type) for pattern, token_type in TOKEN_PATTERNS]
@@ -305,6 +410,65 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 token = Token(token_type, value, line, column, normalized_from, raw_lexeme)
                 tokens.append(token)
 
+                # GH#184: Check for wrong-case boolean/null patterns (spec §6::NEVER)
+                # Emit spec_violation warning for True, False, TRUE, FALSE, Null, NULL
+                if token_type == TokenType.IDENTIFIER and matched_text in WRONG_CASE_PATTERNS:
+                    correct_form = WRONG_CASE_PATTERNS[matched_text]
+                    repairs.append(
+                        {
+                            "type": "spec_violation",
+                            "subtype": "wrong_case",
+                            "original": matched_text,
+                            "correct": correct_form,
+                            "line": line,
+                            "column": column,
+                            "message": (
+                                f"W_WRONG_CASE::{matched_text} should be {correct_form}. "
+                                f"OCTAVE spec requires lowercase for boolean and null literals."
+                            ),
+                        }
+                    )
+
+                # GH#184: Check for 'vs' without word boundaries (spec §6::NEVER)
+                # Detect patterns like "SpeedvsQuality" where 'vs' lacks boundaries
+                if token_type == TokenType.IDENTIFIER and "vs" in matched_text.lower():
+                    # Find 'vs' (case-insensitive) and check if it has proper boundaries
+                    lower_text = matched_text.lower()
+                    vs_pos = lower_text.find("vs")
+                    if vs_pos != -1:
+                        # Check if 'vs' is at boundaries or has non-alphanumeric neighbors
+                        has_left_boundary = vs_pos == 0
+                        has_right_boundary = vs_pos + 2 >= len(matched_text)
+                        if not has_left_boundary and not has_right_boundary:
+                            # 'vs' is embedded within identifier without boundaries
+                            repairs.append(
+                                {
+                                    "type": "spec_violation",
+                                    "subtype": "boundary_missing",
+                                    "original": matched_text,
+                                    "line": line,
+                                    "column": column,
+                                    "message": (
+                                        f"W_BOUNDARY_MISSING::'{matched_text}' contains 'vs' without "
+                                        f"word boundaries. Use 'Speed vs Quality' (with spaces) or "
+                                        f"bracket syntax [Speed vs Quality]."
+                                    ),
+                                }
+                            )
+
+                # Track bracket balance (GH#180)
+                if token_type == TokenType.LIST_START:
+                    bracket_stack.append(("[", line, column))
+                elif token_type == TokenType.LIST_END:
+                    if not bracket_stack:
+                        raise LexerError(
+                            f"closing ']' at line {line}, column {column} has no matching '['",
+                            line,
+                            column,
+                            "E_UNBALANCED_BRACKET",
+                        )
+                    bracket_stack.pop()
+
                 if normalized_from:
                     repairs.append(
                         {
@@ -331,6 +495,13 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 break
 
         if not matched:
+            # GH#145: Check for invalid envelope identifier patterns
+            # Detect ===...=== that didn't match the valid envelope pattern
+            if content[pos : pos + 3] == "===":
+                error = _check_invalid_envelope(content, pos, line, column)
+                if error:
+                    raise error
+
             # Handle special case: + operator (need to distinguish from number)
             if content[pos] == "+":
                 # Look ahead - is this part of a number or an operator?
@@ -349,6 +520,17 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
 
             # Unrecognized character
             raise LexerError(f"Unexpected character: '{content[pos]}'", line, column, "E005")
+
+    # Check for unclosed brackets at end of input (GH#180)
+    if bracket_stack:
+        # Report the first unclosed bracket
+        bracket_char, bracket_line, bracket_column = bracket_stack[0]
+        raise LexerError(
+            f"opening '{bracket_char}' at line {bracket_line}, column {bracket_column} has no matching ']'",
+            bracket_line,
+            bracket_column,
+            "E_UNBALANCED_BRACKET",
+        )
 
     # Add EOF token
     tokens.append(Token(TokenType.EOF, None, line, column))

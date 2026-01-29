@@ -169,6 +169,7 @@ class Parser:
         self.pos = 0
         self.current_indent = 0
         self.warnings: list[dict] = []  # I4 audit trail for lenient parsing events
+        self.bracket_depth = 0  # GH#184: Track bracket nesting for NEVER rule validation
 
     def current(self) -> Token:
         """Get current token."""
@@ -313,8 +314,14 @@ class Parser:
         return doc
 
     def parse_meta_block(self) -> dict[str, Any]:
-        """Parse META block into dictionary."""
+        """Parse META block into dictionary.
+
+        Issue #179: Detects duplicate keys and emits warnings per I4 auditability.
+        Per spec: DUPLICATES::keys_must_be_unique_per_block
+        """
         meta: dict[str, Any] = {}
+        # Issue #179: Track key positions for duplicate detection
+        key_positions: dict[str, int] = {}  # key -> first occurrence line number
 
         # Consume META identifier
         self.expect(TokenType.IDENTIFIER)
@@ -358,11 +365,34 @@ class Parser:
                     break  # Dedent to 0 (implicit)
 
                 key = self.current().value
+                key_line = self.current().line
                 self.advance()
 
                 if self.current().type == TokenType.ASSIGN:
                     self.advance()
                     value = self.parse_value()
+
+                    # Issue #179: Check for duplicate key
+                    if key in key_positions:
+                        # I4 Audit: Emit warning for duplicate key
+                        # Per I4: "If bits lost must have receipt"
+                        self.warnings.append(
+                            {
+                                "type": "lenient_parse",
+                                "subtype": "duplicate_key",
+                                "key": key,
+                                "first_line": key_positions[key],
+                                "duplicate_line": key_line,
+                                "message": (
+                                    f"W_DUPLICATE_KEY::{key} at line {key_line} "
+                                    f"overwrites previous definition at line {key_positions[key]}"
+                                ),
+                            }
+                        )
+                    else:
+                        # Track first occurrence
+                        key_positions[key] = key_line
+
                     meta[key] = value
                 else:
                     # Skip malformed field
@@ -537,6 +567,22 @@ class Parser:
         # Check for assignment or block
         # Lenient: allow FLOW (->) as assignment
         if self.current().type in (TokenType.ASSIGN, TokenType.FLOW):
+            operator_token = self.current()
+            # GH#184: Emit W_BARE_FLOW warning when flow arrow used as assignment
+            if operator_token.type == TokenType.FLOW:
+                self.warnings.append(
+                    {
+                        "type": "spec_violation",
+                        "subtype": "bare_flow",
+                        "line": operator_token.line,
+                        "column": operator_token.column,
+                        "message": (
+                            f"W_BARE_FLOW::Flow operator '{operator_token.value}' "
+                            f"at line {operator_token.line} used as assignment. "
+                            f"Use '::' for assignment and brackets for flow: KEY::[A{operator_token.value}B]"
+                        ),
+                    }
+                )
             self.advance()
             value = self.parse_value()
             return Assignment(key=key, value=value, line=self.current().line, column=self.current().column)
@@ -999,12 +1045,18 @@ class Parser:
         Gap_2 ADR-0012: Captures token slice for token-witnessed reconstruction.
         This enables correct reconstruction of holographic patterns containing
         quoted operator symbols (e.g., ["∧"∧REQ→§SELF]).
+
+        Issue #179: Detects duplicate keys in inline maps [k::v, k::v2].
         """
         # Gap_2: Record token position BEFORE consuming LIST_START
         # We want tokens from [ to ] inclusive for reconstruction
         start_pos = self.pos
         self.expect(TokenType.LIST_START)
+        self.bracket_depth += 1  # GH#184: Track bracket nesting for NEVER rule validation
         items: list[Any] = []
+
+        # Issue #179: Track inline map keys for duplicate detection
+        inline_map_keys: dict[str, int] = {}  # key -> first occurrence line
 
         # Parse list items
         while True:
@@ -1017,9 +1069,33 @@ class Parser:
             if self.current().type in (TokenType.LIST_END, TokenType.EOF, TokenType.ENVELOPE_END):
                 break
 
+            # Issue #179: Capture line before parsing item for accurate duplicate reporting
+            item_line = self.current().line
+
             # Parse item value
             item = self.parse_list_item()
             items.append(item)
+
+            # Issue #179: Check for duplicate keys in inline maps
+            if isinstance(item, InlineMap):
+                for key in item.pairs.keys():
+                    if key in inline_map_keys:
+                        # I4 Audit: Emit warning for duplicate key in inline map
+                        self.warnings.append(
+                            {
+                                "type": "lenient_parse",
+                                "subtype": "duplicate_key",
+                                "key": key,
+                                "first_line": inline_map_keys[key],
+                                "duplicate_line": item_line,
+                                "message": (
+                                    f"W_DUPLICATE_KEY::{key} at line {item_line} "
+                                    f"overwrites previous definition at line {inline_map_keys[key]}"
+                                ),
+                            }
+                        )
+                    else:
+                        inline_map_keys[key] = item_line
 
             # Check for comma
             if self.current().type == TokenType.COMMA:
@@ -1049,7 +1125,9 @@ class Parser:
         # This makes it lenient for unclosed lists at end of file
         if self.current().type == TokenType.LIST_END:
             self.advance()
+            self.bracket_depth -= 1  # GH#184: Track bracket nesting for NEVER rule validation
         elif self.current().type in (TokenType.EOF, TokenType.ENVELOPE_END):
+            self.bracket_depth -= 1  # GH#184: Decrement even on unclosed list
             if self.strict_structure:
                 raise ParserError(
                     f"Unclosed list at end of content. Expected ']' before {self.current().type.name}",
@@ -1072,6 +1150,7 @@ class Parser:
             )
         else:
             self.expect(TokenType.LIST_END)
+            self.bracket_depth -= 1  # GH#184: Track bracket nesting for NEVER rule validation
 
         # Gap_2: Capture token slice for token-witnessed reconstruction (ADR-0012)
         # Slice includes LIST_START through LIST_END (exclusive end, so pos is after ])
@@ -1081,20 +1160,134 @@ class Parser:
         return ListValue(items=items, tokens=token_slice)
 
     def parse_list_item(self) -> Any:
-        """Parse a single list item."""
+        """Parse a single list item.
+
+        Issue #185: Validates INLINE_MAP_NESTING::forbidden[values_must_be_atoms]
+        from octave-core-spec.oct.md section 5::MODES.
+        Inline map values must be atoms - nested inline maps are forbidden.
+        Only enforced in strict mode; lenient mode emits warning.
+        """
         # Check for inline map [k::v, k2::v2]
         if self.current().type == TokenType.IDENTIFIER and self.peek().type == TokenType.ASSIGN:
             # Inline map item
             pairs: dict[str, Any] = {}
             key = self.current().value
+            key_token = self.current()  # Capture for error reporting
             self.advance()
             self.expect(TokenType.ASSIGN)
             value = self.parse_value()
+
+            # Issue #185: Validate inline map values are atoms (no nested inline maps)
+            # Per spec: INLINE_MAP_NESTING::forbidden[values_must_be_atoms]
+            # Only error in strict mode; lenient mode emits warning per I4
+            self._validate_inline_map_value_is_atom(key, value, key_token)
+
             pairs[key] = value
             return InlineMap(pairs=pairs)
 
         # Regular value
         return self.parse_value()
+
+    def _validate_inline_map_value_is_atom(self, key: str, value: Any, token: Token) -> None:
+        """Validate that an inline map value is atomic (not a nested inline map).
+
+        Issue #185: Enforces INLINE_MAP_NESTING::forbidden[values_must_be_atoms]
+        from octave-core-spec.oct.md section 5::MODES.
+
+        In strict mode: raises ParserError for nested inline maps
+        In lenient mode: emits I4 warning but allows parsing to continue
+
+        Args:
+            key: The inline map key (for error context)
+            value: The parsed value to validate
+            token: Token for error location reporting
+
+        Raises:
+            ParserError: If value contains nested inline maps (strict mode only)
+        """
+        # Direct nesting: value is an InlineMap
+        if isinstance(value, InlineMap):
+            if self.strict_structure:
+                raise ParserError(
+                    f"E_NESTED_INLINE_MAP::inline maps cannot contain inline maps. "
+                    f"Key '{key}' has an inline map as value. "
+                    f"Use block structure instead:\n"
+                    f"  {key.upper()}:\n"
+                    f"    NESTED_KEY::value",
+                    token,
+                    "E_NESTED_INLINE_MAP",
+                )
+            else:
+                # I4 Audit: Emit warning for nested inline map in lenient mode
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "nested_inline_map",
+                        "key": key,
+                        "line": token.line,
+                        "column": token.column,
+                        "message": (
+                            f"W_NESTED_INLINE_MAP::{key} at line {token.line} "
+                            f"has inline map as value. Consider using block structure."
+                        ),
+                    }
+                )
+            return
+
+        # Recursive check: value is a ListValue - check all items recursively
+        if isinstance(value, ListValue):
+            self._check_list_for_nested_inline_maps(key, value, token)
+
+    def _check_list_for_nested_inline_maps(self, key: str, list_value: ListValue, token: Token) -> None:
+        """Recursively check a list for inline maps at any depth.
+
+        Issue #185: Ensures inline map values don't contain inline maps
+        even when nested inside lists.
+
+        In strict mode: raises ParserError
+        In lenient mode: emits I4 warning
+
+        Args:
+            key: The inline map key (for error context)
+            list_value: The list to check
+            token: Token for error location reporting
+
+        Raises:
+            ParserError: If any item in the list (at any depth) is an InlineMap (strict mode only)
+        """
+        for item in list_value.items:
+            if isinstance(item, InlineMap):
+                if self.strict_structure:
+                    raise ParserError(
+                        f"E_NESTED_INLINE_MAP::inline maps cannot contain inline maps. "
+                        f"Key '{key}' has a list containing inline maps. "
+                        f"Use block structure instead:\n"
+                        f"  {key.upper()}:\n"
+                        f"    - NESTED_KEY::value",
+                        token,
+                        "E_NESTED_INLINE_MAP",
+                    )
+                else:
+                    # I4 Audit: Emit warning for nested inline map in lenient mode
+                    self.warnings.append(
+                        {
+                            "type": "lenient_parse",
+                            "subtype": "nested_inline_map",
+                            "key": key,
+                            "line": token.line,
+                            "column": token.column,
+                            "message": (
+                                f"W_NESTED_INLINE_MAP::{key} at line {token.line} "
+                                f"has list containing inline maps. Consider using block structure."
+                            ),
+                        }
+                    )
+                    # In lenient mode, continue to allow but don't recurse further
+                    # (one warning per key is enough)
+                    return
+            # Recursive check for nested lists
+            if isinstance(item, ListValue):
+                self._check_list_for_nested_inline_maps(key, item, token)
 
     def parse_flow_expression(self) -> str:
         """Parse expression with operators like A→B→C, X⊕Y, A@B, A⧺B, or Speed⇌Quality.
@@ -1105,8 +1298,15 @@ class Parser:
 
         Gap 9 fix: Also handles SECTION tokens (§) in flow expressions.
         Example: START->§DESTINATION should capture '§DESTINATION' as single unit.
+
+        GH#184: Emits spec violation warnings for NEVER rules:
+        - W_BARE_FLOW: Flow arrow outside brackets
+        - W_CONSTRAINT_OUTSIDE_BRACKETS: Constraint operator outside brackets
+        - W_CHAINED_TENSION: Multiple tension operators in same expression
         """
         parts = []
+        tension_count = 0  # GH#184: Track tension operators for chained tension detection
+        first_tension_token: Token | None = None  # For error location
 
         # Collect all parts of expression using unified EXPRESSION_OPERATORS set
         # Gap 9: Include SECTION token type in valid expression components
@@ -1115,6 +1315,46 @@ class Parser:
             or self.current().type in EXPRESSION_OPERATORS
         ):
             if self.current().type in EXPRESSION_OPERATORS:
+                operator_token = self.current()
+
+                # GH#184: Detect NEVER rule violations
+                if operator_token.type == TokenType.FLOW and self.bracket_depth == 0:
+                    # W_BARE_FLOW: Flow arrow outside brackets
+                    self.warnings.append(
+                        {
+                            "type": "spec_violation",
+                            "subtype": "bare_flow",
+                            "line": operator_token.line,
+                            "column": operator_token.column,
+                            "message": (
+                                f"W_BARE_FLOW::Flow operator '{operator_token.value}' "
+                                f"at line {operator_token.line} is outside brackets. "
+                                f"Use list syntax: KEY::[A{operator_token.value}B]"
+                            ),
+                        }
+                    )
+
+                if operator_token.type == TokenType.CONSTRAINT and self.bracket_depth == 0:
+                    # W_CONSTRAINT_OUTSIDE_BRACKETS: Constraint outside brackets
+                    self.warnings.append(
+                        {
+                            "type": "spec_violation",
+                            "subtype": "constraint_outside_brackets",
+                            "line": operator_token.line,
+                            "column": operator_token.column,
+                            "message": (
+                                f"W_CONSTRAINT_OUTSIDE_BRACKETS::Constraint operator "
+                                f"'{operator_token.value}' at line {operator_token.line} "
+                                f"is only valid inside brackets. Use: [A{operator_token.value}B]"
+                            ),
+                        }
+                    )
+
+                if operator_token.type == TokenType.TENSION:
+                    tension_count += 1
+                    if first_tension_token is None:
+                        first_tension_token = operator_token
+
                 parts.append(self.current().value)
                 self.advance()
             elif self.current().type == TokenType.SECTION:
@@ -1134,6 +1374,22 @@ class Parser:
                 self.advance()
             else:
                 break
+
+        # GH#184: Check for chained tension (more than one tension operator)
+        if tension_count > 1 and first_tension_token is not None:
+            self.warnings.append(
+                {
+                    "type": "spec_violation",
+                    "subtype": "chained_tension",
+                    "line": first_tension_token.line,
+                    "column": first_tension_token.column,
+                    "message": (
+                        f"W_CHAINED_TENSION::Expression at line {first_tension_token.line} "
+                        f"contains {tension_count} tension operators. "
+                        f"Tension is binary only (A vs B). Use separate expressions or list syntax."
+                    ),
+                }
+            )
 
         return "".join(str(p) for p in parts)
 
