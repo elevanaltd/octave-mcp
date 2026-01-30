@@ -160,8 +160,8 @@ PATTERNS_COMPARED_TO_SKILLS::[
     PATTERNS::up_to_150_lines
   ],
   ANCHOR_KERNEL::[
-    SKILLS::required_for_auto_loading,
-    PATTERNS::required_for_auto_loading
+    SKILLS::recommended_for_anchor_injection,
+    PATTERNS::required_for_anchor_injection
   ]
 ]
 

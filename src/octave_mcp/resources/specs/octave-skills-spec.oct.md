@@ -1,35 +1,37 @@
 ===OCTAVE_SKILLS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"6.0.0"
-  STATUS::APPROVED
-  TOKENS::"~180"
+  VERSION::"7.0.0"
+  STATUS::ACTIVE
+  TOKENS::"~220"
   REQUIRES::octave-core-spec
   PURPOSE::L5_skill_document_format[platform_agnostic]
-  IMPLEMENTATION_NOTES::"v6: Hybrid pattern - Skills require YAML frontmatter for tool compatibility, followed by a pure OCTAVE envelope (META.SKILL) for internal consistency."
+  IMPLEMENTATION_NOTES::"v7: Adds optional ANCHOR_KERNEL for odyssean-anchor auto-injection. Skills can export high-density capability atoms for anchor binding. Backward compatible with v6."
 
   CONTRACT::SKILL_DEFINITION[
     PRINCIPLE::"Skills use YAML for external discovery and OCTAVE for internal definition",
-    MECHANISM::[YAML_FRONTMATTER, OCTAVE_ENVELOPE[META, BODY]],
+    MECHANISM::[YAML_FRONTMATTER, OCTAVE_ENVELOPE[META, BODY, ANCHOR_KERNEL_OPTIONAL]],
     COMPATIBILITY::universal_tool_support
   ]
 
 ---
 
 // OCTAVE SKILLS: Universal format for AI agent skill documents.
-// v6: Simplified format: YAML Frontmatter + OCTAVE Envelope. No redundancy.
+// v7: YAML Frontmatter + OCTAVE Envelope + optional ANCHOR_KERNEL for anchor injection.
 
 §1::SKILL_DOCUMENT_STRUCTURE
-SEQUENCE::[YAML_FRONTMATTER, OCTAVE_ENVELOPE]
+SEQUENCE::[YAML_FRONTMATTER, OCTAVE_ENVELOPE, ANCHOR_KERNEL_OPTIONAL]
 YAML_FRONTMATTER::[name, description, allowed-tools, triggers, version]
-ENVELOPE::===SKILL_NAME===[META,body,===END===]
+ENVELOPE::===SKILL_NAME===[META, body, ANCHOR_KERNEL_optional, END]
 META_REQUIRED::[TYPE::SKILL,VERSION,STATUS]
 META_OPTIONAL::[PURPOSE,TIER,SPEC_REFERENCE]
 BODY::octave_syntax[full_L1-L4_support]
+ANCHOR_KERNEL::recommended_for_anchor_injection
 
-REQUIRED_V6::[
+REQUIRED_V7::[
   yaml_frontmatter::required_for_discovery,
   octave_envelope::required_for_parsing,
+  anchor_kernel::recommended_for_anchor_injection,
   no_markdown_headers::prevent_parser_errors
 ]
 
@@ -37,59 +39,48 @@ REQUIRED_V6::[
 
 §2::BODY_FORMAT
 
+V7_STANDARD::hybrid_format[yaml_header + octave_envelope + optional_kernel]
 V6_STANDARD::hybrid_format[yaml_header + octave_envelope]
 V5_DEPRECATED::[markdown_body, missing_envelope, duplicate_meta]
 
 BENEFITS::[
   simplicity::no_redundant_data,
   compatibility::yaml_scanners_work,
-  stability::no_markdown_headers_breaking_parsers
+  stability::no_markdown_headers_breaking_parsers,
+  anchor_injection::kernel_enables_high_density_capability_loading
 ]
 
 §3::DOCUMENT_TEMPLATE
 
-V6_TEMPLATE::"
----
-name: skill-name
-description: Comprehensive description. Use when X. Triggers on Y, Z.
-allowed-tools: [Read, Bash, Grep, Glob]
-triggers: [trigger1, trigger2]
-version: 1.0.0
----
+// V7 template with optional ANCHOR_KERNEL for anchor auto-injection
+V7_TEMPLATE_STRUCTURE::[
+  YAML_FRONTMATTER::[name, description, allowed_tools, triggers, version],
+  OCTAVE_ENVELOPE::[META, body_sections, ANCHOR_KERNEL_optional, END]
+]
 
-===SKILL_NAME===
-META:
-  TYPE::SKILL
-  VERSION::\"1.0.0\"
-  STATUS::ACTIVE
-  PURPOSE::skill_mission_statement
+// Kernel structure aligns with patterns spec for consistency
+KERNEL_FIELDS::[
+  NEVER::[forbidden_actions],
+  MUST::[required_behaviors],
+  LANE::optional[role_type_for_coordination_skills],
+  DELEGATE::optional[task_delegation_mappings]
+]
 
-§1::SECTION_NAME
-CONTENT::follows_octave_syntax[L1-L4]
+V6_TEMPLATE::still_valid[kernel_omission_triggers_cascading_fallback]
 
-===END===
-"
-===END===
-"
-
-V5_DEPRECATED_TEMPLATE::"
----
-name: skill-name
-description: Comprehensive description. Use when X. Triggers on Y, Z.
-allowed-tools: Read, Bash, Grep, Glob
----
-
-===SKILL_NAME===
-VERSION::1.0.0
-...
-===END===
-"
+CASCADING_FALLBACK::[
+  // If ANCHOR_KERNEL missing, server extracts from these sections:
+  PRIORITY_1::§ANCHOR_KERNEL[explicit_export_interface],
+  PRIORITY_2::§BEHAVIOR.CONDUCT[MUST_NEVER + MUST_ALWAYS],
+  PRIORITY_3::SIGNALS_or_PATTERNS_blocks[detection_skills],
+  PRIORITY_4::WARN_UNSTRUCTURED[skill_name]
+]
 
 §4::SIZE_CONSTRAINTS
-TARGET::<500_lines[all_skills]
-MAX_BREACH::5_files>500[system_wide]
+TARGET::500_lines_max[all_skills]
+MAX_BREACH::5_files_over_500[system_wide]
 HARD_LIMIT::600_lines[NEVER_exceed]
-OVERFLOW_STRATEGY::progressive_disclosure[main→resources]
+OVERFLOW_STRATEGY::[progressive_disclosure[main→resources]]
 
 §5::TRIGGER_DESIGN
 DESCRIPTION_KEYWORDS::[action_verbs,domain_terms,problem_patterns]
@@ -100,17 +91,17 @@ EXAMPLE::Use_when_auditing_codebases_finding_stubs_Triggers_on_placeholder_audit
 §6::RESOURCE_STRUCTURE
 
 CLAUDE_CODE_RESOURCES::[
-  PATH::.claude/skills/{skill-name}/,
+  PATH::".claude/skills/[skill-name]/",
   MAIN::SKILL.md,
-  OVERFLOW::resources/[deep_dives,examples]
+  OVERFLOW::resources[deep_dives,examples]
 ]
 
 CODEX_RESOURCES::[
-  PATH::.codex/skills/{skill-name}/,
+  PATH::".codex/skills/[skill-name]/",
   MAIN::SKILL.md,
-  SCRIPTS::scripts/[executable_code],
-  REFERENCES::references/[documentation],
-  ASSETS::assets/[templates,images,fonts]
+  SCRIPTS::scripts[executable_code],
+  REFERENCES::references[documentation],
+  ASSETS::assets[templates,images,fonts]
 ]
 
 UNIVERSAL_PRINCIPLES::[
@@ -145,6 +136,14 @@ BACKWARD_COMPATIBILITY::[
 
 §8::VALIDATION
 
+V7_VALIDATION::[
+  META_REQUIRED::[TYPE::SKILL,VERSION,STATUS],
+  ENVELOPE::===NAME===[matches_YAML_NAME],
+  SYNTAX::passes_octave_validation,
+  SIZE::under_constraint_limits,
+  ANCHOR_KERNEL::recommended[warn_if_missing_for_anchor_enabled_skills]
+]
+
 V6_VALIDATION::[
   META_REQUIRED::[TYPE::SKILL,VERSION,STATUS],
   ENVELOPE::===NAME===[matches_YAML_NAME],
@@ -158,8 +157,10 @@ V5_VALIDATION_DEPRECATED::[
   description::non_empty_with_triggers
 ]
 
-HOLOGRAPHIC_VALIDATION::[
-  DEPRECATED::no_longer_required_to_mirror_YAML_in_META_SKILL
+KERNEL_VALIDATION::[
+  IF_PRESENT::END_KERNEL_marker_required,
+  CONTENT::atoms_only[no_prose_no_rationale],
+  SIZE::kernel_50_lines_max
 ]
 
 §9::FORBIDDEN
@@ -170,7 +171,51 @@ NEVER::[
   deeply_nested_references::max_one_level,
   duplicate_information::SKILL.md_or_resources_not_both,
   table_of_contents::agents_scan_natively,
-  line_number_references::stale_and_fragile
+  line_number_references::stale_and_fragile,
+  prose_in_anchor_kernel::high_density_atoms_only
+]
+
+§10::ANCHOR_KERNEL_FORMAT
+
+// §ANCHOR_KERNEL enables odyssean-anchor server to extract high-density
+// capability atoms for automatic injection into agent anchors §5::CAPABILITY_KERNEL.
+// This eliminates the need for agents to Read() skill files manually.
+
+PURPOSE::[
+  anchor_auto_injection::server_extracts_kernel_for_anchor_capability_loading,
+  high_density::atoms_only_no_prose_no_rationale,
+  cross_provider::works_via_anchor_print_to_any_LLM_context
+]
+
+ANCHOR_KERNEL_STRUCTURE::[
+  // Base fields (align with patterns spec for consistency)
+  NEVER::[list_of_forbidden_actions],
+  MUST::[list_of_mandatory_behaviors],
+  // Skill-specific optional fields
+  LANE::optional[role_type_for_coordination_skills],
+  DELEGATE::optional[task_type_to_agent_mappings],
+  TEMPLATE::optional[handoff_or_output_template]
+]
+
+ANCHOR_KERNEL_TEMPLATE::"§ANCHOR_KERNEL NEVER::[{forbidden}] MUST::[{required}] LANE::{role_type} DELEGATE::[{mappings}] END_KERNEL"
+
+PLACEMENT::before_final_END_of_skill_envelope
+
+EXAMPLE_COORDINATION_SKILL::[
+  §ANCHOR_KERNEL,
+  LANE::COORDINATION_ONLY,
+  NEVER::[direct_code_implementation, bypass_delegation],
+  MUST::[delegate_to_specialists, update_coordination_docs],
+  DELEGATE::[CODE_FIX::impl_lead, TEST::ute, ARCHITECTURE::tech_architect],
+  END_KERNEL
+]
+
+EXAMPLE_DETECTION_SKILL::[
+  §ANCHOR_KERNEL,
+  NEVER::[ignore_signals, skip_analysis],
+  MUST::[report_findings, cite_evidence],
+  SIGNALS::[placeholder_patterns, stub_indicators, incomplete_implementations],
+  END_KERNEL
 ]
 
 ===END===
