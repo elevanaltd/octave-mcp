@@ -13,7 +13,7 @@ This module provides:
 from dataclasses import dataclass, field
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document
+from octave_mcp.core.ast_nodes import Assignment, Block, Document, HolographicValue
 from octave_mcp.core.constraints import RequiredConstraint
 from octave_mcp.core.holographic import (
     HolographicPattern,
@@ -175,6 +175,16 @@ def _parse_field_assignment(assignment: Assignment) -> FieldDefinition | None:
     """
     name = assignment.key
     value = assignment.value
+
+    # Issue #187: Check for HolographicValue first (parser already did the work)
+    if isinstance(value, HolographicValue):
+        # Parser already parsed this as holographic pattern
+        pattern = HolographicPattern(
+            example=value.example,
+            constraints=value.constraints,
+            target=value.target,
+        )
+        return FieldDefinition(name=name, pattern=pattern, raw_value=value.raw_pattern)
 
     # Convert value to string for pattern parsing
     if hasattr(value, "items"):

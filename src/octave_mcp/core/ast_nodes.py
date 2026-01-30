@@ -166,3 +166,28 @@ class InlineMap:
     """Inline map [k::v, k2::v2] (data mode only)."""
 
     pairs: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class HolographicValue:
+    """Holographic pattern value ["example"∧CONSTRAINT→§TARGET].
+
+    Represents a schema field definition in L4 holographic syntax.
+    This AST node is produced when the parser detects holographic operators
+    (∧ constraint chain, →§ target) within a bracketed expression.
+
+    Issue #187: Integrates holographic pattern parsing into parser L4 context.
+
+    Attributes:
+        example: The example value demonstrating expected format.
+        constraints: Parsed ConstraintChain for validation, or None if no constraints.
+        target: Target destination (without § prefix), or None if no target.
+        raw_pattern: Original pattern string for I1 syntactic fidelity.
+        tokens: Optional token slice for token-witnessed reconstruction (ADR-0012).
+    """
+
+    example: Any
+    constraints: Any  # ConstraintChain | None - Any to avoid circular import
+    target: str | None
+    raw_pattern: str = ""
+    tokens: list[Any] | None = None

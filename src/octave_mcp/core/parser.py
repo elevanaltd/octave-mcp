@@ -13,7 +13,17 @@ Parses lexer tokens into AST with:
 
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Comment, Document, InlineMap, ListValue, Section
+from octave_mcp.core.ast_nodes import (
+    Assignment,
+    ASTNode,
+    Block,
+    Comment,
+    Document,
+    HolographicValue,
+    InlineMap,
+    ListValue,
+    Section,
+)
 from octave_mcp.core.lexer import Token, TokenType, tokenize
 
 # Issue #192: Deep nesting detection constants
@@ -1199,12 +1209,15 @@ class Parser:
             self.advance()
             return value
 
-    def parse_list(self) -> ListValue:
-        """Parse list [a, b, c].
+    def parse_list(self) -> ListValue | HolographicValue:
+        """Parse list [a, b, c] or holographic pattern ["example"∧REQ→§TARGET].
 
         Gap_2 ADR-0012: Captures token slice for token-witnessed reconstruction.
         This enables correct reconstruction of holographic patterns containing
         quoted operator symbols (e.g., ["∧"∧REQ→§SELF]).
+
+        Issue #187: After parsing, checks if tokens indicate holographic pattern
+        and returns HolographicValue instead of ListValue when appropriate.
 
         Issue #179: Detects duplicate keys in inline maps [k::v, k::v2].
         Issue #192: Detects deep nesting and emits warnings/errors.
@@ -1322,6 +1335,13 @@ class Parser:
         # Slice includes LIST_START through LIST_END (exclusive end, so pos is after ])
         end_pos = self.pos
         token_slice = self.tokens[start_pos:end_pos]
+
+        # Issue #187: Check if this is a holographic pattern
+        # Holographic patterns have the form: ["example"∧CONSTRAINT→§TARGET]
+        # Detection: Look for CONSTRAINT (∧) token in the token slice
+        holographic_result = self._try_parse_holographic(token_slice)
+        if holographic_result is not None:
+            return holographic_result
 
         return ListValue(items=items, tokens=token_slice)
 
@@ -1495,6 +1515,110 @@ class Parser:
             # Recursive check for nested lists
             if isinstance(item, ListValue):
                 self._check_list_for_nested_inline_maps(key, item, token)
+
+    def _try_parse_holographic(self, token_slice: list[Token]) -> HolographicValue | None:
+        """Try to parse token slice as holographic pattern.
+
+        Issue #187: Integrates holographic pattern parsing into L4 context.
+
+        Holographic patterns have the form: ["example"∧CONSTRAINT→§TARGET]
+        Detection criteria:
+        - Must contain a CONSTRAINT (∧) token outside nested brackets
+        - First substantive token after LIST_START should be the example value
+
+        Args:
+            token_slice: Token list from LIST_START to LIST_END inclusive
+
+        Returns:
+            HolographicValue if this is a holographic pattern, None otherwise
+        """
+        # Quick check: must have CONSTRAINT token to be holographic
+        has_constraint = any(t.type == TokenType.CONSTRAINT for t in token_slice)
+        if not has_constraint:
+            return None
+
+        # Additional heuristic: holographic patterns don't have commas at depth=0
+        # This distinguishes [a, b∧c] (list with expression) from ["x"∧REQ] (holographic)
+        # Check for commas outside nested brackets
+        depth = 0
+        for token in token_slice:
+            if token.type == TokenType.LIST_START:
+                depth += 1
+            elif token.type == TokenType.LIST_END:
+                depth -= 1
+            elif token.type == TokenType.COMMA and depth == 1:
+                # Comma at depth 1 means inside outer [], outside nested []
+                # This is a regular list, not holographic
+                return None
+
+        # Reconstruct raw pattern string from tokens for parse_holographic_pattern()
+        raw_pattern = self._reconstruct_pattern_from_tokens(token_slice)
+
+        try:
+            # Import here to avoid circular import
+            from octave_mcp.core.holographic import HolographicPatternError, parse_holographic_pattern
+
+            pattern = parse_holographic_pattern(raw_pattern)
+
+            return HolographicValue(
+                example=pattern.example,
+                constraints=pattern.constraints,
+                target=pattern.target,
+                raw_pattern=raw_pattern,
+                tokens=token_slice,
+            )
+        except HolographicPatternError:
+            # Not a valid holographic pattern, fall back to ListValue
+            return None
+
+    def _reconstruct_pattern_from_tokens(self, token_slice: list[Token]) -> str:
+        """Reconstruct pattern string from tokens for holographic parsing.
+
+        Issue #187: Converts token slice back to string for parse_holographic_pattern().
+
+        This preserves I1 syntactic fidelity by using token values directly.
+        Handles nested brackets (for ENUM[a,b], REGEX[pattern], etc.) correctly.
+
+        Args:
+            token_slice: Token list from LIST_START to LIST_END inclusive
+
+        Returns:
+            Reconstructed pattern string like '["example"∧REQ→§TARGET]'
+        """
+        parts: list[str] = []
+
+        for token in token_slice:
+            if token.type == TokenType.LIST_START:
+                parts.append("[")
+            elif token.type == TokenType.LIST_END:
+                parts.append("]")
+            elif token.type == TokenType.STRING:
+                parts.append(f'"{token.value}"')
+            elif token.type == TokenType.NUMBER:
+                # Use raw lexeme if available to preserve format (e.g., 1e10)
+                if token.raw is not None:
+                    parts.append(token.raw)
+                else:
+                    parts.append(str(token.value))
+            elif token.type == TokenType.BOOLEAN:
+                parts.append("true" if token.value else "false")
+            elif token.type == TokenType.NULL:
+                parts.append("null")
+            elif token.type == TokenType.CONSTRAINT:
+                parts.append("∧")
+            elif token.type == TokenType.FLOW:
+                parts.append("→")
+            elif token.type == TokenType.SECTION:
+                parts.append("§")
+            elif token.type == TokenType.COMMA:
+                parts.append(",")
+            elif token.type == TokenType.IDENTIFIER:
+                parts.append(str(token.value))
+            # Note: LPAREN/RPAREN are not supported by the lexer,
+            # so TYPE(X) patterns will fail at tokenization level.
+            # Skip whitespace tokens
+
+        return "".join(parts)
 
     def parse_flow_expression(self) -> str:
         """Parse expression with operators like A→B→C, X⊕Y, A@B, A⧺B, or Speed⇌Quality.
