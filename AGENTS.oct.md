@@ -65,8 +65,8 @@ META:
   UNIT::"pytest tests/unit/ (fast, isolated)"
   INTEGRATION::"pytest tests/integration/ (end-to-end)"
   PROPERTIES::"pytest tests/properties/ (hypothesis)"
-  COVERAGE::"87% minimum (current: 87%)"
-  TESTS_PASSING::706
+  COVERAGE::"90% minimum (current: 90%)"
+  TESTS_PASSING::1610
 
 §8::MCP_TOOLS
   TOOLS::3
@@ -89,8 +89,9 @@ META:
   ]
 
 §10::RESOURCES
-  QUICK_REF::"guides/llm-octave-quick-reference.oct.md"
-  CORE_SPEC::"specs/octave-5-llm-core.oct.md"
+  PHILOSOPHY::"docs/guides/octave-philosophy.md"
+  CORE_SPEC::"src/octave_mcp/resources/specs/octave-core-spec.oct.md"
+  GRAMMAR::"docs/grammar/octave-v1.0-grammar.ebnf"
   API_DOCS::"docs/api.md"
   MCP_SETUP::"docs/mcp-configuration.md"
   DEVELOPMENT::"docs/guides/development-setup.md"
