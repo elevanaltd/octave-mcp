@@ -285,7 +285,12 @@ def emit_block(block: Block, indent: int = 0, format_options: FormatOptions | No
     if hasattr(block, "leading_comments"):
         lines.extend(_emit_leading_comments(block.leading_comments, indent, strip_comments))
 
-    lines.append(f"{indent_str}{block.key}:")
+    # M3: Emit block with optional target annotation [→§TARGET]
+    block_line = f"{indent_str}{block.key}"
+    if hasattr(block, "target") and block.target:
+        block_line += f"[→§{block.target}]"
+    block_line += ":"
+    lines.append(block_line)
 
     # Issue #193: Optionally sort children by key
     children = list(block.children)
