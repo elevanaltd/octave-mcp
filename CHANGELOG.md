@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This release represents the v1.0.0 development push with four internal milestones (M1-M4) completing full OCTAVE v6 specification compliance. All changes target the v1.0.0 release.
+
+### Added
+
+#### M1: Parser Hardening (v0.7.0-internal) - #194
+- **Duplicate Key Detection** (#179) - Parser now detects and warns on duplicate keys within the same block
+- **Unbalanced Bracket Detection** (#180) - Improved error messages for unclosed `[` brackets with position tracking
+- **Spec Compliance Warnings** (#184) - Added warnings for NEVER rules from octave-core-spec (e.g., trailing commas)
+- **Inline Map Nesting Validation** (#185) - Validates inline map nesting depth with configurable limits
+
+#### M2: Developer Experience (v0.8.0-internal) - #198
+- **Variable Syntax Support** (#181) - Added `$VAR` and `${VAR}` variable reference syntax in OCTAVE documents
+- **Comment Preservation** (#182) - Comments are now preserved during normalization and round-trip parsing
+- **Validation Profiles** (#183, #197) - Four profiles: `STRICT`, `STANDARD`, `LENIENT`, `ULTRA` for flexible validation
+- **Token-Efficient Response Modes** (#195, #196) - Added `diff_only` and `compact` modes to reduce MCP response size
+- **Deep Nesting Warning** (#192) - Configurable warning threshold for deeply nested structures
+- **Auto-Format Options** (#193) - Formatting options for canonical emission (indentation, line width)
+
+#### M3: Schema Foundation (v0.9.0-internal) - #199
+- **Holographic Pattern Parsing** (#187) - Full support for `["example"^CONSTRAINT->TARGET]` syntax with registry
+- **Target Routing System** (#188) - Block-level routing with `TargetRegistry` and `TargetRouter` for `->TARGET` directives
+- **Block Inheritance** (#189) - `BLOCK[->TARGET]:` syntax for inheriting parent constraints
+- **POLICY Block Enforcement** (#190) - New `POLICY::` block type for governance declarations
+
+#### M4: Generative Contracts (v1.0.0) - #204, #205, #207
+- **Complete GBNF Integration** (#171, #204) - Full llama.cpp GBNF grammar generation for LLM backend constrained decoding
+- **Emoji and Unicode Symbol Support** (#186, #204) - Keys can now contain emoji and extended Unicode symbols
+- **META Schema Compilation** (#191, #205) - Self-describing documents with `META.CONTRACT::HOLOGRAPHIC[...]` compilation
+- **META.CONTRACT in GBNF Export** (#207) - `octave_eject` now includes META.CONTRACT field in GBNF output
+
+#### Documentation - #202, #208
+- **Formal EBNF Grammar Specification** (#113, #208) - Complete formal grammar at `docs/grammar/octave-v1.0-grammar.ebnf`
+- **Patterns Specification** (#202) - New `octave-patterns-spec.oct.md` with `ANCHOR_KERNEL` support
+- **Grammar Test Vectors** - Valid and invalid example files for grammar testing
+
+#### Infrastructure - #203, #206
+- **Context File Synchronization** (#203) - Updated `.hestai/context/` files to reflect M1-M3 completion
+- **Startup Dependency Sync** (#206) - MCP server now validates venv dependencies on startup to prevent stale environments
+
+### Changed
+- **Emitter Improvements** (#200, #201) - Block target annotations (`[->TARGET]`) and `HolographicValue` emission using `raw_pattern`
+- **Test Infrastructure** - Test count increased from 706 to ~1610 passing tests
+- **Quality Gates** - All changes validated against mypy, ruff, black, pytest with 90%+ coverage
+
+### Fixed
+- **Critical octave_write Issues** (#176, #177, #178) - Fixed file writing edge cases and validation errors
+- **Emitter Target Annotations** (#201) - Correctly emit block target annotations in canonical output
+- **HolographicValue Emission** (#200) - Fixed raw pattern preservation in holographic value emission
+
+### Quality Gates
+- All milestones reviewed by Critical Review Specialist (Gemini/LOGOS)
+- Constitutional compliance verified: I1, I2, I3, I4, I5
+- Parser hardening prevents silent data loss (I3 compliance)
+- All changes include comprehensive test coverage
+
 ## [0.6.1] - 2026-01-12
 
 ### Added

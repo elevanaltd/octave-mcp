@@ -2,8 +2,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-706%20passing-brightgreen.svg)]()
-[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-1610%20passing-brightgreen.svg)]()
+[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)]()
 
 Production-grade MCP server implementing the **OCTAVE v6** document protocol: **Generative Holographic Contracts**.
 
@@ -158,6 +158,7 @@ OCTAVE v6 introduces the **Holographic Contract**:
 | [API Reference](docs/api.md) | Python API documentation |
 | [MCP Configuration](docs/mcp-configuration.md) | Client setup and integration |
 | [Protocol Specs](src/octave_mcp/resources/specs/) | v6.0.0 Generative Holographic Specs |
+| [EBNF Grammar](docs/grammar/octave-v1.0-grammar.ebnf) | Formal v1.0.0 grammar specification |
 | [Development Setup](docs/guides/development-setup.md) | Dev environment, testing, quality gates |
 | [Architecture](docs/architecture/) | Decision records and design docs |
 | [Research](docs/research/) | Benchmarks and validation studies |
