@@ -7,7 +7,7 @@
 
 ## Architecture and Scope
 - Canonical Python package under `src/octave_mcp/` with core parsing, validation, and emission logic, plus CLI entrypoints and MCP tooling.
-- Protocol specifications and developer docs live alongside code (`src/octave_mcp/resources/specs/`, `docs/`, `guides/`, `examples/`).
+- Protocol specifications and developer docs live alongside code (`src/octave_mcp/resources/specs/`, `docs/`, `examples/`).
 - Control plane explicitly non-reasoning: repairs are tiered into normalization (always), repair (opt-in), and forbidden (never automatic) to preserve author intent.
 
 ## Quality Signals

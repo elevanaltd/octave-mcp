@@ -25,19 +25,23 @@ Both contain identical information - the Golden Rule and Seven Deadly Smells.
 
 ## Examples
 
-See `examples/` for comprehensive OCTAVE examples including:
+See [`examples/`](../../examples/) for comprehensive OCTAVE examples including:
 - Compression tier comparisons (lossless → ultra)
 - Assessment survey transformations
 - Templates for common patterns
 
+## Development Setup
+
+See [development-setup.md](development-setup.md) for environment configuration and testing.
+
 ## Protocol Specifications
 
-For the authoritative OCTAVE specification, see `specs/`:
+For the authoritative OCTAVE specification, see [`src/octave_mcp/resources/specs/`](../../src/octave_mcp/resources/specs/):
 
-- `specs/octave-5-llm-core.oct.md` - Core syntax (~250 tokens)
-- `specs/octave-5-llm-schema.oct.md` - Holographic patterns
-- `specs/octave-5-llm-data.oct.md` - Compression tiers
-- `specs/octave-5-llm-agents.oct.md` - Agent architecture
+- `octave-core-spec.oct.md` - Core syntax and operators
+- `octave-agents-spec.oct.md` - Agent architecture
+- `octave-skills-spec.oct.md` - Skills specification
+- `octave-patterns-spec.oct.md` - Patterns specification
 
 ## The Golden Rule
 
