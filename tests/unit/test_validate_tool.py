@@ -2108,3 +2108,286 @@ class TestValidateToolCEQualityGateFixes:
         assert result["status"] == "error"
         assert "error_count" in result
         assert result["error_count"] >= 1
+
+
+class TestValidateToolProfiles:
+    """Tests for validation profile parameter (#183).
+
+    Profiles define validation strictness levels:
+    - STRICT: Full spec compliance, reject unknown syntax, enforce all NEVER rules
+    - STANDARD: Current default behavior (backwards compatible)
+    - LENIENT: Relaxed validation, warnings instead of errors, auto-repairs
+    - ULTRA: Minimal validation, preserve everything possible
+
+    TDD: RED phase - these tests define the expected behavior.
+    """
+
+    @pytest.mark.asyncio
+    async def test_profile_parameter_in_schema(self):
+        """Profile parameter should be in input schema."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        schema = tool.get_input_schema()
+        props = schema["properties"]
+        assert "profile" in props, "#183: profile parameter missing from input schema"
+        assert props["profile"]["enum"] == [
+            "STRICT",
+            "STANDARD",
+            "LENIENT",
+            "ULTRA",
+        ], "#183: profile enum should include all four profiles"
+
+    @pytest.mark.asyncio
+    async def test_profile_default_is_standard(self):
+        """Default profile should be STANDARD (backwards compatible)."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Content that currently passes should still pass without profile
+        content = """===TEST===
+META:
+  TYPE::"META"
+  VERSION::"1.0"
+===END==="""
+        result = await tool.execute(content=content, schema="META")
+        assert result["status"] == "success"
+        # Verify profile is reported in result
+        assert (
+            result.get("profile") == "STANDARD"
+        ), "#183: Default profile should be STANDARD for backwards compatibility"
+
+    @pytest.mark.asyncio
+    async def test_profile_strict_rejects_unknown_fields(self):
+        """STRICT profile should reject documents with unknown fields."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"META"
+  VERSION::"1.0"
+  UNKNOWN_FIELD::"should fail in strict"
+===END==="""
+        result = await tool.execute(content=content, schema="META", profile="STRICT")
+        assert result["profile"] == "STRICT"
+        # STRICT should flag unknown fields as errors (not just warnings)
+        # Either validation_status INVALID or non-empty validation_errors
+        is_strict = (
+            result.get("validation_status") == "INVALID"
+            or len(result.get("validation_errors", [])) > 0
+            or len(result.get("errors", [])) > 0
+        )
+        assert is_strict, (
+            "#183: STRICT profile should reject unknown fields. "
+            f"Got validation_status={result.get('validation_status')}, "
+            f"validation_errors={result.get('validation_errors')}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_profile_lenient_downgrades_errors_to_warnings(self):
+        """LENIENT profile should convert some errors to warnings."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"META"
+  VERSION::"1.0"
+  UNKNOWN_FIELD::"should be warning in lenient"
+===END==="""
+        result = await tool.execute(content=content, schema="META", profile="LENIENT")
+        assert result["profile"] == "LENIENT"
+        # LENIENT should treat unknown fields as warnings, not errors
+        # Document should still be considered valid (success + not INVALID)
+        assert result["status"] == "success", "#183: LENIENT profile should succeed even with unknown fields"
+        # LENIENT allows document to pass validation even with minor issues
+        assert result.get("validation_status") in ["VALIDATED", "UNVALIDATED"], (
+            "#183: LENIENT should not mark as INVALID for unknown fields. "
+            f"Got validation_status={result.get('validation_status')}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_profile_ultra_preserves_everything(self):
+        """ULTRA profile should preserve maximum content."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Content with unusual syntax that would normally warn
+        content = """===TEST===
+META:
+  TYPE::"CUSTOM"
+  VERSION::"1.0"
+===END==="""
+        result = await tool.execute(content=content, schema="META", profile="ULTRA")
+        assert result["profile"] == "ULTRA"
+        assert result["status"] == "success", "#183: ULTRA profile should preserve content even if unconventional"
+        # ULTRA should not fail validation unless content is unparseable
+        assert result.get("validation_status") != "INVALID", "#183: ULTRA should only fail on unparseable content"
+
+    @pytest.mark.asyncio
+    async def test_profile_strict_enforces_never_rules(self):
+        """STRICT profile should enforce spec NEVER rules."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Missing VERSION - in STRICT should be error, in STANDARD may be warning
+        content = """===TEST===
+META:
+  TYPE::"META"
+===END==="""
+        strict_result = await tool.execute(content=content, schema="META", profile="STRICT")
+        standard_result = await tool.execute(content=content, schema="META", profile="STANDARD")
+
+        # STRICT should be more strict (either more errors or INVALID status)
+        strict_errors = len(strict_result.get("errors", [])) + len(strict_result.get("validation_errors", []))
+        standard_errors = len(standard_result.get("errors", [])) + len(standard_result.get("validation_errors", []))
+
+        # At minimum, STRICT should not be more lenient
+        strict_is_stricter = strict_errors >= standard_errors or strict_result.get("validation_status") == "INVALID"
+        assert strict_is_stricter, (
+            "#183: STRICT should be at least as strict as STANDARD. "
+            f"STRICT errors={strict_errors}, STANDARD errors={standard_errors}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_profile_invalid_value_returns_error(self):
+        """Invalid profile value should return error."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"META"
+===END==="""
+        result = await tool.execute(content=content, schema="META", profile="INVALID_PROFILE")
+        assert result["status"] == "error", "#183: Invalid profile should return error status"
+        # Error should mention profile
+        error_messages = " ".join(str(e.get("message", "")) for e in result.get("errors", []))
+        assert (
+            "profile" in error_messages.lower() or "INVALID_PROFILE" in error_messages
+        ), "#183: Error message should mention invalid profile value"
+
+    @pytest.mark.asyncio
+    async def test_profile_case_insensitive(self):
+        """Profile values should be case-insensitive."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"META"
+  VERSION::"1.0"
+===END==="""
+        # Try lowercase
+        result = await tool.execute(content=content, schema="META", profile="strict")
+        assert result["profile"] == "STRICT", "#183: Profile should normalize to uppercase"
+        # Should still succeed (not error due to lowercase)
+        # Note: STRICT may fail validation, but should not error on profile param
+        assert result["status"] in ["success", "error"], "#183: lowercase profile should be accepted"
+        # If it's an error, it should NOT be about profile param
+        if result["status"] == "error":
+            error_messages = " ".join(str(e.get("message", "")) for e in result.get("errors", []))
+            assert (
+                "profile" not in error_messages.lower()
+            ), "#183: Error should not be about profile parameter when using lowercase"
+
+    @pytest.mark.asyncio
+    async def test_profile_reported_in_result(self):
+        """Profile should be reported in result envelope for transparency."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+KEY::value
+===END==="""
+
+        # Test each profile is reported
+        for profile in ["STRICT", "STANDARD", "LENIENT", "ULTRA"]:
+            result = await tool.execute(content=content, schema="TEST", profile=profile)
+            assert "profile" in result, f"#183: profile missing from result for {profile}"
+            assert result["profile"] == profile, f"#183: Expected profile={profile}, got {result.get('profile')}"
+
+    @pytest.mark.asyncio
+    async def test_profile_strict_with_missing_required_field(self):
+        """STRICT should mark missing required fields as INVALID."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Missing required TYPE field
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+        result = await tool.execute(content=content, schema="META", profile="STRICT")
+        assert result["profile"] == "STRICT"
+        # STRICT should definitely fail on missing required field
+        assert result.get("validation_status") == "INVALID", "#183: STRICT must fail on missing required fields"
+
+    @pytest.mark.asyncio
+    async def test_profile_lenient_with_missing_required_field(self):
+        """LENIENT still validates required fields but may be more forgiving."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Missing required TYPE field
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+        result = await tool.execute(content=content, schema="META", profile="LENIENT")
+        assert result["profile"] == "LENIENT"
+        # LENIENT may still mark as INVALID for truly required fields
+        # but should not error on the operation itself
+        assert result["status"] == "success", "#183: LENIENT should complete successfully even with validation issues"
+
+    @pytest.mark.asyncio
+    async def test_profile_with_diff_only_and_compact(self):
+        """Profile should work with diff_only and compact modes."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            profile="LENIENT",
+            diff_only=True,
+            compact=True,
+        )
+        assert result["profile"] == "LENIENT"
+        assert result["canonical"] is None  # diff_only honored
+        assert "warning_count" in result  # compact honored
+
+    @pytest.mark.asyncio
+    async def test_profile_lenient_sets_has_warnings_flag(self):
+        """LENIENT profile should set has_warnings when validation issues downgraded."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"META"
+===END==="""  # Missing VERSION - would be error in STANDARD
+        result = await tool.execute(content=content, schema="META", profile="LENIENT")
+        assert result["validation_status"] == "VALIDATED"
+        assert result["has_warnings"] is True  # Signals issues were downgraded
+
+    @pytest.mark.asyncio
+    async def test_profile_standard_has_warnings_false_when_valid(self):
+        """STANDARD profile with valid content should have has_warnings=False."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"META"
+  VERSION::"1.0"
+===END==="""
+        result = await tool.execute(content=content, schema="META", profile="STANDARD")
+        assert result["validation_status"] == "VALIDATED"
+        assert result["has_warnings"] is False
