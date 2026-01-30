@@ -111,6 +111,145 @@ WRONG_CASE_PATTERNS = {
     "NULL": "null",
 }
 
+# GH#186: Unicode characters that are OCTAVE operators (must NOT be identifiers)
+# These are matched by their own patterns before identifier pattern
+OPERATOR_CHARS = frozenset(
+    {
+        "→",  # FLOW (U+2192)
+        "⊕",  # SYNTHESIS (U+2295)
+        "⧺",  # CONCAT (U+29FA)
+        "⇌",  # TENSION (U+21CC)
+        "∧",  # CONSTRAINT (U+2227)
+        "∨",  # ALTERNATIVE (U+2228)
+        "§",  # SECTION (U+00A7)
+    }
+)
+
+
+def _is_valid_identifier_start(char: str) -> bool:
+    """Check if character can start an identifier (GH#186).
+
+    Valid identifier start characters:
+    - ASCII letters (A-Za-z)
+    - Underscore (_)
+    - Dot (.) and slash (/) for paths
+    - Unicode letters (category L*)
+    - Emoji and symbols (category So - Symbol, Other)
+    - Some math symbols (category Sm - Symbol, Math) that aren't operators
+
+    Args:
+        char: Single character to check
+
+    Returns:
+        True if character can start an identifier
+    """
+    if not char:
+        return False
+
+    # Fast path for ASCII
+    if char.isascii():
+        return char.isalpha() or char in "_./"
+
+    # Exclude OCTAVE operator characters
+    if char in OPERATOR_CHARS:
+        return False
+
+    # Check unicode category
+    category = unicodedata.category(char)
+
+    # Allow letters (L*), Symbol Other (So), some Math Symbols (Sm)
+    # So includes: emoji, dingbats, box drawing, misc symbols
+    # Sm includes: mathematical operators (we exclude OCTAVE operators above)
+    # Po includes: bullet points, other punctuation used as markers
+    if category.startswith("L"):  # Letter
+        return True
+    if category == "So":  # Symbol, Other (emoji, misc symbols)
+        return True
+    if category == "Sm":  # Symbol, Math (if not an operator)
+        return True
+    if category == "No":  # Number, Other (circled numbers, etc.)
+        return True
+    if category == "Sk":  # Symbol, Modifier (variation selectors, etc.)
+        return True
+    if category == "Po":  # Punctuation, Other (bullets, etc.)
+        return True
+
+    return False
+
+
+def _is_valid_identifier_char(char: str) -> bool:
+    """Check if character can appear in identifier body (GH#186).
+
+    Valid identifier body characters include all start characters plus:
+    - Digits (0-9)
+    - Hyphen (-) but not at end
+    - Unicode Number characters (category N*)
+
+    Args:
+        char: Single character to check
+
+    Returns:
+        True if character can appear in identifier body
+    """
+    if not char:
+        return False
+
+    # Fast path for ASCII
+    if char.isascii():
+        return char.isalnum() or char in "_./-"
+
+    # Everything valid for start is valid for body
+    if _is_valid_identifier_start(char):
+        return True
+
+    # Additionally allow unicode number categories
+    category = unicodedata.category(char)
+    if category.startswith("N"):  # Number (Nd, Nl, No)
+        return True
+
+    # Allow combining marks for emoji with modifiers
+    if category.startswith("M"):  # Mark (Mn, Mc, Me)
+        return True
+
+    return False
+
+
+def _match_unicode_identifier(content: str, pos: int) -> str | None:
+    """Match a unicode-aware identifier starting at position (GH#186).
+
+    Handles emoji and unicode symbols as valid identifier characters.
+    Multi-codepoint emoji (ZWJ sequences, skin tones) are supported by
+    consuming all valid identifier characters including combining marks.
+
+    Args:
+        content: Full content string
+        pos: Starting position
+
+    Returns:
+        Matched identifier string, or None if no match
+    """
+    if pos >= len(content):
+        return None
+
+    # Check first character
+    if not _is_valid_identifier_start(content[pos]):
+        return None
+
+    # Build identifier by consuming valid characters
+    end = pos + 1
+    while end < len(content) and _is_valid_identifier_char(content[end]):
+        end += 1
+
+    # Don't end with hyphen (per existing lexer behavior)
+    while end > pos + 1 and content[end - 1] == "-":
+        end -= 1
+
+    if end == pos:
+        return None
+
+    return content[pos:end]
+
+
 # Token patterns (order matters for longest match)
 TOKEN_PATTERNS = [
     # Grammar sentinel (Issue #48 Phase 2) - must come first
@@ -180,10 +319,8 @@ TOKEN_PATTERNS = [
     # Pattern: $ followed by alphanumeric, underscore, or colon
     # Colon is allowed for type hints like $1:role but stops at whitespace
     (r"\$[A-Za-z0-9_:]+", TokenType.VARIABLE),
-    # Identifiers (bare words, allows dots and hyphens for property paths and kebab-case)
-    # Hyphen allowed in identifier body, but not at start (Issue #53)
-    # Pattern uses negative lookbehind to avoid consuming -> (flow operator)
-    (r"[A-Za-z_./][A-Za-z0-9_./-]*(?<!-)", TokenType.IDENTIFIER),
+    # GH#186: IDENTIFIER pattern removed - now handled by _match_unicode_identifier()
+    # to support emoji and unicode symbols in identifiers
     # Newlines
     (r"\n", TokenType.NEWLINE),
 ]
@@ -523,6 +660,58 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 )
                 column += 1
                 pos += 1
+                continue
+
+            # GH#186: Try unicode identifier matching for emoji and symbols
+            unicode_id = _match_unicode_identifier(content, pos)
+            if unicode_id:
+                token = Token(TokenType.IDENTIFIER, unicode_id, line, column)
+                tokens.append(token)
+
+                # GH#184: Check for wrong-case boolean/null patterns
+                if unicode_id in WRONG_CASE_PATTERNS:
+                    correct_form = WRONG_CASE_PATTERNS[unicode_id]
+                    repairs.append(
+                        {
+                            "type": "spec_violation",
+                            "subtype": "wrong_case",
+                            "original": unicode_id,
+                            "correct": correct_form,
+                            "line": line,
+                            "column": column,
+                            "message": (
+                                f"W_WRONG_CASE::{unicode_id} should be {correct_form}. "
+                                f"OCTAVE spec requires lowercase for boolean and null literals."
+                            ),
+                        }
+                    )
+
+                # GH#184: Check for 'vs' without word boundaries (spec NEVER)
+                if "vs" in unicode_id.lower():
+                    lower_text = unicode_id.lower()
+                    vs_pos = lower_text.find("vs")
+                    if vs_pos != -1:
+                        has_left_boundary = vs_pos == 0
+                        has_right_boundary = vs_pos + 2 >= len(unicode_id)
+                        if not has_left_boundary and not has_right_boundary:
+                            repairs.append(
+                                {
+                                    "type": "spec_violation",
+                                    "subtype": "boundary_missing",
+                                    "original": unicode_id,
+                                    "line": line,
+                                    "column": column,
+                                    "message": (
+                                        f"W_BOUNDARY_MISSING::'{unicode_id}' contains 'vs' without "
+                                        f"word boundaries. Use 'Speed vs Quality' (with spaces) or "
+                                        f"bracket syntax [Speed vs Quality]."
+                                    ),
+                                }
+                            )
+
+                # Update position - count characters, not bytes
+                column += len(unicode_id)
+                pos += len(unicode_id)
                 continue
 
             # Unrecognized character
