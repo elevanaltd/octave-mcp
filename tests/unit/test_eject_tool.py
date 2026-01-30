@@ -52,12 +52,12 @@ class TestEjectTool:
         assert set(mode_schema["enum"]) == {"canonical", "authoring", "executive", "developer"}
 
     def test_input_schema_has_format_enum(self, eject_tool):
-        """Input schema defines format enumeration."""
+        """Input schema defines format enumeration including gbnf."""
         schema = eject_tool.get_input_schema()
 
         format_schema = schema["properties"]["format"]
         assert "enum" in format_schema
-        assert set(format_schema["enum"]) == {"octave", "json", "yaml", "markdown"}
+        assert set(format_schema["enum"]) == {"octave", "json", "yaml", "markdown", "gbnf"}
 
     @pytest.mark.asyncio
     async def test_eject_canonical_mode(self, eject_tool):
@@ -386,3 +386,102 @@ TESTS::passing
             f"I5 violation: template generation validation_status should be 'UNVALIDATED', "
             f"but got '{result['validation_status']}'"
         )
+
+
+class TestEjectToolGBNFFormat:
+    """Tests for GBNF format export (Issue #171).
+
+    GBNF (Grammar BNF) format exports OCTAVE schema as llama.cpp grammar
+    for constrained text generation.
+    """
+
+    @pytest.fixture
+    def eject_tool(self):
+        """Create EjectTool instance."""
+        return EjectTool()
+
+    @pytest.mark.asyncio
+    async def test_gbnf_format_returns_valid_gbnf(self, eject_tool):
+        """Eject in GBNF format returns valid llama.cpp grammar."""
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+  TYPE::"TEST"
+
+STATUS::active
+FIELD::"value"
+===END==="""
+
+        result = await eject_tool.execute(content=content, schema="TEST", format="gbnf")
+
+        assert result["output"] is not None
+        # GBNF should have ::= assignment operator
+        assert "::=" in result["output"], "GBNF grammar should use ::= for rule definitions"
+        # Should have root rule
+        assert "root" in result["output"].lower(), "GBNF grammar should have root rule"
+
+    @pytest.mark.asyncio
+    async def test_gbnf_format_includes_document_structure(self, eject_tool):
+        """GBNF format should include OCTAVE document structure rules."""
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+
+STATUS::active
+===END==="""
+
+        result = await eject_tool.execute(content=content, schema="TEST", format="gbnf")
+
+        # Should have document/envelope structure
+        output = result["output"]
+        assert (
+            "document" in output.lower() or "envelope" in output.lower()
+        ), "GBNF should include document structure rules"
+
+    @pytest.mark.asyncio
+    async def test_gbnf_format_is_not_lossy(self, eject_tool):
+        """GBNF format export should not be lossy (exports full schema)."""
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+
+STATUS::active
+===END==="""
+
+        result = await eject_tool.execute(content=content, schema="TEST", format="gbnf")
+
+        # GBNF export of schema is not lossy
+        assert result["lossy"] is False
+        assert result["fields_omitted"] == []
+
+    @pytest.mark.asyncio
+    async def test_gbnf_format_has_validation_status(self, eject_tool):
+        """I5: GBNF format should also include validation_status."""
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+
+STATUS::active
+===END==="""
+
+        result = await eject_tool.execute(content=content, schema="TEST", format="gbnf")
+
+        assert "validation_status" in result
+        assert result["validation_status"] == "UNVALIDATED"
+
+    @pytest.mark.asyncio
+    async def test_gbnf_format_includes_field_rules(self, eject_tool):
+        """GBNF format should generate rules for document fields."""
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+
+STATUS::active
+COUNT::42
+===END==="""
+
+        result = await eject_tool.execute(content=content, schema="TEST", format="gbnf")
+
+        output = result["output"]
+        # Should have field rules derived from document structure
+        assert "::=" in output

@@ -1,10 +1,17 @@
-"""MCP tool for OCTAVE eject (P2.3).
+"""MCP tool for OCTAVE eject (P2.3, Issue #171 GBNF).
 
 Implements octave_eject tool with projection modes:
 - canonical: Full document, lossy=false
 - authoring: Lenient format, lossy=false
 - executive: STATUS,RISKS,DECISIONS only, lossy=true
 - developer: TESTS,CI,DEPS only, lossy=true
+
+Output formats:
+- octave: OCTAVE syntax
+- json: JSON representation
+- yaml: YAML representation
+- markdown: Markdown format
+- gbnf: llama.cpp GBNF grammar (Issue #171)
 """
 
 import json
@@ -13,8 +20,10 @@ from typing import Any
 import yaml
 
 from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue
+from octave_mcp.core.gbnf_compiler import GBNFCompiler
 from octave_mcp.core.parser import parse
 from octave_mcp.core.projector import project
+from octave_mcp.core.schema_extractor import extract_schema_from_document
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 
 
@@ -174,7 +183,7 @@ class EjectTool(BaseTool):
             "Eject OCTAVE content with projection modes. "
             "Supports canonical, authoring, executive, and developer views. "
             "Can generate templates when content is null. "
-            "Output formats: octave, json, yaml, markdown."
+            "Output formats: octave, json, yaml, markdown, gbnf."
         )
 
     def get_input_schema(self) -> dict[str, Any]:
@@ -198,7 +207,11 @@ class EjectTool(BaseTool):
         )
 
         schema.add_parameter(
-            "format", "string", required=False, description="Output format", enum=["octave", "json", "yaml", "markdown"]
+            "format",
+            "string",
+            required=False,
+            description="Output format (gbnf exports llama.cpp GBNF grammar)",
+            enum=["octave", "json", "yaml", "markdown", "gbnf"],
         )
 
         return schema.build()
@@ -210,7 +223,7 @@ class EjectTool(BaseTool):
             content: OCTAVE content to eject (None for template)
             schema: Schema name for validation/template
             mode: Projection mode (canonical, authoring, executive, developer)
-            format: Output format (octave, json, yaml, markdown)
+            format: Output format (octave, json, yaml, markdown, gbnf)
 
         Returns:
             Dictionary with:
@@ -294,6 +307,20 @@ META:
                 "lossy": result.lossy,
                 "fields_omitted": result.fields_omitted,
                 "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+            }
+
+        elif output_format == "gbnf":
+            # Issue #171: Export as llama.cpp GBNF grammar
+            # Extract schema from document and compile to GBNF
+            schema = extract_schema_from_document(result.filtered_doc)
+            compiler = GBNFCompiler()
+            gbnf_grammar = compiler.compile_schema(schema, include_envelope=True)
+            return {
+                "output": gbnf_grammar,
+                "lossy": False,  # GBNF export is lossless from schema perspective
+                "fields_omitted": [],
+                "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+                "format": "gbnf",  # Indicate output format
             }
 
         else:  # output_format == "octave"
