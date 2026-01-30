@@ -54,7 +54,7 @@ IMMUTABLES::[
 
 ## What It Does
 
-This repository ships the **OCTAVE MCP Server** (v0.6.1)—a Model Context Protocol implementation that transforms OCTAVE documents from passive text into **Generative Holographic Contracts**.
+This repository ships the **OCTAVE MCP Server** (v1.0.0)—a Model Context Protocol implementation that transforms OCTAVE documents from passive text into **Generative Holographic Contracts**.
 
 OCTAVE (Olympian Common Text And Vocabulary Engine) is a deterministic document format and control plane for LLM systems. It keeps meaning durable when text is compressed, routed between agents, or projected into different views.
 
@@ -139,9 +139,59 @@ Add to Claude Desktop (`claude_desktop_config.json`) or Claude Code (`~/.claude.
 
 | Tool | Purpose |
 |------|---------|
-| `octave_validate` | Schema validation + Grammar Compilation (`debug_grammar=True`) |
-| `octave_write` | Unified file creation/modification (content OR delta changes) |
-| `octave_eject` | Format projection (octave, json, yaml, markdown) |
+| `octave_validate` | Schema validation + repair suggestions + grammar compilation |
+| `octave_write` | Unified file creation/modification with validation |
+| `octave_eject` | Format projection and template generation |
+
+### `octave_validate`
+
+Validates OCTAVE content against a schema and returns normalized canonical output.
+
+```python
+# Parameters
+content: str          # OCTAVE content to validate (or use file_path)
+file_path: str        # Path to file (mutually exclusive with content)
+schema: str           # Schema name (e.g., 'META', 'SESSION_LOG')
+fix: bool = False     # Apply repairs (enum casefold, type coercion)
+profile: str          # Validation strictness: STRICT, STANDARD, LENIENT, ULTRA
+diff_only: bool       # Return diff instead of full canonical (saves tokens)
+compact: bool         # Return counts instead of full error lists
+debug_grammar: bool   # Include compiled regex/GBNF grammar in output
+```
+
+**Returns**: `{ status, canonical, repairs, warnings, errors, validation_status }`
+
+### `octave_write`
+
+Unified write operation for creating new files or modifying existing ones.
+
+```python
+# Parameters
+target_path: str      # File path to write
+content: str          # Full content for new files (mutually exclusive with changes)
+changes: dict         # Delta updates for existing files (tri-state: absent=no-op, DELETE=remove, value=set)
+mutations: dict       # META field overrides
+base_hash: str        # Expected SHA-256 for consistency check (CAS)
+schema: str           # Schema name for validation
+lenient: bool         # Enable lenient parsing with auto-repairs
+corrections_only: bool # Dry run - return corrections without writing
+```
+
+**Returns**: `{ status, mode, canonical, repairs, warnings, errors, validation_status, file_hash }`
+
+### `octave_eject`
+
+Projects OCTAVE content to different formats and views.
+
+```python
+# Parameters
+content: str          # OCTAVE content to project (null for template generation)
+schema: str           # Schema name for validation or template generation
+mode: str             # Projection: canonical, authoring, executive, developer
+format: str           # Output: octave, json, yaml, markdown, gbnf
+```
+
+**Returns**: `{ output, lossy, fields_omitted, validation_status }`
 
 ### Generative Holographic Contracts (v6)
 
