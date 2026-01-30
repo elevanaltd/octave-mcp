@@ -20,7 +20,7 @@ from typing import Any
 import yaml
 
 from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue
-from octave_mcp.core.gbnf_compiler import GBNFCompiler
+from octave_mcp.core.gbnf_compiler import GBNFCompiler, compile_gbnf_from_meta
 from octave_mcp.core.parser import parse
 from octave_mcp.core.projector import project
 from octave_mcp.core.schema_extractor import extract_schema_from_document
@@ -310,11 +310,18 @@ META:
             }
 
         elif output_format == "gbnf":
-            # Issue #171: Export as llama.cpp GBNF grammar
-            # Extract schema from document and compile to GBNF
-            schema = extract_schema_from_document(result.filtered_doc)
-            compiler = GBNFCompiler()
-            gbnf_grammar = compiler.compile_schema(schema, include_envelope=True)
+            # Issue #171/#191: Export as llama.cpp GBNF grammar
+            # Check for META.CONTRACT first (v6 self-describing documents)
+            # Fall back to POLICY/FIELDS blocks if no CONTRACT
+            doc = result.filtered_doc
+            if doc.meta and "CONTRACT" in doc.meta:
+                # Issue #191: Use META.CONTRACT for schema-specific GBNF
+                gbnf_grammar = compile_gbnf_from_meta(doc.meta)
+            else:
+                # Fall back to extracting from POLICY/FIELDS blocks
+                schema = extract_schema_from_document(doc)
+                compiler = GBNFCompiler()
+                gbnf_grammar = compiler.compile_schema(schema, include_envelope=True)
             return {
                 "output": gbnf_grammar,
                 "lossy": False,  # GBNF export is lossless from schema perspective

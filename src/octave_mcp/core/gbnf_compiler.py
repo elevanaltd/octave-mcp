@@ -48,6 +48,155 @@ if TYPE_CHECKING:
 _CONTRACT_FIELD_PATTERN = re.compile(r"^FIELD\[([^\]]+)\]::(.+)$")
 
 
+def _extract_contract_field_specs(contract: object) -> list[str]:
+    """Extract field spec strings from CONTRACT value.
+
+    CONTRACT can be either:
+    - A list of strings (from programmatic use or dict)
+    - A ListValue from parser (contains tokens that need reconstruction)
+
+    Args:
+        contract: CONTRACT value from META (list or ListValue)
+
+    Returns:
+        List of field spec strings like "FIELD[STATUS]::REQ∧ENUM[A,B]"
+    """
+    from octave_mcp.core.ast_nodes import ListValue
+
+    # Handle plain list of strings
+    if isinstance(contract, list):
+        return [s for s in contract if isinstance(s, str)]
+
+    # Handle ListValue from parser - need to reconstruct field specs from tokens
+    if isinstance(contract, ListValue) and hasattr(contract, "tokens") and contract.tokens:
+        return _reconstruct_field_specs_from_tokens(contract.tokens)
+
+    # Handle ListValue with items (may have partial parsing)
+    if isinstance(contract, ListValue) and contract.items:
+        # Try to reconstruct from items
+        return _reconstruct_field_specs_from_items(contract.items)
+
+    return []
+
+
+def _reconstruct_field_specs_from_tokens(tokens: list) -> list[str]:
+    """Reconstruct FIELD[name]::constraints from token stream.
+
+    Args:
+        tokens: Token list from ListValue.tokens
+
+    Returns:
+        List of reconstructed field spec strings
+    """
+    from octave_mcp.core.lexer import TokenType
+
+    field_specs = []
+    current_spec_parts: list[str] = []
+    in_field_brackets = False
+    bracket_depth = 0
+
+    for token in tokens:
+        # Skip list delimiters and whitespace
+        if token.type in (TokenType.LIST_START, TokenType.LIST_END, TokenType.NEWLINE, TokenType.INDENT):
+            if token.type == TokenType.LIST_START and current_spec_parts:
+                # Nested bracket (e.g., ENUM[...])
+                in_field_brackets = True
+                bracket_depth += 1
+                current_spec_parts.append("[")
+            elif token.type == TokenType.LIST_END and in_field_brackets:
+                bracket_depth -= 1
+                current_spec_parts.append("]")
+                if bracket_depth == 0:
+                    in_field_brackets = False
+            continue
+
+        # Comma separates field specs (when not in brackets)
+        # But preserve commas inside brackets (e.g., ENUM[A,B,C])
+        if token.type == TokenType.COMMA:
+            if in_field_brackets:
+                # Comma inside brackets - preserve it
+                current_spec_parts.append(",")
+            else:
+                # Comma outside brackets - field spec separator
+                if current_spec_parts:
+                    spec = "".join(current_spec_parts).strip()
+                    if spec:
+                        field_specs.append(spec)
+                    current_spec_parts = []
+            continue
+
+        # Build current field spec
+        if token.type == TokenType.IDENTIFIER:
+            current_spec_parts.append(token.value)
+        elif token.type == TokenType.ASSIGN:
+            current_spec_parts.append("::")
+        elif token.type == TokenType.CONSTRAINT:
+            current_spec_parts.append(token.value)  # ∧
+        elif token.type == TokenType.FLOW:
+            current_spec_parts.append(token.value)  # →
+        elif token.type == TokenType.STRING:
+            current_spec_parts.append(f'"{token.value}"')
+        elif token.type == TokenType.NUMBER:
+            current_spec_parts.append(str(token.value))
+        elif token.type == TokenType.LIST_START:
+            in_field_brackets = True
+            bracket_depth += 1
+            current_spec_parts.append("[")
+        elif token.type == TokenType.LIST_END:
+            bracket_depth -= 1
+            current_spec_parts.append("]")
+            if bracket_depth == 0:
+                in_field_brackets = False
+
+    # Don't forget the last field spec
+    if current_spec_parts:
+        spec = "".join(current_spec_parts).strip()
+        if spec:
+            field_specs.append(spec)
+
+    return field_specs
+
+
+def _reconstruct_field_specs_from_items(items: list) -> list[str]:
+    """Reconstruct field specs from ListValue.items (fallback).
+
+    This is less reliable than token reconstruction but works
+    when tokens aren't available.
+
+    Args:
+        items: ListValue.items list
+
+    Returns:
+        List of field spec strings (may be incomplete)
+    """
+    # Items are already partially parsed - try to find FIELD patterns
+    field_specs = []
+    i = 0
+    while i < len(items):
+        item = items[i]
+        if isinstance(item, str) and item == "FIELD":
+            # Found start of a field spec, try to reconstruct
+            # This is fragile but handles common cases
+            spec_parts = ["FIELD"]
+            i += 1
+            # Collect until next FIELD or end
+            while i < len(items):
+                next_item = items[i]
+                if isinstance(next_item, str) and next_item == "FIELD":
+                    break
+                if isinstance(next_item, str):
+                    spec_parts.append(next_item)
+                i += 1
+            # Try to form a valid spec
+            spec = "".join(spec_parts)
+            if _CONTRACT_FIELD_PATTERN.match(spec):
+                field_specs.append(spec)
+        else:
+            i += 1
+
+    return field_specs
+
+
 def parse_contract_field(field_spec: str) -> tuple[str, ConstraintChain | None]:
     """Parse a CONTRACT field specification into field name and constraints.
 
@@ -557,12 +706,11 @@ def compile_gbnf_from_meta(meta: dict) -> str:
     )
 
     # Issue #191: Extract fields from CONTRACT if present
-    contract = meta.get("CONTRACT", [])
-    if contract and isinstance(contract, list):
-        for field_spec in contract:
-            if not isinstance(field_spec, str):
-                continue  # Skip non-string entries
-
+    contract = meta.get("CONTRACT")
+    if contract:
+        # Handle CONTRACT as either list of strings or ListValue from parser
+        field_specs = _extract_contract_field_specs(contract)
+        for field_spec in field_specs:
             try:
                 field_name, constraints = parse_contract_field(field_spec)
 

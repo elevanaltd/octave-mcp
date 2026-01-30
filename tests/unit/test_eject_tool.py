@@ -485,3 +485,30 @@ COUNT::42
         output = result["output"]
         # Should have field rules derived from document structure
         assert "::=" in output
+
+    @pytest.mark.asyncio
+    async def test_gbnf_format_uses_meta_contract(self, eject_tool):
+        """Issue #191: GBNF format should use META.CONTRACT for schema-specific rules."""
+        content = """===TEST===
+META:
+  TYPE::SESSION_LOG
+  VERSION::"1.0"
+  CONTRACT::[
+    FIELD[STATUS]::REQ∧ENUM[ACTIVE,PAUSED,COMPLETE],
+    FIELD[PRIORITY]::OPT∧ENUM[LOW,MEDIUM,HIGH]
+  ]
+
+STATUS::ACTIVE
+PRIORITY::HIGH
+===END==="""
+
+        result = await eject_tool.execute(content=content, schema="SESSION_LOG", format="gbnf")
+
+        output = result["output"]
+        # Should have schema-specific rules from CONTRACT
+        assert "status" in output.lower(), "GBNF should have STATUS rule from CONTRACT"
+        # ENUM values should be compiled to GBNF alternation
+        assert '"ACTIVE"' in output or '"active"' in output.lower(), "GBNF should have ENUM value ACTIVE"
+        assert '"PAUSED"' in output or '"paused"' in output.lower(), "GBNF should have ENUM value PAUSED"
+        # Should have both fields from CONTRACT
+        assert "priority" in output.lower(), "GBNF should have PRIORITY rule from CONTRACT"
