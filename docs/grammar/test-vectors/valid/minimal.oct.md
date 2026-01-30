@@ -1,0 +1,4 @@
+===MINIMAL===
+META:
+  TYPE::TEST_VECTOR
+===END===

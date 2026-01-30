@@ -1,0 +1,443 @@
+(* ========================================================================== *)
+(* OCTAVE v1.0.0 Formal Grammar - Extended Backus-Naur Form (EBNF)           *)
+(* ========================================================================== *)
+(*                                                                            *)
+(* Extracted from octave-mcp implementation per I3 Mirror Constraint:         *)
+(*   - src/octave_mcp/core/lexer.py (TokenType enum, regex patterns)          *)
+(*   - src/octave_mcp/core/parser.py (production rules)                       *)
+(*                                                                            *)
+(* Version: 1.0.0                                                             *)
+(* Date: 2026-01-30                                                           *)
+(* Source Commit: See git history for issue-113 branch                        *)
+(*                                                                            *)
+(* EBNF Notation:                                                             *)
+(*   =     definition                                                         *)
+(*   |     alternation                                                        *)
+(*   ,     concatenation                                                      *)
+(*   [ ]   optional (0 or 1)                                                  *)
+(*   { }   repetition (0 or more)                                             *)
+(*   ( )   grouping                                                           *)
+(*   " "   terminal string                                                    *)
+(*   (* *) comment                                                            *)
+(*   -     exception                                                          *)
+(*   ;     end of rule                                                        *)
+(*                                                                            *)
+(* ========================================================================== *)
+
+
+(* ========================================================================== *)
+(* SECTION 1: DOCUMENT STRUCTURE                                              *)
+(* Source: parser.py parse_document() lines 386-466                           *)
+(* ========================================================================== *)
+
+document = [ grammar_sentinel ], [ envelope_start ], [ meta_block ],
+           [ separator ], { section }, [ envelope_end ] ;
+
+(* Grammar sentinel for version declaration *)
+(* Source: lexer.py TokenType.GRAMMAR_SENTINEL line 20, pattern line 258 *)
+grammar_sentinel = "OCTAVE::", version_string ;
+
+(* Version string in grammar sentinel context *)
+(* Same rules as version_literal - see SECTION 9 for full definition *)
+version_string = version_literal ;
+
+(* Envelope markers *)
+(* Source: lexer.py TokenType.ENVELOPE_START/END lines 48-49, patterns 275-278 *)
+envelope_start = "===", envelope_identifier, "===" ;
+envelope_end   = "===END===" ;
+
+(* Envelope identifier: starts with letter or underscore, contains alphanum/underscore *)
+(* Source: lexer.py pattern line 278: [A-Za-z_][A-Za-z0-9_]* *)
+envelope_identifier = ( letter | "_" ), { letter | digit | "_" } ;
+
+
+(* ========================================================================== *)
+(* SECTION 2: META BLOCK                                                      *)
+(* Source: parser.py parse_meta_block() lines 468-556                         *)
+(* ========================================================================== *)
+
+meta_block = "META", block_operator, newline, { indent, meta_field } ;
+
+meta_field = identifier, assign_operator, value, [ trailing_comment ], newline ;
+
+
+(* ========================================================================== *)
+(* SECTION 3: SECTIONS                                                        *)
+(* Source: parser.py parse_section() lines 721-898                            *)
+(* ========================================================================== *)
+
+section = section_marker
+        | assignment
+        | block ;
+
+(* Section marker: number or named identifier *)
+(* Source: parser.py parse_section_marker() lines 558-719 *)
+section_marker = section_operator, ( section_number | identifier ), assign_operator,
+                 [ identifier ], [ bracket_annotation ], newline,
+                 { indent, section } ;
+
+section_number = digit, { digit }, [ letter ] ;  (* e.g., 1, 2b, 10c *)
+
+(* Assignment: KEY::value *)
+(* Source: parser.py lines 751-782 *)
+assignment = identifier, [ target_annotation ], assign_operator, value,
+             [ trailing_comment ], newline ;
+
+(* Block: KEY: followed by indented children *)
+(* Source: parser.py lines 784-883 *)
+block = identifier, [ target_annotation ], block_operator, newline,
+        { indent, section } ;
+
+(* Target annotation for block inheritance [->TARGET] *)
+(* Source: parser.py _parse_block_target_annotation() lines 333-384 *)
+target_annotation = "[", flow_operator, [ section_operator ], identifier, "]" ;
+
+(* Bracket annotation [content] *)
+(* Source: parser.py _consume_bracket_annotation() lines 280-331 *)
+bracket_annotation = "[", { annotation_content }, "]" ;
+annotation_content = identifier | string_literal | "," | bracket_annotation ;
+
+
+(* ========================================================================== *)
+(* SECTION 4: VALUES                                                          *)
+(* Source: parser.py parse_value() lines 900-1270                             *)
+(* ========================================================================== *)
+
+value = string_literal
+      | number_literal
+      | boolean_literal
+      | null_literal
+      | version_literal
+      | variable_reference
+      | list_value
+      | section_reference
+      | identifier_value
+      | flow_expression ;
+
+(* Identifier as value, may include colon-path or multi-word *)
+(* Source: parser.py lines 1119-1221 *)
+identifier_value = identifier, { block_operator, identifier }, [ bracket_annotation ] ;
+
+(* Section reference in value position: TARGET *)
+(* Source: parser.py lines 1227-1251 *)
+section_reference = section_operator, ( identifier | number_literal ) ;
+
+
+(* ========================================================================== *)
+(* SECTION 5: LISTS                                                           *)
+(* Source: parser.py parse_list() lines 1272-1406                             *)
+(* ========================================================================== *)
+
+list_value = "[", [ list_items ], "]" ;
+
+list_items = list_item, { ",", list_item }, [ "," ] ;  (* trailing comma allowed *)
+
+(* List item: inline map or value *)
+(* Source: parser.py parse_list_item() lines 1408-1435 *)
+list_item = inline_map_item | value ;
+
+(* Inline map: key::value pairs within list *)
+(* Source: parser.py lines 1417-1432 *)
+inline_map_item = identifier, assign_operator, atom_value ;
+
+(* Atom values for inline maps - no nested inline maps allowed *)
+(* Source: parser.py _validate_inline_map_value_is_atom() lines 1478-1522 *)
+atom_value = string_literal
+           | number_literal
+           | boolean_literal
+           | null_literal
+           | version_literal
+           | variable_reference
+           | identifier
+           | simple_list ;  (* list of atoms only *)
+
+simple_list = "[", [ atom_value, { ",", atom_value }, [ "," ] ], "]" ;
+
+
+(* ========================================================================== *)
+(* SECTION 6: HOLOGRAPHIC PATTERNS                                            *)
+(* Source: parser.py _try_parse_holographic() lines 1579-1632                 *)
+(* ========================================================================== *)
+
+(* Holographic pattern: ["example"CONSTRAINT->TARGET] *)
+holographic_pattern = "[", example_value, constraint_operator, constraint_list,
+                      [ flow_operator, section_reference ], "]" ;
+
+(* Example value: any atomic value that demonstrates expected format *)
+(* Source: holographic.py _parse_example_value() lines 92-140 *)
+(* Accepts: strings, numbers, booleans, null, lists, identifiers *)
+example_value = string_literal
+              | number_literal
+              | boolean_literal
+              | null_literal
+              | example_list
+              | identifier ;
+
+example_list = "[", [ example_value, { ",", example_value }, [ "," ] ], "]" ;
+
+constraint_list = constraint, { constraint_operator, constraint } ;
+
+constraint = "REQ" | "OPT" | "CONST" | "DIR" | "APPEND_ONLY"
+           | "ENUM", "[", identifier, { ",", identifier }, "]"
+           | "TYPE", "[", type_name, "]"
+           | "REGEX", "[", regex_pattern, "]"
+           | "RANGE", "[", number_literal, ",", number_literal, "]"
+           | "MAX_LENGTH", "[", number_literal, "]"
+           | "MIN_LENGTH", "[", number_literal, "]"
+           | "DATE"
+           | "ISO8601" ;
+
+type_name = "STRING" | "NUMBER" | "BOOLEAN" | "LIST" | identifier ;
+regex_pattern = string_literal ;
+
+
+(* ========================================================================== *)
+(* SECTION 7: FLOW EXPRESSIONS                                                *)
+(* Source: parser.py parse_flow_expression() lines 1683-1787                  *)
+(* Source: parser.py EXPRESSION_OPERATORS frozenset lines 110-120             *)
+(* ========================================================================== *)
+
+flow_expression = expression_term, { expression_operator, expression_term } ;
+
+expression_term = identifier
+                | string_literal
+                | section_reference
+                | variable_reference ;
+
+expression_operator = flow_operator         (* -> *)
+                    | synthesis_operator    (* + *)
+                    | concat_operator       (* ~ *)
+                    | at_operator           (* @ *)
+                    | tension_operator      (* vs *)
+                    | constraint_operator   (* & *)
+                    | alternative_operator  (* | *)
+                    ;
+
+
+(* ========================================================================== *)
+(* SECTION 8: TERMINALS - OPERATORS                                           *)
+(* Source: lexer.py TokenType enum lines 28-44, patterns lines 284-299        *)
+(* ========================================================================== *)
+
+assign_operator      = "::" ;                         (* TokenType.ASSIGN *)
+block_operator       = ":" ;                          (* TokenType.BLOCK *)
+flow_operator        = "->" | "\u2192" ;              (* TokenType.FLOW, U+2192 *)
+synthesis_operator   = "+" | "\u2295" ;               (* TokenType.SYNTHESIS, U+2295 *)
+concat_operator      = "~" | "\u29FA" ;               (* TokenType.CONCAT, U+29FA *)
+at_operator          = "@" ;                          (* TokenType.AT *)
+tension_operator     = "vs" | "<->" | "\u21CC" ;      (* TokenType.TENSION, U+21CC *)
+constraint_operator  = "&" | "\u2227" ;               (* TokenType.CONSTRAINT, U+2227 *)
+alternative_operator = "|" | "\u2228" ;               (* TokenType.ALTERNATIVE, U+2228 *)
+section_operator     = "#" | "\u00A7" ;               (* TokenType.SECTION, U+00A7 *)
+comment_operator     = "//" ;                         (* TokenType.COMMENT *)
+separator            = "---" ;                        (* TokenType.SEPARATOR *)
+
+
+(* ========================================================================== *)
+(* SECTION 9: TERMINALS - LITERALS                                            *)
+(* Source: lexer.py patterns lines 305-321                                    *)
+(* ========================================================================== *)
+
+(* String literal: double-quoted or triple-quoted *)
+(* Source: lexer.py patterns lines 308-309 *)
+string_literal = triple_quoted_string | double_quoted_string ;
+triple_quoted_string = '"""', { string_char | '"', [ '"' ] | newline }, '"""' ;
+double_quoted_string = '"', { string_char }, '"' ;
+string_char = ? any character except " and \ ? | escape_sequence ;
+escape_sequence = "\\", ( '"' | "\\" | "n" | "t" ) ;
+
+(* Number literal: integer, float, or scientific notation *)
+(* Source: lexer.py pattern line 311: -?\d+\.?\d*(?:[eE][+-]?\d+)? *)
+number_literal = [ "-" ], digit, { digit }, [ ".", { digit } ],
+                 [ ( "e" | "E" ), [ "+" | "-" ], digit, { digit } ] ;
+
+(* Boolean literal: lowercase only *)
+(* Source: lexer.py patterns lines 313-314 *)
+boolean_literal = "true" | "false" ;
+
+(* Null literal: lowercase only *)
+(* Source: lexer.py pattern line 315 *)
+null_literal = "null" ;
+
+(* Version literal: semantic versioning *)
+(* Source: lexer.py TokenType.VERSION line 23, patterns lines 270-272 *)
+(* Lexer treats as VERSION only if:                                        *)
+(*   - 3+ parts: 1.2.3, 1.2.3.4 (suffix optional)                          *)
+(*   - 2 parts WITH suffix: 1.0-beta, 1.0+build (suffix required!)         *)
+(* Simple 2-part floats like 3.14 are NUMBER, not VERSION                  *)
+version_literal = version_3plus, [ "-", prerelease ], [ "+", build_metadata ]
+                | version_2part_prerelease, [ "+", build_metadata ]
+                | version_2part_build ;
+
+version_3plus           = digit, { digit }, ".", digit, { digit }, ".", digit, { digit },
+                          { ".", digit, { digit } } ;
+version_2part_prerelease = digit, { digit }, ".", digit, { digit }, "-", prerelease ;
+version_2part_build      = digit, { digit }, ".", digit, { digit }, "+", build_metadata ;
+
+prerelease      = prerelease_id, { ".", prerelease_id } ;
+prerelease_id   = ( letter | digit | "-" ), { letter | digit | "-" } ;
+build_metadata  = ( letter | digit ), { letter | digit | "." } ;
+
+(* Variable reference: $VAR, $1:name *)
+(* Source: lexer.py TokenType.VARIABLE line 26, pattern line 321 *)
+(* Pattern: \$[A-Za-z0-9_:]+ requires at least one character after $ *)
+variable_reference = "$", ( letter | digit | "_" | ":" ), { letter | digit | "_" | ":" } ;
+
+
+(* ========================================================================== *)
+(* SECTION 10: TERMINALS - IDENTIFIERS                                        *)
+(* Source: lexer.py _is_valid_identifier_start/char() lines 129-214           *)
+(* Source: lexer.py _match_unicode_identifier() lines 217-250                 *)
+(* ========================================================================== *)
+
+(* Identifier: starts with letter/underscore/emoji, contains alphanum/underscore/hyphen/emoji *)
+(* Note: Hyphens not allowed at end. Emoji support per GH#186. *)
+identifier = identifier_start, { identifier_char } ;
+
+identifier_start = letter | "_" | "." | "/" | unicode_symbol ;
+
+identifier_char = letter | digit | "_" | "-" | "." | "/" | unicode_symbol ;
+
+(* Unicode symbols valid in identifiers *)
+(* Source: lexer.py lines 164-175 - categories L*, So, Sm, No, Sk, Po *)
+(* Excludes operator chars: lines 116-126 *)
+unicode_symbol = ? Unicode letter (category L*) ?
+               | ? Unicode Symbol Other (So) - emoji, misc symbols ?
+               | ? Unicode Symbol Math (Sm) - excluding OCTAVE operators ?
+               | ? Unicode Number Other (No) ?
+               | ? Unicode Symbol Modifier (Sk) ?
+               | ? Unicode Punctuation Other (Po) ?
+               - operator_chars ;
+
+(* Operator characters that CANNOT appear in identifiers *)
+(* Source: lexer.py OPERATOR_CHARS frozenset lines 116-126 *)
+operator_chars = "\u2192"  (* FLOW U+2192 *)
+               | "\u2295"  (* SYNTHESIS U+2295 *)
+               | "\u29FA"  (* CONCAT U+29FA *)
+               | "\u21CC"  (* TENSION U+21CC *)
+               | "\u2227"  (* CONSTRAINT U+2227 *)
+               | "\u2228"  (* ALTERNATIVE U+2228 *)
+               | "\u00A7"  (* SECTION U+00A7 *)
+               ;
+
+
+(* ========================================================================== *)
+(* SECTION 11: TERMINALS - WHITESPACE AND STRUCTURE                           *)
+(* Source: lexer.py patterns lines 324-326                                    *)
+(* ========================================================================== *)
+
+newline = "\n" ;                           (* TokenType.NEWLINE *)
+indent  = space, { space } ;               (* TokenType.INDENT, any leading whitespace *)
+                                           (* Lexer emits space count; no 2-space enforcement *)
+space   = " " ;                            (* Single space character *)
+
+(* Comments *)
+(* Source: lexer.py pattern line 282 *)
+comment = comment_operator, { ? any character except newline ? } ;
+trailing_comment = comment ;
+
+
+(* ========================================================================== *)
+(* SECTION 12: CHARACTER CLASSES                                              *)
+(* ========================================================================== *)
+
+letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J"
+       | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T"
+       | "U" | "V" | "W" | "X" | "Y" | "Z"
+       | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j"
+       | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t"
+       | "u" | "v" | "w" | "x" | "y" | "z" ;
+
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+
+(* ========================================================================== *)
+(* APPENDIX A: ASCII TO UNICODE NORMALIZATION TABLE                           *)
+(* Source: lexer.py ASCII_ALIASES dict lines 92-101                           *)
+(* ========================================================================== *)
+(*                                                                            *)
+(* All ASCII aliases are normalized to Unicode canonical form during lexing:  *)
+(*                                                                            *)
+(*   ASCII    Unicode    Token Type      Description                          *)
+(*   ------   -------    ----------      -----------                          *)
+(*   ->       U+2192     FLOW            Rightwards arrow                     *)
+(*   <->      U+21CC     TENSION         Rightwards harpoon over leftwards    *)
+(*   +        U+2295     SYNTHESIS       Circled plus (direct sum)            *)
+(*   ~        U+29FA     CONCAT          Double-plus (concatenation)          *)
+(*   vs       U+21CC     TENSION         (with word boundaries)               *)
+(*   |        U+2228     ALTERNATIVE     Logical or                           *)
+(*   &        U+2227     CONSTRAINT      Logical and                          *)
+(*   #        U+00A7     SECTION         Section sign                         *)
+(*                                                                            *)
+(* ========================================================================== *)
+
+
+(* ========================================================================== *)
+(* APPENDIX B: ERROR CODES                                                    *)
+(* Source: lexer.py LexerError, parser.py ParserError                         *)
+(* ========================================================================== *)
+(*                                                                            *)
+(* Lexer Errors:                                                              *)
+(*   E005                  Tabs not allowed (use 2 spaces)                    *)
+(*   E005                  Unexpected character                               *)
+(*   E_UNBALANCED_BRACKET  Unclosed or extra bracket                          *)
+(*   E_INVALID_ENVELOPE_ID Invalid envelope identifier                        *)
+(*                                                                            *)
+(* Parser Errors:                                                             *)
+(*   E001                  Single colon assignment (use :: not :)             *)
+(*   E006                  Invalid section marker syntax                       *)
+(*   E007                  Unclosed list                                       *)
+(*   E_MAX_NESTING_EXCEEDED Nesting depth exceeds 100                         *)
+(*   E_NESTED_INLINE_MAP   Inline map contains nested inline map              *)
+(*                                                                            *)
+(* ========================================================================== *)
+
+
+(* ========================================================================== *)
+(* APPENDIX C: SPECIAL HANDLING NOTES                                         *)
+(* ========================================================================== *)
+(*                                                                            *)
+(* 1. EMOJI IDENTIFIERS (GH#186)                                              *)
+(*    Unicode emoji and symbols are valid in identifiers.                     *)
+(*    Categories allowed: L* (letters), So (symbols), Sm (math - non-ops),    *)
+(*    No (numbers), Sk (modifiers), Po (punctuation).                         *)
+(*    OCTAVE operators excluded from identifier chars.                        *)
+(*                                                                            *)
+(* 2. MULTI-WORD VALUES (GH#66)                                               *)
+(*    Consecutive value tokens without operators are coalesced:               *)
+(*    KEY::Hello World  ->  value = "Hello World"                             *)
+(*    Emits W_MULTI_WORD_COALESCE warning per I4 auditability.                *)
+(*                                                                            *)
+(* 3. TENSION OPERATOR WORD BOUNDARIES                                        *)
+(*    The ASCII 'vs' requires word boundaries:                                *)
+(*    VALID:   Speed vs Quality, [Speed vs Quality]                           *)
+(*    INVALID: SpeedvsQuality (parsed as identifier)                          *)
+(*                                                                            *)
+(* 4. GRAMMAR SENTINEL POSITION                                               *)
+(*    OCTAVE::VERSION must appear at position 0 (document start).             *)
+(*    Pattern skipped at other positions to prevent data loss.                *)
+(*    Example: NOTE::OCTAVE::5 is parsed as NOTE::"OCTAVE::5" not sentinel.   *)
+(*                                                                            *)
+(* 5. HOLOGRAPHIC PATTERN DETECTION                                           *)
+(*    Lists containing constraint operators without commas at depth=1         *)
+(*    are parsed as holographic patterns, not regular lists.                  *)
+(*                                                                            *)
+(* 6. DEEP NESTING LIMITS                                                     *)
+(*    Warning at depth 5 (configurable): W_DEEP_NESTING                       *)
+(*    Hard error at depth 100: E_MAX_NESTING_EXCEEDED                         *)
+(*                                                                            *)
+(* 7. YAML FRONTMATTER                                                        *)
+(*    Documents may have YAML frontmatter delimited by --- markers.           *)
+(*    Frontmatter is stripped before tokenization (parser.py lines 37-103).   *)
+(*    Line numbers are preserved by replacing frontmatter with newlines.      *)
+(*                                                                            *)
+(* 8. COLON-PATH VALUES                                                       *)
+(*    Identifiers followed by : and more identifiers form colon paths:        *)
+(*    REFERENCE::MODULE:SUBMODULE:COMPONENT -> "MODULE:SUBMODULE:COMPONENT"   *)
+(*                                                                            *)
+(* ========================================================================== *)
+
+
+(* ========================================================================== *)
+(* END OF GRAMMAR                                                             *)
+(* ========================================================================== *)
