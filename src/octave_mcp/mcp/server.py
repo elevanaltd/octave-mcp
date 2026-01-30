@@ -9,12 +9,15 @@ Environment Variables:
 - DISABLED_TOOLS: Comma-separated list of tools to disable.
   Available tools: octave_validate, octave_write, octave_eject
   Example: DISABLED_TOOLS=octave_eject
+- OCTAVE_MCP_SKIP_SYNC: Set to "1" to skip dependency sync on startup.
 """
 
 import asyncio
 import json
 import logging
 import os
+import subprocess
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -31,6 +34,67 @@ from octave_mcp.mcp.write import WriteTool
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+def ensure_dependencies_synced() -> None:
+    """Ensure venv dependencies are in sync with uv.lock.
+
+    The MCP server runs independently from user worktrees, so it may have
+    stale dependencies if the lock file was updated. This function runs
+    `uv sync` if needed to ensure the server has current dependencies.
+
+    Can be disabled by setting OCTAVE_MCP_SKIP_SYNC=1.
+    """
+    if os.getenv("OCTAVE_MCP_SKIP_SYNC", "").strip() == "1":
+        return
+
+    # Find the project root (where pyproject.toml lives)
+    # Start from the package location and walk up
+    package_dir = Path(__file__).resolve().parent
+    project_root = None
+
+    for parent in [package_dir] + list(package_dir.parents):
+        if (parent / "pyproject.toml").exists():
+            project_root = parent
+            break
+
+    if project_root is None:
+        # Can't find project root - skip sync (installed package scenario)
+        return
+
+    lock_file = project_root / "uv.lock"
+    if not lock_file.exists():
+        # No lock file - skip sync
+        return
+
+    # Check if uv is available
+    try:
+        subprocess.run(
+            ["uv", "--version"],
+            capture_output=True,
+            check=True,
+            timeout=5,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        # uv not available - skip sync
+        return
+
+    # Run uv sync to ensure dependencies are current
+    try:
+        result = subprocess.run(
+            ["uv", "sync", "--quiet"],
+            cwd=project_root,
+            capture_output=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            # Log but don't fail - server may still work
+            stderr = result.stderr.decode("utf-8", errors="replace")
+            logger.warning(f"uv sync failed: {stderr}")
+    except subprocess.TimeoutExpired:
+        logger.warning("uv sync timed out after 60 seconds")
+    except Exception as e:
+        logger.warning(f"Failed to run uv sync: {e}")
 
 
 def parse_disabled_tools() -> set[str]:
@@ -145,7 +209,13 @@ async def main():
 
 
 def run():
-    """Start the MCP server (entry point)."""
+    """Start the MCP server (entry point).
+
+    Ensures dependencies are synced before starting the server.
+    This prevents issues where the MCP server runs with stale
+    dependencies after uv.lock is updated.
+    """
+    ensure_dependencies_synced()
     asyncio.run(main())
 
 
