@@ -68,10 +68,18 @@ ABSENT = Absent()
 
 @dataclass
 class ASTNode:
-    """Base class for all AST nodes."""
+    """Base class for all AST nodes.
+
+    Issue #182: Comment preservation support.
+    All AST nodes can have attached comments:
+    - leading_comments: Comment lines appearing before this node
+    - trailing_comment: End-of-line comment after this node's value
+    """
 
     line: int = 0
     column: int = 0
+    leading_comments: list[str] = field(default_factory=list)
+    trailing_comment: str | None = None
 
 
 @dataclass
@@ -117,6 +125,8 @@ class Document(ASTNode):
         grammar_version: OCTAVE grammar version from sentinel (Issue #48 Phase 2)
             Format: OCTAVE::VERSION at document start, e.g., "OCTAVE::5.1.0"
             When present, enables forward compatibility detection and migration routing.
+        trailing_comments: Comment lines appearing before ===END=== (Issue #182)
+            These are comments that don't have a subsequent section to attach to.
     """
 
     name: str = "INFERRED"
@@ -124,6 +134,7 @@ class Document(ASTNode):
     sections: list[ASTNode] = field(default_factory=list)
     has_separator: bool = False
     raw_frontmatter: str | None = None
+    trailing_comments: list[str] = field(default_factory=list)
     grammar_version: str | None = None
 
 

@@ -8,12 +8,19 @@ Parses lexer tokens into AST with:
 - Nested block structure with indentation
 - META block extraction
 - YAML frontmatter stripping (Issue #91)
+- Deep nesting warning and error detection (Issue #192)
 """
 
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, Section
+from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Comment, Document, InlineMap, ListValue, Section
 from octave_mcp.core.lexer import Token, TokenType, tokenize
+
+# Issue #192: Deep nesting detection constants
+# Warning threshold: emit W_DEEP_NESTING at this depth (configurable, default 5)
+DEFAULT_DEEP_NESTING_THRESHOLD = 5
+# Maximum nesting: hard error at this depth (implementation cap per spec)
+MAX_NESTING_DEPTH = 100
 
 
 def _strip_yaml_frontmatter(content: str) -> tuple[str, str | None]:
@@ -105,6 +112,7 @@ EXPRESSION_OPERATORS: frozenset[TokenType] = frozenset(
 # Semantic classification of tokens that can appear in values (#140/#141)
 # This prevents data loss when VERSION, BOOLEAN, NULL, or STRING tokens
 # appear in multi-word values like "Release 1.2.3 is ready"
+# Issue #181: Added VARIABLE for $VAR placeholders
 VALUE_TOKENS: frozenset[TokenType] = frozenset(
     {
         TokenType.IDENTIFIER,
@@ -113,6 +121,7 @@ VALUE_TOKENS: frozenset[TokenType] = frozenset(
         TokenType.BOOLEAN,
         TokenType.NULL,
         TokenType.STRING,
+        TokenType.VARIABLE,
     }
 )
 
@@ -125,6 +134,7 @@ def _token_to_str(token: Token) -> str:
 
     Issue #140/#141: Added support for VERSION, BOOLEAN, NULL, and STRING tokens
     to prevent data loss in multi-word values.
+    Issue #181: Added support for VARIABLE tokens ($VAR placeholders).
     """
     if token.type == TokenType.NUMBER and token.raw is not None:
         return token.raw
@@ -137,6 +147,9 @@ def _token_to_str(token: Token) -> str:
     elif token.type == TokenType.STRING:
         # Preserve quotes for strings in multi-word values
         return f'"{token.value}"'
+    elif token.type == TokenType.VARIABLE:
+        # Issue #181: Preserve variable as-is (e.g., $VAR, $1:name)
+        return str(token.value)
     return str(token.value)
 
 
@@ -147,6 +160,7 @@ class ParserError(Exception):
         self.message = message
         self.token = token
         self.error_code = error_code
+        self.code = error_code  # Alias for consistent access
         if token:
             super().__init__(f"{error_code} at line {token.line}, column {token.column}: {message}")
         else:
@@ -156,20 +170,29 @@ class ParserError(Exception):
 class Parser:
     """OCTAVE parser with lenient input support."""
 
-    def __init__(self, tokens: list[Token], strict_structure: bool = False):
+    def __init__(
+        self,
+        tokens: list[Token],
+        strict_structure: bool = False,
+        deep_nesting_threshold: int = DEFAULT_DEEP_NESTING_THRESHOLD,
+    ):
         """Initialize parser with token stream.
 
         Args:
             tokens: List of tokens to parse
             strict_structure: If True, raise ParserError on structural issues (e.g. unclosed lists)
                             instead of leniently recovering.
+            deep_nesting_threshold: Emit W_DEEP_NESTING warning at this nesting depth.
+                                   Default is 5. Set to 0 to disable warnings.
         """
         self.tokens = tokens
         self.strict_structure = strict_structure
+        self.deep_nesting_threshold = deep_nesting_threshold
         self.pos = 0
         self.current_indent = 0
         self.warnings: list[dict] = []  # I4 audit trail for lenient parsing events
         self.bracket_depth = 0  # GH#184: Track bracket nesting for NEVER rule validation
+        self._deep_nesting_warned_at: set[int] = set()  # Track lines where warning was emitted
 
     def current(self) -> Token:
         """Get current token."""
@@ -198,10 +221,51 @@ class Parser:
             raise ParserError(f"Expected {token_type}, got {token.type}", token)
         return self.advance()
 
-    def skip_whitespace(self) -> None:
-        """Skip newlines and comments."""
-        while self.current().type in (TokenType.NEWLINE, TokenType.COMMENT):
+    def skip_whitespace(self, skip_comments: bool = True) -> None:
+        """Skip newlines and optionally comments.
+
+        Args:
+            skip_comments: If True (default), also skip COMMENT tokens.
+                          Set to False for Issue #182 comment preservation.
+        """
+        skip_types = {TokenType.NEWLINE}
+        if skip_comments:
+            skip_types.add(TokenType.COMMENT)
+        while self.current().type in skip_types:
             self.advance()
+
+    def collect_leading_comments(self) -> list[str]:
+        """Collect leading comment lines before a node.
+
+        Issue #182: Comment preservation.
+        Collects all COMMENT tokens appearing before the next non-whitespace token.
+        Called before parsing a node to capture its leading comments.
+
+        Returns:
+            List of comment text strings (without // prefix)
+        """
+        comments: list[str] = []
+        while self.current().type in (TokenType.NEWLINE, TokenType.COMMENT, TokenType.INDENT):
+            if self.current().type == TokenType.COMMENT:
+                comments.append(self.current().value)
+            self.advance()
+        return comments
+
+    def collect_trailing_comment(self) -> str | None:
+        """Collect end-of-line comment after a value.
+
+        Issue #182: Comment preservation.
+        Checks for a COMMENT token on the same line after a value.
+        Must be called immediately after parsing a value, before newline is consumed.
+
+        Returns:
+            Comment text string (without // prefix) or None
+        """
+        if self.current().type == TokenType.COMMENT:
+            comment: str = str(self.current().value)
+            self.advance()
+            return comment
+        return None
 
     def _consume_bracket_annotation(self, capture: bool = False) -> str | None:
         """Consume bracket annotation [content] if present.
@@ -272,7 +336,8 @@ class Parser:
         if self.current().type == TokenType.ENVELOPE_START:
             token = self.advance()
             doc.name = token.value
-            self.skip_whitespace()
+            # Issue #182: Don't skip comments after envelope start
+            self.skip_whitespace(skip_comments=False)
         else:
             # Infer envelope for single doc
             doc.name = "INFERRED"
@@ -281,23 +346,40 @@ class Parser:
         if self.current().type == TokenType.IDENTIFIER and self.current().value == "META":
             meta_block = self.parse_meta_block()
             doc.meta = meta_block
-            self.skip_whitespace()
+            # Issue #182: Don't skip comments after META
+            self.skip_whitespace(skip_comments=False)
 
         # Check for separator
         if self.current().type == TokenType.SEPARATOR:
             doc.has_separator = True
             self.advance()
-            self.skip_whitespace()
+            # Issue #182: Don't skip comments after separator
+            self.skip_whitespace(skip_comments=False)
 
         # Parse document body
+        # Issue #182: Track pending comments for next section
+        pending_comments: list[str] = []
+
         while self.current().type != TokenType.ENVELOPE_END and self.current().type != TokenType.EOF:
             # Skip indentation at document level
             if self.current().type == TokenType.INDENT:
                 self.advance()
                 continue
 
-            # Parse section (assignment or block)
-            section = self.parse_section(0)
+            # Issue #182: Collect comments as pending for next section
+            if self.current().type == TokenType.COMMENT:
+                pending_comments.append(self.current().value)
+                self.advance()
+                continue
+
+            # Skip newlines
+            if self.current().type == TokenType.NEWLINE:
+                self.advance()
+                continue
+
+            # Parse section (assignment or block) with pending comments
+            section = self.parse_section(0, pending_comments)
+            pending_comments = []  # Reset after passing to section
             if section:
                 doc.sections.append(section)
             elif self.current().type not in (TokenType.ENVELOPE_END, TokenType.EOF):
@@ -305,7 +387,14 @@ class Parser:
                 # GH#64: Warning is already emitted by parse_section for bare identifiers
                 self.advance()
 
-            self.skip_whitespace()
+            # Issue #182: Don't skip comments - the loop will collect them
+            # as pending_comments for the next section
+            # (removed self.skip_whitespace() call that was consuming comments)
+
+        # Issue #182: Any remaining pending_comments have no following section
+        # (they appear before ===END===), so store them as document trailing comments
+        if pending_comments:
+            doc.trailing_comments = pending_comments
 
         # Expect END envelope (lenient - allow missing)
         if self.current().type == TokenType.ENVELOPE_END:
@@ -491,6 +580,9 @@ class Parser:
             # Track current line's indentation to determine if SECTION is child or sibling
             current_line_indent = child_indent
 
+            # Issue #182: Track pending comments for next child
+            pending_comments: list[str] = []
+
             while True:
                 # End conditions
                 if self.current().type in (TokenType.EOF, TokenType.ENVELOPE_END):
@@ -502,6 +594,12 @@ class Parser:
                     if current_line_indent < child_indent:
                         break  # Dedent, end of section
                     # Same or deeper level - consume and continue to parse
+                    self.advance()
+                    continue
+
+                # Issue #182: Collect comments as pending for next child
+                if self.current().type == TokenType.COMMENT:
+                    pending_comments.append(self.current().value)
                     self.advance()
                     continue
 
@@ -528,8 +626,9 @@ class Parser:
                 if current_line_indent < child_indent:
                     break
 
-                # Parse child
-                child = self.parse_section(child_indent)
+                # Parse child with any pending comments
+                child = self.parse_section(child_indent, pending_comments)
+                pending_comments = []  # Reset after passing to child
                 if child:
                     children.append(child)
                     # GH#81: After parsing a child (especially nested blocks),
@@ -541,6 +640,12 @@ class Parser:
                     # No valid child parsed, might be end of section
                     break
 
+            # Issue #182: Handle orphan comments at end of section
+            # If pending_comments exist but loop broke (dedent/EOF), they are inner comments
+            if pending_comments:
+                for comment_text in pending_comments:
+                    children.append(Comment(text=comment_text))
+
         return Section(
             section_id=section_id,
             key=section_name,
@@ -550,11 +655,21 @@ class Parser:
             column=section_token.column,
         )
 
-    def parse_section(self, base_indent: int) -> Assignment | Block | Section | None:
-        """Parse a top-level section (assignment, block, or § section)."""
-        # Check for § section marker first
+    def parse_section(
+        self, base_indent: int, leading_comments: list[str] | None = None
+    ) -> Assignment | Block | Section | None:
+        """Parse a top-level section (assignment, block, or section).
+
+        Args:
+            base_indent: The base indentation level for this section
+            leading_comments: Comments collected before this section (Issue #182)
+        """
+        # Check for section marker first
         if self.current().type == TokenType.SECTION:
-            return self.parse_section_marker()
+            section = self.parse_section_marker()
+            if section and leading_comments:
+                section.leading_comments = leading_comments
+            return section
 
         if self.current().type != TokenType.IDENTIFIER:
             return None
@@ -585,7 +700,17 @@ class Parser:
                 )
             self.advance()
             value = self.parse_value()
-            return Assignment(key=key, value=value, line=self.current().line, column=self.current().column)
+            # Issue #182: Collect trailing comment after value
+            trailing_comment = self.collect_trailing_comment()
+            assignment = Assignment(
+                key=key,
+                value=value,
+                line=identifier_token.line,
+                column=identifier_token.column,
+                leading_comments=leading_comments or [],
+                trailing_comment=trailing_comment,
+            )
+            return assignment
 
         elif self.current().type == TokenType.BLOCK:
             block_token = self.current()
@@ -618,6 +743,9 @@ class Parser:
                 # is at column 0 (implicit dedent). We must detect this and break.
                 current_line_indent = child_indent
 
+                # Issue #182: Track pending comments for next child
+                pending_comments: list[str] = []
+
                 while True:
                     # End conditions
                     if self.current().type in (TokenType.EOF, TokenType.ENVELOPE_END):
@@ -629,6 +757,12 @@ class Parser:
                         if current_line_indent < child_indent:
                             break  # Dedent, end of block
                         # Same or deeper level - consume and continue to parse
+                        self.advance()
+                        continue
+
+                    # Issue #182: Collect comments as pending for next child
+                    if self.current().type == TokenType.COMMENT:
+                        pending_comments.append(self.current().value)
                         self.advance()
                         continue
 
@@ -646,8 +780,9 @@ class Parser:
                     if current_line_indent < child_indent:
                         break
 
-                    # Parse child
-                    child = self.parse_section(child_indent)
+                    # Parse child with any pending comments
+                    child = self.parse_section(child_indent, pending_comments)
+                    pending_comments = []  # Reset after passing to child
                     if child:
                         children.append(child)
                         # GH#81: After parsing a child (especially nested blocks),
@@ -655,7 +790,7 @@ class Parser:
                         # tracking so next iteration properly detects the current
                         # line's indentation via INDENT token or implicit dedent.
                         current_line_indent = 0
-                    elif self.current().type in (TokenType.NEWLINE, TokenType.INDENT):
+                    elif self.current().type in (TokenType.NEWLINE, TokenType.INDENT, TokenType.COMMENT):
                         # GH#64: parse_section consumed and warned about bare identifier,
                         # leaving us at NEWLINE/INDENT. Continue parsing remaining children.
                         continue
@@ -663,7 +798,19 @@ class Parser:
                         # No valid child parsed, might be end of block
                         break
 
-            return Block(key=key, children=children, line=self.current().line, column=self.current().column)
+                # Issue #182: Handle orphan comments at end of block
+                # If pending_comments exist but loop broke (dedent/EOF), they are inner comments
+                if pending_comments:
+                    for comment_text in pending_comments:
+                        children.append(Comment(text=comment_text))
+
+            return Block(
+                key=key,
+                children=children,
+                line=identifier_token.line,
+                column=identifier_token.column,
+                leading_comments=leading_comments or [],
+            )
 
         # GH#64: Bare identifier without :: or : operator - emit I4 audit warning
         # Per I4 (Transform Auditability): "If bits lost must have receipt"
@@ -1033,6 +1180,19 @@ class Parser:
 
             return section_marker
 
+        elif token.type == TokenType.VARIABLE:
+            # Issue #181: Handle $VAR, $1:name variable placeholders
+            # Variables are atomic values - treated like strings without expansion
+            # Check if this starts an expression with operators (like $VAR->$OTHER)
+            next_token = self.peek()
+            if next_token.type in EXPRESSION_OPERATORS:
+                return self.parse_flow_expression()
+
+            # Simple variable - return as-is
+            value = str(token.value)
+            self.advance()
+            return value
+
         else:
             # Try to consume as bare word
             value = str(token.value)
@@ -1047,12 +1207,18 @@ class Parser:
         quoted operator symbols (e.g., ["∧"∧REQ→§SELF]).
 
         Issue #179: Detects duplicate keys in inline maps [k::v, k::v2].
+        Issue #192: Detects deep nesting and emits warnings/errors.
         """
         # Gap_2: Record token position BEFORE consuming LIST_START
         # We want tokens from [ to ] inclusive for reconstruction
         start_pos = self.pos
+        bracket_token = self.current()  # Capture for line number in warnings
         self.expect(TokenType.LIST_START)
         self.bracket_depth += 1  # GH#184: Track bracket nesting for NEVER rule validation
+
+        # Issue #192: Check for deep nesting
+        self._check_deep_nesting(bracket_token)
+
         items: list[Any] = []
 
         # Issue #179: Track inline map keys for duplicate detection
@@ -1188,6 +1354,47 @@ class Parser:
         # Regular value
         return self.parse_value()
 
+    def _check_deep_nesting(self, token: Token) -> None:
+        """Check for deep nesting and emit warning or raise error.
+
+        Issue #192: Implements deep nesting detection per spec requirements:
+        - Warning at configurable threshold (default 5): W_DEEP_NESTING
+        - Hard error at 100 levels: E_MAX_NESTING_EXCEEDED
+
+        Args:
+            token: The bracket token for line number reporting
+
+        Raises:
+            ParserError: If nesting depth reaches MAX_NESTING_DEPTH (100)
+        """
+        depth = self.bracket_depth
+
+        # Check for max nesting (hard error)
+        if depth >= MAX_NESTING_DEPTH:
+            raise ParserError(
+                f"E_MAX_NESTING_EXCEEDED::Maximum nesting depth of {MAX_NESTING_DEPTH} exceeded. "
+                f"Flatten your structure or use block syntax.",
+                token,
+                "E_MAX_NESTING_EXCEEDED",
+            )
+
+        # Check for deep nesting warning (if threshold is configured)
+        if self.deep_nesting_threshold > 0 and depth >= self.deep_nesting_threshold:
+            # Only warn once per line to avoid spam for [[[...]]]
+            if token.line not in self._deep_nesting_warned_at:
+                self._deep_nesting_warned_at.add(token.line)
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "deep_nesting",
+                        "depth": depth,
+                        "threshold": self.deep_nesting_threshold,
+                        "line": token.line,
+                        "column": token.column,
+                        "message": (f"W_DEEP_NESTING::depth {depth} at line {token.line}, " f"consider flattening"),
+                    }
+                )
+
     def _validate_inline_map_value_is_atom(self, key: str, value: Any, token: Token) -> None:
         """Validate that an inline map value is atomic (not a nested inline map).
 
@@ -1310,8 +1517,9 @@ class Parser:
 
         # Collect all parts of expression using unified EXPRESSION_OPERATORS set
         # Gap 9: Include SECTION token type in valid expression components
+        # Issue #181: Include VARIABLE token type for $VAR placeholders in expressions
         while (
-            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.SECTION)
+            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.SECTION, TokenType.VARIABLE)
             or self.current().type in EXPRESSION_OPERATORS
         ):
             if self.current().type in EXPRESSION_OPERATORS:
@@ -1369,7 +1577,8 @@ class Parser:
                     section_marker += _token_to_str(self.current())
                     self.advance()
                 parts.append(section_marker)
-            elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING):
+            elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.VARIABLE):
+                # Issue #181: Handle VARIABLE tokens in flow expressions
                 parts.append(self.current().value)
                 self.advance()
             else:

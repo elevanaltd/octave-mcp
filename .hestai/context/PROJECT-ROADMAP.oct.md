@@ -2,8 +2,8 @@
 META:
   TYPE::PROJECT_ROADMAP
   NAME::"OCTAVE-MCP Development Roadmap"
-  VERSION::"0.5.0"
-  UPDATED::"2026-01-29T23:00:00Z"
+  VERSION::"0.6.0"
+  UPDATED::"2026-01-30T02:00:00Z"
 VISION::"Production-ready MCP server implementing OCTAVE v6 protocol with full spec compliance"
 RELEASE_STRATEGY:
   APPROACH::internal_milestones_single_release
@@ -11,8 +11,8 @@ RELEASE_STRATEGY:
   RATIONALE::"No external consumers until v1.0.0 - avoid ceremony overhead of intermediate releases"
 CURRENT_STATE:
   PHASE::B3_INTEGRATION
-  TESTS::"1343 passing"
-  COVERAGE::"90%"
+  TESTS::"1231 passing"
+  COVERAGE::"84%"
   QUALITY::all_passing
   WORKING_VERSION::"pre-1.0.0-dev"
 PHASES_COMPLETED:
@@ -37,10 +37,12 @@ INTERNAL_MILESTONES:
     ISSUES::[GH_145,GH_179,GH_180,GH_184,GH_185]
   M2_developer_experience:
     LABEL::v0.8.0
-    STATUS::IN_PROGRESS
+    STATUS::COMPLETE
+    COMPLETED_AT::"2026-01-30T02:00:00Z"
     FOCUS::"Developer experience and formatting"
     ISSUES::[GH_195,GH_181,GH_182,GH_183,GH_192,GH_193]
-    COMPLETED::[GH_195,GH_183]
+    COMPLETED::[GH_195,GH_183,GH_192,GH_193,GH_181,GH_182]
+    PR::GH_198
   M3_schema_foundation:
     LABEL::v0.9.0
     STATUS::QUEUED
