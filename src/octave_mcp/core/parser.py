@@ -112,6 +112,7 @@ EXPRESSION_OPERATORS: frozenset[TokenType] = frozenset(
 # Semantic classification of tokens that can appear in values (#140/#141)
 # This prevents data loss when VERSION, BOOLEAN, NULL, or STRING tokens
 # appear in multi-word values like "Release 1.2.3 is ready"
+# Issue #181: Added VARIABLE for $VAR placeholders
 VALUE_TOKENS: frozenset[TokenType] = frozenset(
     {
         TokenType.IDENTIFIER,
@@ -120,6 +121,7 @@ VALUE_TOKENS: frozenset[TokenType] = frozenset(
         TokenType.BOOLEAN,
         TokenType.NULL,
         TokenType.STRING,
+        TokenType.VARIABLE,
     }
 )
 
@@ -132,6 +134,7 @@ def _token_to_str(token: Token) -> str:
 
     Issue #140/#141: Added support for VERSION, BOOLEAN, NULL, and STRING tokens
     to prevent data loss in multi-word values.
+    Issue #181: Added support for VARIABLE tokens ($VAR placeholders).
     """
     if token.type == TokenType.NUMBER and token.raw is not None:
         return token.raw
@@ -144,6 +147,9 @@ def _token_to_str(token: Token) -> str:
     elif token.type == TokenType.STRING:
         # Preserve quotes for strings in multi-word values
         return f'"{token.value}"'
+    elif token.type == TokenType.VARIABLE:
+        # Issue #181: Preserve variable as-is (e.g., $VAR, $1:name)
+        return str(token.value)
     return str(token.value)
 
 
@@ -1050,6 +1056,19 @@ class Parser:
 
             return section_marker
 
+        elif token.type == TokenType.VARIABLE:
+            # Issue #181: Handle $VAR, $1:name variable placeholders
+            # Variables are atomic values - treated like strings without expansion
+            # Check if this starts an expression with operators (like $VAR->$OTHER)
+            next_token = self.peek()
+            if next_token.type in EXPRESSION_OPERATORS:
+                return self.parse_flow_expression()
+
+            # Simple variable - return as-is
+            value = str(token.value)
+            self.advance()
+            return value
+
         else:
             # Try to consume as bare word
             value = str(token.value)
@@ -1374,8 +1393,9 @@ class Parser:
 
         # Collect all parts of expression using unified EXPRESSION_OPERATORS set
         # Gap 9: Include SECTION token type in valid expression components
+        # Issue #181: Include VARIABLE token type for $VAR placeholders in expressions
         while (
-            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.SECTION)
+            self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.SECTION, TokenType.VARIABLE)
             or self.current().type in EXPRESSION_OPERATORS
         ):
             if self.current().type in EXPRESSION_OPERATORS:
@@ -1433,7 +1453,8 @@ class Parser:
                     section_marker += _token_to_str(self.current())
                     self.advance()
                 parts.append(section_marker)
-            elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING):
+            elif self.current().type in (TokenType.IDENTIFIER, TokenType.STRING, TokenType.VARIABLE):
+                # Issue #181: Handle VARIABLE tokens in flow expressions
                 parts.append(self.current().value)
                 self.advance()
             else:

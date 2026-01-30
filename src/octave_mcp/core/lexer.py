@@ -22,6 +22,9 @@ class TokenType(Enum):
     # Version field (Issues #140 #141)
     VERSION = auto()  # VERSION::1.0.0 semantic version strings
 
+    # Variable reference (Issue #181)
+    VARIABLE = auto()  # $VAR, $1:name placeholders
+
     # Structural operators
     ASSIGN = auto()  # ::
     BLOCK = auto()  # :
@@ -173,6 +176,10 @@ TOKEN_PATTERNS = [
     (r"\bnull\b", TokenType.NULL),
     # Section marker (ASCII alias)
     (r"#", TokenType.SECTION),
+    # Variable reference (Issue #181): $VAR, $1:name, $MY_VAR123
+    # Pattern: $ followed by alphanumeric, underscore, or colon
+    # Colon is allowed for type hints like $1:role but stops at whitespace
+    (r"\$[A-Za-z0-9_:]+", TokenType.VARIABLE),
     # Identifiers (bare words, allows dots and hyphens for property paths and kebab-case)
     # Hyphen allowed in identifier body, but not at start (Issue #53)
     # Pattern uses negative lookbehind to avoid consuming -> (flow operator)

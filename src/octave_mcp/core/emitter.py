@@ -55,6 +55,10 @@ class FormatOptions:
 
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*\Z")
 
+# Issue #181: Variable pattern for $VAR, $1:name placeholders
+# Variables start with $ and contain alphanumeric, underscore, or colon
+VARIABLE_PATTERN = re.compile(r"^\$[A-Za-z0-9_:]+\Z")
+
 
 def _sort_children_by_key(children: list[Any]) -> list[Any]:
     """Sort AST children by key for key_sorting option.
@@ -98,6 +102,11 @@ def needs_quotes(value: Any) -> bool:
     # This includes boolean/null literals and operator keywords
     if value in ("true", "false", "null", "vs"):
         return True
+
+    # Issue #181: Variables ($VAR, $1:name) don't need quotes
+    # Check this BEFORE identifier pattern since $ is not a valid identifier start
+    if VARIABLE_PATTERN.match(value):
+        return False
 
     # If it's not a valid identifier, it needs quotes
     # This covers:
