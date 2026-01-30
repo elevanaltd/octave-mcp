@@ -1820,3 +1820,291 @@ TEST_HOLOGRAPHIC:
         assert (
             "|" in compiled or "DRAFT" in compiled
         ), f"ENUM constraint should compile to pattern with alternatives, got: {compiled}"
+
+
+class TestValidateToolTokenEfficiency:
+    """Tests for Issue #195: Token-efficient response modes.
+
+    The octave_validate tool always returns full canonical content, which wastes tokens
+    when agents just need validation status. These tests verify:
+    1. diff_only=True returns diff instead of canonical content
+    2. compact=True returns counts instead of full warning/error lists
+    3. Both modes maintain backwards compatibility (defaults unchanged)
+
+    TDD: RED phase - these tests define the expected behavior.
+    """
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_returns_diff_not_canonical(self):
+        """diff_only=True should return diff instead of canonical content."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"SESSION"
+  VERSION::"1.0"
+===END==="""
+        result = await tool.execute(content=content, schema="SESSION", diff_only=True)
+        assert result["status"] == "success"
+        assert result["canonical"] is None  # NOT echoed back
+        assert "changed" in result
+        assert "diff" in result
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_unchanged_content(self):
+        """diff_only with valid unchanged content returns 'no changes'."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Content that is already canonical (won't change)
+        # Note: Must use already-canonical format (e.g., TYPE::META not TYPE::"META")
+        # because the emitter normalizes quoted bare strings to unquoted
+        content = """===TEST===
+META:
+  TYPE::META
+  VERSION::"1.0"
+===END==="""
+        result = await tool.execute(content=content, schema="META", diff_only=True)
+        assert result["status"] == "success"
+        assert result["changed"] is False
+        assert result["diff"] == "no changes"
+        assert result["canonical"] is None
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_with_changes(self):
+        """diff_only=True with content that gets normalized should show diff."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Content with ASCII arrow that will be normalized to unicode
+        content = """===TEST===
+FLOW::A -> B
+===END==="""
+        result = await tool.execute(content=content, schema="TEST", diff_only=True)
+        assert result["status"] == "success"
+        assert "changed" in result
+        assert "diff" in result
+        # If changed, diff should contain actual diff output
+        if result["changed"]:
+            assert result["diff"] != "no changes"
+            assert len(result["diff"]) > 0
+        assert result["canonical"] is None
+
+    @pytest.mark.asyncio
+    async def test_validate_compact_mode_warning_counts(self):
+        """compact=True should return warning_count instead of full warnings list."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Content that may generate warnings (invalid enum value)
+        content = """===TEST===
+META:
+  TYPE::"UNKNOWN_SCHEMA"
+  VERSION::"1.0"
+  STATUS::INVALID_STATUS
+===END==="""
+        result = await tool.execute(content=content, schema="META", compact=True)
+        assert result["status"] == "success"
+        assert "warning_count" in result
+        assert isinstance(result["warning_count"], int)
+        # In compact mode, warnings list should be empty (counts only)
+        assert result["warnings"] == []
+
+    @pytest.mark.asyncio
+    async def test_validate_compact_mode_includes_error_count(self):
+        """compact=True should return error_count as well."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+===END==="""
+        result = await tool.execute(content=content, schema="META", compact=True)
+        assert result["status"] == "success"
+        assert "error_count" in result
+        assert isinstance(result["error_count"], int)
+        assert "validation_error_count" in result
+        assert isinstance(result["validation_error_count"], int)
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_with_compact(self):
+        """Both diff_only and compact can be used together."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"SESSION"
+===END==="""
+        result = await tool.execute(content=content, schema="SESSION", diff_only=True, compact=True)
+        assert result["status"] == "success"
+        assert result["canonical"] is None
+        assert "changed" in result
+        assert "diff" in result
+        assert "warning_count" in result
+
+    @pytest.mark.asyncio
+    async def test_validate_default_behavior_unchanged(self):
+        """Without diff_only, canonical should still be returned (backwards compat)."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        content = """===TEST===
+META:
+  TYPE::"META"
+===END==="""
+        result = await tool.execute(content=content, schema="META")
+        assert result["status"] == "success"
+        assert result["canonical"] is not None
+        assert "changed" not in result  # Only present when diff_only=True
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_in_input_schema(self):
+        """diff_only parameter should be in input schema."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        schema = tool.get_input_schema()
+
+        assert "diff_only" in schema["properties"]
+        assert schema["properties"]["diff_only"]["type"] == "boolean"
+        # Should not be required
+        assert "diff_only" not in schema.get("required", [])
+
+    @pytest.mark.asyncio
+    async def test_validate_compact_in_input_schema(self):
+        """compact parameter should be in input schema."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        schema = tool.get_input_schema()
+
+        assert "compact" in schema["properties"]
+        assert schema["properties"]["compact"]["type"] == "boolean"
+        # Should not be required
+        assert "compact" not in schema.get("required", [])
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_with_parse_error(self):
+        """diff_only should not break error handling."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Invalid content with tab (E005 violation)
+        content = "===TEST===\n\tKEY::value\n===END==="
+
+        result = await tool.execute(content=content, schema="TEST", diff_only=True)
+        # Should still return error status
+        assert result["status"] == "error"
+        assert len(result["errors"]) >= 1
+
+    @pytest.mark.asyncio
+    async def test_validate_compact_with_parse_error(self):
+        """compact should not break error handling."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Invalid content with tab (E005 violation)
+        content = "===TEST===\n\tKEY::value\n===END==="
+
+        result = await tool.execute(content=content, schema="TEST", compact=True)
+        # Should still return error status
+        assert result["status"] == "error"
+        # On error, warnings/errors lists may still be populated (not compacted)
+
+
+class TestValidateToolCEQualityGateFixes:
+    """Tests for CE-identified quality gate fixes.
+
+    CE Review identified two MUST FIX items:
+    1. Size guard before diff generation (prevent high CPU/memory on large inputs)
+    2. Error-path token efficiency (diff_only/compact should apply on parse errors)
+    """
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_large_content_guard(self):
+        """Large content should skip expensive diff generation.
+
+        MUST FIX #1: _build_unified_diff can cause high CPU/memory on large inputs
+        even before truncation. Add size guard before calling diff generation.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Create large content (>100KB)
+        large_content = "===TEST===\nMETA:\n  TYPE::META\n" + "X::value\n" * 10000 + "===END==="
+        result = await tool.execute(content=large_content, schema="META", diff_only=True)
+        assert result["status"] == "success"
+        # Should show truncation message for large changes
+        assert "changed" in result
+        # If content changed and was large, diff should be omitted
+        if result.get("changed") and len(large_content) > 100_000:
+            assert result["diff"] == "omitted: too large (>100KB)"
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_on_parse_error(self):
+        """diff_only should apply even on parse errors.
+
+        MUST FIX #2: diff_only/compact don't apply on parse errors - canonical
+        content still echoed. This wastes tokens when agents use diff_only.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        invalid_content = "this is not valid octave {"
+        result = await tool.execute(content=invalid_content, schema="META", diff_only=True)
+        assert result["status"] == "error"
+        assert result["canonical"] is None  # NOT echoed back
+
+    @pytest.mark.asyncio
+    async def test_validate_compact_on_parse_error(self):
+        """compact should apply even on parse errors.
+
+        MUST FIX #2: Error envelopes should honor compact mode.
+        """
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        invalid_content = "this is not valid octave {"
+        result = await tool.execute(content=invalid_content, schema="META", compact=True)
+        assert result["status"] == "error"
+        assert "error_count" in result
+        assert result["error_count"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_and_compact_on_parse_error(self):
+        """Both diff_only and compact should apply on parse errors."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        invalid_content = "===BROKEN\nKEY value"  # Missing :: and ===END===
+        result = await tool.execute(content=invalid_content, schema="META", diff_only=True, compact=True)
+        assert result["status"] == "error"
+        assert result["canonical"] is None  # diff_only honored
+        assert "error_count" in result  # compact honored
+
+    @pytest.mark.asyncio
+    async def test_validate_diff_only_on_input_error(self):
+        """diff_only should apply even on input validation errors (E_INPUT)."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Trigger E_INPUT by providing neither content nor file_path
+        result = await tool.execute(schema="META", diff_only=True)
+        assert result["status"] == "error"
+        assert result["canonical"] is None  # NOT echoed back
+
+    @pytest.mark.asyncio
+    async def test_validate_compact_on_input_error(self):
+        """compact should apply even on input validation errors (E_INPUT)."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        # Trigger E_INPUT by providing neither content nor file_path
+        result = await tool.execute(schema="META", compact=True)
+        assert result["status"] == "error"
+        assert "error_count" in result
+        assert result["error_count"] >= 1

@@ -10,8 +10,8 @@ RELEASE_STRATEGY:
   NOTE::"All milestones (v0.7.0→v0.9.0) are internal tracking labels only. No git tags or releases until v1.0.0."
   RATIONALE::"No external consumers until v1.0.0 - avoid ceremony overhead of intermediate releases"
 CURRENT_STATE:
-  PHASE::B3_COMPLETE
-  TESTS::"1312 passing"
+  PHASE::B3_INTEGRATION
+  TESTS::"1329 passing"
   COVERAGE::"90%"
   QUALITY::all_passing
   WORKING_VERSION::"pre-1.0.0-dev"
@@ -37,9 +37,10 @@ INTERNAL_MILESTONES:
     ISSUES::[GH_145,GH_179,GH_180,GH_184,GH_185]
   M2_developer_experience:
     LABEL::v0.8.0
-    STATUS::READY
+    STATUS::IN_PROGRESS
     FOCUS::"Developer experience and formatting"
-    ISSUES::[GH_181,GH_182,GH_183,GH_192,GH_193]
+    ISSUES::[GH_195,GH_181,GH_182,GH_183,GH_192,GH_193]
+    COMPLETED::[GH_195]
   M3_schema_foundation:
     LABEL::v0.9.0
     STATUS::QUEUED
