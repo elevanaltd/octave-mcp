@@ -5,7 +5,7 @@ ACCEPTED
 
 ## Context
 
-The OCTAVE MCP server currently has a validation stub (`Validator(schema=None)`) that was identified as a P0 enforcement gap in the external assessment (docs/governance/assessment-validation-gaps.md). The system can parse and emit OCTAVE syntax, but cannot validate document structure against schema requirements.
+The OCTAVE MCP server currently has a validation stub (`Validator(schema=None)`) that was identified as a P0 enforcement gap in the external assessment (.hestai/reports/archive/assessment-validation-gaps-historical.md). The system can parse and emit OCTAVE syntax, but cannot validate document structure against schema requirements.
 
 ### The Problem
 Without schema validation:
@@ -497,7 +497,7 @@ tests/e2e/test_schema_enforcement.py        (~50 lines)
 - ADR-001: Configurability and Modularity Architecture
 
 ### External Assessment
-- `docs/governance/assessment-validation-gaps.md` - Identified validation stub as P0 gap
+- `.hestai/reports/archive/assessment-validation-gaps-historical.md` - Identified validation stub as P0 gap
 
 ## Alignment with OCTAVE Specification
 

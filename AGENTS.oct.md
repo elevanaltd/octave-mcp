@@ -57,8 +57,8 @@ META:
 §6::STRUCTURE
   SRC::"src/octave_mcp/[core|cli|mcp|schemas]"
   TESTS::"tests/[unit|integration|properties]"
-  SPECS::"specs/*.oct.md (OCTAVE protocol v5.1.0)"
-  DOCS::"docs/[guides|architecture|adr|research]"
+  SPECS::"src/octave_mcp/resources/specs/*.oct.md (OCTAVE protocol v6.0.0)"
+  DOCS::"docs/[guides|adr|research]"
   TOOLS::[octave,octave-mcp-server]
 
 §7::TESTING

@@ -160,7 +160,7 @@ OCTAVE v6 introduces the **Holographic Contract**:
 | [Protocol Specs](src/octave_mcp/resources/specs/) | v6.0.0 Generative Holographic Specs |
 | [EBNF Grammar](docs/grammar/octave-v1.0-grammar.ebnf) | Formal v1.0.0 grammar specification |
 | [Development Setup](docs/guides/development-setup.md) | Dev environment, testing, quality gates |
-| [Architecture](docs/architecture/) | Decision records and design docs |
+| [Architecture Decisions](docs/adr/) | Architecture Decision Records (ADRs) |
 | [Research](docs/research/) | Benchmarks and validation studies |
 
 ### Architecture Immutables
