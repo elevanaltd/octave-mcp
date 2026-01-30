@@ -8,6 +8,7 @@ Validates AST against schema definitions with:
 - Unknown field detection
 - Constraint chain evaluation
 - Target routing with audit trail (Issue #103)
+- Target validation with registry (Issue #188)
 """
 
 from dataclasses import dataclass
@@ -15,7 +16,7 @@ from typing import Any
 
 from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue
 from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
-from octave_mcp.core.routing import RoutingLog, compute_value_hash
+from octave_mcp.core.routing import InvalidTargetError, RoutingLog, TargetRegistry, TargetRouter
 from octave_mcp.core.schema_extractor import SchemaDefinition
 
 
@@ -37,6 +38,8 @@ class Validator:
         self.schema = schema or {}
         self.errors: list[ValidationError] = []
         self.routing_log: RoutingLog = RoutingLog()
+        self._target_registry: TargetRegistry | None = None
+        self._target_router: TargetRouter | None = None
 
     def _to_python_value(self, value: Any) -> Any:
         """Convert AST values to Python primitives for constraint evaluation."""
@@ -132,6 +135,7 @@ class Validator:
         - Holographic patterns: ["example"∧CONSTRAINT→§TARGET]
         - Constraint chains: REQ∧ENUM[A,B]∧REGEX["^[a-z]+$"]
         - Target routing with audit trail (Issue #103)
+        - Target validation with registry (Issue #188)
         """
         # I5: Schema-less sections skip content validation
         if section_schema is None:
@@ -149,6 +153,16 @@ class Validator:
 
         # Get block-level default target (feudal inheritance)
         default_target = getattr(section_schema, "default_target", None)
+
+        # Initialize target registry with custom targets from POLICY.TARGETS (Issue #188)
+        registry = TargetRegistry()
+        policy_targets = getattr(section_schema, "policy_targets", None)
+        if policy_targets:
+            for custom_target in policy_targets:
+                registry.register_custom(custom_target)
+
+        # Create router for target validation and routing
+        router = TargetRouter(registry=registry, routing_log=self.routing_log)
 
         # Validate each field defined in schema
         for field_name, field_def in section_schema.fields.items():
@@ -189,7 +203,7 @@ class Validator:
                         )
                     )
 
-            # Target routing with audit trail (Issue #103)
+            # Target routing with audit trail (Issue #103) and validation (Issue #188)
             # Feudal inheritance: child explicit target overrides parent block target
             if field_def.pattern:
                 target = field_def.pattern.target  # Child's explicit target
@@ -197,13 +211,23 @@ class Validator:
                     target = default_target  # Inherit from parent if no explicit
 
                 if target is not None and value is not None:
-                    # Log routing entry for audit trail (I4 compliance)
-                    self.routing_log.add(
-                        source_path=field_path,
-                        target_name=target,
-                        value_hash=compute_value_hash(value),
-                        constraint_passed=constraint_passed,
-                    )
+                    # Route through TargetRouter for validation and multi-target support
+                    try:
+                        router.route(
+                            source_path=field_path,
+                            target_spec=target,
+                            value=value,
+                            constraint_passed=constraint_passed,
+                        )
+                    except InvalidTargetError as e:
+                        # E009: Invalid target error
+                        self.errors.append(
+                            ValidationError(
+                                code="E009",
+                                message=f"Invalid target '{e.target_name}': not a builtin, registered custom, or file path target",
+                                field_path=field_path,
+                            )
+                        )
 
     def _validate_type(self, field: str, value: Any, field_schema: dict[str, Any]) -> None:
         """Validate value type and enum constraints."""
