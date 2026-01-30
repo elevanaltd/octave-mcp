@@ -456,19 +456,20 @@ class TestGBNFRuleNameSanitization:
         assert "::=" in grammar
 
     def test_field_name_with_emoji_produces_valid_rule_name(self):
-        """Field name with emoji should produce valid GBNF rule name."""
+        """Field name with emoji should produce valid GBNF rule name with _u{hex}_ encoding."""
         from octave_mcp.core.constraints import ConstraintChain
         from octave_mcp.core.gbnf_compiler import GBNFCompiler
         from octave_mcp.core.holographic import HolographicPattern
         from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
 
         compiler = GBNFCompiler()
+        # Use actual emoji in field name: ⚠️ (U+26A0 WARNING SIGN + U+FE0F VARIATION SELECTOR)
         schema = SchemaDefinition(
             name="TEST",
             version="1.0",
             fields={
-                "warning": FieldDefinition(
-                    name="warning",
+                "⚠️_warning": FieldDefinition(
+                    name="⚠️_warning",
                     pattern=HolographicPattern(
                         example="value",
                         constraints=ConstraintChain.parse("REQ"),
@@ -480,10 +481,13 @@ class TestGBNFRuleNameSanitization:
 
         grammar = compiler.compile_schema(schema)
 
-        # Rule name with unicode should be encoded (warning emoji codepoint 26a0)
-        # or simplified to ASCII
-        assert "warning" in grammar.lower()
+        # Rule name with emoji should be encoded as _u{hex}_ format
+        # ⚠️ = U+26A0 + U+FE0F, so expect u26a0_ufe0f_warning as rule name
+        assert "u26a0_ufe0f_warning" in grammar.lower()
         assert "::=" in grammar
+        # Rule name should be sanitized, but the literal value keeps the emoji for matching
+        # e.g., u26a0_ufe0f_warning ::= "⚠️_warning" "::" ...
+        assert 'u26a0_ufe0f_warning ::= "⚠️_warning"' in grammar
 
     def test_sanitize_rule_name_method_exists(self):
         """GBNFCompiler should have _sanitize_rule_name method."""
