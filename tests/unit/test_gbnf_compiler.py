@@ -613,6 +613,194 @@ class TestGBNFCompilerFromMeta:
         assert "stub" not in grammar.lower() or "::=" in grammar
 
 
+class TestGBNFMetaContractCompilation:
+    """Test META CONTRACT schema compilation (Issue #191).
+
+    v6 self-describing documents carry their own validation rules via META.CONTRACT.
+    CONTRACT is a list in META, format: FIELD[name]::constraint_chain.
+    """
+
+    def test_parse_contract_from_meta_basic(self):
+        """CONTRACT list in META should be parsed into schema fields."""
+        from octave_mcp.core.gbnf_compiler import compile_gbnf_from_meta
+
+        meta = {
+            "TYPE": "SESSION_LOG",
+            "VERSION": "1.0",
+            "CONTRACT": [
+                "FIELD[STATUS]::REQ∧ENUM[ACTIVE,PAUSED,COMPLETE]",
+                "FIELD[PRIORITY]::OPT∧ENUM[LOW,MEDIUM,HIGH]",
+            ],
+        }
+        gbnf = compile_gbnf_from_meta(meta)
+
+        # Should have field-specific rules
+        assert "status" in gbnf.lower()  # Rule name
+        assert "priority" in gbnf.lower()  # Rule name
+        # GBNF grammar should be valid
+        assert "::=" in gbnf
+
+    def test_contract_enum_compiles_to_alternation(self):
+        """ENUM constraint in CONTRACT should compile to GBNF alternation."""
+        from octave_mcp.core.gbnf_compiler import compile_gbnf_from_meta
+
+        meta = {
+            "TYPE": "TEST_SCHEMA",
+            "VERSION": "1.0",
+            "CONTRACT": [
+                "FIELD[STATUS]::REQ∧ENUM[ACTIVE,PAUSED,COMPLETE]",
+            ],
+        }
+        gbnf = compile_gbnf_from_meta(meta)
+
+        # ENUM values should appear as alternation in GBNF
+        assert '"ACTIVE"' in gbnf
+        assert '"PAUSED"' in gbnf
+        assert '"COMPLETE"' in gbnf
+        # GBNF uses | for alternation
+        assert "|" in gbnf
+
+    def test_contract_req_constraint_compiles_correctly(self):
+        """REQ constraint in CONTRACT should compile to non-empty pattern."""
+        from octave_mcp.core.gbnf_compiler import compile_gbnf_from_meta
+
+        meta = {
+            "TYPE": "TEST_SCHEMA",
+            "VERSION": "1.0",
+            "CONTRACT": [
+                "FIELD[NAME]::REQ",
+            ],
+        }
+        gbnf = compile_gbnf_from_meta(meta)
+
+        # Should have the NAME field rule
+        assert "name" in gbnf.lower()
+        # REQ compiles to [^\n]+ (non-empty)
+        assert "[^\\n]+" in gbnf
+
+    def test_contract_opt_constraint_compiles_correctly(self):
+        """OPT constraint in CONTRACT should compile to optional pattern."""
+        from octave_mcp.core.gbnf_compiler import compile_gbnf_from_meta
+
+        meta = {
+            "TYPE": "TEST_SCHEMA",
+            "VERSION": "1.0",
+            "CONTRACT": [
+                "FIELD[NOTES]::OPT",
+            ],
+        }
+        gbnf = compile_gbnf_from_meta(meta)
+
+        # Should have the NOTES field rule
+        assert "notes" in gbnf.lower()
+        # OPT compiles to [^\n]* (can be empty)
+        assert "[^\\n]*" in gbnf
+
+    def test_contract_multiple_constraints_chain(self):
+        """Multiple constraints in CONTRACT field should be combined."""
+        from octave_mcp.core.gbnf_compiler import compile_gbnf_from_meta
+
+        meta = {
+            "TYPE": "TEST_SCHEMA",
+            "VERSION": "1.0",
+            "CONTRACT": [
+                "FIELD[LEVEL]::REQ∧ENUM[DEBUG,INFO,WARN,ERROR]",
+            ],
+        }
+        gbnf = compile_gbnf_from_meta(meta)
+
+        # The ENUM should take precedence in GBNF output (most restrictive)
+        assert '"DEBUG"' in gbnf or '"INFO"' in gbnf
+        assert "|" in gbnf
+
+    def test_contract_empty_list_produces_minimal_grammar(self):
+        """Empty CONTRACT list should produce minimal valid grammar."""
+        from octave_mcp.core.gbnf_compiler import compile_gbnf_from_meta
+
+        meta = {
+            "TYPE": "MINIMAL",
+            "VERSION": "1.0",
+            "CONTRACT": [],
+        }
+        gbnf = compile_gbnf_from_meta(meta)
+
+        # Should still have root rule and basic structure
+        assert "root" in gbnf
+        assert "::=" in gbnf
+
+    def test_contract_missing_produces_minimal_grammar(self):
+        """META without CONTRACT should produce basic schema grammar."""
+        from octave_mcp.core.gbnf_compiler import compile_gbnf_from_meta
+
+        meta = {
+            "TYPE": "NO_CONTRACT",
+            "VERSION": "1.0",
+        }
+        gbnf = compile_gbnf_from_meta(meta)
+
+        # Should still produce valid GBNF
+        assert "root" in gbnf
+        assert "::=" in gbnf
+
+    def test_contract_field_parsing_helper(self):
+        """Helper function should parse FIELD[name]::constraints format."""
+        from octave_mcp.core.gbnf_compiler import parse_contract_field
+
+        # Test basic parsing
+        field_name, constraints = parse_contract_field("FIELD[STATUS]::REQ∧ENUM[ACTIVE,PAUSED]")
+        assert field_name == "STATUS"
+        assert constraints is not None
+        assert len(constraints.constraints) == 2
+
+    def test_contract_field_parsing_simple_constraint(self):
+        """Helper should handle single constraint."""
+        from octave_mcp.core.gbnf_compiler import parse_contract_field
+
+        field_name, constraints = parse_contract_field("FIELD[NAME]::REQ")
+        assert field_name == "NAME"
+        assert constraints is not None
+        assert len(constraints.constraints) == 1
+
+    def test_contract_invalid_format_raises_error(self):
+        """Invalid CONTRACT field format should raise ValueError."""
+        import pytest
+
+        from octave_mcp.core.gbnf_compiler import parse_contract_field
+
+        # Missing FIELD[] wrapper
+        with pytest.raises(ValueError, match="Invalid CONTRACT field format"):
+            parse_contract_field("STATUS::REQ")
+
+        # Missing :: separator
+        with pytest.raises(ValueError, match="Invalid CONTRACT field format"):
+            parse_contract_field("FIELD[STATUS]REQ")
+
+    def test_full_integration_compile_from_meta_with_contract(self):
+        """Full integration: META with CONTRACT compiles to complete GBNF."""
+        from octave_mcp.core.gbnf_compiler import compile_gbnf_from_meta
+
+        meta = {
+            "TYPE": "SESSION_LOG",
+            "VERSION": "1.0",
+            "CONTRACT": [
+                "FIELD[STATUS]::REQ∧ENUM[ACTIVE,PAUSED,COMPLETE]",
+                "FIELD[PRIORITY]::OPT∧ENUM[LOW,MEDIUM,HIGH]",
+                "FIELD[TIMESTAMP]::REQ∧ISO8601",
+            ],
+        }
+        gbnf = compile_gbnf_from_meta(meta)
+
+        # Verify complete grammar structure
+        assert "SESSION_LOG" in gbnf  # Schema name in envelope
+        assert "status" in gbnf.lower()
+        assert "priority" in gbnf.lower()
+        assert "timestamp" in gbnf.lower()
+        assert '"ACTIVE"' in gbnf
+        assert '"LOW"' in gbnf
+        # ISO8601 pattern elements
+        assert "root ::=" in gbnf
+
+
 class TestIntegrationHelpers:
     """Test integration helpers for different LLM backends."""
 
