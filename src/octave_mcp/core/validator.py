@@ -19,7 +19,11 @@ from typing import Any
 from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue
 from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
 from octave_mcp.core.routing import InvalidTargetError, RoutingLog, TargetRegistry, TargetRouter
-from octave_mcp.core.schema_extractor import SchemaDefinition
+from octave_mcp.core.schema_extractor import (
+    InheritanceResolver,
+    SchemaDefinition,
+    extract_block_targets,
+)
 
 
 class UnknownFieldPolicy(Enum):
@@ -67,6 +71,9 @@ class Validator:
         self.routing_log: RoutingLog = RoutingLog()
         self._target_registry: TargetRegistry | None = None
         self._target_router: TargetRouter | None = None
+        # Block inheritance support (Issue #189, M3 CE violations)
+        self._block_targets: dict[str, str] = {}
+        self._inheritance_resolver: InheritanceResolver = InheritanceResolver()
 
     def _to_python_value(self, value: Any) -> Any:
         """Convert AST values to Python primitives for constraint evaluation."""
@@ -97,6 +104,10 @@ class Validator:
         """
         self.errors = []
         self.routing_log = RoutingLog()  # Reset routing log for each validation
+
+        # Extract block-level targets from document AST (Issue #189, M3 CE violations)
+        # This enables feudal inheritance: children inherit parent block targets
+        self._block_targets = extract_block_targets(doc)
 
         # Validate META if schema defines it
         if "META" in self.schema and doc.meta:
@@ -254,6 +265,17 @@ class Validator:
         for custom_target in policy_targets:
             registry.register_custom(custom_target)
 
+        # Register default_target as custom if not already a builtin (M3 fix)
+        # This ensures policy default targets are valid routing destinations
+        if default_target and default_target not in registry.BUILTINS:
+            registry.register_custom(default_target)
+
+        # Register block-level targets as custom targets (M3 fix for CE violation #1)
+        # Block targets from [->TARGET] syntax are implicitly valid routing destinations
+        for block_target in self._block_targets.values():
+            if block_target not in registry.BUILTINS:
+                registry.register_custom(block_target)
+
         # Create router for target validation and routing
         router = TargetRouter(registry=registry, routing_log=self.routing_log)
 
@@ -297,11 +319,18 @@ class Validator:
                     )
 
             # Target routing with audit trail (Issue #103) and validation (Issue #188)
-            # Feudal inheritance: child explicit target overrides parent block target
+            # Feudal inheritance hierarchy (closest wins):
+            # 1. Field explicit target (highest priority)
+            # 2. Block-level target [->TARGET] from AST (Issue #189, M3 CE violations)
+            # 3. POLICY.DEFAULT_TARGET (lowest priority)
             if field_def.pattern:
-                target = field_def.pattern.target  # Child's explicit target
+                target: str | None = field_def.pattern.target  # Field's explicit target
                 if target is None:
-                    target = default_target  # Inherit from parent if no explicit
+                    # Try block inheritance: resolve from block hierarchy
+                    field_path_parts = field_path.split(".")
+                    inherited_target = self._inheritance_resolver.resolve_target(field_path_parts, self._block_targets)
+                    # Use inherited target if found, otherwise fall back to policy default
+                    target = inherited_target if inherited_target is not None else default_target
 
                 if target is not None and value is not None:
                     # Route through TargetRouter for validation and multi-target support

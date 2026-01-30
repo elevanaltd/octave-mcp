@@ -161,6 +161,26 @@ def _extract_targets_recursive(nodes: list[ASTNode], path: list[str], targets: d
 
 
 @dataclass
+class SchemaExtractionWarning:
+    """Warning generated during schema extraction (M3 CE violation #3).
+
+    Per lenient parsing philosophy: warn but don't block.
+    Malformed holographic patterns produce warnings, not errors.
+
+    Attributes:
+        code: Warning code (W002 for malformed patterns)
+        message: Human-readable description
+        field_path: Path to the field (e.g., "FIELDS.FIELD_NAME")
+        severity: Always "warning"
+    """
+
+    code: str
+    message: str
+    field_path: str = ""
+    severity: str = field(default="warning")
+
+
+@dataclass
 class PolicyDefinition:
     """POLICY block configuration for schema.
 
@@ -207,6 +227,7 @@ class SchemaDefinition:
         policy: POLICY block configuration
         fields: Dictionary of field name -> FieldDefinition
         default_target: Block-level default target for feudal inheritance (Issue #103)
+        warnings: List of warnings generated during extraction (M3 CE violation #3)
     """
 
     name: str
@@ -214,6 +235,7 @@ class SchemaDefinition:
     policy: PolicyDefinition = field(default_factory=PolicyDefinition)
     fields: dict[str, FieldDefinition] = field(default_factory=dict)
     default_target: str | None = None
+    warnings: list[SchemaExtractionWarning] = field(default_factory=list)
 
 
 def _extract_policy(sections: list[Any]) -> tuple[PolicyDefinition, str | None]:
@@ -279,36 +301,46 @@ def _parse_targets(value: Any) -> list[str]:
     return targets
 
 
-def _extract_fields(sections: list[Any]) -> dict[str, FieldDefinition]:
+def _extract_fields(sections: list[Any]) -> tuple[dict[str, FieldDefinition], list[SchemaExtractionWarning]]:
     """Extract FIELDS block from document sections.
+
+    M3 CE violation #3: Now returns warnings for malformed patterns.
 
     Args:
         sections: List of document sections
 
     Returns:
-        Dictionary of field name -> FieldDefinition
+        Tuple of (fields dict, warnings list)
     """
     fields: dict[str, FieldDefinition] = {}
+    warnings: list[SchemaExtractionWarning] = []
 
     for section in sections:
         if isinstance(section, Block) and section.key == "FIELDS":
             for child in section.children:
                 if isinstance(child, Assignment):
-                    field_def = _parse_field_assignment(child)
+                    field_def, warning = _parse_field_assignment(child)
                     if field_def:
                         fields[field_def.name] = field_def
+                    if warning:
+                        warnings.append(warning)
 
-    return fields
+    return fields, warnings
 
 
-def _parse_field_assignment(assignment: Assignment) -> FieldDefinition | None:
+def _parse_field_assignment(
+    assignment: Assignment,
+) -> tuple[FieldDefinition | None, SchemaExtractionWarning | None]:
     """Parse a field assignment into FieldDefinition.
+
+    M3 CE violation #3: Now returns warning for malformed patterns.
 
     Args:
         assignment: Assignment AST node (KEY::VALUE)
 
     Returns:
-        FieldDefinition or None if parsing fails
+        Tuple of (FieldDefinition or None, Warning or None)
+        Warning is generated for malformed holographic patterns.
     """
     name = assignment.key
     value = assignment.value
@@ -321,7 +353,7 @@ def _parse_field_assignment(assignment: Assignment) -> FieldDefinition | None:
             constraints=value.constraints,
             target=value.target,
         )
-        return FieldDefinition(name=name, pattern=pattern, raw_value=value.raw_pattern)
+        return FieldDefinition(name=name, pattern=pattern, raw_value=value.raw_pattern), None
 
     # Convert value to string for pattern parsing
     if hasattr(value, "items"):
@@ -333,10 +365,17 @@ def _parse_field_assignment(assignment: Assignment) -> FieldDefinition | None:
     # Try to parse as holographic pattern
     try:
         pattern = parse_holographic_pattern(raw_value)
-        return FieldDefinition(name=name, pattern=pattern, raw_value=raw_value)
-    except HolographicPatternError:
+        return FieldDefinition(name=name, pattern=pattern, raw_value=raw_value), None
+    except HolographicPatternError as e:
+        # M3 CE violation #3 fix: Emit warning for malformed pattern
+        warning = SchemaExtractionWarning(
+            code="W002",
+            message=f"Malformed holographic pattern for field '{name}': {e}",
+            field_path=f"FIELDS.{name}",
+            severity="warning",
+        )
         # Return field with no pattern for invalid holographic syntax
-        return FieldDefinition(name=name, pattern=None, raw_value=raw_value)
+        return FieldDefinition(name=name, pattern=None, raw_value=raw_value), warning
 
 
 def _list_value_to_pattern_string(list_value: Any) -> str:
@@ -601,8 +640,8 @@ def extract_schema_from_document(doc: Document) -> SchemaDefinition:
     # Extract POLICY block and default_target (Issue #103: feudal inheritance)
     policy, default_target = _extract_policy(doc.sections)
 
-    # Extract FIELDS block
-    fields = _extract_fields(doc.sections)
+    # Extract FIELDS block (M3 CE violation #3: now returns warnings)
+    fields, warnings = _extract_fields(doc.sections)
 
     return SchemaDefinition(
         name=name,
@@ -610,4 +649,5 @@ def extract_schema_from_document(doc: Document) -> SchemaDefinition:
         policy=policy,
         fields=fields,
         default_target=default_target,
+        warnings=warnings,
     )
