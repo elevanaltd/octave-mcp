@@ -13,14 +13,70 @@ I2 (Deterministic Absence) Support:
 - Absent values are NOT emitted (field is absent, not present with null)
 - None values are emitted as 'null' (explicitly empty)
 - This preserves the tri-state distinction: absent vs null vs value
+
+GitHub Issue #193: Auto-Format Options
+- indent_normalize: Convert all indentation to 2-space standard
+- blank_line_normalize: Normalize blank lines between sections
+- trailing_whitespace: Strip/preserve trailing whitespace
+- key_sorting: Optionally sort keys alphabetically within blocks
 """
 
 import re
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue, Section
 
+
+@dataclass
+class FormatOptions:
+    """Configuration for output formatting during emission.
+
+    GitHub Issue #193: Auto-Format Options
+
+    Attributes:
+        indent_normalize: Convert all indentation to 2-space standard.
+            Fixes mixed tabs/spaces. Default: True.
+        blank_line_normalize: Normalize blank lines between sections.
+            Single blank line between top-level sections, removes excessive
+            blank lines (>2 consecutive). Default: False.
+        trailing_whitespace: How to handle trailing whitespace on lines.
+            "strip" removes trailing spaces/tabs, "preserve" keeps them.
+            Default: "strip".
+        key_sorting: Sort keys alphabetically within blocks and META.
+            Default: False.
+    """
+
+    indent_normalize: bool = True
+    blank_line_normalize: bool = False
+    trailing_whitespace: Literal["strip", "preserve"] = "strip"
+    key_sorting: bool = False
+
+
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*\Z")
+
+
+def _sort_children_by_key(children: list[Any]) -> list[Any]:
+    """Sort AST children by key for key_sorting option.
+
+    Assignments are sorted alphabetically by key and placed first.
+    Non-assignment nodes (Block, Section) preserve their relative order
+    and are placed after sorted assignments.
+
+    Args:
+        children: List of AST child nodes
+
+    Returns:
+        Sorted list with assignments first (by key), then other nodes
+    """
+    assignments = [c for c in children if isinstance(c, Assignment)]
+    non_assignments = [c for c in children if not isinstance(c, Assignment)]
+
+    # Sort assignments alphabetically by key
+    sorted_assignments = sorted(assignments, key=lambda x: x.key)
+
+    # Merge: sorted assignments first, then non-assignments in original order
+    return sorted_assignments + non_assignments
 
 
 def needs_quotes(value: Any) -> bool:
@@ -113,36 +169,51 @@ def emit_assignment(assignment: Assignment, indent: int = 0) -> str:
     return f"{indent_str}{assignment.key}::{value_str}"
 
 
-def emit_block(block: Block, indent: int = 0) -> str:
+def emit_block(block: Block, indent: int = 0, format_options: FormatOptions | None = None) -> str:
     """Emit a block in canonical form.
 
     I2 Compliance: Skips children with Absent values.
+
+    Args:
+        block: Block AST node
+        indent: Current indentation level
+        format_options: Optional formatting configuration (Issue #193)
     """
     indent_str = "  " * indent
     lines = [f"{indent_str}{block.key}:"]
 
+    # Issue #193: Optionally sort children by key
+    children = list(block.children)
+    if format_options and format_options.key_sorting:
+        children = _sort_children_by_key(children)
+
     # Emit children
     # I2: Skip assignments with Absent values
-    for child in block.children:
+    for child in children:
         if isinstance(child, Assignment):
             if is_absent(child.value):
                 continue
             lines.append(emit_assignment(child, indent + 1))
         elif isinstance(child, Block):
-            lines.append(emit_block(child, indent + 1))
+            lines.append(emit_block(child, indent + 1, format_options))
         elif isinstance(child, Section):
-            lines.append(emit_section(child, indent + 1))
+            lines.append(emit_section(child, indent + 1, format_options))
 
     return "\n".join(lines)
 
 
-def emit_section(section: Section, indent: int = 0) -> str:
+def emit_section(section: Section, indent: int = 0, format_options: FormatOptions | None = None) -> str:
     """Emit a § section in canonical form.
 
     Supports both plain numbers ("1", "2") and suffix forms ("2b", "2c").
     Includes optional bracket annotation if present.
 
     I2 Compliance: Skips children with Absent values.
+
+    Args:
+        section: Section AST node
+        indent: Current indentation level
+        format_options: Optional formatting configuration (Issue #193)
     """
     indent_str = "  " * indent
     section_line = f"{indent_str}§{section.section_id}::{section.key}"
@@ -150,34 +221,49 @@ def emit_section(section: Section, indent: int = 0) -> str:
         section_line += f"[{section.annotation}]"
     lines = [section_line]
 
+    # Issue #193: Optionally sort children by key
+    children = list(section.children)
+    if format_options and format_options.key_sorting:
+        children = _sort_children_by_key(children)
+
     # Emit children
     # I2: Skip assignments with Absent values
-    for child in section.children:
+    for child in children:
         if isinstance(child, Assignment):
             if is_absent(child.value):
                 continue
             lines.append(emit_assignment(child, indent + 1))
         elif isinstance(child, Block):
-            lines.append(emit_block(child, indent + 1))
+            lines.append(emit_block(child, indent + 1, format_options))
         elif isinstance(child, Section):
-            lines.append(emit_section(child, indent + 1))
+            lines.append(emit_section(child, indent + 1, format_options))
 
     return "\n".join(lines)
 
 
-def emit_meta(meta: dict[str, Any]) -> str:
+def emit_meta(meta: dict[str, Any], format_options: FormatOptions | None = None) -> str:
     """Emit META block.
 
     I2 Compliance:
     - Skips fields with Absent values
     - Returns empty string if all fields are absent (no empty META: header)
+
+    Args:
+        meta: Dictionary of META fields
+        format_options: Optional formatting configuration (Issue #193)
     """
     if not meta:
         return ""
 
+    # Issue #193: Optionally sort keys alphabetically
+    keys = list(meta.keys())
+    if format_options and format_options.key_sorting:
+        keys = sorted(keys)
+
     # I2: Collect non-absent fields first, then decide whether to emit header
     content_lines = []
-    for key, value in meta.items():
+    for key in keys:
+        value = meta[key]
         # I2: Skip Absent values
         if is_absent(value):
             continue
@@ -191,11 +277,69 @@ def emit_meta(meta: dict[str, Any]) -> str:
     return "META:\n" + "\n".join(content_lines)
 
 
-def emit(doc: Document) -> str:
+def _apply_format_options(output: str, format_options: FormatOptions) -> str:
+    """Apply post-emission formatting transformations.
+
+    Issue #193: Auto-Format Options
+
+    Args:
+        output: Raw emitted OCTAVE content
+        format_options: Formatting configuration
+
+    Returns:
+        Formatted OCTAVE content
+    """
+    lines = output.split("\n")
+
+    # Apply trailing_whitespace handling
+    # "strip" removes trailing whitespace; "preserve" keeps lines as-is
+    if format_options.trailing_whitespace == "strip":
+        lines = [line.rstrip() for line in lines]
+
+    # Apply blank_line_normalize
+    if format_options.blank_line_normalize:
+        # Remove excessive blank lines (more than 2 consecutive)
+        normalized_lines: list[str] = []
+        blank_count = 0
+        for line in lines:
+            if line.strip() == "":
+                blank_count += 1
+                if blank_count <= 2:
+                    normalized_lines.append(line)
+            else:
+                blank_count = 0
+                normalized_lines.append(line)
+        lines = normalized_lines
+
+        # Ensure single blank line between top-level sections (starts with "§")
+        # This is done by inserting blank lines where needed
+        # MF1 Fix: Track "seen a section" separately from "prev line type"
+        # so that child content doesn't reset the section tracking
+        result_lines: list[str] = []
+        seen_section = False  # Have we seen any section header?
+        for line in lines:
+            is_section_header = line.strip().startswith("§") and "::" in line
+            # If this is a section and we've seen a previous section
+            if is_section_header and seen_section:
+                # Check if there's already a blank line before
+                if result_lines and result_lines[-1].strip() != "":
+                    result_lines.append("")  # Add blank line between sections
+            result_lines.append(line)
+            # Once we see a section, we've "seen" one (for subsequent sections)
+            if is_section_header:
+                seen_section = True
+        lines = result_lines
+
+    return "\n".join(lines)
+
+
+def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     """Emit canonical OCTAVE from AST.
 
     Args:
         doc: Document AST
+        format_options: Optional formatting configuration (Issue #193).
+            If not provided, default behavior is used.
 
     Returns:
         Canonical OCTAVE text with explicit envelope,
@@ -213,7 +357,7 @@ def emit(doc: Document) -> str:
 
     # Emit META if present
     if doc.meta:
-        lines.append(emit_meta(doc.meta))
+        lines.append(emit_meta(doc.meta, format_options))
 
     # Emit separator if present
     if doc.has_separator:
@@ -228,11 +372,17 @@ def emit(doc: Document) -> str:
                 continue
             lines.append(emit_assignment(section, 0))
         elif isinstance(section, Block):
-            lines.append(emit_block(section, 0))
+            lines.append(emit_block(section, 0, format_options))
         elif isinstance(section, Section):
-            lines.append(emit_section(section, 0))
+            lines.append(emit_section(section, 0, format_options))
 
     # Always emit END envelope
     lines.append("===END===")
 
-    return "\n".join(lines)
+    output = "\n".join(lines)
+
+    # Issue #193: Apply format options if provided
+    if format_options:
+        output = _apply_format_options(output, format_options)
+
+    return output

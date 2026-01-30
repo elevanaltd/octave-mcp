@@ -8,12 +8,19 @@ Parses lexer tokens into AST with:
 - Nested block structure with indentation
 - META block extraction
 - YAML frontmatter stripping (Issue #91)
+- Deep nesting warning and error detection (Issue #192)
 """
 
 from typing import Any
 
 from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, Section
 from octave_mcp.core.lexer import Token, TokenType, tokenize
+
+# Issue #192: Deep nesting detection constants
+# Warning threshold: emit W_DEEP_NESTING at this depth (configurable, default 5)
+DEFAULT_DEEP_NESTING_THRESHOLD = 5
+# Maximum nesting: hard error at this depth (implementation cap per spec)
+MAX_NESTING_DEPTH = 100
 
 
 def _strip_yaml_frontmatter(content: str) -> tuple[str, str | None]:
@@ -147,6 +154,7 @@ class ParserError(Exception):
         self.message = message
         self.token = token
         self.error_code = error_code
+        self.code = error_code  # Alias for consistent access
         if token:
             super().__init__(f"{error_code} at line {token.line}, column {token.column}: {message}")
         else:
@@ -156,20 +164,29 @@ class ParserError(Exception):
 class Parser:
     """OCTAVE parser with lenient input support."""
 
-    def __init__(self, tokens: list[Token], strict_structure: bool = False):
+    def __init__(
+        self,
+        tokens: list[Token],
+        strict_structure: bool = False,
+        deep_nesting_threshold: int = DEFAULT_DEEP_NESTING_THRESHOLD,
+    ):
         """Initialize parser with token stream.
 
         Args:
             tokens: List of tokens to parse
             strict_structure: If True, raise ParserError on structural issues (e.g. unclosed lists)
                             instead of leniently recovering.
+            deep_nesting_threshold: Emit W_DEEP_NESTING warning at this nesting depth.
+                                   Default is 5. Set to 0 to disable warnings.
         """
         self.tokens = tokens
         self.strict_structure = strict_structure
+        self.deep_nesting_threshold = deep_nesting_threshold
         self.pos = 0
         self.current_indent = 0
         self.warnings: list[dict] = []  # I4 audit trail for lenient parsing events
         self.bracket_depth = 0  # GH#184: Track bracket nesting for NEVER rule validation
+        self._deep_nesting_warned_at: set[int] = set()  # Track lines where warning was emitted
 
     def current(self) -> Token:
         """Get current token."""
@@ -1047,12 +1064,18 @@ class Parser:
         quoted operator symbols (e.g., ["∧"∧REQ→§SELF]).
 
         Issue #179: Detects duplicate keys in inline maps [k::v, k::v2].
+        Issue #192: Detects deep nesting and emits warnings/errors.
         """
         # Gap_2: Record token position BEFORE consuming LIST_START
         # We want tokens from [ to ] inclusive for reconstruction
         start_pos = self.pos
+        bracket_token = self.current()  # Capture for line number in warnings
         self.expect(TokenType.LIST_START)
         self.bracket_depth += 1  # GH#184: Track bracket nesting for NEVER rule validation
+
+        # Issue #192: Check for deep nesting
+        self._check_deep_nesting(bracket_token)
+
         items: list[Any] = []
 
         # Issue #179: Track inline map keys for duplicate detection
@@ -1187,6 +1210,47 @@ class Parser:
 
         # Regular value
         return self.parse_value()
+
+    def _check_deep_nesting(self, token: Token) -> None:
+        """Check for deep nesting and emit warning or raise error.
+
+        Issue #192: Implements deep nesting detection per spec requirements:
+        - Warning at configurable threshold (default 5): W_DEEP_NESTING
+        - Hard error at 100 levels: E_MAX_NESTING_EXCEEDED
+
+        Args:
+            token: The bracket token for line number reporting
+
+        Raises:
+            ParserError: If nesting depth reaches MAX_NESTING_DEPTH (100)
+        """
+        depth = self.bracket_depth
+
+        # Check for max nesting (hard error)
+        if depth >= MAX_NESTING_DEPTH:
+            raise ParserError(
+                f"E_MAX_NESTING_EXCEEDED::Maximum nesting depth of {MAX_NESTING_DEPTH} exceeded. "
+                f"Flatten your structure or use block syntax.",
+                token,
+                "E_MAX_NESTING_EXCEEDED",
+            )
+
+        # Check for deep nesting warning (if threshold is configured)
+        if self.deep_nesting_threshold > 0 and depth >= self.deep_nesting_threshold:
+            # Only warn once per line to avoid spam for [[[...]]]
+            if token.line not in self._deep_nesting_warned_at:
+                self._deep_nesting_warned_at.add(token.line)
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "deep_nesting",
+                        "depth": depth,
+                        "threshold": self.deep_nesting_threshold,
+                        "line": token.line,
+                        "column": token.column,
+                        "message": (f"W_DEEP_NESTING::depth {depth} at line {token.line}, " f"consider flattening"),
+                    }
+                )
 
     def _validate_inline_map_value_is_atom(self, key: str, value: Any, token: Token) -> None:
         """Validate that an inline map value is atomic (not a nested inline map).
