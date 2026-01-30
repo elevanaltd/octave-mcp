@@ -1,4 +1,4 @@
-"""GBNF compiler for OCTAVE constraint chains (Issue #171).
+"""GBNF compiler for OCTAVE constraint chains (Issue #171, #191).
 
 Transforms OCTAVE schemas and constraints into llama.cpp GBNF format
 for constrained text generation.
@@ -12,6 +12,10 @@ sampling. Key syntax:
 - rule* for zero or more
 - rule+ for one or more
 - rule? for optional
+
+Issue #191: META CONTRACT Schema Compilation
+v6 self-describing documents carry their own validation rules via META.CONTRACT.
+CONTRACT is a list in META, format: FIELD[name]::constraint_chain.
 """
 
 import re
@@ -38,6 +42,53 @@ from octave_mcp.core.constraints import (
 
 if TYPE_CHECKING:
     from octave_mcp.core.schema_extractor import SchemaDefinition
+
+
+# CONTRACT field parsing pattern: FIELD[name]::constraints
+_CONTRACT_FIELD_PATTERN = re.compile(r"^FIELD\[([^\]]+)\]::(.+)$")
+
+
+def parse_contract_field(field_spec: str) -> tuple[str, ConstraintChain | None]:
+    """Parse a CONTRACT field specification into field name and constraints.
+
+    CONTRACT field format: FIELD[name]::constraint_chain
+
+    Args:
+        field_spec: Field specification string (e.g., "FIELD[STATUS]::REQ∧ENUM[ACTIVE,PAUSED]")
+
+    Returns:
+        Tuple of (field_name, ConstraintChain or None)
+
+    Raises:
+        ValueError: If field_spec format is invalid
+
+    Examples:
+        >>> name, chain = parse_contract_field("FIELD[STATUS]::REQ∧ENUM[ACTIVE,PAUSED]")
+        >>> name
+        'STATUS'
+        >>> len(chain.constraints)
+        2
+    """
+    field_spec = field_spec.strip()
+
+    match = _CONTRACT_FIELD_PATTERN.match(field_spec)
+    if not match:
+        raise ValueError(f"Invalid CONTRACT field format: '{field_spec}'. " f"Expected: FIELD[name]::constraint_chain")
+
+    field_name = match.group(1).strip()
+    constraint_str = match.group(2).strip()
+
+    if not field_name:
+        raise ValueError(f"Invalid CONTRACT field format: empty field name in '{field_spec}'")
+
+    if not constraint_str:
+        return field_name, None
+
+    try:
+        constraints = ConstraintChain.parse(constraint_str)
+        return field_name, constraints
+    except ValueError as e:
+        raise ValueError(f"Invalid constraint in CONTRACT field '{field_name}': {e}") from e
 
 
 @dataclass
@@ -469,22 +520,68 @@ def compile_gbnf_from_meta(meta: dict) -> str:
     """Compile GBNF grammar from META block.
 
     This is the integration point with grammar.py.
+    Supports v6 self-describing documents via META.CONTRACT (Issue #191).
+
+    CONTRACT format: list of "FIELD[name]::constraint_chain" entries.
+    Each entry defines a schema field with its validation constraints.
 
     Args:
-        meta: META dictionary from parse_meta_only() or full parse
+        meta: META dictionary from parse_meta_only() or full parse.
+              May contain CONTRACT list for v6 self-describing documents.
 
     Returns:
-        GBNF grammar string
+        GBNF grammar string with schema-specific field rules from CONTRACT.
+
+    Example:
+        >>> meta = {
+        ...     "TYPE": "SESSION_LOG",
+        ...     "VERSION": "1.0",
+        ...     "CONTRACT": [
+        ...         "FIELD[STATUS]::REQ∧ENUM[ACTIVE,PAUSED,COMPLETE]",
+        ...         "FIELD[PRIORITY]::OPT∧ENUM[LOW,MEDIUM,HIGH]",
+        ...     ],
+        ... }
+        >>> gbnf = compile_gbnf_from_meta(meta)
+        >>> "status" in gbnf.lower()
+        True
     """
-    from octave_mcp.core.schema_extractor import SchemaDefinition
+    from octave_mcp.core.holographic import HolographicPattern
+    from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
 
     schema_type = meta.get("TYPE", "UNKNOWN")
 
-    # Create minimal schema from META
+    # Create schema from META
     schema = SchemaDefinition(
         name=schema_type,
         version=str(meta.get("VERSION", "1.0")),
     )
+
+    # Issue #191: Extract fields from CONTRACT if present
+    contract = meta.get("CONTRACT", [])
+    if contract and isinstance(contract, list):
+        for field_spec in contract:
+            if not isinstance(field_spec, str):
+                continue  # Skip non-string entries
+
+            try:
+                field_name, constraints = parse_contract_field(field_spec)
+
+                # Create HolographicPattern to wrap constraints
+                pattern = HolographicPattern(
+                    example=None,  # CONTRACT doesn't include examples
+                    constraints=constraints,
+                    target=None,
+                )
+
+                # Add field to schema
+                schema.fields[field_name] = FieldDefinition(
+                    name=field_name,
+                    pattern=pattern,
+                    raw_value=field_spec,
+                )
+            except ValueError:
+                # Skip invalid CONTRACT entries (lenient parsing)
+                continue
 
     compiler = GBNFCompiler()
     return compiler.compile_schema(schema, include_envelope=True)
