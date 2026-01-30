@@ -1,51 +1,51 @@
-"""OCTAVE grammar compilation orchestration (Phase 2: Generator Engine).
+"""OCTAVE grammar compilation orchestration (Issue #171).
 
-Provides foundation for JIT grammar compilation from META schema definitions.
-Coordinates constraint compilation into document-level regex patterns.
+Provides JIT grammar compilation from META schema definitions.
+Coordinates constraint compilation into GBNF grammars for llama.cpp
+constrained generation.
 
-Future phases will extend this with full JIT compilation support.
+v6.0 Generative Holographic Contracts: Documents carry their own validation law.
 """
 
 from typing import Any
+
+from octave_mcp.core.gbnf_compiler import GBNFCompiler, compile_gbnf_from_meta
+from octave_mcp.core.schema_extractor import SchemaDefinition
 
 
 def compile_document_grammar(meta: dict[str, Any]) -> str:
     """Compile document grammar from META schema definition.
 
     Takes a META section containing schema information and compiles
-    constraint specifications into a unified document grammar.
-
-    This is a stub implementation providing the foundation for Phase 3
-    JIT compilation. Currently returns a placeholder regex.
+    constraint specifications into a GBNF grammar for llama.cpp.
 
     Args:
         meta: META dictionary from parse_meta_only() or full parse
 
     Returns:
-        Compiled grammar string (regex pattern for document structure)
+        Compiled GBNF grammar string
 
     Example:
-        >>> meta = {"TYPE": "SESSION_LOG", "SCHEMA": "v1.0"}
+        >>> meta = {"TYPE": "SESSION_LOG", "VERSION": "1.0"}
         >>> grammar = compile_document_grammar(meta)
-        >>> isinstance(grammar, str)
+        >>> "::=" in grammar
         True
     """
-    # Phase 2 stub: Foundation for JIT compilation
-    # Phase 3 will implement full constraint-to-grammar compilation
-    schema_type = meta.get("TYPE", "UNKNOWN")
-    return f"# Grammar for {schema_type} (stub - Phase 3 will implement full compilation)"
+    return compile_gbnf_from_meta(meta)
 
 
 def emit_grammar_for_schema(schema_name: str) -> str:
-    """Emit grammar pattern for named schema.
+    """Emit GBNF grammar for named schema.
 
-    Stub for schema-based grammar generation. Phase 3 will integrate
-    with schema repository and constraint compilation.
+    Creates a minimal schema with the given name and compiles
+    it to GBNF format.
 
     Args:
         schema_name: Name of schema to compile grammar for
 
     Returns:
-        Grammar pattern string
+        GBNF grammar string
     """
-    return f"# Grammar for schema: {schema_name} (stub)"
+    schema = SchemaDefinition(name=schema_name, version="1.0")
+    compiler = GBNFCompiler()
+    return compiler.compile_schema(schema, include_envelope=True)
