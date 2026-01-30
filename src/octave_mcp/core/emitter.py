@@ -25,7 +25,17 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Comment, Document, InlineMap, ListValue, Section
+from octave_mcp.core.ast_nodes import (
+    Absent,
+    Assignment,
+    Block,
+    Comment,
+    Document,
+    HolographicValue,
+    InlineMap,
+    ListValue,
+    Section,
+)
 
 
 @dataclass
@@ -171,6 +181,10 @@ def emit_value(value: Any) -> str:
         # I2: Filter out pairs with Absent values before emission
         pairs = [f"{k}::{emit_value(v)}" for k, v in value.pairs.items() if not is_absent(v)]
         return f"[{','.join(pairs)}]"
+    elif isinstance(value, HolographicValue):
+        # M3: Emit holographic pattern using raw_pattern for I1 fidelity
+        # The raw_pattern preserves the original syntax: ["example"∧CONSTRAINT→§TARGET]
+        return value.raw_pattern
     else:
         # Fallback for unknown types
         return str(value)
