@@ -45,7 +45,7 @@ PHASE_STRUCTURE:
 
   D2::ARCHITECTURE_DESIGN:
     STATUS::COMPLETE
-    ARTIFACT::"docs/architecture/tool-consolidation-design.md"
+    ARTIFACT::"docs/adr/004-tool-consolidation-design.md"
     QUALITY_GATES_PASSED::[
       CE_gemini::PASS[I1-I5_compliance],
       CRS_codex::PASS[API_design,DELETE_encoding,error_envelope],

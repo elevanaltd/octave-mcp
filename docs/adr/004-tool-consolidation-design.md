@@ -1,4 +1,13 @@
-# D2 Architecture Design: OCTAVE-MCP Tool Consolidation (GH#51)
+# ADR-004: OCTAVE-MCP Tool Consolidation (GH#51)
+
+## Status
+ACCEPTED
+
+## Context
+The original 4-tool suite (`octave_ingest`, `octave_create`, `octave_amend`, `octave_eject`) created cognitive overhead and redundant functionality.
+
+## Decision
+Consolidate to a streamlined 3-tool API (`octave_validate`, `octave_write`, `octave_eject`) to reduce cognitive load, enforce North Star immutables, and simplify the developer experience.
 
 ## Mission
 Consolidate the current 4-tool suite (`octave_ingest`, `octave_create`, `octave_amend`, `octave_eject`) into a streamlined 3-tool API (`octave_validate`, `octave_write`, `octave_eject`) to reduce cognitive load, enforce North Star immutables, and simplify the developer experience.
