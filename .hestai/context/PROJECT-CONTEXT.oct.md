@@ -6,7 +6,7 @@ META:
   INTERNAL_MILESTONE::M2_developer_experience[IN_PROGRESS]
   PHASE::B3_INTEGRATION
   STATUS::active_development
-  LAST_UPDATED::"2026-01-30T00:15:00Z"
+  LAST_UPDATED::"2026-01-30T01:00:00Z"
 PURPOSE::"MCP server implementing OCTAVE v6 protocol for structured AI communication"
 ARCHITECTURE:
   CORE::[parser,normalizer,validator,emitter,lexer]
@@ -14,7 +14,7 @@ ARCHITECTURE:
   MCP::[octave_validate,octave_write,octave_eject]
   DEPRECATED::[octave_ingest,octave_create,octave_amend]
 QUALITY_GATES:
-  pytest::"1329 tests passing"
+  pytest::"1343 tests passing"
   mypy::PASSING
   ruff::PASSING
   black::PASSING
@@ -32,9 +32,10 @@ RECENT_FIXES:
   GH_184::spec_compliance_warnings[M1]
   GH_185::inline_map_nesting_validation[M1]
   GH_195::token_efficient_response_modes[M2]
+  GH_183::validation_profiles[M2]
 OPEN_ISSUES:
   QUICK_WINS::[GH_192,GH_193]
-  MEDIUM_EFFORT::[GH_181,GH_182,GH_183]
+  MEDIUM_EFFORT::[GH_181,GH_182]
   LARGE_FEATURES::[GH_171,GH_187,GH_188,GH_189,GH_190,GH_191]
   DESIGN_DECISIONS::[GH_110,GH_111,GH_112,GH_113,GH_153]
   DEFERRED::[GH_135,GH_186]
