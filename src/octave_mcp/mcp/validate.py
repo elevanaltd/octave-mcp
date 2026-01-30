@@ -31,6 +31,11 @@ SPEC_CODE_PATTERN = re.compile(r"\b(E00[1-7])\b")
 # Skip expensive diff computation on large content to prevent high CPU/memory
 DIFF_SIZE_THRESHOLD = 100_000
 
+# Validation profiles (#183)
+# Each profile defines strictness level for validation
+VALID_PROFILES = {"STRICT", "STANDARD", "LENIENT", "ULTRA"}
+DEFAULT_PROFILE = "STANDARD"
+
 
 def _extract_spec_code(error_message: str) -> str | None:
     """Extract spec error code (E001-E007) from error message.
@@ -224,6 +229,20 @@ class ValidateTool(BaseTool):
             description="If True, return warning/error counts instead of full lists. Saves tokens.",
         )
 
+        schema.add_parameter(
+            "profile",
+            "string",
+            required=False,
+            description=(
+                "Validation strictness profile: "
+                "STRICT (full compliance, reject unknown), "
+                "STANDARD (default), "
+                "LENIENT (warnings not errors, auto-repairs), "
+                "ULTRA (minimal validation)."
+            ),
+            enum=["STRICT", "STANDARD", "LENIENT", "ULTRA"],
+        )
+
         return schema.build()
 
     def _error_envelope(
@@ -232,6 +251,7 @@ class ValidateTool(BaseTool):
         content: str = "",
         diff_only: bool = False,
         compact: bool = False,
+        profile: str = DEFAULT_PROFILE,
     ) -> dict[str, Any]:
         """Build consistent error envelope with all required fields.
 
@@ -240,6 +260,7 @@ class ValidateTool(BaseTool):
             content: Original content to return in canonical (on error)
             diff_only: If True, set canonical to None instead of content
             compact: If True, include counts instead of full lists
+            profile: Validation profile used (#183)
 
         Returns:
             Complete error envelope with all required fields per spec Section 7
@@ -256,6 +277,7 @@ class ValidateTool(BaseTool):
             "valid": False,  # Gap 7: Boolean derived from validation_status
             "validation_errors": [],  # Gap 7: Always present per spec Section 7
             "routing_log": [],  # I4: Always include routing_log for consistency
+            "profile": profile,  # #183: Include profile in error envelope
         }
 
         # CE FIX #2: Honor compact mode on errors
@@ -263,6 +285,9 @@ class ValidateTool(BaseTool):
             result["warning_count"] = 0
             result["error_count"] = len(errors)
             result["validation_error_count"] = 0
+
+        # CE Review: has_warnings flag for profile-aware gating (always False on error envelope)
+        result["has_warnings"] = False
 
         return result
 
@@ -300,6 +325,26 @@ class ValidateTool(BaseTool):
         diff_only = params.get("diff_only", False)
         compact = params.get("compact", False)
 
+        # #183: Extract and validate profile parameter
+        profile_raw = params.get("profile", DEFAULT_PROFILE)
+        profile = profile_raw.upper() if profile_raw else DEFAULT_PROFILE
+
+        # Validate profile value
+        if profile not in VALID_PROFILES:
+            return self._error_envelope(
+                [
+                    {
+                        "code": "E_PROFILE",
+                        "message": (
+                            f"Invalid profile '{profile_raw}'. " f"Valid profiles: {', '.join(sorted(VALID_PROFILES))}"
+                        ),
+                    }
+                ],
+                diff_only=diff_only,
+                compact=compact,
+                profile=profile_raw or "",  # Report raw value for debugging
+            )
+
         # XOR validation: exactly one of content or file_path must be provided
         if content is not None and file_path is not None:
             return self._error_envelope(
@@ -311,6 +356,7 @@ class ValidateTool(BaseTool):
                 ],
                 diff_only=diff_only,
                 compact=compact,
+                profile=profile,
             )
 
         if content is None and file_path is None:
@@ -318,6 +364,7 @@ class ValidateTool(BaseTool):
                 [{"code": "E_INPUT", "message": "Must provide either content or file_path"}],
                 diff_only=diff_only,
                 compact=compact,
+                profile=profile,
             )
 
         # If file_path provided, read file content
@@ -329,6 +376,7 @@ class ValidateTool(BaseTool):
                     [{"code": "E_PATH", "message": error_msg or "Invalid file path"}],
                     diff_only=diff_only,
                     compact=compact,
+                    profile=profile,
                 )
 
             path = Path(file_path)
@@ -337,6 +385,7 @@ class ValidateTool(BaseTool):
                     [{"code": "E_FILE", "message": f"File not found: {file_path}"}],
                     diff_only=diff_only,
                     compact=compact,
+                    profile=profile,
                 )
 
             try:
@@ -346,6 +395,7 @@ class ValidateTool(BaseTool):
                     [{"code": "E_READ", "message": f"Error reading file: {str(e)}"}],
                     diff_only=diff_only,
                     compact=compact,
+                    profile=profile,
                 )
 
         # At this point content is guaranteed to be a string
@@ -369,6 +419,7 @@ class ValidateTool(BaseTool):
             "valid": False,  # Gap 7: Boolean derived from validation_status (updated later)
             "validation_errors": [],  # Gap 7: Always present per spec Section 7
             "routing_log": [],  # I4: Target routing audit trail (Issue #103)
+            "profile": profile,  # #183: Include profile in result for transparency
         }
 
         # STAGE 1+2: Parse with frontmatter handling and collect repairs
@@ -470,14 +521,14 @@ class ValidateTool(BaseTool):
 
             # Use the validator with the schema definition
             # Gap_1: Pass section_schemas for constraint validation on document sections
+            # #183: STRICT mode uses strict validation (reject unknown fields)
+            strict_mode = profile == "STRICT"
             validator = Validator(schema=schema_def)
-            validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
+            validation_errors = validator.validate(doc, strict=strict_mode, section_schemas=section_schemas)
 
             if validation_errors:
-                # I5: Schema validation failed - mark as INVALID
-                result["validation_status"] = "INVALID"
-                result["valid"] = False  # Gap 7: Boolean correlates with validation_status
-                result["validation_errors"] = [
+                # Convert errors to dicts for reporting
+                error_dicts = [
                     {
                         "code": err.code,
                         "message": err.message,
@@ -485,8 +536,28 @@ class ValidateTool(BaseTool):
                     }
                     for err in validation_errors
                 ]
-                # Also add to warnings for backward compatibility
-                result["warnings"].extend(result["validation_errors"])
+
+                # #183: Profile-based handling of validation errors
+                # CE REVIEW: LENIENT/ULTRA profiles downgrade validation errors to warnings
+                # and set validation_status=VALIDATED. Callers gating only on validation_status
+                # must also check warnings/has_warnings when using these profiles.
+                # This is intentional: these profiles prioritize flexibility over strict validation.
+                if profile in ("LENIENT", "ULTRA"):
+                    # LENIENT/ULTRA: Downgrade validation errors to warnings
+                    # Document is still considered valid (can proceed with warnings)
+                    result["validation_status"] = "VALIDATED"
+                    result["valid"] = True
+                    result["warnings"].extend(error_dicts)
+                    # validation_errors empty since we're treating as warnings
+                    result["validation_errors"] = []
+                else:
+                    # STRICT/STANDARD: Validation errors are blocking
+                    # I5: Schema validation failed - mark as INVALID
+                    result["validation_status"] = "INVALID"
+                    result["valid"] = False  # Gap 7: Boolean correlates with validation_status
+                    result["validation_errors"] = error_dicts
+                    # Also add to warnings for backward compatibility
+                    result["warnings"].extend(result["validation_errors"])
             else:
                 # I5: Schema validation passed - mark as VALIDATED
                 result["validation_status"] = "VALIDATED"
@@ -571,5 +642,9 @@ class ValidateTool(BaseTool):
             result["validation_error_count"] = len(result.get("validation_errors", []))
             result["warnings"] = []
             result["validation_errors"] = []
+
+        # Add has_warnings flag for profile-aware gating
+        # CE Review: Makes it explicit when warnings exist alongside VALIDATED status
+        result["has_warnings"] = len(result.get("warnings", [])) > 0 or result.get("warning_count", 0) > 0
 
         return result
