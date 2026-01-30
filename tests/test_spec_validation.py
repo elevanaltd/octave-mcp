@@ -28,7 +28,6 @@ SPEC_FILES = sorted(SPECS_DIR.rglob("*.oct.md"))
 # Format: {filename: "reason for exclusion"}
 KNOWN_ISSUES = {
     "octave-primers-spec.oct.md": "LexerError E005 line 45 col 24: Unexpected character '\\'",
-    "octave-skills-spec.oct.md": "LexerError E005 line 97 col 54: Unexpected character '\"'",
 }
 
 
