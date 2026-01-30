@@ -461,3 +461,151 @@ class TestParseHolographicPatternEdgeCases:
 
         pattern = parse_holographic_pattern("[rawvalue∧REQ→§SELF]")
         assert pattern.example == "rawvalue"
+
+
+class TestParserHolographicIntegration:
+    """Test parser integration with holographic pattern recognition (Issue #187).
+
+    These tests verify that the parser's L4 context correctly recognizes
+    holographic patterns when parsing schema field definitions like:
+        FIELDS:
+          ID::["abc123"∧REQ→§INDEXER]
+    """
+
+    def test_parser_returns_holographic_value_for_simple_pattern(self):
+        """Parser should return HolographicValue for ["example"∧REQ→§SELF]."""
+        from octave_mcp.core.ast_nodes import Assignment, HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["abc123"∧REQ→§INDEXER]\n===END===')
+        assert len(doc.sections) == 1
+        assert isinstance(doc.sections[0], Assignment)
+        assert isinstance(doc.sections[0].value, HolographicValue)
+        assert doc.sections[0].value.example == "abc123"
+        assert doc.sections[0].value.target == "INDEXER"
+
+    def test_parser_returns_holographic_value_with_constraint_chain(self):
+        """Parser should return HolographicValue with constraint chain."""
+        from octave_mcp.core.ast_nodes import Assignment, HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nSTATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,DRAFT]→§INDEXER]\n===END===')
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert isinstance(assignment.value, HolographicValue)
+        assert assignment.value.example == "ACTIVE"
+        assert assignment.value.constraints is not None
+        assert len(assignment.value.constraints.constraints) == 2
+        assert assignment.value.target == "INDEXER"
+
+    def test_parser_returns_holographic_value_without_target(self):
+        """Parser should return HolographicValue without target (target optional)."""
+        from octave_mcp.core.ast_nodes import Assignment, HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nVALUE::["test"∧REQ]\n===END===')
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert isinstance(assignment.value, HolographicValue)
+        assert assignment.value.example == "test"
+        assert assignment.value.target is None
+
+    def test_parser_returns_list_value_for_non_holographic(self):
+        """Parser should return ListValue for regular lists without holographic operators."""
+        from octave_mcp.core.ast_nodes import Assignment, ListValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse("===TEST===\nITEMS::[a, b, c]\n===END===")
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert isinstance(assignment.value, ListValue)
+        assert assignment.value.items == ["a", "b", "c"]
+
+    def test_parser_holographic_with_numeric_example(self):
+        """Parser should handle holographic pattern with numeric example."""
+        from octave_mcp.core.ast_nodes import HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse("===TEST===\nCOUNT::[42∧REQ∧RANGE[0,100]→§SELF]\n===END===")
+        assignment = doc.sections[0]
+        assert isinstance(assignment.value, HolographicValue)
+        assert assignment.value.example == 42
+
+    def test_parser_holographic_with_list_example(self):
+        """Parser should handle holographic pattern with list example.
+
+        Note: TYPE(X) constraints use parentheses which the lexer doesn't support.
+        Using simpler constraints that the lexer understands.
+        """
+        from octave_mcp.core.ast_nodes import HolographicValue
+        from octave_mcp.core.parser import parse
+
+        # Simplified pattern without TYPE(LIST) since lexer doesn't support parentheses
+        doc = parse('===TEST===\nTAGS::[["item1", "item2"]∧REQ→§SELF]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(assignment.value, HolographicValue)
+        assert assignment.value.example == ["item1", "item2"]
+
+    def test_parser_holographic_preserves_raw_pattern(self):
+        """Parser should preserve raw pattern string for I1 fidelity."""
+        from octave_mcp.core.ast_nodes import HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["abc123"∧REQ→§INDEXER]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(assignment.value, HolographicValue)
+        # raw_pattern should contain the original pattern string
+        assert "abc123" in assignment.value.raw_pattern
+        assert "REQ" in assignment.value.raw_pattern
+
+    def test_parser_holographic_in_block_context(self):
+        """Parser should recognize holographic patterns inside blocks."""
+        from octave_mcp.core.ast_nodes import Assignment, Block, HolographicValue
+        from octave_mcp.core.parser import parse
+
+        content = """===TEST===
+FIELDS:
+  ID::["abc123"∧REQ→§INDEXER]
+  NAME::["example"∧REQ→§SELF]
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        block = doc.sections[0]
+        assert isinstance(block, Block)
+        assert len(block.children) == 2
+
+        id_assignment = block.children[0]
+        assert isinstance(id_assignment, Assignment)
+        assert isinstance(id_assignment.value, HolographicValue)
+        assert id_assignment.value.example == "abc123"
+
+        name_assignment = block.children[1]
+        assert isinstance(name_assignment, Assignment)
+        assert isinstance(name_assignment.value, HolographicValue)
+        assert name_assignment.value.example == "example"
+
+    def test_parser_holographic_with_ascii_arrow(self):
+        """Parser should handle ASCII arrow variant (->§) in holographic patterns."""
+        from octave_mcp.core.ast_nodes import HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["abc123"∧REQ->§INDEXER]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(assignment.value, HolographicValue)
+        assert assignment.value.target == "INDEXER"
+
+    def test_parser_distinguishes_holographic_from_inline_map(self):
+        """Parser should distinguish holographic from inline map [k::v]."""
+        from octave_mcp.core.ast_nodes import InlineMap, ListValue
+        from octave_mcp.core.parser import parse
+
+        # Inline map pattern: [k::v]
+        doc = parse("===TEST===\nDATA::[key::value]\n===END===")
+        assignment = doc.sections[0]
+        assert isinstance(assignment.value, ListValue)
+        # Inline map is wrapped in ListValue
+        assert len(assignment.value.items) == 1
+        assert isinstance(assignment.value.items[0], InlineMap)

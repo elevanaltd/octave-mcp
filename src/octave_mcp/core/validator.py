@@ -8,25 +8,57 @@ Validates AST against schema definitions with:
 - Unknown field detection
 - Constraint chain evaluation
 - Target routing with audit trail (Issue #103)
+- Target validation with registry (Issue #188)
+- Policy enforcement (Issue #190): UNKNOWN_FIELDS policy, custom targets
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue
 from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
-from octave_mcp.core.routing import RoutingLog, compute_value_hash
-from octave_mcp.core.schema_extractor import SchemaDefinition
+from octave_mcp.core.routing import InvalidTargetError, RoutingLog, TargetRegistry, TargetRouter
+from octave_mcp.core.schema_extractor import (
+    InheritanceResolver,
+    SchemaDefinition,
+    extract_block_targets,
+)
+
+
+class UnknownFieldPolicy(Enum):
+    """Policy for handling unknown fields during validation.
+
+    Issue #190: Spec §5::POLICY_BLOCK defines UNKNOWN_FIELDS::REJECT∨IGNORE∨WARN
+
+    Attributes:
+        REJECT: Error on unknown fields (E007)
+        IGNORE: Skip unknown fields silently
+        WARN: Add warning but don't fail (W001)
+    """
+
+    REJECT = "REJECT"
+    IGNORE = "IGNORE"
+    WARN = "WARN"
 
 
 @dataclass
 class ValidationError:
-    """Validation error with context."""
+    """Validation error with context.
+
+    Attributes:
+        code: Error/warning code (E007, W001, etc.)
+        message: Human-readable description
+        field_path: Dot-separated path to field (e.g., "SECTION.FIELD")
+        line: Line number in source (0 if unknown)
+        severity: "error" or "warning" (default: "error")
+    """
 
     code: str
     message: str
     field_path: str = ""
     line: int = 0
+    severity: str = field(default="error")
 
 
 class Validator:
@@ -37,6 +69,11 @@ class Validator:
         self.schema = schema or {}
         self.errors: list[ValidationError] = []
         self.routing_log: RoutingLog = RoutingLog()
+        self._target_registry: TargetRegistry | None = None
+        self._target_router: TargetRouter | None = None
+        # Block inheritance support (Issue #189, M3 CE violations)
+        self._block_targets: dict[str, str] = {}
+        self._inheritance_resolver: InheritanceResolver = InheritanceResolver()
 
     def _to_python_value(self, value: Any) -> Any:
         """Convert AST values to Python primitives for constraint evaluation."""
@@ -68,6 +105,10 @@ class Validator:
         self.errors = []
         self.routing_log = RoutingLog()  # Reset routing log for each validation
 
+        # Extract block-level targets from document AST (Issue #189, M3 CE violations)
+        # This enables feudal inheritance: children inherit parent block targets
+        self._block_targets = extract_block_targets(doc)
+
         # Validate META if schema defines it
         if "META" in self.schema and doc.meta:
             self._validate_meta(doc.meta, strict)
@@ -90,34 +131,84 @@ class Validator:
 
         # Check required fields
         required = schema_meta.get("required", [])
-        for field in required:
-            if field not in meta:
+        for field_name in required:
+            if field_name not in meta:
                 self.errors.append(
                     ValidationError(
                         code="E003",
-                        message=f"Cannot auto-fill missing required field '{field}'. Author must provide value.",
-                        field_path=f"META.{field}",
+                        message=f"Cannot auto-fill missing required field '{field_name}'. Author must provide value.",
+                        field_path=f"META.{field_name}",
                     )
                 )
 
         # Check unknown fields in strict mode
         if strict:
             allowed = schema_meta.get("fields", {}).keys()
-            for field in meta.keys():
-                if field not in allowed and allowed:
+            for field_name in meta.keys():
+                if field_name not in allowed and allowed:
                     self.errors.append(
                         ValidationError(
                             code="E007",
-                            message=f"Unknown field '{field}' not allowed in STRICT mode.",
-                            field_path=f"META.{field}",
+                            message=f"Unknown field '{field_name}' not allowed in STRICT mode.",
+                            field_path=f"META.{field_name}",
                         )
                     )
 
         # Type validation
         fields_schema = schema_meta.get("fields", {})
-        for field, value in meta.items():
-            if field in fields_schema:
-                self._validate_type(field, value, fields_schema[field])
+        for field_name, value in meta.items():
+            if field_name in fields_schema:
+                self._validate_type(field_name, value, fields_schema[field_name])
+
+    def _validate_unknown_fields(
+        self,
+        document_fields: set[str],
+        schema_fields: set[str],
+        policy: UnknownFieldPolicy,
+        section_key: str,
+    ) -> list[ValidationError]:
+        """Check for unknown fields per UNKNOWN_FIELDS policy.
+
+        Issue #190: Implements §5::POLICY_BLOCK UNKNOWN_FIELDS enforcement.
+
+        Args:
+            document_fields: Set of field names present in the document section
+            schema_fields: Set of field names defined in the schema
+            policy: How to handle unknown fields (REJECT, WARN, or IGNORE)
+            section_key: Section name for error path construction
+
+        Returns:
+            List of ValidationErrors (errors for REJECT, warnings for WARN, empty for IGNORE)
+        """
+        unknown = document_fields - schema_fields
+        if not unknown:
+            return []
+
+        errors: list[ValidationError] = []
+
+        if policy == UnknownFieldPolicy.REJECT:
+            for field_name in sorted(unknown):  # Sort for deterministic output
+                errors.append(
+                    ValidationError(
+                        code="E007",
+                        message=f"Unknown field '{field_name}' not allowed per UNKNOWN_FIELDS::REJECT policy",
+                        field_path=f"{section_key}.{field_name}",
+                        severity="error",
+                    )
+                )
+        elif policy == UnknownFieldPolicy.WARN:
+            for field_name in sorted(unknown):
+                errors.append(
+                    ValidationError(
+                        code="W001",
+                        message=f"Unknown field '{field_name}' (UNKNOWN_FIELDS::WARN policy)",
+                        field_path=f"{section_key}.{field_name}",
+                        severity="warning",
+                    )
+                )
+        # IGNORE: return empty list (no errors/warnings)
+
+        return errors
 
     def _validate_section(self, section: ASTNode, strict: bool, section_schema: SchemaDefinition | None = None) -> None:
         """Validate a section against its schema definition.
@@ -132,6 +223,8 @@ class Validator:
         - Holographic patterns: ["example"∧CONSTRAINT→§TARGET]
         - Constraint chains: REQ∧ENUM[A,B]∧REGEX["^[a-z]+$"]
         - Target routing with audit trail (Issue #103)
+        - Target validation with registry (Issue #188)
+        - Unknown fields per UNKNOWN_FIELDS policy (Issue #190)
         """
         # I5: Schema-less sections skip content validation
         if section_schema is None:
@@ -147,8 +240,44 @@ class Validator:
             if isinstance(child, Assignment):
                 present_fields[child.key] = self._to_python_value(child.value)
 
+        # Issue #190: UNKNOWN_FIELDS policy enforcement
+        # Parse policy from schema, defaulting to REJECT
+        policy_str = section_schema.policy.unknown_fields if section_schema.policy else "REJECT"
+        try:
+            unknown_policy = UnknownFieldPolicy(policy_str)
+        except ValueError:
+            # Invalid policy value, default to REJECT (fail-safe)
+            unknown_policy = UnknownFieldPolicy.REJECT
+
+        # Check for unknown fields
+        document_fields = set(present_fields.keys())
+        schema_fields = set(section_schema.fields.keys())
+        unknown_errors = self._validate_unknown_fields(document_fields, schema_fields, unknown_policy, section.key)
+        self.errors.extend(unknown_errors)
+
         # Get block-level default target (feudal inheritance)
         default_target = getattr(section_schema, "default_target", None)
+
+        # Initialize target registry with custom targets from POLICY.TARGETS (Issue #190)
+        registry = TargetRegistry()
+        # Get custom targets from policy
+        policy_targets = section_schema.policy.targets if section_schema.policy else []
+        for custom_target in policy_targets:
+            registry.register_custom(custom_target)
+
+        # Register default_target as custom if not already a builtin (M3 fix)
+        # This ensures policy default targets are valid routing destinations
+        if default_target and default_target not in registry.BUILTINS:
+            registry.register_custom(default_target)
+
+        # Register block-level targets as custom targets (M3 fix for CE violation #1)
+        # Block targets from [->TARGET] syntax are implicitly valid routing destinations
+        for block_target in self._block_targets.values():
+            if block_target not in registry.BUILTINS:
+                registry.register_custom(block_target)
+
+        # Create router for target validation and routing
+        router = TargetRouter(registry=registry, routing_log=self.routing_log)
 
         # Validate each field defined in schema
         for field_name, field_def in section_schema.fields.items():
@@ -189,21 +318,38 @@ class Validator:
                         )
                     )
 
-            # Target routing with audit trail (Issue #103)
-            # Feudal inheritance: child explicit target overrides parent block target
+            # Target routing with audit trail (Issue #103) and validation (Issue #188)
+            # Feudal inheritance hierarchy (closest wins):
+            # 1. Field explicit target (highest priority)
+            # 2. Block-level target [->TARGET] from AST (Issue #189, M3 CE violations)
+            # 3. POLICY.DEFAULT_TARGET (lowest priority)
             if field_def.pattern:
-                target = field_def.pattern.target  # Child's explicit target
+                target: str | None = field_def.pattern.target  # Field's explicit target
                 if target is None:
-                    target = default_target  # Inherit from parent if no explicit
+                    # Try block inheritance: resolve from block hierarchy
+                    field_path_parts = field_path.split(".")
+                    inherited_target = self._inheritance_resolver.resolve_target(field_path_parts, self._block_targets)
+                    # Use inherited target if found, otherwise fall back to policy default
+                    target = inherited_target if inherited_target is not None else default_target
 
                 if target is not None and value is not None:
-                    # Log routing entry for audit trail (I4 compliance)
-                    self.routing_log.add(
-                        source_path=field_path,
-                        target_name=target,
-                        value_hash=compute_value_hash(value),
-                        constraint_passed=constraint_passed,
-                    )
+                    # Route through TargetRouter for validation and multi-target support
+                    try:
+                        router.route(
+                            source_path=field_path,
+                            target_spec=target,
+                            value=value,
+                            constraint_passed=constraint_passed,
+                        )
+                    except InvalidTargetError as e:
+                        # E009: Invalid target error
+                        self.errors.append(
+                            ValidationError(
+                                code="E009",
+                                message=f"Invalid target '{e.target_name}': not a builtin, registered custom, or file path target",
+                                field_path=field_path,
+                            )
+                        )
 
     def _validate_type(self, field: str, value: Any, field_schema: dict[str, Any]) -> None:
         """Validate value type and enum constraints."""
