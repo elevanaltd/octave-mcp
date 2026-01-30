@@ -92,10 +92,23 @@ class Assignment(ASTNode):
 
 @dataclass
 class Block(ASTNode):
-    """KEY: with nested children."""
+    """KEY: with nested children.
+
+    Issue #189: Block inheritance support.
+    Blocks can have a target annotation: BLOCK[->TARGET]:
+    Children inherit this target unless they specify their own.
+
+    Attributes:
+        key: Block key name
+        children: Nested AST nodes
+        target: Optional target for block-level routing inheritance.
+                Syntax: BLOCK[->TARGET]: sets target="TARGET".
+                Children without explicit targets inherit from parent blocks.
+    """
 
     key: str = ""
     children: list[ASTNode] = field(default_factory=list)
+    target: str | None = None
 
 
 @dataclass

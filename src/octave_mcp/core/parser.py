@@ -330,6 +330,59 @@ class Parser:
 
         return "".join(annotation_tokens) if annotation_tokens else None
 
+    def _parse_block_target_annotation(self) -> str | None:
+        """Parse block target annotation [->TARGET] syntax.
+
+        Issue #189: Block inheritance per spec section 4::BLOCK_INHERITANCE.
+        Syntax: BLOCK[->TARGET]: where children inherit TARGET.
+
+        Expected token sequence: [ -> IDENTIFIER ] or [ -> SECTION IDENTIFIER ]
+        The FLOW token (->) is required. SECTION token (section marker) is optional.
+
+        Returns:
+            Target name (without section marker) if valid annotation,
+            None if annotation is not a target (e.g., [note] annotation).
+        """
+        if self.current().type != TokenType.LIST_START:
+            return None
+
+        self.advance()  # Consume [
+
+        # Check for FLOW token (->) to identify target annotation
+        # Regular annotations like [note] don't start with ->
+        if self.current().type != TokenType.FLOW:
+            # Not a target annotation, rewind is not possible so skip bracket
+            # This is a regular annotation [something], consume until ]
+            bracket_depth = 1
+            while bracket_depth > 0 and self.current().type != TokenType.EOF:
+                if self.current().type == TokenType.LIST_START:
+                    bracket_depth += 1
+                elif self.current().type == TokenType.LIST_END:
+                    bracket_depth -= 1
+                self.advance()
+            return None
+
+        self.advance()  # Consume ->
+
+        # Expect SECTION (section marker) or IDENTIFIER (target name)
+        target: str | None = None
+
+        if self.current().type == TokenType.SECTION:
+            # Skip section marker, get following identifier
+            self.advance()
+            if self.current().type == TokenType.IDENTIFIER:
+                target = self.current().value
+                self.advance()
+        elif self.current().type == TokenType.IDENTIFIER:
+            target = self.current().value
+            self.advance()
+
+        # Consume closing ]
+        if self.current().type == TokenType.LIST_END:
+            self.advance()
+
+        return target
+
     def parse_document(self) -> Document:
         """Parse a complete OCTAVE document."""
         doc = Document()
@@ -689,6 +742,12 @@ class Parser:
         key = identifier_token.value
         self.advance()
 
+        # Issue #189: Check for block target annotation syntax: BLOCK[->TARGET]:
+        # This must be checked BEFORE the ASSIGN/BLOCK check below.
+        block_target: str | None = None
+        if self.current().type == TokenType.LIST_START:
+            block_target = self._parse_block_target_annotation()
+
         # Check for assignment or block
         # Lenient: allow FLOW (->) as assignment
         if self.current().type in (TokenType.ASSIGN, TokenType.FLOW):
@@ -820,6 +879,7 @@ class Parser:
                 line=identifier_token.line,
                 column=identifier_token.column,
                 leading_comments=leading_comments or [],
+                target=block_target,  # Issue #189: Block inheritance target
             )
 
         # GH#64: Bare identifier without :: or : operator - emit I4 audit warning

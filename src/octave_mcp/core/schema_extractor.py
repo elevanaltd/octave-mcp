@@ -7,13 +7,17 @@ This module provides:
 - SchemaDefinition: Complete schema definition with policy and fields
 - FieldDefinition: Single field definition with holographic pattern
 - PolicyDefinition: POLICY block configuration
+- InheritanceResolver: Block target inheritance resolution (Issue #189)
+- DepthLimitError: Raised when inheritance depth exceeds MAX_DEPTH
 - extract_schema_from_document(): Extract schema from parsed Document
+- extract_block_targets(): Extract block-level targets from document AST
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, HolographicValue
+from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, HolographicValue, Section
 from octave_mcp.core.constraints import RequiredConstraint
 from octave_mcp.core.holographic import (
     HolographicPattern,
@@ -21,6 +25,139 @@ from octave_mcp.core.holographic import (
     parse_holographic_pattern,
 )
 from octave_mcp.core.lexer import TokenType
+
+
+class DepthLimitError(Exception):
+    """Raised when inheritance depth exceeds MAX_DEPTH (100).
+
+    Issue #189: Block inheritance depth limit per spec section 4::BLOCK_INHERITANCE.
+    DEPTH::unbounded_semantic[implementation_caps_at_100]
+    """
+
+    pass
+
+
+class InheritanceResolver:
+    """Resolves block-level target inheritance.
+
+    Issue #189: Implements block inheritance per spec section 4::BLOCK_INHERITANCE.
+
+    Children inherit parent block's target unless they specify their own.
+    Resolution walks from child to root, returning first target found.
+    Depth is capped at MAX_DEPTH (100) per spec.
+
+    Example:
+        RISKS[->RISK_LOG]:
+          CRITICAL::["auth_bypass"∧REQ]     // inherits ->RISK_LOG
+          WARNING::["rate_limit"∧OPT->SELF] // overrides to SELF
+    """
+
+    MAX_DEPTH = 100
+
+    def resolve_target(self, path: list[str], block_targets: dict[str, str]) -> str | None:
+        """Walk from child to ancestors, return first target found.
+
+        Args:
+            path: Path components from root to current node, e.g., ["RISKS", "CRITICAL"]
+            block_targets: Mapping of block paths to their targets, e.g., {"RISKS": "RISK_LOG"}
+
+        Returns:
+            The inherited target, or None if no ancestor has a target.
+
+        Raises:
+            DepthLimitError: If path depth exceeds MAX_DEPTH (100).
+        """
+        for depth, prefix in enumerate(self._ancestors(path)):
+            if depth >= self.MAX_DEPTH:
+                raise DepthLimitError(
+                    f"Inheritance depth exceeds {self.MAX_DEPTH}. " f"Path: {'.'.join(path[:self.MAX_DEPTH])}..."
+                )
+            if prefix in block_targets:
+                return block_targets[prefix]
+        return None
+
+    def resolve_target_with_audit(
+        self, path: list[str], block_targets: dict[str, str]
+    ) -> tuple[str | None, dict[str, Any] | None]:
+        """Resolve target with I4 audit trail.
+
+        Args:
+            path: Path components from root to current node.
+            block_targets: Mapping of block paths to their targets.
+
+        Returns:
+            Tuple of (target, audit_info).
+            audit_info contains inherited_from, target, and field_path when target is found.
+        """
+        for depth, prefix in enumerate(self._ancestors(path)):
+            if depth >= self.MAX_DEPTH:
+                raise DepthLimitError(
+                    f"Inheritance depth exceeds {self.MAX_DEPTH}. " f"Path: {'.'.join(path[:self.MAX_DEPTH])}..."
+                )
+            if prefix in block_targets:
+                target = block_targets[prefix]
+                audit = {
+                    "inherited_from": prefix,
+                    "target": target,
+                    "field_path": ".".join(path),
+                }
+                return target, audit
+        return None, None
+
+    def _ancestors(self, path: list[str]) -> Iterator[str]:
+        """Yield ancestor paths from child to root.
+
+        Args:
+            path: Path components, e.g., ["A", "B", "C"]
+
+        Yields:
+            Ancestor paths: "A.B.C", "A.B", "A"
+        """
+        for i in range(len(path), 0, -1):
+            yield ".".join(path[:i])
+
+
+def extract_block_targets(doc: Document) -> dict[str, str]:
+    """Extract all block-level targets from document AST.
+
+    Issue #189: Builds a mapping of block paths to their target annotations.
+
+    Args:
+        doc: Parsed Document AST
+
+    Returns:
+        Dictionary mapping block paths to targets.
+        Example: {"RISKS": "RISK_LOG", "OUTER.INNER": "INNER_TARGET"}
+    """
+    targets: dict[str, str] = {}
+    _extract_targets_recursive(doc.sections, [], targets)
+    return targets
+
+
+def _extract_targets_recursive(nodes: list[ASTNode], path: list[str], targets: dict[str, str]) -> None:
+    """Recursively extract block targets from AST nodes.
+
+    Args:
+        nodes: List of AST nodes to process
+        path: Current path prefix (list of ancestor keys)
+        targets: Output dictionary to populate
+    """
+    for node in nodes:
+        if isinstance(node, Block):
+            current_path = path + [node.key]
+            path_str = ".".join(current_path)
+
+            # Capture block's target if present
+            if node.target is not None:
+                targets[path_str] = node.target
+
+            # Recurse into children
+            _extract_targets_recursive(node.children, current_path, targets)
+
+        elif isinstance(node, Section):
+            # Sections can also contain nested blocks
+            current_path = path + [node.key]
+            _extract_targets_recursive(node.children, current_path, targets)
 
 
 @dataclass
