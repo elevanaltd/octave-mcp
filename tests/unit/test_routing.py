@@ -814,13 +814,19 @@ class TestValidatorTargetIntegration:
 
     def test_validator_accepts_custom_target_from_policy(self):
         """Validator should accept custom targets declared in POLICY.TARGETS."""
+        from octave_mcp.core.schema_extractor import PolicyDefinition
+
         pattern = parse_holographic_pattern('["value"∧REQ→§MY_CUSTOM_TARGET]')
         schema = SchemaDefinition(
             name="TEST",
             fields={"FIELD": FieldDefinition(name="FIELD", pattern=pattern)},
+            # Issue #190: Custom targets declared via policy.targets
+            policy=PolicyDefinition(
+                version="1.0",
+                unknown_fields="REJECT",
+                targets=["MY_CUSTOM_TARGET"],
+            ),
         )
-        # Register custom target (simulating POLICY.TARGETS)
-        schema.policy_targets = ["MY_CUSTOM_TARGET"]
         section_schemas = {"BLOCK": schema}
 
         section = Block(
