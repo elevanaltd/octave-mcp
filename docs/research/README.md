@@ -105,13 +105,13 @@ Empirical testing of OCTAVE-compressed LLM agents reveals critical behavioral ca
 
 ## 9. JIT Literacy Injection Research
 
-A Wind/Wall/Door debate (2026-01-30) proved that the 40-token OCTAVE literacy primer is sufficient for any LLM to output native OCTAVE. Three different models (Claude Opus 4.5, o3, Gemini 3 Pro) all produced valid OCTAVE after receiving the primer.
+A Wind/Wall/Door debate (2026-01-30) proved that the ~200-token OCTAVE literacy primer is sufficient for any LLM to output native OCTAVE. Three different models (Claude Opus 4.5, o3, Gemini 3 Pro) all produced valid OCTAVE after receiving the primer.
 
 **Key Insight:** "The barrier is invocation, not capability."
 
 **Solution Pattern:** JIT_LITERACY_INJECTION
 - Tunnel OCTAVE through JSON—change the water, not the pipe
-- Agent orchestration injects 40-token primer
+- Agent orchestration injects ~200-token primer
 - LLM outputs native OCTAVE
 - MCP wraps in JSON TextContent
 - Receiver unwraps and validates
@@ -125,8 +125,8 @@ Architectural assessment proposing MCP Prompts as the mechanism for universal LL
 | Tier | Mechanism | Token Cost |
 |------|-----------|------------|
 | Zero-Touch | MCP prompt auto-discovery | 0 |
-| On-Demand | `get_prompt("octave-literacy")` | ~40 |
-| Progressive | `get_prompt("octave-mastery")` | ~80 |
+| On-Demand | `get_prompt("octave-literacy")` | ~200 |
+| Progressive | `get_prompt("octave-mastery")` | ~250 |
 
 **Elegance Criteria:**
 - Minimal change (implement existing MCP primitives)
@@ -141,4 +141,4 @@ Architectural assessment proposing MCP Prompts as the mechanism for universal LL
 
 The empirical data strongly supports the claims of the OCTAVE protocol. It is a highly effective method for compressing complex information for LLM communication, achieving significant token reduction while simultaneously increasing semantic clarity and analytical depth. Recent studies further demonstrate that properly calibrated OCTAVE compression can actually enhance agent performance beyond verbose baselines.
 
-The JIT Literacy Injection research further demonstrates that the gap is not capability but invocation—40 tokens is sufficient to bootstrap any LLM into native OCTAVE fluency.
+The JIT Literacy Injection research further demonstrates that the gap is not capability but invocation—~200 tokens is sufficient to bootstrap any LLM into native OCTAVE fluency.
