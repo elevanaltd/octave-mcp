@@ -11,6 +11,7 @@ Pipeline: PARSE -> NORMALIZE -> VALIDATE -> REPAIR(if fix) -> EMIT
 """
 
 import re
+from difflib import unified_diff
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,10 @@ from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
 # Gap_6: Regex pattern to extract spec error codes (E001-E007) from error messages
 # The core lexer/parser embed codes like "E005 at line 2, column 1: ..."
 SPEC_CODE_PATTERN = re.compile(r"\b(E00[1-7])\b")
+
+# CE MUST FIX #1: Size threshold for diff generation (100KB)
+# Skip expensive diff computation on large content to prevent high CPU/memory
+DIFF_SIZE_THRESHOLD = 100_000
 
 
 def _extract_spec_code(error_message: str) -> str | None:
@@ -52,6 +57,32 @@ class ValidateTool(BaseTool):
 
     # Security: allowed file extensions
     ALLOWED_EXTENSIONS = {".oct.md", ".octave", ".md"}
+
+    def _build_unified_diff(self, before: str, after: str) -> str:
+        """Build a compact unified diff string for diff-first responses.
+
+        Args:
+            before: Original content
+            after: Canonical content
+
+        Returns:
+            Unified diff string, truncated if too large
+        """
+        before_lines = before.splitlines(keepends=True)
+        after_lines = after.splitlines(keepends=True)
+        diff_iter = unified_diff(before_lines, after_lines, fromfile="original", tofile="canonical", n=3)
+
+        max_chars = 200_000
+        out: list[str] = []
+        total = 0
+        for line in diff_iter:
+            if total + len(line) > max_chars:
+                out.append("\n... (diff truncated)\n")
+                break
+            out.append(line)
+            total += len(line)
+
+        return "".join(out)
 
     def _validate_path(self, target_path: str) -> tuple[bool, str | None]:
         """Validate target path for security.
@@ -179,26 +210,44 @@ class ValidateTool(BaseTool):
             description="If True, include compiled regex/grammar in output for debugging constraint evaluation.",
         )
 
+        schema.add_parameter(
+            "diff_only",
+            "boolean",
+            required=False,
+            description="If True, return diff instead of canonical content. Saves tokens when validating.",
+        )
+
+        schema.add_parameter(
+            "compact",
+            "boolean",
+            required=False,
+            description="If True, return warning/error counts instead of full lists. Saves tokens.",
+        )
+
         return schema.build()
 
     def _error_envelope(
         self,
         errors: list[dict[str, Any]],
         content: str = "",
+        diff_only: bool = False,
+        compact: bool = False,
     ) -> dict[str, Any]:
         """Build consistent error envelope with all required fields.
 
         Args:
             errors: List of error records
             content: Original content to return in canonical (on error)
+            diff_only: If True, set canonical to None instead of content
+            compact: If True, include counts instead of full lists
 
         Returns:
             Complete error envelope with all required fields per spec Section 7
         """
         repairs: list[dict[str, Any]] = []
-        return {
+        result: dict[str, Any] = {
             "status": "error",
-            "canonical": content,
+            "canonical": None if diff_only else content,  # CE FIX #2: Honor diff_only on errors
             "repairs": repairs,
             "repair_log": repairs,  # Gap 7: Spec-compliant alias (same reference)
             "warnings": [],
@@ -208,6 +257,14 @@ class ValidateTool(BaseTool):
             "validation_errors": [],  # Gap 7: Always present per spec Section 7
             "routing_log": [],  # I4: Always include routing_log for consistency
         }
+
+        # CE FIX #2: Honor compact mode on errors
+        if compact:
+            result["warning_count"] = 0
+            result["error_count"] = len(errors)
+            result["validation_error_count"] = 0
+
+        return result
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
         """Execute validation pipeline.
@@ -240,6 +297,8 @@ class ValidateTool(BaseTool):
         schema_name = params["schema"]
         fix = params.get("fix", False)
         debug_grammar = params.get("debug_grammar", False)
+        diff_only = params.get("diff_only", False)
+        compact = params.get("compact", False)
 
         # XOR validation: exactly one of content or file_path must be provided
         if content is not None and file_path is not None:
@@ -249,27 +308,45 @@ class ValidateTool(BaseTool):
                         "code": "E_INPUT",
                         "message": "Cannot provide both content and file_path - they are mutually exclusive",
                     }
-                ]
+                ],
+                diff_only=diff_only,
+                compact=compact,
             )
 
         if content is None and file_path is None:
-            return self._error_envelope([{"code": "E_INPUT", "message": "Must provide either content or file_path"}])
+            return self._error_envelope(
+                [{"code": "E_INPUT", "message": "Must provide either content or file_path"}],
+                diff_only=diff_only,
+                compact=compact,
+            )
 
         # If file_path provided, read file content
         if file_path is not None:
             # Security: validate path before reading
             is_valid, error_msg = self._validate_path(file_path)
             if not is_valid:
-                return self._error_envelope([{"code": "E_PATH", "message": error_msg or "Invalid file path"}])
+                return self._error_envelope(
+                    [{"code": "E_PATH", "message": error_msg or "Invalid file path"}],
+                    diff_only=diff_only,
+                    compact=compact,
+                )
 
             path = Path(file_path)
             if not path.exists():
-                return self._error_envelope([{"code": "E_FILE", "message": f"File not found: {file_path}"}])
+                return self._error_envelope(
+                    [{"code": "E_FILE", "message": f"File not found: {file_path}"}],
+                    diff_only=diff_only,
+                    compact=compact,
+                )
 
             try:
                 content = path.read_text(encoding="utf-8")
             except Exception as e:
-                return self._error_envelope([{"code": "E_READ", "message": f"Error reading file: {str(e)}"}])
+                return self._error_envelope(
+                    [{"code": "E_READ", "message": f"Error reading file: {str(e)}"}],
+                    diff_only=diff_only,
+                    compact=compact,
+                )
 
         # At this point content is guaranteed to be a string
         assert content is not None
@@ -328,7 +405,13 @@ class ValidateTool(BaseTool):
                 error_dict["spec_code"] = spec_code
 
             result["errors"].append(error_dict)
-            result["canonical"] = content  # Return original on error
+            # CE FIX #2: Honor diff_only on parse errors
+            result["canonical"] = None if diff_only else content
+            # CE FIX #2: Honor compact mode on parse errors
+            if compact:
+                result["warning_count"] = len(result["warnings"])
+                result["error_count"] = len(result["errors"])
+                result["validation_error_count"] = len(result.get("validation_errors", []))
             return result
 
         # STAGE 3: Schema Validation (I5 Schema Sovereignty)
@@ -458,10 +541,35 @@ class ValidateTool(BaseTool):
         # STAGE 5: Emit canonical form
         try:
             canonical_output = emit(doc)
-            result["canonical"] = canonical_output
+
+            if diff_only:
+                # Token efficiency: return diff instead of full canonical
+                content_changed = content != canonical_output
+                result["changed"] = content_changed
+
+                # CE FIX #1: Size guard before expensive diff generation
+                # Skip diff computation on large content to prevent high CPU/memory
+                if content_changed and len(content) > DIFF_SIZE_THRESHOLD:
+                    result["diff"] = "omitted: too large (>100KB)"
+                elif content_changed:
+                    result["diff"] = self._build_unified_diff(content, canonical_output)
+                else:
+                    result["diff"] = "no changes"
+                result["canonical"] = None  # Don't echo back
+            else:
+                result["canonical"] = canonical_output
+
         except Exception as e:
             result["status"] = "error"
             result["errors"].append({"code": "E_EMIT", "message": f"Emit error: {str(e)}"})
             return result
+
+        # Compact mode: summarize warnings as counts
+        if compact:
+            result["warning_count"] = len(result["warnings"])
+            result["error_count"] = len(result["errors"])
+            result["validation_error_count"] = len(result.get("validation_errors", []))
+            result["warnings"] = []
+            result["validation_errors"] = []
 
         return result
