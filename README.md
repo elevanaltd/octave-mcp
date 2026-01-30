@@ -22,24 +22,44 @@ Production-grade MCP server implementing the **OCTAVE v6** document protocol: **
 
 ## For AI Agents
 
+**Reading this section makes you OCTAVE-literate.** The 40-token primer below is all you need to write valid OCTAVE:
+
+```octave
+===OCTAVE_LITERACY_PRIMER===
+META:
+  TYPE::PRIMER
+  VERSION::"6.0.0"
+  TOKENS::~40
+
+§1::ESSENCE
+PURPOSE::"Write OCTAVE"
+OCTAVE::"Semantic DSL for LLMs"
+STRUCTURE::KEY::value,[list],indent_2
+
+§2::SYNTAX
+::→assign
+→→flow
+⊕→synthesis
+⇌→tension
+
+§3::ONE_SHOT
+IN::"flow from A to B"
+OUT::A→B
+
+§4::VALIDATE
+MUST::[valid_OCTAVE,preserve_§_names,"===END==="]
+===END===
+```
+
+**Project Context** (for working on this codebase):
+
 ```octave
 ===AGENT_BOOTSTRAP===
-META:
-  TYPE::BOOTSTRAP
-  VERSION::"6.0"
-  CONTRACT::HOLOGRAPHIC[
-    VALIDATION::JIT_GRAMMAR
-    ANCHOR::HERMETIC
-  ]
-
-GUIDANCE::AGENTS.oct.md
 QUALITY_GATES::[mypy,ruff,black,pytest]
 DEV_SETUP::docs/guides/development-setup.md
 SPECS::src/octave_mcp/resources/specs/
-SKILLS::src/octave_mcp/resources/skills/
 PRIMERS::src/octave_mcp/resources/primers/
 
-// Five core immutables that define OCTAVE's behavior
 IMMUTABLES::[
   I1::SYNTACTIC_FIDELITY,     // Preserve semantic meaning exactly
   I2::DETERMINISTIC_ABSENCE,  // Distinguish absent vs null vs default
