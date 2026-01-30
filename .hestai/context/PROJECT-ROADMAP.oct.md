@@ -11,7 +11,7 @@ RELEASE_STRATEGY:
   RATIONALE::"No external consumers until v1.0.0 - avoid ceremony overhead of intermediate releases"
 CURRENT_STATE:
   PHASE::B3_INTEGRATION
-  TESTS::"1506 passing"
+  TESTS::"1508 passing"
   COVERAGE::"90%"
   QUALITY::all_passing
   WORKING_VERSION::"pre-1.0.0-dev"
