@@ -9,7 +9,7 @@ META:
   DEBATE_REF::jit-literacy-injection-debate.oct.md
 
 §1::PROBLEM_STATEMENT
-CONTEXT::"JIT Literacy Injection proves 40-token primer enables native OCTAVE output"
+CONTEXT::"JIT Literacy Injection proves ~200-token primer enables native OCTAVE output"
 BARRIER::"Invocation, not capability"
 GAP::"No automatic mechanism for universal LLM onboarding when user clones repo"
 CURRENT_STATE::[
@@ -26,7 +26,7 @@ PRINCIPLE::"LLM asks for help, server teaches OCTAVE"
 MECHANISM::[
   1::MCP_prompts_expose_primers_as_callable_templates,
   2::LLM_lists_prompts→sees_octave_literacy_available,
-  3::LLM_calls_get_prompt("octave-literacy")→receives_40_token_primer,
+  3::LLM_calls_get_prompt("octave-literacy")→receives_~200_token_primer,
   4::LLM_now_speaks_OCTAVE→uses_tools_natively
 ]
 WHY_PROMPTS::[
@@ -48,13 +48,13 @@ TIER_2::[
   NAME::ON_DEMAND,
   MECHANISM::get_prompt("octave-literacy"),
   TRIGGER::first_OCTAVE_tool_error_or_user_request,
-  TOKEN_COST::~40
+  TOKEN_COST::~200
 ]
 TIER_3::[
   NAME::PROGRESSIVE,
   MECHANISM::get_prompt("octave-mastery"),
   TRIGGER::after_mastering_basics,
-  TOKEN_COST::~80
+  TOKEN_COST::~250
 ]
 
 §4::IMPLEMENTATION_PATH
@@ -102,7 +102,7 @@ MCP_JSON_CONSTRAINT::[
 ]
 TOKEN_OVERHEAD::[
   TENSION::"Context window is finite",
-  RESOLUTION::"~40 tokens negligible; lazy loading on-demand preserves window"
+  RESOLUTION::"~200 tokens negligible; lazy loading on-demand preserves window"
 ]
 
 §6::ELEGANCE_CRITERIA
@@ -114,7 +114,7 @@ NO_USER_INTERVENTION::zero_configuration_for_basic_onboarding
 
 §7::EVIDENCE_CHAIN
 DEBATE_PROOF::jit-literacy-injection-debate.oct.md
-PRIMER_SIZE::40_tokens[octave-literacy-primer.oct.md]
+PRIMER_SIZE::~200_tokens[octave-literacy-primer.oct.md]
 THREE_MODEL_VALIDATION::[claude-opus-4-5,o3,gemini-3-pro-preview]
 KEY_INSIGHT::"Barrier is invocation, not capability"
 PRINCIPLE::"Machine native, human optional"

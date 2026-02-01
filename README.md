@@ -22,14 +22,14 @@ Production-grade MCP server implementing the **OCTAVE v6** document protocol: **
 
 ## For AI Agents
 
-**Reading this section makes you OCTAVE-literate.** The 40-token primer below is all you need to write valid OCTAVE:
+**Reading this section makes you OCTAVE-literate.** The ~200-token primer below is all you need to write valid OCTAVE:
 
 ```octave
 ===OCTAVE_LITERACY_PRIMER===
 META:
   TYPE::PRIMER
   VERSION::"6.0.0"
-  TOKENS::~40
+  TOKENS::~200
 
 §1::ESSENCE
 PURPOSE::"Write OCTAVE"

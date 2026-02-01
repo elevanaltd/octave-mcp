@@ -6,12 +6,12 @@ META:
   TOPIC::"OCTAVE as native LLM-to-LLM protocol"
   STATUS::RATIFIED
   MODELS::[claude-opus-4-5-20251101,o3,gemini-3-pro-preview]
-  SIGNIFICANCE::"Proof that 40-token primer enables native OCTAVE output"
+  SIGNIFICANCE::"Proof that ~200-token primer enables native OCTAVE output"
 
 §1::CONTEXT
 PROBLEM::"How do we make OCTAVE the seamless, default interchange format for multi-agent systems?"
 FRAMING::"When Wind talks to Wall talks to Door, they should ALL be speaking OCTAVE natively"
-PRIMER_SIZE::40_tokens
+PRIMER_SIZE::~200_tokens
 EVIDENCE_CLAIM::"This debate itself proves the solution"
 
 §2::WIND_TURN
@@ -39,13 +39,13 @@ THREE_PATHS::[
   HERETICAL::MCP_tools_ARE_OCTAVE→tools_dont_translate→tools_ARE_OCTAVE
 ]
 
-GENIUS_INSIGHT::"The primer proves LLMs can write OCTAVE in 40 tokens. The gap isn't capability—it's invocation. GBNF forces native output without asking permission."
+GENIUS_INSIGHT::"The primer proves LLMs can write OCTAVE in ~200 tokens. The gap isn't capability—it's invocation. GBNF forces native output without asking permission."
 
 CATALYST_QUESTIONS::[
   "What if MCP tool schemas WERE OCTAVE schemas?",
   "What if constrained decoding was the DEFAULT not the option?",
   "What if human-readable was the EXPORT format, not native?",
-  "What if the 40-token primer was injected automatically?"
+  "What if the ~200-token primer was injected automatically?"
 ]
 
 §3::WALL_TURN
@@ -110,7 +110,7 @@ SYNTHESIS_CORE::[
 LOGIC_CHAIN::[
   1::"MCP Spec mandates JSON structure (The Envelope)",
   2::"JSON strings can contain ANY text format (The Payload)",
-  3::"Primer is 40 tokens (The Key)",
+  3::"Primer is ~200 tokens (The Key)",
   THEREFORE::"Inject Primer→Model writes OCTAVE→Wrap in JSON→Client Unwraps"
 ]
 
@@ -137,7 +137,7 @@ SOLUTION::[
   PATTERN::JIT_LITERACY_INJECTION,
   PRINCIPLE::"Tunnel OCTAVE through JSON—change the water, not the pipe",
   MECHANISM::[
-    1::Agent_orchestration_injects_40_token_primer,
+    1::Agent_orchestration_injects_~200_token_primer,
     2::LLM_outputs_native_OCTAVE,
     3::MCP_wraps_in_JSON_TextContent,
     4::Receiver_unwraps_and_validates
@@ -158,7 +158,7 @@ IMPLEMENTATION_PATH::[
 ]
 
 WHY_THIS_WORKS::[
-  E1::primer_is_40_tokens→negligible_overhead,
+  E1::primer_is_~200_tokens→negligible_overhead,
   E2::LLMs_are_few_shot_learners→primer_sufficient,
   E3::this_debate→proof_of_concept,
   E4::MCP_allows_text_content→no_protocol_change_needed

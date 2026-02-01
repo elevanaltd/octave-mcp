@@ -3,7 +3,7 @@ META:
   TYPE::PRIMER
   VERSION::"6.1.0"
   TIER::ULTRA
-  TOKENS::~75
+  TOKENS::~260
 
 §1::ESSENCE
 PURPOSE::"Convert prose→OCTAVE"

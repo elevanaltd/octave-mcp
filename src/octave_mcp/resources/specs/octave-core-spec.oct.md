@@ -4,7 +4,7 @@ META:
   VERSION::"6.0.0"
   STATUS::APPROVED
 
-  TOKENS::"~280"
+  TOKENS::"~2500"
   REQUIRES::nothing
   ENABLES::[schema,data]
   TEACHES::[§skills/octave-literacy,§skills/octave-mastery]
