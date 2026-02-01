@@ -79,9 +79,11 @@ This repository ships the **OCTAVE MCP Server** (v1.0.0)—a Model Context Proto
 OCTAVE (Olympian Common Text And Vocabulary Engine) is a deterministic document format and control plane for LLM systems. It keeps meaning durable when text is compressed, routed between agents, or projected into different views.
 
 **Core Philosophy: Validation Precedes Generation**
-Instead of checking if an LLM wrote a valid document *after* the fact, OCTAVE v6 compiles the document's `META` block into a strict grammar (Regex/GBNF) that *constrains* the LLM's output generation. It is structurally impossible to generate invalid syntax.
+OCTAVE v6 introduces the principle that schemas should constrain LLM output *during* generation, not just validate it afterward. The `META` block can compile to strict grammars (Regex/GBNF) for constrained generation.
 
-- **Generative Constraints**: `META.CONTRACT` compiles to regex/grammar for LLM guidance.
+> **Implementation Status (v0.6.0):** Grammar compilation is implemented and available via `debug_grammar=True`. However, the MCP tools (`octave_validate`, `octave_write`) currently perform post-hoc validation rather than enforcing grammar constraints during generation. See the [architecture spec](src/octave_mcp/resources/specs/octave-mcp-architecture.oct.md) for details.
+
+- **Generative Constraints**: `META.CONTRACT` compiles to regex/GBNF grammar (use `debug_grammar=True` to inspect).
 - **Holographic Sovereignty**: The document defines its own schema laws inline.
 - **Hermetic Anchoring**: No network calls in the hot path. Standards are frozen or local.
 - **Auditable Loss**: Compression tiers declared in `META` (`LOSSLESS`, `AGGRESSIVE`).
@@ -99,7 +101,7 @@ See the [protocol specs in `src/octave_mcp/resources/specs/`](src/octave_mcp/res
 `octave-mcp` bundles the OCTAVE tooling as MCP tools and a CLI.
 
 - **3 MCP tools**: `octave_validate`, `octave_write`, `octave_eject`
-- **Generative Engine**: Compiles constraints to grammars (`debug_grammar=True`).
+- **Grammar Compiler**: Compiles `META.CONTRACT` constraints to GBNF grammars (inspect via `debug_grammar=True`).
 - **Hermetic Hydrator**: Resolves standards without network dependency.
 
 ## When OCTAVE Helps
@@ -215,10 +217,12 @@ format: str           # Output: octave, json, yaml, markdown, gbnf
 
 ### Generative Holographic Contracts (v6)
 
-OCTAVE v6 introduces the **Holographic Contract**:
+OCTAVE v6 introduces the **Holographic Contract** concept:
 1.  **Read META**: The parser reads the `META` block first.
-2.  **Compile Grammar**: It compiles the constraints (`REQ`, `ENUM`, `REGEX`) into a generative grammar.
-3.  **Generate/Validate**: The body is generated/validated against this bespoke grammar.
+2.  **Compile Grammar**: Constraints (`REQ`, `ENUM`, `REGEX`) compile into GBNF grammar (available via `debug_grammar=True`).
+3.  **Generate/Validate**: The body can be validated against this bespoke grammar.
+
+> **Note:** In v0.6.0, grammar compilation is implemented but tools perform post-hoc validation. Grammar-constrained generation is a roadmap feature.
 
 ## Documentation
 
