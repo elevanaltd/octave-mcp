@@ -246,6 +246,80 @@ KEY::value
         assert "Multiple   spaces   here" in result
 
 
+class TestIssue217LeadingCommentsInSections:
+    """Regression tests for Issue #217: Leading comments inside sections before first child.
+
+    These tests ensure that comments appearing between a section header (§N::NAME)
+    and the first indented child are preserved during round-trip.
+    """
+
+    def test_column0_comment_before_first_section_child(self):
+        """Issue #217: Column-0 comment between section header and first child should be preserved."""
+        content = """===TEST===
+§1::SECTION
+// This comment is at column 0 before the first child
+  FIELD::value
+===END==="""
+        doc = parse(content)
+        result = emit(doc)
+        assert "// This comment is at column 0 before the first child" in result
+        assert "FIELD::value" in result
+
+    def test_multiple_column0_comments_before_first_child(self):
+        """Issue #217: Multiple column-0 comments before first child should all be preserved."""
+        content = """===TEST===
+§1::SECTION
+// First comment
+// Second comment
+// Third comment
+  FIELD::value
+===END==="""
+        doc = parse(content)
+        result = emit(doc)
+        assert "// First comment" in result
+        assert "// Second comment" in result
+        assert "// Third comment" in result
+
+    def test_section_with_comments_but_no_children(self):
+        """Issue #217: Section with only comments and no children should preserve comments."""
+        content = """===TEST===
+§1::SECTION
+// Orphan comment in empty section
+§2::NEXT_SECTION
+  FIELD::value
+===END==="""
+        doc = parse(content)
+        result = emit(doc)
+        assert "// Orphan comment in empty section" in result
+
+    def test_column0_comment_idempotent(self):
+        """Issue #217: Column-0 comments in sections should be idempotent through round-trips."""
+        original = """===TEST===
+§1::PRECEDENCE
+// Order implies priority: First > Last
+  HIERARCHY::[CORE,SCHEMA,EXECUTION]
+===END==="""
+        doc1 = parse(original)
+        emitted1 = emit(doc1)
+        doc2 = parse(emitted1)
+        emitted2 = emit(doc2)
+        assert emitted1 == emitted2
+        assert "// Order implies priority" in emitted2
+
+    def test_mixed_column0_and_indented_comments(self):
+        """Issue #217: Both column-0 and indented comments should be preserved."""
+        content = """===TEST===
+§1::SECTION
+// Column-0 comment before first child
+  // Indented comment inside section
+  FIELD::value
+===END==="""
+        doc = parse(content)
+        result = emit(doc)
+        assert "// Column-0 comment before first child" in result
+        assert "// Indented comment inside section" in result
+
+
 class TestCommentIdempotence:
     """Test that emit(parse(emit(parse(x)))) == emit(parse(x)) with comments."""
 
