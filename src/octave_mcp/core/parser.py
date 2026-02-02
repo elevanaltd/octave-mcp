@@ -630,10 +630,19 @@ class Parser:
         # Example: §0::META[schema_hints,versioning]
         annotation = self._consume_bracket_annotation(capture=True)
 
-        self.skip_whitespace()
+        # Issue #217: Don't skip comments here - preserve them for section children
+        self.skip_whitespace(skip_comments=False)
 
         # Parse section children (similar to block parsing)
         children: list[ASTNode] = []
+
+        # Issue #217: Collect any comments at column 0 before first indented child
+        # These are orphan comments that appear between section header and children
+        pre_indent_comments: list[str] = []
+        while self.current().type in (TokenType.COMMENT, TokenType.NEWLINE):
+            if self.current().type == TokenType.COMMENT:
+                pre_indent_comments.append(self.current().value)
+            self.advance()
 
         # Expect indentation for children
         if self.current().type == TokenType.INDENT:
@@ -644,7 +653,8 @@ class Parser:
             current_line_indent = child_indent
 
             # Issue #182: Track pending comments for next child
-            pending_comments: list[str] = []
+            # Issue #217: Include any pre-indent comments collected before first INDENT
+            pending_comments: list[str] = pre_indent_comments.copy()
 
             while True:
                 # End conditions
@@ -707,6 +717,12 @@ class Parser:
             # If pending_comments exist but loop broke (dedent/EOF), they are inner comments
             if pending_comments:
                 for comment_text in pending_comments:
+                    children.append(Comment(text=comment_text))
+        else:
+            # Issue #217: No indented children, but may have pre-indent comments
+            # Add them as orphan comments in the section
+            if pre_indent_comments:
+                for comment_text in pre_indent_comments:
                     children.append(Comment(text=comment_text))
 
         return Section(
