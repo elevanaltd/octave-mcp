@@ -1,7 +1,7 @@
 ===OCTAVE_PRIMERS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"6.0.0"
+  VERSION::"6.1.0"
   STATUS::APPROVED
   TOKENS::"~80"
   REQUIRES::octave-core-spec
@@ -13,7 +13,8 @@ META:
   PRIMER::"Minimal bootstrap for execution without understanding"
   SKILL::"Complete reference with rationale and examples"
   PRIMER_VS_SKILL::PRIMER[execution] ⇌ SKILL[comprehension] → PRIMER
-  TOKEN_BUDGET::MAX[60]_RECOMMENDED[30-50]
+  TOKEN_BUDGET::MAX[300]_RECOMMENDED[200-260]
+  // Note: OCTAVE syntax tokenizes ~5x word count due to ::, →, ⊕, ⇌, § operators
   AUDIENCE::LLM_context_window[not_humans]
   COMPRESSION_REF::skills/octave-compression[§1b::ULTRA_TIER]
 
@@ -56,14 +57,14 @@ META:
     "Explaining_why[trust_latent_knowledge]",
     "Multiple_examples[one_perfect_shot]",
     "Human_readability[optimize_for_LLM]",
-    "Exceeding_100_tokens[defeats_purpose]",
+    "Exceeding_300_tokens[defeats_purpose]",
     "Teaching_theory[only_execution_matters]"
   ]
 
 §4::COMPARISON_MATRIX
   ASPECT::PRIMER→SKILL
   PURPOSE::execution→understanding
-  TOKENS::30-60→500-800
+  TOKENS::200-300→500-800
   EXAMPLES::one→many
   RATIONALE::none→complete
   AUDIENCE::LLM→human+LLM
@@ -72,7 +73,7 @@ META:
 
 §5::VALIDATION_CRITERIA
   VALID_PRIMER::[
-    tokens<60∧
+    tokens<300∧
     has_one_shot∧
     has_purpose_line∧
     has_operator_legend∧
