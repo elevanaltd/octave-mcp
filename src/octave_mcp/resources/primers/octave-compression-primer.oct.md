@@ -1,33 +1,43 @@
 ===OCTAVE_COMPRESSION_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.1.0"
-  TOKENS::~260
+  VERSION::"6.2.0"
+  TOKENS::~300
   TIER::ULTRA
 
 §1::ESSENCE
-PURPOSE::"Compress prose→OCTAVE"
+PURPOSE::"Compress prose→OCTAVE with tier judgment"
 OCTAVE::"Semantic DSL for LLMs"
-WORKFLOW::READ→EXTRACT[why,evidence]→COMPRESS→VALIDATE
+METHOD::READ→EXTRACT[why,evidence]→COMPRESS→VALIDATE
 
-§2::MAP
-VERBOSE→DENSE
-REDUNDANCY→[array]
-HIERARCHY→parent::[children]
-TIERS::LOSSLESS∨CONSERVATIVE∨AGGRESSIVE∨ULTRA
-PRESERVE::[causality,numbers,IDs,§_names]
-NEVER::[JSON,YAML,>3_nesting]
+§2::DECIDE
+TIER_SELECT::[
+  LOSSLESS::audit∨critical[drop::none],
+  CONSERVATIVE::research∨design[drop::redundancy],
+  AGGRESSIVE::quick_ref[drop::nuance],
+  ULTRA::extreme_scarcity[drop::narrative]
+]
+PRESERVE::causality[X→Y_because_Z]∧numbers∧IDs∧§_names
+DROP::stopwords∧redundancy∧prose_connectors
 
-§3::SYNTAX
-::→assign
+§3::MAP
+sentences→KEY::value
+repetition→[array]
+because/therefore→A→B[reason]
+tradeoffs→GAIN⇌LOSS
+groupings→parent::[children]
+
+§4::SYNTAX
+::→assign[no_spaces]
 →::flow
-⇌::tradeoff
+⊕::synthesis
+⇌::tension
 [,]::list
 
-§4::ONE_SHOT
-IN::"System processes data because users need speed"
-OUT::SYSTEM::data→process[b/c::user_speed]
+§5::ONE_SHOT
+IN::"Users authenticate before dashboard. Failed logins trigger alerts for security while maintaining usability."
+OUT::AUTH::login→validate→dashboard,FAIL::alert,INTENT::security⇌usability
 
-§5::VALIDATE
-MUST::[valid_OCTAVE,preserve_§_names_verbatim,why_preserved,"60%_reduction"]
+§6::NEVER
+AVOID::[markdown,JSON,YAML,nesting>3,losing_numbers]
 ===END===
