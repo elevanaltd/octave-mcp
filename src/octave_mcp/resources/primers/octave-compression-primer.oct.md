@@ -1,31 +1,33 @@
 ===OCTAVE_COMPRESSION_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.0.0"
-  TOKENS::~225
+  VERSION::"6.1.0"
+  TOKENS::~260
   TIER::ULTRA
 
 §1::ESSENCE
 PURPOSE::"Compress prose→OCTAVE"
 OCTAVE::"Semantic DSL for LLMs"
-TARGET::"60-80%_reduction"
+WORKFLOW::READ→EXTRACT[why,evidence]→COMPRESS→VALIDATE
 
 §2::MAP
 VERBOSE→DENSE
 REDUNDANCY→[array]
 HIERARCHY→parent::[children]
-TIERS→LOSSLESS∨CONSERVATIVE∨AGGRESSIVE∨ULTRA
+TIERS::LOSSLESS∨CONSERVATIVE∨AGGRESSIVE∨ULTRA
+PRESERVE::[causality,numbers,IDs,§_names]
+NEVER::[JSON,YAML,>3_nesting]
 
 §3::SYNTAX
-→::transform
+::→assign
+→::flow
 ⇌::tradeoff
 [,]::list
-::→assign
 
 §4::ONE_SHOT
-IN::"The system processes input data and generates output results"
-OUT::SYSTEM::input→process→output
+IN::"System processes data because users need speed"
+OUT::SYSTEM::data→process[b/c::user_speed]
 
 §5::VALIDATE
-MUST::[valid_OCTAVE,preserve_§_names_verbatim,logic_intact,"60%_reduction",navigable]
+MUST::[valid_OCTAVE,preserve_§_names_verbatim,why_preserved,"60%_reduction"]
 ===END===
