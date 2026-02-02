@@ -5,6 +5,41 @@ All notable changes to OCTAVE-MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-02-02 - "Decision Scaffolding" Release
+
+This release enhances OCTAVE Primers with decision scaffolding for semantic compression, corrects token budget specifications to match empirical measurements, and fixes parser comment preservation edge cases.
+
+### Added
+- **Compression Primer Decision Scaffolding** (#220) - Enhanced primer enables tier-based compression judgment
+  - `§2::DECIDE` section with explicit tier selection (LOSSLESS/CONSERVATIVE/AGGRESSIVE/ULTRA)
+  - `PRESERVE` and `DROP` rules per tier for semantic judgment
+  - Concrete MAP section showing prose→OCTAVE transformations
+  - Complex ONE_SHOT demonstrating hierarchy, flow, and tension operators together
+  - `⊕` synthesis operator added to syntax reference
+- **Universal LLM Onboarding Architecture** (#214, #215) - Research documentation for JIT literacy injection
+  - Wind/Wall/Door debate transcript demonstrating synthesis methodology
+  - Proof of concept for primer-based agent bootstrapping
+
+### Changed
+- **Primer Token Budget Corrected** (#220) - Spec updated to match empirical tiktoken measurements
+  - `TOKEN_BUDGET::MAX[60]` → `MAX[300]_RECOMMENDED[200-260]`
+  - Anti-pattern: "Exceeding_100_tokens" → "Exceeding_300_tokens"
+  - Added note: OCTAVE syntax tokenizes ~5x word count due to `::`, `→`, `⊕`, `⇌`, `§` operators
+  - Validation criteria: `tokens<60` → `tokens<300`
+- **README Literacy Primer** (#215) - Embedded primer directly in README for instant LLM onboarding
+- **Core Spec Token Count** (#216) - Corrected META.TOKENS from ~2500 to ~2650
+
+### Fixed
+- **Parser Comment Preservation** (#217, #219) - Leading comments inside sections now preserved before first child
+  - Previously, comments at the start of a section block were dropped during parsing
+  - Now correctly captured in AST and emitted in canonical output
+  - Added regression tests to prevent future issues
+
+### Quality Gates
+- All changes reviewed per tier requirements
+- Constitutional compliance verified: I1, I3, I4
+- Primer changes maintain ULTRA compression tier
+
 ## [1.0.0] - 2026-01-30 - "Generative Holographic Contracts" Release
 
 This release marks the stable v1.0.0 of OCTAVE-MCP, completing four internal milestones (M1-M4) with full OCTAVE v6 specification compliance. OCTAVE-MCP is now production-ready for LLM communication with generative holographic contracts.
@@ -270,7 +305,9 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.1...v1.0.0
 [0.6.1]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.4.1...v0.5.0
