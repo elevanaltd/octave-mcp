@@ -610,7 +610,7 @@ wheels = [
 
 [[package]]
 name = "octave-mcp"
-version = "1.0.0"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -623,6 +623,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "black" },
+    { name = "httpx" },
     { name = "hypothesis" },
     { name = "mypy" },
     { name = "pre-commit" },
@@ -633,11 +634,19 @@ dev = [
     { name = "ruff" },
     { name = "types-pyyaml" },
 ]
+http = [
+    { name = "httpx" },
+    { name = "sse-starlette" },
+    { name = "starlette" },
+    { name = "uvicorn" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
     { name = "click", specifier = ">=8.0.0" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.25.0" },
+    { name = "httpx", marker = "extra == 'http'", specifier = ">=0.25.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
@@ -650,9 +659,12 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "sse-starlette", marker = "extra == 'http'", specifier = ">=1.6.0" },
+    { name = "starlette", marker = "extra == 'http'", specifier = ">=0.35.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+    { name = "uvicorn", marker = "extra == 'http'", specifier = ">=0.24.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["http", "dev"]
 
 [[package]]
 name = "packaging"

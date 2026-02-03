@@ -10,8 +10,18 @@ Environment Variables:
   Available tools: octave_validate, octave_write, octave_eject
   Example: DISABLED_TOOLS=octave_eject
 - OCTAVE_MCP_SKIP_SYNC: Set to "1" to skip dependency sync on startup.
+- MCP_TRANSPORT: Transport type ("stdio" or "http"). Default: stdio
+- MCP_HOST: Host address for HTTP transport. Default: 127.0.0.1
+- MCP_PORT: Port number for HTTP transport. Default: 8080
+
+CLI Usage:
+  octave-mcp-server                              # Default: stdio
+  octave-mcp-server --transport http             # HTTP transport
+  octave-mcp-server --transport http --port 9000 # Custom port
+  octave-mcp-server --transport http --host 0.0.0.0 --stateless  # Serverless mode
 """
 
+import argparse
 import asyncio
 import json
 import logging
@@ -34,6 +44,10 @@ from octave_mcp.mcp.write import WriteTool
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# Default configuration for HTTP transport
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 8080
 
 
 def ensure_dependencies_synced() -> None:
@@ -200,6 +214,111 @@ def create_server() -> Server:
     return server
 
 
+# Transport selection functions
+
+
+def get_transport_type() -> str:
+    """Get transport type from environment or default to stdio.
+
+    Returns:
+        Transport type string: "stdio" or "http"
+    """
+    transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
+    return transport
+
+
+def get_server_host() -> str:
+    """Get server host from environment or default to localhost.
+
+    Returns:
+        Host address string
+    """
+    return os.getenv("MCP_HOST", DEFAULT_HOST).strip()
+
+
+def get_server_port() -> int:
+    """Get server port from environment or default to 8080.
+
+    Returns:
+        Port number
+    """
+    port_str = os.getenv("MCP_PORT", str(DEFAULT_PORT)).strip()
+    try:
+        return int(port_str)
+    except ValueError:
+        logger.warning(f"Invalid MCP_PORT value '{port_str}', using default {DEFAULT_PORT}")
+        return DEFAULT_PORT
+
+
+def parse_args(args: list[str] | None = None) -> argparse.Namespace:
+    """Parse command line arguments.
+
+    Args:
+        args: Command line arguments. If None, uses sys.argv[1:].
+
+    Returns:
+        Parsed arguments namespace
+    """
+    parser = argparse.ArgumentParser(
+        description="OCTAVE MCP Server - Schema validation and OCTAVE file operations",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  octave-mcp-server                              # Default: stdio transport
+  octave-mcp-server --transport http             # HTTP transport on localhost:8080
+  octave-mcp-server --transport http --port 9000 # HTTP on port 9000
+  octave-mcp-server --transport http --host 0.0.0.0 --stateless  # Serverless mode
+
+Environment Variables:
+  MCP_TRANSPORT    Transport type (stdio, http)
+  MCP_HOST         HTTP host address (default: 127.0.0.1)
+  MCP_PORT         HTTP port number (default: 8080)
+  DISABLED_TOOLS   Comma-separated list of tools to disable
+""",
+    )
+
+    parser.add_argument(
+        "--transport",
+        "-t",
+        choices=["stdio", "http"],
+        default=get_transport_type(),
+        help="Transport type (default: stdio, or MCP_TRANSPORT env)",
+    )
+
+    parser.add_argument(
+        "--host",
+        "-H",
+        default=get_server_host(),
+        help="HTTP host address (default: 127.0.0.1, or MCP_HOST env)",
+    )
+
+    parser.add_argument(
+        "--port",
+        "-p",
+        type=int,
+        default=get_server_port(),
+        help="HTTP port number (default: 8080, or MCP_PORT env)",
+    )
+
+    parser.add_argument(
+        "--stateless",
+        "-s",
+        action="store_true",
+        default=False,
+        help="Enable stateless mode for serverless deployments",
+    )
+
+    parser.add_argument(
+        "--json-response",
+        "-j",
+        action="store_true",
+        default=False,
+        help="Use JSON responses instead of SSE streams",
+    )
+
+    return parser.parse_args(args)
+
+
 async def main():
     """Run the MCP server via stdio."""
     server = create_server()
@@ -208,15 +327,53 @@ async def main():
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
+def run_stdio() -> None:
+    """Run the MCP server with stdio transport."""
+    asyncio.run(main())
+
+
+def run_http(host: str, port: int, stateless: bool = False, json_response: bool = False) -> None:
+    """Run the MCP server with HTTP transport.
+
+    Args:
+        host: Host address to bind to
+        port: Port number to listen on
+        stateless: Enable stateless mode for serverless
+        json_response: Use JSON responses instead of SSE
+    """
+    from octave_mcp.mcp.http_transport import run_http_server
+
+    run_http_server(
+        host=host,
+        port=port,
+        stateless=stateless,
+        json_response=json_response,
+    )
+
+
 def run():
     """Start the MCP server (entry point).
 
     Ensures dependencies are synced before starting the server.
     This prevents issues where the MCP server runs with stale
     dependencies after uv.lock is updated.
+
+    Supports both stdio (default) and HTTP transports via CLI args
+    or environment variables.
     """
     ensure_dependencies_synced()
-    asyncio.run(main())
+
+    args = parse_args()
+
+    if args.transport == "http":
+        run_http(
+            host=args.host,
+            port=args.port,
+            stateless=args.stateless,
+            json_response=args.json_response,
+        )
+    else:
+        run_stdio()
 
 
 if __name__ == "__main__":
