@@ -50,6 +50,12 @@ Issues = "https://github.com/elevanaltd/octave-mcp/issues"
 Changelog = "https://github.com/elevanaltd/octave-mcp/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+http = [
+    "starlette>=0.35.0",
+    "uvicorn>=0.24.0",
+    "httpx>=0.25.0",  # For testing HTTP transport
+    "sse-starlette>=1.6.0",  # SSE support for streaming
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -61,6 +67,7 @@ dev = [
     "black>=23.0.0",
     "hypothesis>=6.0.0",
     "pre-commit>=3.0.0",
+    "httpx>=0.25.0",  # For testing HTTP transport
 ]
 
 [project.scripts]
