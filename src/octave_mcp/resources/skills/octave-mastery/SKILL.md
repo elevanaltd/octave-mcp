@@ -18,7 +18,8 @@ META:
   V6_FEATURES::"Holographic contracts, JIT grammar compilation, constraint validation"
 
 §1::SEMANTIC_PANTHEON
-  // The complete vocabulary for semantic compression
+  // Core vocabulary for semantic compression — extensible, not closed
+  // See octave-mythology §10::EXTENSION_POINTS for expansion guidance
   DOMAINS:
     ZEUS::"Executive function, authority, strategic direction, final arbitration"
     ATHENA::"Strategic wisdom, planning, elegant solutions, deliberate action"

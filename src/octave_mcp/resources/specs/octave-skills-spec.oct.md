@@ -1,12 +1,12 @@
 ===OCTAVE_SKILLS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"7.0.0"
+  VERSION::"8.0.0"
   STATUS::ACTIVE
   TOKENS::"~220"
   REQUIRES::octave-core-spec
   PURPOSE::L5_skill_document_format[platform_agnostic]
-  IMPLEMENTATION_NOTES::"v7: Adds optional ANCHOR_KERNEL for odyssean-anchor auto-injection. Skills can export high-density capability atoms for anchor binding. Backward compatible with v6."
+  IMPLEMENTATION_NOTES::"v8: Adds compression mandate (AGGRESSIVE body, LOSSLESS YAML, ULTRA kernel), canonical sections (CORE/PROTOCOL/GOVERNANCE/EXAMPLES), token budget (300-700 target), description_role as retrieval_only, and TARGET/GATE fields in anchor kernel. Backward compatible with v7."
 
   CONTRACT::SKILL_DEFINITION[
     PRINCIPLE::"Skills use YAML for external discovery and OCTAVE for internal definition",
@@ -17,7 +17,7 @@ META:
 ---
 
 // OCTAVE SKILLS: Universal format for AI agent skill documents.
-// v7: YAML Frontmatter + OCTAVE Envelope + optional ANCHOR_KERNEL for anchor injection.
+// v8: YAML Frontmatter + OCTAVE Envelope + ANCHOR_KERNEL + compression mandate + canonical sections + token budget.
 
 §1::SKILL_DOCUMENT_STRUCTURE
 SEQUENCE::[YAML_FRONTMATTER, OCTAVE_ENVELOPE, ANCHOR_KERNEL_OPTIONAL]
@@ -32,8 +32,12 @@ REQUIRED_V7::[
   yaml_frontmatter::required_for_discovery,
   octave_envelope::required_for_parsing,
   anchor_kernel::recommended_for_anchor_injection,
-  no_markdown_headers::prevent_parser_errors
+  no_markdown_headers::prevent_parser_errors,
+  description_role::retrieval_only[NOT_behavioral_constraint]
 ]
+
+DESCRIPTION_ROLE::retrieval_only[NOT_behavioral_constraint]
+ENFORCEMENT_SOURCE::OCTAVE_body[§2::PROTOCOL⊕§3::GOVERNANCE]
 
 // Note: No duplicate TRIGGERS/TOOLS in META. Source of truth is YAML.
 
@@ -50,6 +54,21 @@ BENEFITS::[
   anchor_injection::kernel_enables_high_density_capability_loading
 ]
 
+COMPRESSION::[
+  BODY::AGGRESSIVE[dense_KEY::value⊕operators, preserve_1-2_examples⊕causal_chains, drop_narrative⊕stopwords⊕verbose_phrasing],
+  YAML_FRONTMATTER::LOSSLESS[natural_language_for_BM25⊕embedding_retrieval],
+  ANCHOR_KERNEL::ULTRA[atoms_only]
+]
+
+§2b::CANONICAL_SECTIONS
+RECOMMENDED_SECTIONS::[
+  §1::CORE[what_this_skill_IS⊕mission⊕authority⊕identity_in_2_to_5_lines],
+  §2::PROTOCOL[what_agent_DOES⊕procedures⊕decision_trees⊕detection_checks],
+  §3::GOVERNANCE[boundaries⊕MUST_NEVER⊕BLOCKED⊕ALLOWED⊕escalation],
+  §4::EXAMPLES[1_to_2_concrete⊕1_anti⊕OPTIONAL_for_small_skills]
+]
+CATALOG_VARIANT::section_per_item[anti_patterns⊕failure_patterns⊕each_item_is_a_section]
+
 §3::DOCUMENT_TEMPLATE
 
 // V7 template with optional ANCHOR_KERNEL for anchor auto-injection
@@ -60,8 +79,10 @@ V7_TEMPLATE_STRUCTURE::[
 
 // Kernel structure aligns with patterns spec for consistency
 KERNEL_FIELDS::[
+  TARGET::optional[single_line_purpose],
   NEVER::[forbidden_actions],
   MUST::[required_behaviors],
+  GATE::optional[decision_question],
   LANE::optional[role_type_for_coordination_skills],
   DELEGATE::optional[task_delegation_mappings]
 ]
@@ -81,6 +102,10 @@ TARGET::500_lines_max[all_skills]
 MAX_BREACH::5_files_over_500[system_wide]
 HARD_LIMIT::600_lines[NEVER_exceed]
 OVERFLOW_STRATEGY::[progressive_disclosure[main→resources]]
+TOKEN_TARGET::300-700[body_excluding_YAML_and_kernel]
+EXAMPLE_DENSITY::1_per_200_tokens_of_abstraction
+UNDERSIZED::below_200_tokens[skeleton_warning]
+OVERSIZED::above_800_tokens[split_or_compress_warning]
 
 §5::TRIGGER_DESIGN
 DESCRIPTION_KEYWORDS::[action_verbs,domain_terms,problem_patterns]
@@ -189,8 +214,10 @@ PURPOSE::[
 
 ANCHOR_KERNEL_STRUCTURE::[
   // Base fields (align with patterns spec for consistency)
+  TARGET::optional[single_line_purpose⊕what_this_skill_enforces],
   NEVER::[list_of_forbidden_actions],
   MUST::[list_of_mandatory_behaviors],
+  GATE::optional[decision_question⊕the_one_question_this_skill_answers],
   // Skill-specific optional fields
   LANE::optional[role_type_for_coordination_skills],
   DELEGATE::optional[task_type_to_agent_mappings],
