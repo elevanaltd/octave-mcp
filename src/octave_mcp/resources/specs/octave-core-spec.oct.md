@@ -55,6 +55,8 @@ COMMENTS:://[line_start_or_after_value]
 
 ASSEMBLY::when_profiles_concatenated[core+schema+data]→only_final_===END===_terminates
 ASSEMBLY_RULE::omit_separator_in_assembled_profiles[only_standalone_documents]
+MARKDOWN_EMBEDDING::outer_single_code_fence_allowed[```octave...```→strip_fence_then_parse]
+MARKDOWN_EMBEDDING_RULE::code_fence_is_transport_wrapper_not_document_content
 
 // ASSEMBLY EXAMPLE (Issue #108):
 // When injecting OCTAVE profiles into agent context, concatenate them.

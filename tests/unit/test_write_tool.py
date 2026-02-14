@@ -91,6 +91,32 @@ class TestWriteTool:
             assert os.path.exists(target_path)
 
     @pytest.mark.asyncio
+    async def test_write_content_mode_accepts_markdown_fence(self):
+        """Strict mode should accept an OCTAVE payload wrapped in markdown fence."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "fenced.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="""```octave
+===TEST===
+KEY::value
+===END===
+```""",
+            )
+
+            assert result["status"] == "success"
+            assert any(c.get("code") == "W_MARKDOWN_UNWRAP" for c in result.get("corrections", []))
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+            assert written.startswith("===TEST===")
+
+    @pytest.mark.asyncio
     async def test_write_corrections_only_does_not_write(self):
         """Test corrections_only mode returns preview but does not write file."""
         from octave_mcp.mcp.write import WriteTool

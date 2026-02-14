@@ -135,6 +135,17 @@ class WriteTool(BaseTool):
     # Security: allowed file extensions
     ALLOWED_EXTENSIONS = {".oct.md", ".octave", ".md"}
 
+    def _unwrap_markdown_code_fence(self, content: str) -> tuple[str, bool]:
+        """Extract OCTAVE payload from a single outer markdown code fence.
+
+        Accepts common fenced forms such as ```octave and ```markdown.
+        Returns the original content when no full-document fence is present.
+        """
+        fence_match = re.match(r"^\s*```[^\n]*\n([\s\S]*?)\n```\s*$", content)
+        if not fence_match:
+            return content, False
+        return fence_match.group(1), True
+
     def _build_unified_diff(self, before: str, after: str) -> str:
         """Build a compact unified diff string for diff-first responses."""
         before_lines = before.splitlines(keepends=True)
@@ -414,7 +425,7 @@ class WriteTool(BaseTool):
             "content",
             "string",
             required=False,
-            description="Full content for new files or overwrites. Mutually exclusive with changes.",
+            description="Full content for new files or overwrites. Accepts raw OCTAVE or a single markdown fenced code block. Mutually exclusive with changes.",
         )
 
         schema.add_parameter(
@@ -912,6 +923,16 @@ class WriteTool(BaseTool):
                     )
 
             parse_input = content
+            parse_input, unwrapped = self._unwrap_markdown_code_fence(parse_input)
+            if unwrapped:
+                corrections.append(
+                    {
+                        "code": "W_MARKDOWN_UNWRAP",
+                        "message": "Unwrapped markdown code fence before OCTAVE parsing.",
+                        "safe": True,
+                        "semantics_changed": False,
+                    }
+                )
 
             if lenient:
                 # Detect likely OCTAVE structure using line-anchored patterns to avoid false positives in prose.
