@@ -1,7 +1,7 @@
 ===OCTAVE_AGENTS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"6.0.0"
+  VERSION::"6.1.0"
   STATUS::APPROVED
   PURPOSE::"Agent architecture schema using Dual-Lock Identity/Behavior separation."
 
@@ -31,7 +31,12 @@ META:
       ELEMENT::[WALL|WIND|DOOR]
     ],
     MISSION::"The immutable core purpose",
-    PRINCIPLES::"Agent-specific constitutional constraints"
+    PRINCIPLES::"Agent-specific constitutional constraints",
+    AUTHORITY::[                          // OPTIONAL
+      [ULTIMATE|BLOCKING|ADVISORY]::[scope_list],
+      MANDATE::"Authority description",
+      ACCOUNTABILITY::"Domain responsibility"
+    ]
   ]
 
 §2::BEHAVIOR
@@ -66,6 +71,7 @@ META:
   ]
 
 §5::MAPPING_DEFINITION
+  STATUS::DOCUMENTARY
   // For Steward/Anchor parser compliance
   SHANK_LOCK::[§1::IDENTITY]
   CONDUCT_LOCK::[§2::BEHAVIOR, §4::INTERACTION_RULES]

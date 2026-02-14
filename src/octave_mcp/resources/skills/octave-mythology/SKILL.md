@@ -30,7 +30,8 @@ META:
   WHEN_NOT::[reference_tables, formal_specs, human_readability_priority]
 
 §2::SEMANTIC_DOMAINS
-  // 10-domain Semantic Pantheon - use to frame technical layers
+  // Core 10-domain Semantic Pantheon — foundation set, not a closed vocabulary
+  // Any mythological figure with a distinct semantic domain is valid (see §10)
   ZEUS::"Executive function, authority, strategic direction, final decision"
   ATHENA::"Strategic wisdom, planning, elegant solutions, deliberate action"
   APOLLO::"Analytics, clarity, data insights, revealing truth, prediction"
@@ -157,7 +158,14 @@ META:
   UNCLEAR_AUDIENCE::explain_or_define_patterns_first
 
 §10::EXTENSION_POINTS
-  // Beyond the core 10 domains and patterns
+  // The core sets above are a FOUNDATION, not a boundary
+  // Any mythological figure with a distinct semantic domain is a valid archetype
+  // Validation: format-only ([A-Z][A-Z_]*), not membership in a fixed set
+  VOCABULARY::OPEN[
+    RULE::"If a figure encodes a unique semantic domain, it is valid",
+    EXAMPLES::[PHAEDRUS{dialectic,rhetoric}, CASSANDRA{foresight_ignored}, MNEMOSYNE{memory,persistence}, HESTIA{hearth,stability}, METIS{cunning_intelligence}],
+    CONSTRAINT::"Must map to a distinct technical/cognitive domain — no synonyms of existing entries"
+  ]
   DOMAINS::extrapolate_naturally[HESTIA,NIKE,METIS,THEMIS]
   PATTERNS::extend_based_on_context[ODYSSEAN_VARIANT,LOCAL_MYTHOLOGY]
   FORCES::system_specific_dynamics[INSTITUTIONAL_INERTIA,TECHNICAL_DEBT]
