@@ -256,7 +256,7 @@ TOOL_WRITE:
 
   PARAMETERS:
     TARGET_PATH::["file path to write to"∧REQ]
-    CONTENT::["full content for new files or overwrites"∧OPT∧mutually_exclusive_with_CHANGES]
+    CONTENT::["full content for new files or overwrites (raw OCTAVE or single markdown fenced code block)"∧OPT∧mutually_exclusive_with_CHANGES]
     CHANGES::["dictionary of field updates for existing files"∧OPT∧mutually_exclusive_with_CONTENT]
     SCHEMA::["TEST_HOLOGRAPHIC"∧OPT∧for_validation]
     MUTATIONS::["META field overrides"∧OPT∧applies_to_both_modes]
