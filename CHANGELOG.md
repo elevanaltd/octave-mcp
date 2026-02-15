@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-02-15 - "Specification Refinement" Release
+
+This release enhances the specification suite with improved skills and agents specs, and introduces Streamable HTTP transport for web-based client access.
+
 ### Added
 - **Streamable HTTP Transport** (#218, #221) - Web-based clients can now access OCTAVE tools via HTTP
   - Single `/mcp` endpoint per MCP Streamable HTTP specification
@@ -18,6 +22,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Stateless mode support for serverless deployments (`--stateless`)
   - New optional `[http]` dependency group: `pip install octave-mcp[http]`
   - 31 new tests covering transport, security, CLI, and integration
+- **Enhanced Skills Specification** (#225) - octave-skills-spec v8.0 with canonical structure requirements
+  - Compression mandate for all skills (AGGRESSIVE tier minimum)
+  - Standardized canonical sections: ESSENCE, SYNTAX, CONSTRAINTS, VALIDATE
+  - Clarified that archetype vocabulary is open (extensible), not closed
+- **Enhanced Agents Specification** (#225) - octave-agents-spec v6 improvements
+  - Added `AUTHORITY` as optional field for agent role hierarchy
+  - Enables explicit authority level declarations for agent coordination
+
+### Changed
+- **Documentation Clarity** (#229) - README improvements for generative constraints
+  - Clarified implementation status of generative holographic contracts
+  - Updated feature documentation to reflect current capabilities
+
+### Fixed
+- **Specification Syntax** (#227) - Fixed OCTAVE spec compliance issues
+  - Fixed `MARKDOWN_EMBEDDING` value quoting to prevent lexer errors
+  - Aligned specs and `octave_write` tool with markdown code fence syntax
+  - Ensures all specifications parse correctly without syntax warnings
+
+### Quality Gates
+- All changes reviewed per tier requirements
+- Constitutional compliance verified: I1, I3, I5
+- HTTP transport includes comprehensive security testing
 
 ## [1.1.0] - 2026-02-02 - "Decision Scaffolding" Release
 
@@ -319,7 +346,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.1...v1.0.0
 [0.6.1]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.0...v0.6.1
