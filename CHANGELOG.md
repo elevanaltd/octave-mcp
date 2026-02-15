@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-02-15 - "Specification Refinement" Release
+## [1.2.1] - 2026-02-15 - "Specification Refinement" (Re-release)
+
+This is a re-release of v1.2.0 to fix a critical packaging issue where `__version__` in `__init__.py` was not synchronized with `pyproject.toml`.
+
+### Fixed
+- **Package Version Synchronization** (#231) - Critical fix for version reporting
+  - Updated `__version__ = "1.2.1"` in `src/octave_mcp/__init__.py` to match `pyproject.toml`
+  - v1.2.0 on PyPI contained incorrect version "0.6.1" in the package code
+  - This caused installation verification failures and incorrect version reporting
+
+**Note:** v1.2.0 should be considered broken and v1.2.1 should be used instead. The v1.2.0 release will be yanked on PyPI.
+
+### All v1.2.x Changes
+
+Same features and fixes as v1.2.0 (see below), but with correct version synchronization.
+
+## [1.2.0] - 2026-02-15 - "Specification Refinement" Release (YANKED - use v1.2.1)
 
 This release enhances the specification suite with improved skills and agents specs, and introduces Streamable HTTP transport for web-based client access.
 
@@ -346,7 +362,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/elevanaltd/octave-mcp/compare/v0.6.1...v1.0.0
