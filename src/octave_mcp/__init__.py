@@ -17,6 +17,8 @@ Public API exports:
 - Operators: OCTAVE_OPERATORS dict with canonical Unicode operators
 """
 
+from importlib.metadata import version
+
 from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue, Section
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.hydrator import (
@@ -39,7 +41,12 @@ from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition, 
 from octave_mcp.core.sealer import SealVerificationResult, seal_document, verify_seal
 from octave_mcp.core.validator import ValidationError, Validator
 
-__version__ = "1.2.1"
+# Single source of truth: version comes from pyproject.toml via package metadata
+try:
+    __version__ = version("octave-mcp")
+except Exception:
+    # Fallback for development installations without package metadata
+    __version__ = "0.0.0.dev"
 
 # Canonical OCTAVE operators (per specs/octave-5-llm-core.oct.md §2)
 # These are the Unicode canonical forms. ASCII aliases are also accepted by the lexer.
