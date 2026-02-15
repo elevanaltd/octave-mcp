@@ -36,10 +36,10 @@ classifiers = [
 ]
 dependencies = [
     "mcp>=1.0.0",
-    "click>=8.0.0",
-    "pydantic>=2.0.0",
-    "python-dotenv>=1.0.0",
-    "PyYAML>=6.0.0",
+    "click>=8.1.0",
+    "pydantic>=2.12.0",
+    "python-dotenv>=1.2.0",
+    "PyYAML>=6.0.3",
 ]
 
 [project.urls]
@@ -51,23 +51,23 @@ Changelog = "https://github.com/elevanaltd/octave-mcp/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 http = [
-    "starlette>=0.35.0",
-    "uvicorn>=0.24.0",
-    "httpx>=0.25.0",  # For testing HTTP transport
-    "sse-starlette>=1.6.0",  # SSE support for streaming
+    "starlette>=0.52.0",
+    "uvicorn>=0.34.0",
+    "httpx>=0.28.0",  # For testing HTTP transport
+    "sse-starlette>=2.2.0",  # SSE support for streaming
 ]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-timeout>=2.0.0",
-    "mypy>=1.0.0",
-    "types-PyYAML>=6.0.0",
-    "ruff>=0.1.0",
-    "black>=23.0.0",
-    "hypothesis>=6.0.0",
-    "pre-commit>=3.0.0",
-    "httpx>=0.25.0",  # For testing HTTP transport
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-timeout>=2.3.0",
+    "mypy>=1.14.0",
+    "types-PyYAML>=6.0.12",
+    "ruff>=0.9.0",
+    "black>=26.0.0",
+    "hypothesis>=6.122.0",
+    "pre-commit>=4.0.0",
+    "httpx>=0.28.0",  # For testing HTTP transport
 ]
 
 [project.scripts]
