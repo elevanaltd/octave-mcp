@@ -1,41 +1,50 @@
 ===OCTAVE_MCP_NORTH_STAR_SUMMARY===
 META:
   TYPE::NORTH_STAR_SUMMARY
-  VERSION::"1.1"
+  VERSION::"1.2"
   PROJECT::"OCTAVE-MCP"
   STATUS::APPROVED
   APPROVED_DATE::"2025-12-28"
-  UPDATED::"2026-01-12"
+  UPDATED::"2026-02-16"
   FULL_DOC::".hestai/workflow/000-OCTAVE-MCP-NORTH-STAR.md"
+  COMPRESSION_TIER::AGGRESSIVE
+  LOSS_PROFILE::"drop_narrative_preserve_protocol⊕examples"
 CORE_IDENTITY::"OCTAVE-MCP is a loss accounting system for LLM communication"
-STRUCTURAL_PATTERN::LAYERED_FIDELITY
-INTENT_LAYER::I3
-VALUE_LAYER::I1
-AUDIT_LAYER::I4
-SCHEMA_LAYER::I5
-ABSENCE_LAYER::I2
+STRUCTURAL_PATTERN::"LAYERED_FIDELITY⊕THREE_ZONE_MODEL"
+LAYERED_FIDELITY:
+  INTENT_LAYER::I3
+  VALUE_LAYER::I1
+  AUDIT_LAYER::I4
+  SCHEMA_LAYER::I5
+  ABSENCE_LAYER::I2
+THREE_ZONE_MODEL::[[[ZONE_1::NORMALIZING_DSL],[ZONE_2::PRESERVING_CONTAINER],[ZONE_3::EXPLICIT_LITERAL_ZONES]]]
 IMMUTABLES::5
 I1::SYNTACTIC_FIDELITY
 STATEMENT::normalization_alters_syntax_never_semantics
-RATIONALE::canon_must_be_idempotent_and_bijective_on_semantic_space
+RATIONALE::"canon_must_be_idempotent∧bijective_on_semantic_space"
+INTERPRETATION_LITERAL_ZONES::exemption_from_normalization_preserves_meaning
 STATUS::ENFORCED
 I2::DETERMINISTIC_ABSENCE
-STATEMENT::distinguish_absent_null_default
+STATEMENT::"distinguish_absent∨"
 RATIONALE::downstream_must_know_didnt_check_vs_not_there
-STATUS::ENFORCED[absent_sentinel_type]
+INTERPRETATION_LITERAL_ZONES::empty_code_block_distinct_from_absent
+STATUS::ENFORCED
 I3::MIRROR_CONSTRAINT
 STATEMENT::reflect_only_present_create_nothing
 RATIONALE::non_reasoning_is_core_differentiator
-STATUS::ENFORCED[visible_schema_bypass]
+INTERPRETATION_LITERAL_ZONES::nested_fences_MUST_error
+STATUS::ENFORCED
 I4::TRANSFORM_AUDITABILITY
 STATEMENT::every_transformation_logged_with_stable_ids
 RATIONALE::if_bits_lost_must_have_receipt
+INTERPRETATION_LITERAL_ZONES::preservation_logged
 STATUS::ENFORCED
 I5::SCHEMA_SOVEREIGNTY
 STATEMENT::validation_status_visible_in_output
-RATIONALE::if_you_cant_validate_say_so
-STATUS::PARTIAL[validation_status_field_added]
-ASSUMPTIONS::[[A1::SCHEMA_VALIDATION_VALUABLE],[confidence_85],"→HIGH_IMPACT",[A2::LENIENT_PARSING_PREFERRED],[confidence_90],"→VALIDATED",[A3::THREE_TOOL_SURFACE_STABLE],[confidence_95],"→VALIDATED",[A4::LLM_COMPREHENDS_OCTAVE],[confidence_92],"→VALIDATED",[A5::TOKEN_REDUCTION_SIGNIFICANT],[confidence_95],"→VALIDATED",[A6::REPAIRLOG_STRUCTURE_SUFFICIENT],[confidence_70],"→MEDIUM_IMPACT",[A7::PARSE_ERROR_CONTRACT_FORMALIZABLE],[confidence_85],"→MEDIUM_IMPACT"]
+RATIONALE::if_cant_validate_say_so
+INTERPRETATION_LITERAL_ZONES::"contains_literal_zones_flag⊕literal_zones_validated_flag"
+STATUS::PARTIAL
+ASSUMPTIONS::[[[A1::SCHEMA_VALIDATION_VALUABLE],[A2::LENIENT_PARSING_PREFERRED],[A3::THREE_TOOL_SURFACE_STABLE],[A4::LLM_COMPREHENDS_OCTAVE],[A5::TOKEN_REDUCTION_SIGNIFICANT],[A6::REPAIRLOG_STRUCTURE_SUFFICIENT],[A7::PARSE_ERROR_CONTRACT_FORMALIZABLE],[A8::NESTED_FENCE_DETECTION_TRACTABLE],[A9::MIGRATION_TO_LITERAL_ZONES_NON_BREAKING],[A10::LANGUAGE_TAGS_PRESERVATION_METADATA_NOT_SEMANTIC]]]
 SCOPE_BOUNDARIES:
   IS::[deterministic_document_format_processor,loss_accounting_system_for_LLM_communication,lenient_to_canonical_normalizer,schema_validation_framework,audit_trail_generator]
   IS_NOT::[LLM_or_reasoning_engine,agent_orchestration_system,database_or_persistence_layer,identity_authentication_system]
@@ -43,6 +52,13 @@ SCOPE_BOUNDARIES:
     IMMUTABLE::[I1,I2,I3,I4,I5]
     FLEXIBLE::[tool_count_3_stable,error_codes,tier_names,schema_formats]
     NEGOTIABLE::[default_strictness,feature_priority,integration_timeline]
-    RISKS::[[R1::spec_claims_vs_implementation],[[mitigation::I5_makes_gaps_visible]],[R2::validator_drift_multiple_validators],[[mitigation::single_source_of_truth_core_parser_validator]],[R3::lenient_parsing_edge_cases],[[mitigation::I3_errors_not_guesses]]]
-    APPROVAL::APPROVED[2025-12-28]
+  RISKS::[[[R1::spec_claims_vs_implementation],[R2::validator_drift_multiple_validators],[R3::lenient_parsing_edge_cases]]]
+COMMITMENT_CEREMONY::APPROVED
+EVIDENCE_SUMMARY:
+  IMMUTABLES::5
+ASSUMPTIONS::10
+RISKS::3
+VALIDATOR_SURFACE::"core_parser⊕core_validator_CLI_MCP_tools"
+LITERAL_ZONES::planned_v1_3_0
+ENFORCEMENT_STATUS::[[[I1::ENFORCED],[I2::ENFORCED],[I3::ENFORCED],[I4::ENFORCED],[I5::PARTIAL]]]
 ===END===
