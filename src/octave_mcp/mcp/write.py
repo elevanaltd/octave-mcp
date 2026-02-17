@@ -20,7 +20,16 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, Section
+from octave_mcp.core.ast_nodes import (
+    Assignment,
+    ASTNode,
+    Block,
+    Document,
+    InlineMap,
+    ListValue,
+    LiteralZoneValue,
+    Section,
+)
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.hydrator import resolve_hermetic_standard
 from octave_mcp.core.lexer import tokenize
@@ -114,6 +123,11 @@ def _normalize_value_for_ast(value: Any) -> Any:
     Returns:
         AST-compatible value (ListValue for lists, InlineMap for dicts, original for others)
     """
+    # Issue #235 MP8: Literal zones must NOT be normalized (D3: zero processing).
+    # Return unchanged to prevent content being wrapped or coerced.
+    if isinstance(value, LiteralZoneValue):
+        return value
+
     if isinstance(value, list):
         # Recursively normalize list items
         normalized_items = [_normalize_value_for_ast(item) for item in value]
