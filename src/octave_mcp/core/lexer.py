@@ -62,6 +62,11 @@ class TokenType(Enum):
     SEPARATOR = auto()  # ---
     EOF = auto()  # end of input
 
+    # Literal zone tokens (Issue #235)
+    FENCE_OPEN = auto()  # Opening ``` with optional info tag
+    FENCE_CLOSE = auto()  # Closing ```
+    LITERAL_CONTENT = auto()  # Raw content between fences
+
 
 @dataclass
 class Token:
@@ -124,6 +129,170 @@ OPERATOR_CHARS = frozenset(
         "§",  # SECTION (U+00A7)
     }
 )
+
+# Matches 3+ backticks at line start (with optional 0-3 spaces indent)
+# Captures: (1) indent, (2) full fence+info, (3) the backtick sequence, (4) info tag
+FENCE_PATTERN = re.compile(r"^( {0,3})((`{3,})([^\n`]*)?)$")
+
+
+def _evaluate_fence_line(
+    backtick_seq: str,
+    open_fence_marker: str,
+    trailing_content: str,
+    line: int,
+    column: int,
+    open_line: int,
+) -> str:
+    """Evaluate a backtick sequence found at line start inside an open fence.
+
+    Returns: "close" or "content", or raises LexerError for E007.
+
+    PRECEDENCE ORDER (B0-B1 amendment):
+      1. Closing fence (exact match, no trailing content) -- checked FIRST
+      2. Nested fence error (equal-or-greater length)     -- checked SECOND
+      3. Content (shorter length)                         -- fallthrough
+    """
+    seq_len = len(backtick_seq)
+    open_len = len(open_fence_marker)
+
+    # CASE 1: Exact match with clean line -> CLOSE
+    if seq_len == open_len and not trailing_content.strip():
+        return "close"
+
+    # CASE 2: Equal length with trailing content -> ERROR (ambiguous)
+    # CASE 3: Greater length -> ERROR (nested fence)
+    if seq_len >= open_len:
+        raise LexerError(
+            f"E007_NESTED_FENCE: Nested literal zone detected at line {line}. "
+            f"Found fence '{backtick_seq}' (length {seq_len}) "
+            f"inside literal zone opened with '{open_fence_marker}' "
+            f"(length {open_len}) at line {open_line}. "
+            f"Use a longer fence to wrap content containing shorter fences, "
+            f"e.g., {'`' * (open_len + 1)} to wrap content with {open_fence_marker}.",
+            line,
+            column,
+            "E007",
+        )
+
+    # CASE 4: Shorter fence -> treat as content
+    return "content"
+
+
+def _normalize_with_fence_detection(
+    content: str,
+) -> tuple[str, list[tuple[int, int, str, str | None]]]:
+    """Single-pass fence detection with selective NFC normalization.
+
+    Processes content line-by-line. When outside a fence, each line is
+    NFC-normalized before appending to the output buffer. When inside a
+    fence, lines are appended verbatim (no NFC). Fence span offsets are
+    recorded against the OUTPUT buffer, so they are always valid for the
+    returned string.
+
+    Args:
+        content: Raw (non-NFC-normalized) content string.
+
+    Returns:
+        Tuple of:
+        - normalized_content: String with NFC applied outside fences,
+          literal zone content preserved exactly.
+        - fence_spans: List of (start_offset, end_offset, fence_marker,
+          info_tag) tuples. Offsets are valid for normalized_content.
+
+    Raises:
+        LexerError: E006 if a fence is opened but never closed.
+        LexerError: E007 (subtype E007_NESTED_FENCE) if a fence of
+                    equal or greater length appears inside an open fence.
+    """
+    lines = content.split("\n")
+    output_parts: list[str] = []
+    fence_spans: list[tuple[int, int, str, str | None]] = []
+    output_offset = 0
+    in_fence = False
+    current_fence_marker: str | None = None
+    current_info_tag: str | None = None
+    open_line = -1
+    span_start = -1
+
+    for line_num, line in enumerate(lines, start=1):
+        match = FENCE_PATTERN.match(line)
+
+        if match and not in_fence:
+            # Opening fence: start literal zone
+            backtick_seq = match.group(3)
+            raw_tag = match.group(4).strip()
+            current_info_tag = raw_tag if raw_tag else None
+            in_fence = True
+            current_fence_marker = backtick_seq
+            open_line = line_num
+            # NFC-normalize the fence line itself (it's structural, not content)
+            normalized_line = unicodedata.normalize("NFC", line)
+            output_parts.append(normalized_line)
+            span_start = output_offset
+            output_offset += len(normalized_line) + 1  # +1 for newline
+
+        elif match and in_fence:
+            backtick_seq = match.group(3)
+            trailing = match.group(4)
+            # Use precedence table from section 5.3.1
+            if current_fence_marker is None:
+                raise LexerError(
+                    "E006: Internal error: fence marker is None inside open fence.",
+                    line_num,
+                    1,
+                    "E006",
+                )
+            result = _evaluate_fence_line(
+                backtick_seq,
+                current_fence_marker,
+                trailing,
+                line_num,
+                1,
+                open_line,
+            )
+            if result == "close":
+                # NFC-normalize the closing fence line (structural)
+                normalized_line = unicodedata.normalize("NFC", line)
+                output_parts.append(normalized_line)
+                output_offset += len(normalized_line) + 1
+                fence_spans.append(
+                    (
+                        span_start,
+                        output_offset - 1,
+                        current_fence_marker,
+                        current_info_tag,
+                    )
+                )
+                in_fence = False
+                current_fence_marker = None
+                current_info_tag = None
+            else:  # "content"
+                # Shorter fence inside literal zone: preserve verbatim
+                output_parts.append(line)
+                output_offset += len(line) + 1
+
+        elif in_fence:
+            # Inside literal zone: preserve verbatim (NO NFC)
+            output_parts.append(line)
+            output_offset += len(line) + 1
+
+        else:
+            # Outside literal zone: apply NFC normalization
+            normalized_line = unicodedata.normalize("NFC", line)
+            output_parts.append(normalized_line)
+            output_offset += len(normalized_line) + 1
+
+    if in_fence:
+        raise LexerError(
+            f"E006: Unterminated literal zone. Fence '{current_fence_marker}' "
+            f"opened at line {open_line} was never closed. "
+            f"Add a matching closing fence: {current_fence_marker}",
+            open_line,
+            1,
+            "E006",
+        )
+
+    return "\n".join(output_parts), fence_spans
 
 
 def _is_valid_identifier_start(char: str) -> bool:
@@ -426,22 +595,33 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
     Raises:
         LexerError: On invalid syntax (tabs, malformed operators, unbalanced brackets)
     """
-    # Apply NFC unicode normalization
-    content = unicodedata.normalize("NFC", content)
+    # Apply NFC unicode normalization with fence detection (Issue #235)
+    # Replaces blanket NFC: literal zone content is preserved verbatim (D3: zero processing)
+    content, fence_spans = _normalize_with_fence_detection(content)
 
-    # ... (existing checks)
-
-    # Check for tabs
-    if "\t" in content:
-        line = content[: content.index("\t")].count("\n") + 1
-        column = len(content[: content.index("\t")].split("\n")[-1]) + 1
-        raise LexerError("Tabs are not allowed. Use 2 spaces for indentation.", line, column, "E005")
+    # Check for tabs OUTSIDE literal zones only (Issue #235: tab bypass)
+    for i, char in enumerate(content):
+        if char == "\t":
+            # Check if this position falls within any fence span
+            in_literal = any(start <= i < end for start, end, _, _ in fence_spans)
+            if not in_literal:
+                tab_line = content[:i].count("\n") + 1
+                tab_column = len(content[:i].split("\n")[-1]) + 1
+                raise LexerError(
+                    "Tabs are not allowed. Use 2 spaces for indentation.",
+                    tab_line,
+                    tab_column,
+                    "E005",
+                )
 
     tokens: list[Token] = []
     repairs: list[Any] = []
     line = 1
     column = 1
     pos = 0
+
+    # Issue #235: Track which fence span we are expecting next
+    fence_span_idx = 0
 
     # Track bracket depth for unbalanced bracket detection (GH#180)
     # Stack of (bracket_char, line, column) for each opening bracket
@@ -451,6 +631,82 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
     compiled_patterns = [(re.compile(pattern), token_type) for pattern, token_type in TOKEN_PATTERNS]
 
     while pos < len(content):
+        # Issue #235: Check if current position is the start of a fence span
+        # Emit FENCE_OPEN, LITERAL_CONTENT, FENCE_CLOSE tokens and skip past span
+        if fence_span_idx < len(fence_spans) and pos == fence_spans[fence_span_idx][0]:
+            span_start, span_end, marker, tag = fence_spans[fence_span_idx]
+
+            # Emit FENCE_OPEN token
+            tokens.append(
+                Token(
+                    TokenType.FENCE_OPEN,
+                    {"fence_marker": marker, "info_tag": tag},
+                    line,
+                    column,
+                )
+            )
+
+            # Find content boundaries within the span
+            # content_start: position after the first newline (end of opening fence line)
+            # content_end: position of the last newline before closing fence line
+            first_newline = content.index("\n", span_start)
+            content_start = first_newline + 1
+
+            # Find the start of the closing fence line
+            # The closing fence is the last line of the span
+            last_newline = content.rindex("\n", span_start, span_end)
+            content_end = last_newline
+
+            # Advance line past opening fence line's newline
+            line += 1  # Move past opening fence line's newline
+            column = 1
+
+            # Extract literal content
+            if content_start <= content_end:
+                literal_text = content[content_start:content_end]
+            else:
+                # Empty literal zone (opening fence immediately followed by closing fence)
+                literal_text = ""
+
+            # Emit LITERAL_CONTENT token (line is the first content line)
+            content_line = line
+            tokens.append(Token(TokenType.LITERAL_CONTENT, literal_text, content_line, 1))
+
+            # Advance line tracking past content lines.
+            # Count newlines in the span to determine how many content lines exist.
+            # lines_in_span includes the opening fence newline + content newlines.
+            # content_line_count = lines_in_span - 1 (subtract opening fence line).
+            lines_in_span = content[span_start:span_end].count("\n")
+            content_line_count = lines_in_span - 1
+            line += content_line_count
+
+            # Emit FENCE_CLOSE token
+            close_line = line
+            # Find the indent of the closing fence line
+            close_fence_start = last_newline + 1
+            close_column = 1
+            tokens.append(Token(TokenType.FENCE_CLOSE, marker, close_line, close_column))
+
+            # Advance past the span
+            # Count the closing fence line's newline in line tracking
+            closing_fence_text = content[close_fence_start:span_end]
+            # Move pos past the entire span
+            pos = span_end
+            # Update line to be past the closing fence
+            line = close_line + 1
+            column = 1
+
+            # Handle the case where the span ends at the boundary
+            # pos should be at span_end, which is after closing fence line content
+            # but before the newline that follows
+            if pos < len(content) and content[pos] == "\n":
+                # Emit NEWLINE token for the line break after closing fence
+                tokens.append(Token(TokenType.NEWLINE, "\n", close_line, len(closing_fence_text) + 1))
+                pos += 1
+
+            fence_span_idx += 1
+            continue
+
         # ... (whitespace handling)
         # Track whitespace (spaces only, not newlines)
         if content[pos] == " ":

@@ -34,6 +34,7 @@ from octave_mcp.core.ast_nodes import (
     HolographicValue,
     InlineMap,
     ListValue,
+    LiteralZoneValue,
     Section,
 )
 
@@ -185,6 +186,17 @@ def emit_value(value: Any) -> str:
         # M3: Emit holographic pattern using raw_pattern for I1 fidelity
         # The raw_pattern preserves the original syntax: ["example"∧CONSTRAINT→§TARGET]
         return value.raw_pattern
+    elif isinstance(value, LiteralZoneValue):
+        # Issue #235: Verbatim emission -- no escaping, no normalization (I1)
+        parts = [value.fence_marker]
+        if value.info_tag:
+            parts.append(value.info_tag)
+        parts.append("\n")
+        parts.append(value.content)
+        if value.content and not value.content.endswith("\n"):
+            parts.append("\n")
+        parts.append(value.fence_marker)
+        return "".join(parts)
     else:
         # Fallback for unknown types
         return str(value)
@@ -243,9 +255,10 @@ def emit_assignment(assignment: Assignment, indent: int = 0, format_options: For
     """Emit an assignment in canonical form.
 
     Issue #182: Includes leading and trailing comments.
+    Issue #235: Special handling for LiteralZoneValue -- fence markers get
+    indent, content lines are verbatim (no indent added).
     """
     indent_str = "  " * indent
-    value_str = emit_value(assignment.value)
 
     # Determine if comments should be stripped
     strip_comments = format_options.strip_comments if format_options else False
@@ -255,6 +268,25 @@ def emit_assignment(assignment: Assignment, indent: int = 0, format_options: For
     # Issue #182: Emit leading comments
     if hasattr(assignment, "leading_comments"):
         lines.extend(_emit_leading_comments(assignment.leading_comments, indent, strip_comments))
+
+    # Issue #235: Literal zone values need special indentation handling
+    if isinstance(assignment.value, LiteralZoneValue):
+        lzv = assignment.value
+        # Key line: KEY:: (value starts on next line)
+        lines.append(f"{indent_str}{assignment.key}::")
+        # Opening fence with indent
+        opening = f"{indent_str}{lzv.fence_marker}"
+        if lzv.info_tag:
+            opening += lzv.info_tag
+        lines.append(opening)
+        # Content lines: verbatim, NO indent added
+        if lzv.content:
+            lines.append(lzv.content)
+        # Closing fence with indent
+        lines.append(f"{indent_str}{lzv.fence_marker}")
+        return "\n".join(lines)
+
+    value_str = emit_value(assignment.value)
 
     # Emit the assignment line with optional trailing comment
     assignment_line = f"{indent_str}{assignment.key}::{value_str}"

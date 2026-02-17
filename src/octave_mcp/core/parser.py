@@ -22,9 +22,10 @@ from octave_mcp.core.ast_nodes import (
     HolographicValue,
     InlineMap,
     ListValue,
+    LiteralZoneValue,
     Section,
 )
-from octave_mcp.core.lexer import Token, TokenType, tokenize
+from octave_mcp.core.lexer import Token, TokenType, tokenize  # noqa: F401 - TokenType members used via attribute access
 
 # Issue #192: Deep nesting detection constants
 # Warning threshold: emit W_DEEP_NESTING at this depth (configurable, default 5)
@@ -913,6 +914,59 @@ class Parser:
         )
         return None
 
+    def parse_literal_zone(self) -> LiteralZoneValue:
+        """Parse a literal zone from FENCE_OPEN, LITERAL_CONTENT, FENCE_CLOSE tokens.
+
+        Issue #235: Called when parse_value() encounters a FENCE_OPEN token.
+
+        Returns:
+            LiteralZoneValue with content, info_tag, and fence_marker.
+
+        Raises:
+            ParserError (E006): If FENCE_CLOSE is missing (unterminated zone).
+        """
+        fence_token = self.expect(TokenType.FENCE_OPEN)
+        fence_data = fence_token.value  # dict with fence_marker and info_tag
+        if not isinstance(fence_data, dict) or "fence_marker" not in fence_data:
+            raise ParserError(
+                f"Malformed FENCE_OPEN token at line {fence_token.line}.",
+                fence_token,
+                "E006",
+            )
+        marker = fence_data["fence_marker"]
+        info_tag = fence_data.get("info_tag")
+
+        # Clean info_tag: strip whitespace, normalize to None if empty
+        if info_tag is not None:
+            info_tag = info_tag.strip()
+            if not info_tag:
+                info_tag = None
+
+        # Expect literal content
+        if self.current().type == TokenType.LITERAL_CONTENT:
+            content = self.current().value
+            self.advance()
+        else:
+            content = ""  # Empty literal zone (I2: distinct from absent)
+
+        # Expect closing fence
+        if self.current().type == TokenType.FENCE_CLOSE:
+            self.advance()
+        else:
+            raise ParserError(
+                f"Unterminated literal zone starting at line {fence_token.line}. "
+                f"Expected closing fence '{marker}' but reached "
+                f"{self.current().type.name}.",
+                fence_token,
+                "E006",
+            )
+
+        return LiteralZoneValue(
+            content=content,
+            info_tag=info_tag,
+            fence_marker=marker,
+        )
+
     def parse_value(self) -> Any:
         """Parse a value (string, number, boolean, null, list)."""
         token = self.current()
@@ -1131,6 +1185,19 @@ class Parser:
 
         elif token.type == TokenType.LIST_START:
             return self.parse_list()
+
+        # Issue #235: Literal zone detection
+        # FENCE_OPEN token indicates start of a literal zone (fenced code block).
+        # When a literal zone is the value of an assignment (KEY::\n```...```),
+        # a NEWLINE token sits between ASSIGN and FENCE_OPEN. We handle that
+        # case here: if current is NEWLINE and next is FENCE_OPEN, skip the
+        # NEWLINE so the literal zone is consumed as the assignment value.
+        elif token.type == TokenType.FENCE_OPEN:
+            return self.parse_literal_zone()
+
+        elif token.type == TokenType.NEWLINE and self.peek().type == TokenType.FENCE_OPEN:
+            self.advance()  # Skip NEWLINE before fence
+            return self.parse_literal_zone()
 
         elif token.type == TokenType.IDENTIFIER:
             # Check if this starts an expression with operators (GH#62, GH#65)

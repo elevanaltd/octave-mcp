@@ -204,3 +204,34 @@ class HolographicValue:
     target: str | None
     raw_pattern: str = ""
     tokens: list[Any] | None = None
+
+
+@dataclass
+class LiteralZoneValue:
+    """Literal zone value (fenced code block).
+
+    Issue #235: Represents content between fence markers (``` or longer).
+    Content is preserved exactly as-is -- no NFC normalization, no escape
+    processing, no operator normalization, no variable substitution.
+
+    Follows the HolographicValue/ListValue precedent: value type (not
+    ASTNode subclass). This ensures exhaustive pattern matching catches
+    literal zones and prevents silent normalization through string paths.
+
+    I1: Exempt from normalization (semantic intent is "preserve exactly").
+    I2: Empty content ("") is distinct from absent (no LiteralZoneValue).
+    I3: Nested fences MUST error at parse time, never reach this node.
+
+    Attributes:
+        content: Raw content between fences. Preserved byte-for-byte.
+                 Empty string for empty literal zones (```\\n```).
+        info_tag: Optional language identifier (e.g., "python", "json").
+                  None when no info tag is provided.
+                  Preserved but not validated by OCTAVE parser.
+        fence_marker: The exact fence string used (e.g., "```", "````").
+                      Needed for round-trip emission fidelity.
+    """
+
+    content: str = ""
+    info_tag: str | None = None
+    fence_marker: str = "```"
