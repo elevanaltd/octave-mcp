@@ -1,10 +1,33 @@
 # D3 Technical Blueprint: Issue #235 Literal Zones
 
-**Version**: 1.0.0
-**Date**: 2026-02-16
-**Author**: design-architect (PERMIT_SID: eeaa61f7-8ddf-47dd-8449-24027486c132)
-**Status**: B0-READY
+**Version**: 1.1.0
+**Date**: 2026-02-17
+**Author**: design-architect (PERMIT_SID: 124b84d8-11a9-4806-9b10-4b255297de57)
+**Status**: B0-AMENDED
 **Target Release**: v1.3.0
+
+---
+
+## [B0_AMENDMENTS]
+
+This section documents amendments applied from the B0 validation gate (CONDITIONAL_GO verdict, 2026-02-17).
+
+**BLOCKING items resolved (5/5)**:
+
+| # | Finding | Section(s) Amended | Summary |
+|---|---------|-------------------|---------|
+| B1 | Fence precedence ambiguity | 5.3 | Added decision table with pseudocode covering closing-fence recognition BEFORE nested-fence error, with equal/greater/shorter fence length cases |
+| B2 | NFC coordinate drift | 4.1 | Replaced two-pass approach with single-pass chunk-by-chunk strategy; `_detect_fence_spans` now returns adjusted spans compatible with post-NFC string |
+| B3 | Vague exhaustive match points | 3.2 | Replaced vague `projector.py`/`repair.py` entries with exact function names and expected `LiteralZoneValue` behavior |
+| B4 | I4 audit contract missing | New section 6.4 | Added formal `RepairLog` schema for per-zone receipts (zone_key, line, action, pre/post hash, timestamp, source_stage) |
+| B5 | A9 migration gate undefined | Appendix C | Defined corpus scope (all `.oct.md`), 100% pass threshold, evidence output format |
+
+**SHOULD-IMPROVE items resolved (2/2)**:
+
+| # | Finding | Section(s) Amended | Summary |
+|---|---------|-------------------|---------|
+| S1 | A8 pathological tests incomplete | 10.2 | Added escaped backticks in content, mixed indentation, deep nesting (3+ levels), trailing whitespace variants |
+| S2 | Property tests skip fence content | 10.3 | Replaced `assume("```" not in content)` skip with Hypothesis generators that include fence-like substrings via fence-length scaling |
 
 ---
 
@@ -212,16 +235,25 @@ class LiteralZoneValue:
 
 The `Assignment.value` field is typed as `Any`, so no type union update is needed at the dataclass level. However, all code that pattern-matches on value types must be updated:
 
-**Exhaustive match points** (must add `LiteralZoneValue` handling):
-1. `emitter.py`: `emit_value()` -- line 146
-2. `emitter.py`: `is_absent()` / `needs_quotes()` -- no change needed (LiteralZoneValue is not str/Absent)
-3. `eject.py`: `_convert_value()` -- line 55
-4. `eject.py`: `_format_markdown_value()` -- line 92
-5. `validator.py`: `_to_python_value()` -- line 78
-6. `write.py`: `_normalize_value_for_ast()` -- line 99
-7. `projector.py`: any value traversal
-8. `holographic.py`: value extraction (no change -- holographic patterns cannot contain literal zones)
-9. `repair.py`: value traversal
+**Exhaustive match points** (must add `LiteralZoneValue` handling) [B0-B3]:
+
+Each entry specifies the exact function name, expected behavior for `LiteralZoneValue`, and whether code changes are required.
+
+| # | File | Function | LiteralZoneValue Behavior | Change Required |
+|---|------|----------|--------------------------|-----------------|
+| 1 | `emitter.py` | `emit_value()` | Emit fence_marker + info_tag + content + fence_marker verbatim | YES -- new `isinstance` branch |
+| 2 | `emitter.py` | `is_absent()` | Returns `False` (LiteralZoneValue is never Absent) | NO -- only checks `str`/`Absent` types |
+| 3 | `emitter.py` | `needs_quotes()` | Returns `False` (LiteralZoneValue is not a string) | NO -- only checks `str` type |
+| 4 | `emitter.py` | `emit_assignment()` | Emit literal zone with fences at indent level, content verbatim | YES -- new `isinstance` branch before standard path |
+| 5 | `eject.py` | `_convert_value()` | Return dict with `__literal_zone__`, `content`, `info_tag`, `fence_marker` | YES -- new `isinstance` branch |
+| 6 | `eject.py` | `_format_markdown_value()` | Emit as markdown fenced code block | YES -- new `isinstance` branch |
+| 7 | `validator.py` | `_to_python_value()` | Return the `LiteralZoneValue` object unchanged (constraints operate on it directly) | YES -- new `isinstance` branch returning `value` |
+| 8 | `write.py` | `_normalize_value_for_ast()` | Return the `LiteralZoneValue` object unchanged (must NOT normalize literal content) | YES -- new `isinstance` branch returning `value` |
+| 9 | `projector.py` | `_project_value()` | Return `LiteralZoneValue.content` as raw string for projection output | YES -- new `isinstance` branch |
+| 10 | `projector.py` | `_matches_pattern()` | `LiteralZoneValue` never matches holographic patterns; return `False` | YES -- guard clause |
+| 11 | `holographic.py` | `resolve_holographic()` | No change -- holographic patterns cannot contain literal zones | NO |
+| 12 | `repair.py` | `_repair_value()` | Return `LiteralZoneValue` unchanged (literal zones are never repaired/normalized) | YES -- guard clause returning `value` unchanged |
+| 13 | `repair.py` | `_check_value_integrity()` | Log literal zone presence in RepairLog (see section 6.4) but never modify | YES -- new `isinstance` branch with audit logging |
 
 ### 3.3 Import Updates
 
@@ -235,75 +267,139 @@ In all files that import from `ast_nodes.py`, add `LiteralZoneValue` to the impo
 
 **Tension T1 (I1)**: The lexer currently applies NFC normalization to the ENTIRE input at line 429 of `lexer.py` before any tokenization. Literal zone content must bypass this.
 
-**Concrete Strategy -- Two-Pass Approach**:
+**Concrete Strategy -- Single-Pass Chunk-by-Chunk Approach** [B0-B2]:
+
+The original two-pass design had a coordinate drift bug: `_detect_fence_spans` returned raw-string offsets, but `_selective_nfc_normalize` could change string length (NFC normalization may combine or decompose characters), making the raw offsets invalid for the post-NFC string. The B0 gate identified this as a blocking issue.
+
+**Resolution**: Use a single-pass chunk-by-chunk approach. Instead of detecting spans first and then selectively normalizing, process the content line-by-line, tracking fence state as we go, and building the output string incrementally. This eliminates any offset mapping between pre-NFC and post-NFC coordinates.
 
 ```python
 def tokenize(content: str) -> tuple[list[Token], list[Any]]:
-    # PHASE 1: Detect fence boundaries in RAW content (BEFORE NFC)
-    # This preserves non-NFC characters inside literal zones
+    # SINGLE PASS: Process content chunk-by-chunk, tracking fence state.
+    # NFC is applied only to non-literal chunks as we go.
+    # This avoids coordinate drift between raw and normalized strings.
     raw_content = content
-    fence_spans = _detect_fence_spans(raw_content)
+    content, fence_spans = _normalize_with_fence_detection(raw_content)
 
-    # PHASE 2: Apply NFC only to NON-LITERAL spans
-    # Build a new string where literal spans are preserved raw
-    content = _selective_nfc_normalize(raw_content, fence_spans)
-
-    # PHASE 3: Continue with existing tokenization (tab check modified)
+    # fence_spans now contains offsets valid for the POST-normalization string.
+    # Continue with existing tokenization (tab check modified)
     # ...existing code...
 ```
 
-**`_detect_fence_spans()` specification**:
+**`_normalize_with_fence_detection()` specification**:
 
 ```python
-def _detect_fence_spans(content: str) -> list[tuple[int, int, str, str | None]]:
-    """Detect code fence boundaries in raw content BEFORE NFC normalization.
+def _normalize_with_fence_detection(
+    content: str,
+) -> tuple[str, list[tuple[int, int, str, str | None]]]:
+    """Single-pass fence detection with selective NFC normalization.
 
-    Scans line-by-line for opening/closing fence patterns.
-    A fence is 3+ backtick characters at the START of a line (column 0),
-    optionally preceded by up to 3 spaces of indentation.
+    Processes content line-by-line. When outside a fence, each line is
+    NFC-normalized before appending to the output buffer. When inside a
+    fence, lines are appended verbatim (no NFC). Fence span offsets are
+    recorded against the OUTPUT buffer, so they are always valid for the
+    returned string.
+
+    This eliminates the coordinate drift problem where raw-string offsets
+    became invalid after NFC normalization changed string length.
 
     Args:
         content: Raw (non-NFC-normalized) content string.
 
     Returns:
-        List of (start_offset, end_offset, fence_marker, info_tag) tuples.
-        start_offset: byte offset of the opening fence line start.
-        end_offset: byte offset of the closing fence line end.
-        fence_marker: the exact backtick sequence (e.g., "```", "````").
-        info_tag: the info string if present, or None.
+        Tuple of:
+        - normalized_content: String with NFC applied outside fences,
+          literal zone content preserved exactly.
+        - fence_spans: List of (start_offset, end_offset, fence_marker,
+          info_tag) tuples. Offsets are valid for normalized_content.
 
     Raises:
         LexerError: E006 if a fence is opened but never closed.
         LexerError: E007 (subtype E007_NESTED_FENCE) if a fence of
-                    equal or greater length appears inside an open fence.
+                    equal or greater length appears inside an open fence
+                    (evaluated per the precedence table in section 5.3.1).
     """
+```
+
+**Pseudocode for single-pass approach**:
+
+```python
+def _normalize_with_fence_detection(content: str):
+    lines = content.split("\n")
+    output_parts = []
+    fence_spans = []
+    output_offset = 0
+    in_fence = False
+    current_fence_marker = None
+    open_line = -1
+    span_start = -1
+
+    for line_num, line in enumerate(lines, start=1):
+        match = FENCE_PATTERN.match(line)
+
+        if match and not in_fence:
+            # Opening fence: start literal zone
+            backtick_seq = match.group(3)
+            info_tag = match.group(4).strip() or None
+            in_fence = True
+            current_fence_marker = backtick_seq
+            open_line = line_num
+            # NFC-normalize the fence line itself (it's structural, not content)
+            normalized_line = unicodedata.normalize("NFC", line)
+            output_parts.append(normalized_line)
+            span_start = output_offset
+            output_offset += len(normalized_line) + 1  # +1 for newline
+
+        elif match and in_fence:
+            backtick_seq = match.group(3)
+            trailing = match.group(4)
+            # Use precedence table from section 5.3.1
+            result = _evaluate_fence_line(
+                backtick_seq, current_fence_marker, trailing,
+                line_num, 1, open_line
+            )
+            if result == "close":
+                # Append closing fence line verbatim
+                output_parts.append(line)
+                output_offset += len(line) + 1
+                fence_spans.append((
+                    span_start, output_offset - 1,
+                    current_fence_marker, info_tag
+                ))
+                in_fence = False
+                current_fence_marker = None
+            else:  # "content"
+                # Shorter fence inside literal zone: preserve verbatim
+                output_parts.append(line)
+                output_offset += len(line) + 1
+
+        elif in_fence:
+            # Inside literal zone: preserve verbatim (NO NFC)
+            output_parts.append(line)
+            output_offset += len(line) + 1
+
+        else:
+            # Outside literal zone: apply NFC normalization
+            normalized_line = unicodedata.normalize("NFC", line)
+            output_parts.append(normalized_line)
+            output_offset += len(normalized_line) + 1
+
+    if in_fence:
+        raise LexerError(
+            f"E006: Unterminated literal zone. Fence '{current_fence_marker}' "
+            f"opened at line {open_line} was never closed.",
+            open_line, 1, "E006"
+        )
+
+    return "\n".join(output_parts), fence_spans
 ```
 
 **Regex pattern for fence detection**:
 
 ```python
 # Matches 3+ backticks at line start (with optional 0-3 spaces indent)
-# Captures: (1) the backtick sequence, (2) optional info tag
-FENCE_PATTERN = re.compile(r'^( {0,3})((`{3,})([^\n`]*)?)$', re.MULTILINE)
-```
-
-**`_selective_nfc_normalize()` specification**:
-
-```python
-def _selective_nfc_normalize(
-    content: str,
-    fence_spans: list[tuple[int, int, str, str | None]]
-) -> str:
-    """Apply NFC normalization only to content OUTSIDE fence spans.
-
-    Args:
-        content: Raw content.
-        fence_spans: List of (start, end, marker, tag) from _detect_fence_spans.
-
-    Returns:
-        Content with NFC applied to non-literal regions,
-        literal zone content preserved exactly.
-    """
+# Captures: (1) indent, (2) full fence+info, (3) the backtick sequence, (4) info tag
+FENCE_PATTERN = re.compile(r'^( {0,3})((`{3,})([^\n`]*)?)$')
 ```
 
 ### 4.2 Tab Bypass
@@ -466,61 +562,76 @@ def parse_value(self) -> Any:
 - `E007` remains the family code for "structural ambiguity" errors
 - Subtypes distinguish the specific issue via the error message prefix
 
-**Detection happens in the lexer** (`_detect_fence_spans()`), not the parser:
+#### 5.3.1 Fence Precedence Decision Table [B0-B1]
+
+When the lexer encounters a backtick sequence at line start while inside an open fence, it MUST evaluate in the following precedence order. Closing-fence recognition is checked BEFORE nested-fence error.
+
+| # | Condition | Action | Rationale |
+|---|-----------|--------|-----------|
+| 1 | `len(seq) == len(open_fence)` AND line has no trailing non-whitespace | **CLOSE fence** | Exact-match closing fence per CommonMark |
+| 2 | `len(seq) > len(open_fence)` | **ERROR E007_NESTED_FENCE** | Ambiguous nesting violates I3 |
+| 3 | `len(seq) == len(open_fence)` AND line has trailing content | **ERROR E007_NESTED_FENCE** | Not a valid closing fence; same-length with trailing content is ambiguous |
+| 4 | `len(seq) < len(open_fence)` | **CONTENT** -- treat as literal text | Shorter fences are safe content per fence-length scaling |
+
+**Pseudocode implementing the precedence table**:
 
 ```python
-# In _detect_fence_spans():
-# When scanning inside an open fence, if we encounter another fence
-# of equal or greater length, raise E007 with nested fence subtype.
+def _evaluate_fence_line(
+    backtick_seq: str,
+    open_fence_marker: str,
+    trailing_content: str,
+    line: int,
+    column: int,
+    open_line: int,
+) -> str:
+    """Evaluate a backtick sequence found at line start inside an open fence.
 
-if in_fence and len(backtick_sequence) >= len(current_fence_marker):
-    # This is NOT a closing fence (closing must be exact match)
-    # This IS a nested fence attempt -- violates I3
-    raise LexerError(
-        f"E007_NESTED_FENCE: Nested literal zone detected at line {line}. "
-        f"Found fence '{backtick_sequence}' (length {len(backtick_sequence)}) "
-        f"inside literal zone opened with '{current_fence_marker}' "
-        f"(length {len(current_fence_marker)}) at line {open_line}. "
-        f"Use a longer fence to wrap content containing shorter fences, "
-        f"e.g., ```` to wrap content with ```.",
-        line, column, "E007"
-    )
+    Returns: "close", "content", or raises LexerError for E007.
+
+    PRECEDENCE ORDER (B0-B1 amendment):
+      1. Closing fence (exact match, no trailing content) -- checked FIRST
+      2. Nested fence error (equal-or-greater length)     -- checked SECOND
+      3. Content (shorter length)                         -- fallthrough
+    """
+    seq_len = len(backtick_seq)
+    open_len = len(open_fence_marker)
+
+    # CASE 1: Exact match with clean line -> CLOSE
+    if seq_len == open_len and not trailing_content.strip():
+        return "close"
+
+    # CASE 2: Equal length with trailing content -> ERROR (ambiguous)
+    # CASE 3: Greater length -> ERROR (nested fence)
+    if seq_len >= open_len:
+        raise LexerError(
+            f"E007_NESTED_FENCE: Nested literal zone detected at line {line}. "
+            f"Found fence '{backtick_seq}' (length {seq_len}) "
+            f"inside literal zone opened with '{open_fence_marker}' "
+            f"(length {open_len}) at line {open_line}. "
+            f"Use a longer fence to wrap content containing shorter fences, "
+            f"e.g., {'`' * (open_len + 1)} to wrap content with {open_fence_marker}.",
+            line, column, "E007"
+        )
+
+    # CASE 4: Shorter fence -> treat as content
+    return "content"
 ```
 
-**Fence closing logic**:
+**Detection happens in the lexer** (`_normalize_with_fence_detection()`), not the parser. The `_evaluate_fence_line` function above is called for each backtick sequence found at line start while inside an open fence.
+
+**Fence closing logic summary**:
 
 A closing fence MUST have EXACTLY the same number of backticks as the opening fence, at the start of a line (with optional 0-3 spaces indent), with no other content on that line (except optional trailing whitespace).
 
-```python
-# Closing fence detection:
-# - Must be at start of line (column 0-3)
-# - Must have EXACTLY len(current_fence_marker) backticks
-# - No non-whitespace characters after the backticks on the same line
-if (len(backtick_sequence) == len(current_fence_marker)
-    and not trailing_content.strip()):
-    # This is the closing fence
-    in_fence = False
-```
-
 This means:
-- ```` (4 backticks) does NOT close ``` (3 backticks)
-- ``` (3 backticks) does NOT close ```` (4 backticks)
-- Only exact match closes
-- Content can contain shorter fence sequences freely
+- ```` (4 backticks) does NOT close ``` (3 backticks) -- Case 4, treated as content
+- ``` (3 backticks) does NOT close ```` (4 backticks) -- Case 4, treated as content
+- ``` (3 backticks) with trailing text does NOT close ``` (3 backticks) -- Case 3, raises E007
+- Only exact match with clean line closes -- Case 1
 
 ### 5.4 E006 Unclosed Fence Handling
 
-If `_detect_fence_spans()` reaches EOF while a fence is still open:
-
-```python
-if in_fence:
-    raise LexerError(
-        f"E006: Unterminated literal zone. Fence '{current_fence_marker}' "
-        f"opened at line {open_line} was never closed. "
-        f"Add a matching closing fence: {current_fence_marker}",
-        open_line, open_column, "E006"
-    )
-```
+If `_normalize_with_fence_detection()` reaches EOF while a fence is still open, the E006 error is raised (see pseudocode in section 4.1).
 
 ### 5.5 Update TOKEN_PATTERNS and Imports
 
@@ -601,6 +712,108 @@ def emit_assignment(assignment: Assignment, indent: int = 0, ...) -> str:
 
     # ... existing non-literal path ...
 ```
+
+### 6.4 I4 Audit Contract: RepairLog Schema [B0-B4]
+
+**Tension T4 (I4)**: Transform auditability requires formal per-zone receipts. Every literal zone that passes through the repair/normalization pipeline must produce a `RepairLogEntry` proving it was preserved, not silently modified.
+
+**RepairLogEntry dataclass**:
+
+```python
+@dataclass
+class RepairLogEntry:
+    """Per-zone audit receipt for I4 transform auditability.
+
+    Issue #235: Every literal zone produces a receipt proving its content
+    was preserved through the repair/normalization pipeline.
+
+    Attributes:
+        zone_key: The OCTAVE key path (e.g., "DOC.CODE", "DOC.SECTION.CONFIG").
+        line: Line number of the opening fence in the source document.
+        action: One of "preserved" or "stripped".
+            - "preserved": Content passed through unchanged (expected case).
+            - "stripped": Zone was removed (only if the entire assignment was removed
+              by a higher-level repair operation, e.g., schema-driven key removal).
+        pre_hash: SHA-256 hex digest of the literal zone content BEFORE pipeline.
+        post_hash: SHA-256 hex digest of the literal zone content AFTER pipeline.
+            Must equal pre_hash when action="preserved".
+        timestamp: ISO 8601 timestamp of when the receipt was generated.
+        source_stage: Pipeline stage that produced this receipt. One of:
+            - "lexer": NFC bypass confirmed content was not normalized.
+            - "parser": LiteralZoneValue created with raw content.
+            - "emitter": Content emitted verbatim.
+            - "repair": Repair pipeline passed zone through unchanged.
+            - "write": Write tool preserved zone in output.
+    """
+
+    zone_key: str
+    line: int
+    action: str  # "preserved" | "stripped"
+    pre_hash: str
+    post_hash: str
+    timestamp: str
+    source_stage: str
+```
+
+**RepairLog aggregation**:
+
+```python
+@dataclass
+class RepairLog:
+    """Aggregated audit log for all literal zones in a document.
+
+    Included in MCP tool responses when literal zones are present.
+    Satisfies I4 (Transform Auditability) for literal zone content.
+    """
+
+    entries: list[RepairLogEntry]
+
+    @property
+    def all_preserved(self) -> bool:
+        """True if every literal zone was preserved unchanged."""
+        return all(
+            e.action == "preserved" and e.pre_hash == e.post_hash
+            for e in self.entries
+        )
+
+    def to_dict(self) -> list[dict]:
+        """Serialize for inclusion in MCP tool response."""
+        return [
+            {
+                "zone_key": e.zone_key,
+                "line": e.line,
+                "action": e.action,
+                "pre_hash": e.pre_hash,
+                "post_hash": e.post_hash,
+                "timestamp": e.timestamp,
+                "source_stage": e.source_stage,
+            }
+            for e in self.entries
+        ]
+```
+
+**Integration with MCP tools**: All three tools (validate, write, eject) include `repair_log` in the response when literal zones are present:
+
+```json
+{
+  "zone_report": { "...existing fields..." },
+  "repair_log": [
+    {
+      "zone_key": "DOC.CODE",
+      "line": 5,
+      "action": "preserved",
+      "pre_hash": "a1b2c3...",
+      "post_hash": "a1b2c3...",
+      "timestamp": "2026-02-17T01:30:00Z",
+      "source_stage": "write"
+    }
+  ]
+}
+```
+
+**Invariant**: When `action="preserved"`, `pre_hash` MUST equal `post_hash`. If they differ, the pipeline has a bug -- this is a hard assertion failure, not a soft warning.
+
+---
 
 ### 6.3 Round-Trip Fidelity Requirements
 
@@ -899,7 +1112,7 @@ Fence '{marker}' opened at line {open_line} was never closed.
 Add a matching closing fence: {marker}
 ```
 
-**Raised by**: `_detect_fence_spans()` in lexer.py
+**Raised by**: `_normalize_with_fence_detection()` in lexer.py
 
 **Example input**:
 ```
@@ -939,7 +1152,7 @@ Use a longer fence to wrap content containing shorter fences,
 e.g., ```` to wrap content with ```.
 ```
 
-**Raised by**: `_detect_fence_spans()` in lexer.py
+**Raised by**: `_normalize_with_fence_detection()` in lexer.py
 
 **Educational guidance** (per I3 -- "ERROR with educational context"):
 The error message tells the author HOW to fix the issue (use longer fence), following the established pattern of OCTAVE error messages.
@@ -948,9 +1161,9 @@ The error message tells the author HOW to fix the issue (use longer fence), foll
 
 | Code | Subtype | Source | Description |
 |------|---------|--------|-------------|
-| E006 | - | lexer.py `_detect_fence_spans()` | Unterminated literal zone |
+| E006 | - | lexer.py `_normalize_with_fence_detection()` | Unterminated literal zone |
 | E007 | E007_UNCLOSED_LIST | parser.py `parse_list()` | Unclosed bracket (existing) |
-| E007 | E007_NESTED_FENCE | lexer.py `_detect_fence_spans()` | Nested fence inside literal zone |
+| E007 | E007_NESTED_FENCE | lexer.py `_normalize_with_fence_detection()` via `_evaluate_fence_line()` | Nested fence inside literal zone |
 
 ---
 
@@ -1026,6 +1239,71 @@ def test_shorter_fence_inside_is_content():
     assert "```" in doc.sections[0].value.content
 ```
 
+#### Pathological Edge Cases (A8) [B0-S1]
+
+```python
+def test_escaped_backticks_in_content():
+    """Escaped backticks inside literal zone are preserved verbatim."""
+    content = '===DOC===\nCODE::```\nsome \\` escaped \\`\\`\\` backticks\n```\n===END==='
+    doc = parse(content)
+    assert "\\`" in doc.sections[0].value.content
+    assert "\\`\\`\\`" in doc.sections[0].value.content
+
+def test_mixed_indentation_in_literal_zone():
+    """Mixed tabs and spaces inside literal zone are preserved exactly."""
+    inner = "\tline1\n  line2\n\t  line3\n    \tline4"
+    content = f'===DOC===\nCODE::```\n{inner}\n```\n===END==='
+    doc = parse(content)
+    assert doc.sections[0].value.content == inner
+
+def test_deep_nesting_three_levels():
+    """Three levels of fence scaling: 5-tick wraps 4-tick wraps 3-tick content."""
+    content = (
+        '===DOC===\n'
+        'OUTER::`````\n'
+        '````\n'
+        '```\n'
+        'innermost\n'
+        '```\n'
+        '````\n'
+        '`````\n'
+        '===END==='
+    )
+    doc = parse(content)
+    lz = doc.sections[0].value
+    assert isinstance(lz, LiteralZoneValue)
+    assert "````" in lz.content
+    assert "```" in lz.content
+    assert "innermost" in lz.content
+    assert lz.fence_marker == "`````"
+
+def test_trailing_whitespace_on_closing_fence():
+    """Closing fence with trailing spaces/tabs is still recognized as closing."""
+    content = '===DOC===\nCODE::```\nhello\n```   \n===END==='
+    doc = parse(content)
+    assert doc.sections[0].value.content == "hello"
+
+def test_trailing_whitespace_on_opening_fence():
+    """Opening fence with trailing whitespace after info tag."""
+    content = '===DOC===\nCODE::```python   \nhello\n```\n===END==='
+    doc = parse(content)
+    assert doc.sections[0].value.info_tag == "python"
+    assert doc.sections[0].value.content == "hello"
+
+def test_content_line_is_only_backticks_shorter_than_fence():
+    """A line of 2 backticks inside a 3-backtick fence is content."""
+    content = '===DOC===\nCODE::```\n``\n```\n===END==='
+    doc = parse(content)
+    assert doc.sections[0].value.content == "``"
+
+def test_empty_lines_around_content():
+    """Empty lines before/after content inside literal zone are preserved."""
+    inner = "\n\nhello\n\n"
+    content = f'===DOC===\nCODE::```\n{inner}```\n===END==='
+    doc = parse(content)
+    assert doc.sections[0].value.content == inner
+```
+
 #### Tab Bypass
 
 ```python
@@ -1072,14 +1350,72 @@ def test_absent_vs_empty_literal():
 Using Hypothesis:
 
 ```python
-from hypothesis import given, strategies as st
+from hypothesis import given, assume, strategies as st
 
-@given(st.text(min_size=0, max_size=1000))
-def test_any_content_round_trips(content):
-    """Any string content can be placed in a literal zone and round-trips."""
-    # Skip content containing fence sequences
-    assume("```" not in content)
-    octave = f'===DOC===\nCODE::```\n{content}\n```\n===END==='
+# --- Hypothesis generators that INCLUDE fence-like substrings [B0-S2] ---
+
+def _content_with_fences_strategy(max_fence_len: int = 6):
+    """Generate content that may contain fence-like backtick sequences.
+
+    Instead of skipping content with fences (the old approach), this
+    generator deliberately includes fence-like substrings and uses
+    fence-length scaling to wrap them safely.
+
+    Returns a tuple of (fence_marker, content) where fence_marker is
+    always longer than any backtick sequence in content.
+    """
+    return st.tuples(
+        # Generate content that may include backtick runs
+        st.text(
+            alphabet=st.sampled_from(
+                list("abcdefghijklmnopqrstuvwxyz \t\n`")
+            ),
+            min_size=0,
+            max_size=500,
+        ),
+    ).map(lambda t: _scale_fence_for_content(t[0]))
+
+
+def _scale_fence_for_content(content: str) -> tuple[str, str]:
+    """Compute the minimum safe fence marker for content.
+
+    Scans content for the longest run of backticks and returns a fence
+    marker that is strictly longer.
+    """
+    max_run = 0
+    current_run = 0
+    for ch in content:
+        if ch == "`":
+            current_run += 1
+            max_run = max(max_run, current_run)
+        else:
+            current_run = 0
+    # Fence must be at least 3 and strictly longer than any run in content
+    fence_len = max(3, max_run + 1)
+    return ("`" * fence_len, content)
+
+
+@given(_content_with_fences_strategy())
+def test_any_content_round_trips_with_fence_scaling(fence_and_content):
+    """Any string content -- including fence-like substrings -- can be
+    placed in a literal zone using fence-length scaling and round-trips.
+
+    B0-S2: Replaces the previous test that skipped fence-containing content.
+    This test uses Hypothesis generators that deliberately produce content
+    with backtick runs, then dynamically scales the fence length to wrap
+    them safely.
+    """
+    fence, content = fence_and_content
+    # Filter out content with newline-backtick patterns that would create
+    # a line-start fence sequence equal or longer than our wrapping fence
+    lines = content.split("\n")
+    max_line_fence = max(
+        (len(line) - len(line.lstrip("`")) for line in lines),
+        default=0,
+    )
+    assume(max_line_fence < len(fence))
+
+    octave = f'===DOC===\nCODE::{fence}\n{content}\n{fence}\n===END==='
     try:
         doc = parse(octave)
         emitted = emit(doc)
@@ -1087,6 +1423,7 @@ def test_any_content_round_trips(content):
         assert doc.sections[0].value.content == doc2.sections[0].value.content
     except (LexerError, ParserError):
         pass  # Some content may be invalid OCTAVE outside the fence
+
 
 @given(st.integers(min_value=3, max_value=10))
 def test_fence_length_scaling(n):
@@ -1096,6 +1433,17 @@ def test_fence_length_scaling(n):
     doc = parse(content)
     assert doc.sections[0].value.fence_marker == fence
     assert doc.sections[0].value.content == "hello"
+
+
+@given(st.integers(min_value=3, max_value=8), st.integers(min_value=1, max_value=5))
+def test_shorter_fences_in_content_are_preserved(outer_len, inner_len):
+    """Fence-like sequences shorter than the wrapping fence are content."""
+    assume(inner_len < outer_len)
+    outer_fence = "`" * outer_len
+    inner_fence = "`" * inner_len
+    octave = f'===DOC===\nCODE::{outer_fence}\n{inner_fence}\n{outer_fence}\n===END==='
+    doc = parse(octave)
+    assert inner_fence in doc.sections[0].value.content
 ```
 
 ### 10.4 Regression Tests
@@ -1113,7 +1461,7 @@ def test_fence_length_scaling(n):
 | File | Changes |
 |------|---------|
 | `src/octave_mcp/core/ast_nodes.py` | Add `LiteralZoneValue` dataclass |
-| `src/octave_mcp/core/lexer.py` | Add `FENCE_OPEN/CLOSE/LITERAL_CONTENT` token types, `_detect_fence_spans()`, `_selective_nfc_normalize()`, tab bypass, fence detection |
+| `src/octave_mcp/core/lexer.py` | Add `FENCE_OPEN/CLOSE/LITERAL_CONTENT` token types, `_normalize_with_fence_detection()`, `_evaluate_fence_line()`, tab bypass, fence detection |
 | `src/octave_mcp/core/parser.py` | Add `parse_literal_zone()`, update `parse_value()`, update imports |
 | `src/octave_mcp/core/emitter.py` | Update `emit_value()` for `LiteralZoneValue`, update `emit_assignment()` for literal zone indentation |
 | `src/octave_mcp/core/validator.py` | Update `_to_python_value()`, add `contains_literal_zones` to results |
@@ -1129,8 +1477,8 @@ def test_fence_length_scaling(n):
 Phase 1: Foundation (lexer + AST)
 1. `LiteralZoneValue` dataclass in ast_nodes.py
 2. New token types in lexer.py
-3. `_detect_fence_spans()` with NFC bypass and tab bypass
-4. `_selective_nfc_normalize()`
+3. `_normalize_with_fence_detection()` with NFC bypass and tab bypass
+4. `_evaluate_fence_line()` fence precedence logic
 5. Token emission for literal zones in tokenize()
 
 Phase 2: Core Pipeline (parser + emitter)
@@ -1159,6 +1507,75 @@ Phase 5: Spec + Grammar
 **Non-breaking change**: Documents without literal zones parse identically before and after this change. The backtick character (`) is currently an unrecognized character in the lexer and would raise `E005: Unexpected character`. Since no existing valid OCTAVE documents contain backticks at line start, this change introduces new syntax without breaking existing documents.
 
 **A9 assumption validation**: The implementation must include a migration test that parses the entire existing `.oct.md` corpus to verify no documents are affected.
+
+### A9 Migration Gate Definition [B0-B5]
+
+The A9 migration gate validates the backward compatibility assumption (Appendix C) by parsing the entire existing corpus.
+
+**Corpus scope**: All files matching `**/*.oct.md` in the repository root, excluding:
+- Files in `node_modules/`, `.git/`, `__pycache__/`, `.venv/` directories
+- Files in `tests/fixtures/` that are intentionally malformed (these have `_invalid` or `_error` in their filename)
+
+**Pass threshold**: 100% -- every file in scope MUST parse without errors under the new lexer/parser with literal zone support. Zero regressions allowed.
+
+**Test implementation**:
+
+```python
+def test_a9_migration_no_regressions():
+    """A9: Verify that all existing .oct.md files parse successfully
+    with literal zone support enabled.
+
+    This test validates the backward compatibility assumption that no
+    existing valid OCTAVE documents contain backtick sequences at line
+    start that would be interpreted as fence markers.
+
+    Gate criteria: 100% pass rate, zero regressions.
+    """
+    import glob
+    from pathlib import Path
+
+    repo_root = Path(__file__).parents[3]  # Adjust to reach repo root
+    oct_files = glob.glob(str(repo_root / "**/*.oct.md"), recursive=True)
+
+    # Exclude known directories
+    exclude_dirs = {"node_modules", ".git", "__pycache__", ".venv"}
+    oct_files = [
+        f for f in oct_files
+        if not any(d in Path(f).parts for d in exclude_dirs)
+    ]
+
+    # Exclude intentionally malformed fixtures
+    oct_files = [
+        f for f in oct_files
+        if "_invalid" not in Path(f).name and "_error" not in Path(f).name
+    ]
+
+    results = {"passed": [], "failed": []}
+
+    for filepath in oct_files:
+        try:
+            content = Path(filepath).read_text(encoding="utf-8")
+            parse(content)  # Must not raise
+            results["passed"].append(filepath)
+        except Exception as e:
+            results["failed"].append({"file": filepath, "error": str(e)})
+
+    # Evidence output
+    assert len(results["failed"]) == 0, (
+        f"A9 MIGRATION GATE FAILED: {len(results['failed'])} of "
+        f"{len(oct_files)} files failed to parse.\n"
+        + "\n".join(
+            f"  FAIL: {r['file']}: {r['error']}" for r in results["failed"]
+        )
+    )
+```
+
+**Evidence output format**: On success, the test produces no output (standard pytest pass). On failure, the assertion message includes:
+- Total file count
+- Failed file count
+- Per-failure: file path and error message
+
+**CI integration**: This test runs as part of the standard `pytest` suite. It is NOT gated behind a flag -- it runs on every CI build to catch regressions.
 
 ---
 
