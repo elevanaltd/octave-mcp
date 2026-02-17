@@ -589,22 +589,33 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
     Raises:
         LexerError: On invalid syntax (tabs, malformed operators, unbalanced brackets)
     """
-    # Apply NFC unicode normalization
-    content = unicodedata.normalize("NFC", content)
+    # Apply NFC unicode normalization with fence detection (Issue #235)
+    # Replaces blanket NFC: literal zone content is preserved verbatim (D3: zero processing)
+    content, fence_spans = _normalize_with_fence_detection(content)
 
-    # ... (existing checks)
-
-    # Check for tabs
-    if "\t" in content:
-        line = content[: content.index("\t")].count("\n") + 1
-        column = len(content[: content.index("\t")].split("\n")[-1]) + 1
-        raise LexerError("Tabs are not allowed. Use 2 spaces for indentation.", line, column, "E005")
+    # Check for tabs OUTSIDE literal zones only (Issue #235: tab bypass)
+    for i, char in enumerate(content):
+        if char == "\t":
+            # Check if this position falls within any fence span
+            in_literal = any(start <= i < end for start, end, _, _ in fence_spans)
+            if not in_literal:
+                tab_line = content[:i].count("\n") + 1
+                tab_column = len(content[:i].split("\n")[-1]) + 1
+                raise LexerError(
+                    "Tabs are not allowed. Use 2 spaces for indentation.",
+                    tab_line,
+                    tab_column,
+                    "E005",
+                )
 
     tokens: list[Token] = []
     repairs: list[Any] = []
     line = 1
     column = 1
     pos = 0
+
+    # Issue #235: Track which fence span we are expecting next
+    fence_span_idx = 0
 
     # Track bracket depth for unbalanced bracket detection (GH#180)
     # Stack of (bracket_char, line, column) for each opening bracket
@@ -614,6 +625,91 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
     compiled_patterns = [(re.compile(pattern), token_type) for pattern, token_type in TOKEN_PATTERNS]
 
     while pos < len(content):
+        # Issue #235: Check if current position is the start of a fence span
+        # Emit FENCE_OPEN, LITERAL_CONTENT, FENCE_CLOSE tokens and skip past span
+        if fence_span_idx < len(fence_spans) and pos == fence_spans[fence_span_idx][0]:
+            span_start, span_end, marker, tag = fence_spans[fence_span_idx]
+
+            # Emit FENCE_OPEN token
+            tokens.append(
+                Token(
+                    TokenType.FENCE_OPEN,
+                    {"fence_marker": marker, "info_tag": tag},
+                    line,
+                    column,
+                )
+            )
+
+            # Find content boundaries within the span
+            # content_start: position after the first newline (end of opening fence line)
+            # content_end: position of the last newline before closing fence line
+            first_newline = content.index("\n", span_start)
+            content_start = first_newline + 1
+
+            # Find the start of the closing fence line
+            # The closing fence is the last line of the span
+            last_newline = content.rindex("\n", span_start, span_end)
+            content_end = last_newline
+
+            # Advance line past opening fence line's newline
+            line += 1  # Move past opening fence line's newline
+            column = 1
+
+            # Extract literal content
+            if content_start <= content_end:
+                literal_text = content[content_start:content_end]
+            else:
+                # Empty literal zone (opening fence immediately followed by closing fence)
+                literal_text = ""
+
+            # Emit LITERAL_CONTENT token (line is the first content line)
+            content_line = line
+            if literal_text:
+                tokens.append(Token(TokenType.LITERAL_CONTENT, literal_text, content_line, 1))
+                # Count newlines in literal content to advance line tracking
+                content_newlines = literal_text.count("\n")
+                line += content_newlines
+                if content_newlines > 0:
+                    line += 1  # Move past the newline before closing fence
+                else:
+                    line += 1  # Single line of content, move past its newline
+            else:
+                # Empty literal zone: still emit empty LITERAL_CONTENT
+                tokens.append(Token(TokenType.LITERAL_CONTENT, "", content_line, 1))
+
+            # Emit FENCE_CLOSE token
+            close_line = line
+            # Find the indent of the closing fence line
+            close_fence_start = last_newline + 1
+            close_column = 1
+            tokens.append(Token(TokenType.FENCE_CLOSE, marker, close_line, close_column))
+
+            # Advance past the span
+            # Count the closing fence line's newline in line tracking
+            closing_fence_text = content[close_fence_start:span_end]
+            # Move pos past the entire span
+            pos = span_end
+            # Check if there's a newline right after span_end to consume
+            if pos < len(content) and content[pos] == "\n":
+                # The span_end points to the end of the closing fence line
+                # but there may be a trailing newline
+                pass
+
+            # Update line to be past the closing fence
+            line = close_line + 1
+            column = 1
+
+            # Handle the case where the span ends at the boundary
+            # pos should be at span_end, which is after closing fence line content
+            # but before the newline that follows
+            if pos < len(content) and content[pos] == "\n":
+                # Emit NEWLINE token for the line break after closing fence
+                tokens.append(Token(TokenType.NEWLINE, "\n", close_line, len(closing_fence_text) + 1))
+                pos += 1
+
+            fence_span_idx += 1
+            continue
+
         # ... (whitespace handling)
         # Track whitespace (spaces only, not newlines)
         if content[pos] == " ":

@@ -582,3 +582,244 @@ class TestNormalizeWithFenceDetectionMultiple:
         _, _, marker, tag = spans[0]
         assert marker == "````"
         assert tag == "python"
+
+
+# ---------------------------------------------------------------------------
+# T06: tokenize() wiring — token emission + tab bypass
+# ---------------------------------------------------------------------------
+
+
+class TestTokenizeTabBypass:
+    """Tab bypass: tabs inside literal zones do NOT raise E005."""
+
+    def test_tab_inside_literal_zone_does_not_raise(self) -> None:
+        """Tabs inside a literal zone must NOT raise E005."""
+        from octave_mcp.core.lexer import tokenize
+
+        content = "```\n\thello\n```"
+        tokens, _ = tokenize(content)
+        # Should succeed without raising LexerError
+        types = [t.type.name for t in tokens]
+        assert "FENCE_OPEN" in types
+
+    def test_tab_outside_literal_zone_still_raises_e005(self) -> None:
+        """Tabs outside literal zones must still raise E005."""
+        from octave_mcp.core.lexer import LexerError, tokenize
+
+        content = "\thello"
+        with pytest.raises(LexerError) as exc_info:
+            tokenize(content)
+        assert exc_info.value.error_code == "E005"
+
+    def test_tab_before_literal_zone_raises_e005(self) -> None:
+        """Tab on a line before the literal zone raises E005."""
+        from octave_mcp.core.lexer import LexerError, tokenize
+
+        content = "\tbad\n```\n\tok inside\n```"
+        with pytest.raises(LexerError) as exc_info:
+            tokenize(content)
+        assert exc_info.value.error_code == "E005"
+
+    def test_tab_after_literal_zone_raises_e005(self) -> None:
+        """Tab on a line after the literal zone raises E005."""
+        from octave_mcp.core.lexer import LexerError, tokenize
+
+        content = "```\n\tok inside\n```\n\tbad"
+        with pytest.raises(LexerError) as exc_info:
+            tokenize(content)
+        assert exc_info.value.error_code == "E005"
+
+    def test_mixed_tabs_and_spaces_inside_literal_zone_preserved(self) -> None:
+        """Mixed tabs and spaces inside literal zone are preserved."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\n\t  mixed\t\n```"
+        tokens, _ = tokenize(content)
+        literal_tokens = [t for t in tokens if t.type == TokenType.LITERAL_CONTENT]
+        assert len(literal_tokens) == 1
+        assert "\t" in literal_tokens[0].value
+
+
+class TestTokenizeFenceTokenEmission:
+    """Token emission: FENCE_OPEN, LITERAL_CONTENT, FENCE_CLOSE."""
+
+    def test_simple_literal_zone_emits_three_tokens(self) -> None:
+        """A simple literal zone emits FENCE_OPEN, LITERAL_CONTENT, FENCE_CLOSE."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nhello\n```"
+        tokens, _ = tokenize(content)
+        types = [t.type for t in tokens]
+        assert TokenType.FENCE_OPEN in types
+        assert TokenType.LITERAL_CONTENT in types
+        assert TokenType.FENCE_CLOSE in types
+
+    def test_fence_open_value_is_dict(self) -> None:
+        """FENCE_OPEN token value is a dict with fence_marker and info_tag."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```python\nhello\n```"
+        tokens, _ = tokenize(content)
+        fence_open = next(t for t in tokens if t.type == TokenType.FENCE_OPEN)
+        assert isinstance(fence_open.value, dict)
+        assert fence_open.value["fence_marker"] == "```"
+        assert fence_open.value["info_tag"] == "python"
+
+    def test_fence_open_info_tag_none_when_absent(self) -> None:
+        """FENCE_OPEN info_tag is None when no tag provided."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nhello\n```"
+        tokens, _ = tokenize(content)
+        fence_open = next(t for t in tokens if t.type == TokenType.FENCE_OPEN)
+        assert fence_open.value["info_tag"] is None
+
+    def test_literal_content_is_raw_string(self) -> None:
+        """LITERAL_CONTENT token value is the raw content string."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nhello world\n```"
+        tokens, _ = tokenize(content)
+        literal = next(t for t in tokens if t.type == TokenType.LITERAL_CONTENT)
+        assert literal.value == "hello world"
+
+    def test_fence_close_value_is_marker(self) -> None:
+        """FENCE_CLOSE token value is the fence marker string."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nhello\n```"
+        tokens, _ = tokenize(content)
+        fence_close = next(t for t in tokens if t.type == TokenType.FENCE_CLOSE)
+        assert fence_close.value == "```"
+
+    def test_empty_literal_zone(self) -> None:
+        """Empty literal zone produces empty LITERAL_CONTENT."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\n```"
+        tokens, _ = tokenize(content)
+        types = [t.type for t in tokens]
+        assert TokenType.FENCE_OPEN in types
+        assert TokenType.FENCE_CLOSE in types
+        # Empty literal zone may or may not have LITERAL_CONTENT with empty string
+        literal_tokens = [t for t in tokens if t.type == TokenType.LITERAL_CONTENT]
+        if literal_tokens:
+            assert literal_tokens[0].value == ""
+
+    def test_four_backtick_fence(self) -> None:
+        """4-backtick fence: FENCE_OPEN has fence_marker='````'."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "````\nhello\n````"
+        tokens, _ = tokenize(content)
+        fence_open = next(t for t in tokens if t.type == TokenType.FENCE_OPEN)
+        assert fence_open.value["fence_marker"] == "````"
+
+    def test_multiple_literal_zones(self) -> None:
+        """Multiple literal zones tokenize correctly."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nfirst\n```\n```\nsecond\n```"
+        tokens, _ = tokenize(content)
+        fence_opens = [t for t in tokens if t.type == TokenType.FENCE_OPEN]
+        fence_closes = [t for t in tokens if t.type == TokenType.FENCE_CLOSE]
+        literals = [t for t in tokens if t.type == TokenType.LITERAL_CONTENT]
+        assert len(fence_opens) == 2
+        assert len(fence_closes) == 2
+        assert len(literals) == 2
+        assert literals[0].value == "first"
+        assert literals[1].value == "second"
+
+    def test_literal_zone_with_info_tag(self) -> None:
+        """Info tag is captured in FENCE_OPEN token."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = '```json\n{"key": "value"}\n```'
+        tokens, _ = tokenize(content)
+        fence_open = next(t for t in tokens if t.type == TokenType.FENCE_OPEN)
+        assert fence_open.value["info_tag"] == "json"
+
+    def test_multiline_literal_content(self) -> None:
+        """Multi-line content inside literal zone is preserved."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nline1\nline2\nline3\n```"
+        tokens, _ = tokenize(content)
+        literal = next(t for t in tokens if t.type == TokenType.LITERAL_CONTENT)
+        assert literal.value == "line1\nline2\nline3"
+
+
+class TestTokenizeFenceLineTracking:
+    """Line numbers on fence tokens are correct."""
+
+    def test_fence_open_line_number(self) -> None:
+        """FENCE_OPEN token has correct line number."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nhello\n```"
+        tokens, _ = tokenize(content)
+        fence_open = next(t for t in tokens if t.type == TokenType.FENCE_OPEN)
+        assert fence_open.line == 1
+
+    def test_fence_open_at_line_3(self) -> None:
+        """FENCE_OPEN on line 3 (after two lines of normal content)."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "KEY::value\nKEY2::value2\n```\nhello\n```"
+        tokens, _ = tokenize(content)
+        fence_open = next(t for t in tokens if t.type == TokenType.FENCE_OPEN)
+        assert fence_open.line == 3
+
+    def test_literal_content_line_number(self) -> None:
+        """LITERAL_CONTENT token has correct line number (line after FENCE_OPEN)."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nhello\n```"
+        tokens, _ = tokenize(content)
+        literal = next(t for t in tokens if t.type == TokenType.LITERAL_CONTENT)
+        assert literal.line == 2
+
+    def test_fence_close_line_number(self) -> None:
+        """FENCE_CLOSE token has correct line number."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nhello\n```"
+        tokens, _ = tokenize(content)
+        fence_close = next(t for t in tokens if t.type == TokenType.FENCE_CLOSE)
+        assert fence_close.line == 3
+
+    def test_fence_close_after_multiline_content(self) -> None:
+        """FENCE_CLOSE line number correct after multi-line content."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nline1\nline2\nline3\n```"
+        tokens, _ = tokenize(content)
+        fence_close = next(t for t in tokens if t.type == TokenType.FENCE_CLOSE)
+        assert fence_close.line == 5
+
+    def test_tokens_after_literal_zone_have_correct_line(self) -> None:
+        """Tokens after a literal zone have correct line numbers."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nhello\n```\nKEY::value"
+        tokens, _ = tokenize(content)
+        # Find the IDENTIFIER token for "KEY"
+        key_token = next(t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "KEY")
+        assert key_token.line == 4
+
+
+class TestTokenizeNFCPreservationInLiteralZones:
+    """NFC-sensitive content inside literal zones preserved in token value."""
+
+    def test_nfc_sensitive_content_preserved_in_literal_token(self) -> None:
+        """Decomposed e-acute inside fence: preserved in LITERAL_CONTENT value."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        # U+0065 (e) + U+0301 (combining acute) = decomposed e-acute
+        decomposed = "e\u0301"
+        content = f"```\n{decomposed}\n```"
+        tokens, _ = tokenize(content)
+        literal = next(t for t in tokens if t.type == TokenType.LITERAL_CONTENT)
+        # The decomposed form must survive (2 codepoints, NOT normalized to 1)
+        assert literal.value == decomposed
+        assert len(literal.value) == 2
