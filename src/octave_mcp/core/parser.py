@@ -927,6 +927,12 @@ class Parser:
         """
         fence_token = self.expect(TokenType.FENCE_OPEN)
         fence_data = fence_token.value  # dict with fence_marker and info_tag
+        if not isinstance(fence_data, dict) or "fence_marker" not in fence_data:
+            raise ParserError(
+                f"Malformed FENCE_OPEN token at line {fence_token.line}.",
+                fence_token,
+                "E006",
+            )
         marker = fence_data["fence_marker"]
         info_tag = fence_data.get("info_tag")
 

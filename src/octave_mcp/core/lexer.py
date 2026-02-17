@@ -235,7 +235,13 @@ def _normalize_with_fence_detection(
             backtick_seq = match.group(3)
             trailing = match.group(4)
             # Use precedence table from section 5.3.1
-            assert current_fence_marker is not None
+            if current_fence_marker is None:
+                raise LexerError(
+                    "E006: Internal error: fence marker is None inside open fence.",
+                    line_num,
+                    1,
+                    "E006",
+                )
             result = _evaluate_fence_line(
                 backtick_seq,
                 current_fence_marker,
@@ -664,18 +670,15 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
 
             # Emit LITERAL_CONTENT token (line is the first content line)
             content_line = line
-            if literal_text:
-                tokens.append(Token(TokenType.LITERAL_CONTENT, literal_text, content_line, 1))
-                # Count newlines in literal content to advance line tracking
-                content_newlines = literal_text.count("\n")
-                line += content_newlines
-                if content_newlines > 0:
-                    line += 1  # Move past the newline before closing fence
-                else:
-                    line += 1  # Single line of content, move past its newline
-            else:
-                # Empty literal zone: still emit empty LITERAL_CONTENT
-                tokens.append(Token(TokenType.LITERAL_CONTENT, "", content_line, 1))
+            tokens.append(Token(TokenType.LITERAL_CONTENT, literal_text, content_line, 1))
+
+            # Advance line tracking past content lines.
+            # Count newlines in the span to determine how many content lines exist.
+            # lines_in_span includes the opening fence newline + content newlines.
+            # content_line_count = lines_in_span - 1 (subtract opening fence line).
+            lines_in_span = content[span_start:span_end].count("\n")
+            content_line_count = lines_in_span - 1
+            line += content_line_count
 
             # Emit FENCE_CLOSE token
             close_line = line
@@ -689,12 +692,6 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
             closing_fence_text = content[close_fence_start:span_end]
             # Move pos past the entire span
             pos = span_end
-            # Check if there's a newline right after span_end to consume
-            if pos < len(content) and content[pos] == "\n":
-                # The span_end points to the end of the closing fence line
-                # but there may be a trailing newline
-                pass
-
             # Update line to be past the closing fence
             line = close_line + 1
             column = 1

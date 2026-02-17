@@ -172,3 +172,55 @@ class TestParseLiteralZoneDecision2:
         assert not isinstance(value, LiteralZoneValue)
         assert isinstance(value, str)
         assert value == "hello world"
+
+
+# ---------------------------------------------------------------------------
+# CE-A4: Defensive dict access in parse_literal_zone()
+# ---------------------------------------------------------------------------
+
+
+class TestParseLiteralZoneDefensiveDictAccess:
+    """CE-A4: Parser handles malformed FENCE_OPEN token payload gracefully."""
+
+    def test_malformed_fence_data_raises_parser_error(self) -> None:
+        """If FENCE_OPEN token has non-dict value, ParserError raised."""
+        from octave_mcp.core.lexer import Token, TokenType
+        from octave_mcp.core.parser import ParserError, parse
+
+        # Create a token stream with a malformed FENCE_OPEN token
+        tokens = [
+            Token(TokenType.ENVELOPE_START, "DOC", 1, 1),
+            Token(TokenType.NEWLINE, "\n", 1, 10),
+            Token(TokenType.IDENTIFIER, "KEY", 2, 1),
+            Token(TokenType.ASSIGN, "::", 2, 4),
+            Token(TokenType.FENCE_OPEN, "not_a_dict", 3, 1),
+            Token(TokenType.LITERAL_CONTENT, "content", 4, 1),
+            Token(TokenType.FENCE_CLOSE, "```", 5, 1),
+            Token(TokenType.NEWLINE, "\n", 5, 4),
+            Token(TokenType.ENVELOPE_END, "DOC", 6, 1),
+            Token(TokenType.EOF, "", 6, 10),
+        ]
+        with pytest.raises(ParserError) as exc_info:
+            parse(tokens)
+        assert "E006" in str(exc_info.value)
+
+    def test_fence_data_missing_marker_key_raises_parser_error(self) -> None:
+        """If FENCE_OPEN dict is missing 'fence_marker', ParserError raised."""
+        from octave_mcp.core.lexer import Token, TokenType
+        from octave_mcp.core.parser import ParserError, parse
+
+        tokens = [
+            Token(TokenType.ENVELOPE_START, "DOC", 1, 1),
+            Token(TokenType.NEWLINE, "\n", 1, 10),
+            Token(TokenType.IDENTIFIER, "KEY", 2, 1),
+            Token(TokenType.ASSIGN, "::", 2, 4),
+            Token(TokenType.FENCE_OPEN, {"info_tag": "python"}, 3, 1),
+            Token(TokenType.LITERAL_CONTENT, "content", 4, 1),
+            Token(TokenType.FENCE_CLOSE, "```", 5, 1),
+            Token(TokenType.NEWLINE, "\n", 5, 4),
+            Token(TokenType.ENVELOPE_END, "DOC", 6, 1),
+            Token(TokenType.EOF, "", 6, 10),
+        ]
+        with pytest.raises(ParserError) as exc_info:
+            parse(tokens)
+        assert "E006" in str(exc_info.value)

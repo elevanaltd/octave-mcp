@@ -808,6 +808,155 @@ class TestTokenizeFenceLineTracking:
         assert key_token.line == 4
 
 
+# ---------------------------------------------------------------------------
+# CRS-B1 / CRS-B2: Line tracking drift after empty/content literal zones
+# ---------------------------------------------------------------------------
+
+
+class TestLineTrackingDriftFixes:
+    """CRS-B1: Line number drift after empty literal zones.
+
+    Verifies that tokens following a literal zone have correct line numbers,
+    even when the zone contains empty lines or no content.
+    """
+
+    def test_empty_line_between_fences_fence_close_line(self) -> None:
+        """One empty line between fences: FENCE_CLOSE on correct line.
+
+        Input (7 lines):
+            1: ===DOC===
+            2: CODE::
+            3: ```
+            4: (empty line)
+            5: ```
+            6: NEXT::value
+            7: ===END===
+        """
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "===DOC===\nCODE::\n```\n\n```\nNEXT::value\n===END==="
+        tokens, _ = tokenize(content)
+        fence_close = next(t for t in tokens if t.type == TokenType.FENCE_CLOSE)
+        assert fence_close.line == 5, f"FENCE_CLOSE should be on line 5, got {fence_close.line}"
+
+    def test_empty_line_between_fences_next_token_line(self) -> None:
+        """One empty line between fences: token after zone on correct line."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "===DOC===\nCODE::\n```\n\n```\nNEXT::value\n===END==="
+        tokens, _ = tokenize(content)
+        next_token = next(t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "NEXT")
+        assert next_token.line == 6, f"NEXT token should be on line 6, got {next_token.line}"
+
+    def test_empty_line_between_fences_envelope_end_line(self) -> None:
+        """One empty line between fences: ===END=== on correct line."""
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "===DOC===\nCODE::\n```\n\n```\nNEXT::value\n===END==="
+        tokens, _ = tokenize(content)
+        end_token = next(t for t in tokens if t.type == TokenType.ENVELOPE_END)
+        assert end_token.line == 7, f"ENVELOPE_END should be on line 7, got {end_token.line}"
+
+    def test_two_empty_lines_between_fences_line_tracking(self) -> None:
+        """Two empty lines between fences: correct line tracking.
+
+        Input (6 lines):
+            1: ```
+            2: (empty)
+            3: (empty)
+            4: ```
+            5: KEY::value
+        """
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\n\n\n```\nKEY::value"
+        tokens, _ = tokenize(content)
+        fence_close = next(t for t in tokens if t.type == TokenType.FENCE_CLOSE)
+        assert fence_close.line == 4, f"FENCE_CLOSE should be on line 4, got {fence_close.line}"
+        key_token = next(t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "KEY")
+        assert key_token.line == 5, f"KEY token should be on line 5, got {key_token.line}"
+
+    def test_immediate_close_fence_line_tracking(self) -> None:
+        """Immediate close (no content lines): correct line tracking.
+
+        Input (4 lines):
+            1: ```
+            2: ```
+            3: KEY::value
+        """
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\n```\nKEY::value"
+        tokens, _ = tokenize(content)
+        fence_close = next(t for t in tokens if t.type == TokenType.FENCE_CLOSE)
+        assert fence_close.line == 2, f"FENCE_CLOSE should be on line 2, got {fence_close.line}"
+        key_token = next(t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "KEY")
+        assert key_token.line == 3, f"KEY token should be on line 3, got {key_token.line}"
+
+    def test_multiline_content_then_tokens_line_tracking(self) -> None:
+        """Multi-line content zone followed by tokens: correct lines.
+
+        Input (7 lines):
+            1: ```
+            2: line1
+            3: line2
+            4: line3
+            5: ```
+            6: KEY::value
+        """
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\nline1\nline2\nline3\n```\nKEY::value"
+        tokens, _ = tokenize(content)
+        fence_close = next(t for t in tokens if t.type == TokenType.FENCE_CLOSE)
+        assert fence_close.line == 5, f"FENCE_CLOSE should be on line 5, got {fence_close.line}"
+        key_token = next(t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "KEY")
+        assert key_token.line == 6, f"KEY token should be on line 6, got {key_token.line}"
+
+    def test_two_zones_separated_by_assignment_line_tracking(self) -> None:
+        """Two literal zones separated by assignment: all lines correct.
+
+        Input (8 lines):
+            1: ```
+            2: a
+            3: ```
+            4: MID::val
+            5: ```
+            6: b
+            7: ```
+            8: END::val
+        """
+        from octave_mcp.core.lexer import TokenType, tokenize
+
+        content = "```\na\n```\nMID::val\n```\nb\n```\nEND::val"
+        tokens, _ = tokenize(content)
+        mid_token = next(t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "MID")
+        assert mid_token.line == 4, f"MID token should be on line 4, got {mid_token.line}"
+        end_token = next(t for t in tokens if t.type == TokenType.IDENTIFIER and t.value == "END")
+        assert end_token.line == 8, f"END token should be on line 8, got {end_token.line}"
+
+
+# ---------------------------------------------------------------------------
+# CE-A5: Assert replaced with explicit LexerError
+# ---------------------------------------------------------------------------
+
+
+class TestAssertReplacedWithLexerError:
+    """CE-A5: Production code paths should not use assert."""
+
+    def test_fence_marker_none_guard_raises_lexer_error(self) -> None:
+        """The assert at lexer.py:238 should be an explicit LexerError."""
+        import inspect
+
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        source = inspect.getsource(_normalize_with_fence_detection)
+        # Should NOT contain "assert current_fence_marker is not None"
+        assert (
+            "assert current_fence_marker is not None" not in source
+        ), "Production code should use explicit LexerError, not assert"
+
+
 class TestTokenizeNFCPreservationInLiteralZones:
     """NFC-sensitive content inside literal zones preserved in token value."""
 
