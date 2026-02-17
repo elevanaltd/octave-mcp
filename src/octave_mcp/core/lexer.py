@@ -62,6 +62,11 @@ class TokenType(Enum):
     SEPARATOR = auto()  # ---
     EOF = auto()  # end of input
 
+    # Literal zone tokens (Issue #235)
+    FENCE_OPEN = auto()  # Opening ``` with optional info tag
+    FENCE_CLOSE = auto()  # Closing ```
+    LITERAL_CONTENT = auto()  # Raw content between fences
+
 
 @dataclass
 class Token:
@@ -124,6 +129,53 @@ OPERATOR_CHARS = frozenset(
         "§",  # SECTION (U+00A7)
     }
 )
+
+# Matches 3+ backticks at line start (with optional 0-3 spaces indent)
+# Captures: (1) indent, (2) full fence+info, (3) the backtick sequence, (4) info tag
+FENCE_PATTERN = re.compile(r"^( {0,3})((`{3,})([^\n`]*)?)$")
+
+
+def _evaluate_fence_line(
+    backtick_seq: str,
+    open_fence_marker: str,
+    trailing_content: str,
+    line: int,
+    column: int,
+    open_line: int,
+) -> str:
+    """Evaluate a backtick sequence found at line start inside an open fence.
+
+    Returns: "close" or "content", or raises LexerError for E007.
+
+    PRECEDENCE ORDER (B0-B1 amendment):
+      1. Closing fence (exact match, no trailing content) -- checked FIRST
+      2. Nested fence error (equal-or-greater length)     -- checked SECOND
+      3. Content (shorter length)                         -- fallthrough
+    """
+    seq_len = len(backtick_seq)
+    open_len = len(open_fence_marker)
+
+    # CASE 1: Exact match with clean line -> CLOSE
+    if seq_len == open_len and not trailing_content.strip():
+        return "close"
+
+    # CASE 2: Equal length with trailing content -> ERROR (ambiguous)
+    # CASE 3: Greater length -> ERROR (nested fence)
+    if seq_len >= open_len:
+        raise LexerError(
+            f"E007_NESTED_FENCE: Nested literal zone detected at line {line}. "
+            f"Found fence '{backtick_seq}' (length {seq_len}) "
+            f"inside literal zone opened with '{open_fence_marker}' "
+            f"(length {open_len}) at line {open_line}. "
+            f"Use a longer fence to wrap content containing shorter fences, "
+            f"e.g., {'`' * (open_len + 1)} to wrap content with {open_fence_marker}.",
+            line,
+            column,
+            "E007",
+        )
+
+    # CASE 4: Shorter fence -> treat as content
+    return "content"
 
 
 def _is_valid_identifier_start(char: str) -> bool:
