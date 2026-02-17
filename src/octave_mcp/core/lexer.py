@@ -178,6 +178,117 @@ def _evaluate_fence_line(
     return "content"
 
 
+def _normalize_with_fence_detection(
+    content: str,
+) -> tuple[str, list[tuple[int, int, str, str | None]]]:
+    """Single-pass fence detection with selective NFC normalization.
+
+    Processes content line-by-line. When outside a fence, each line is
+    NFC-normalized before appending to the output buffer. When inside a
+    fence, lines are appended verbatim (no NFC). Fence span offsets are
+    recorded against the OUTPUT buffer, so they are always valid for the
+    returned string.
+
+    Args:
+        content: Raw (non-NFC-normalized) content string.
+
+    Returns:
+        Tuple of:
+        - normalized_content: String with NFC applied outside fences,
+          literal zone content preserved exactly.
+        - fence_spans: List of (start_offset, end_offset, fence_marker,
+          info_tag) tuples. Offsets are valid for normalized_content.
+
+    Raises:
+        LexerError: E006 if a fence is opened but never closed.
+        LexerError: E007 (subtype E007_NESTED_FENCE) if a fence of
+                    equal or greater length appears inside an open fence.
+    """
+    lines = content.split("\n")
+    output_parts: list[str] = []
+    fence_spans: list[tuple[int, int, str, str | None]] = []
+    output_offset = 0
+    in_fence = False
+    current_fence_marker: str | None = None
+    current_info_tag: str | None = None
+    open_line = -1
+    span_start = -1
+
+    for line_num, line in enumerate(lines, start=1):
+        match = FENCE_PATTERN.match(line)
+
+        if match and not in_fence:
+            # Opening fence: start literal zone
+            backtick_seq = match.group(3)
+            raw_tag = match.group(4).strip()
+            current_info_tag = raw_tag if raw_tag else None
+            in_fence = True
+            current_fence_marker = backtick_seq
+            open_line = line_num
+            # NFC-normalize the fence line itself (it's structural, not content)
+            normalized_line = unicodedata.normalize("NFC", line)
+            output_parts.append(normalized_line)
+            span_start = output_offset
+            output_offset += len(normalized_line) + 1  # +1 for newline
+
+        elif match and in_fence:
+            backtick_seq = match.group(3)
+            trailing = match.group(4)
+            # Use precedence table from section 5.3.1
+            assert current_fence_marker is not None
+            result = _evaluate_fence_line(
+                backtick_seq,
+                current_fence_marker,
+                trailing,
+                line_num,
+                1,
+                open_line,
+            )
+            if result == "close":
+                # NFC-normalize the closing fence line (structural)
+                normalized_line = unicodedata.normalize("NFC", line)
+                output_parts.append(normalized_line)
+                output_offset += len(normalized_line) + 1
+                fence_spans.append(
+                    (
+                        span_start,
+                        output_offset - 1,
+                        current_fence_marker,
+                        current_info_tag,
+                    )
+                )
+                in_fence = False
+                current_fence_marker = None
+                current_info_tag = None
+            else:  # "content"
+                # Shorter fence inside literal zone: preserve verbatim
+                output_parts.append(line)
+                output_offset += len(line) + 1
+
+        elif in_fence:
+            # Inside literal zone: preserve verbatim (NO NFC)
+            output_parts.append(line)
+            output_offset += len(line) + 1
+
+        else:
+            # Outside literal zone: apply NFC normalization
+            normalized_line = unicodedata.normalize("NFC", line)
+            output_parts.append(normalized_line)
+            output_offset += len(normalized_line) + 1
+
+    if in_fence:
+        raise LexerError(
+            f"E006: Unterminated literal zone. Fence '{current_fence_marker}' "
+            f"opened at line {open_line} was never closed. "
+            f"Add a matching closing fence: {current_fence_marker}",
+            open_line,
+            1,
+            "E006",
+        )
+
+    return "\n".join(output_parts), fence_spans
+
+
 def _is_valid_identifier_start(char: str) -> bool:
     """Check if character can start an identifier (GH#186).
 

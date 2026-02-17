@@ -1,8 +1,11 @@
-"""Tests for literal zone lexer additions (Issue #235, T03 + T04).
+"""Tests for literal zone lexer additions (Issue #235, T03 + T04 + T05).
 
 T03: TokenType entries (FENCE_OPEN, FENCE_CLOSE, LITERAL_CONTENT) and FENCE_PATTERN regex.
 T04: _evaluate_fence_line() precedence logic with B0-B1 amendment.
+T05: _normalize_with_fence_detection() single-pass NFC bypass and fence span tracking.
 """
+
+import unicodedata
 
 import pytest
 
@@ -314,3 +317,268 @@ class TestEvaluateFenceLine:
             open_line=1,
         )
         assert result == "content"
+
+
+# ---------------------------------------------------------------------------
+# T05: _normalize_with_fence_detection() single-pass approach
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeWithFenceDetectionBasic:
+    """Basic behavior of _normalize_with_fence_detection()."""
+
+    def test_no_fences_returns_nfc_normalized(self) -> None:
+        """Document with no fences: entire content is NFC-normalized."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "hello world"
+        result, spans = _normalize_with_fence_detection(content)
+        assert result == unicodedata.normalize("NFC", content)
+        assert spans == []
+
+    def test_no_fences_empty_spans(self) -> None:
+        """Document with no fences: empty spans list returned."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        _, spans = _normalize_with_fence_detection("just some text\nand more")
+        assert spans == []
+
+    def test_simple_fence_returns_span(self) -> None:
+        """Simple document with one fence: correct span returned."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "before\n```\nhello\n```\nafter"
+        result, spans = _normalize_with_fence_detection(content)
+        assert len(spans) == 1
+        # Span should be valid for the returned string
+        start, end, marker, tag = spans[0]
+        assert marker == "```"
+        assert tag is None
+        # Verify the span covers from the opening fence through closing fence
+        span_text = result[start:end]
+        assert "```" in span_text
+        assert "hello" in span_text
+
+    def test_nfc_applied_outside_fence(self) -> None:
+        """NFC-sensitive characters outside a fence are normalized."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        # U+0065 (e) + U+0301 (combining acute) = decomposed e-acute
+        decomposed = "e\u0301"  # NFD form
+        precomposed = "\u00e9"  # NFC form (e-acute)
+        content = f"{decomposed}\n```\nhello\n```"
+        result, _ = _normalize_with_fence_detection(content)
+        # Outside fence: decomposed form should be NFC-normalized to precomposed
+        assert result.startswith(precomposed)
+
+    def test_nfc_not_applied_inside_fence(self) -> None:
+        """NFC-sensitive characters inside a fence are preserved as-is (NFD preserved)."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        # U+0065 (e) + U+0301 (combining acute) = decomposed e-acute
+        decomposed = "e\u0301"
+        content = f"```\n{decomposed}\n```"
+        result, spans = _normalize_with_fence_detection(content)
+        # Inside fence: decomposed form should be preserved verbatim
+        assert decomposed in result
+
+    def test_precomposed_outside_fence_normalized(self) -> None:
+        """U+00E9 outside fence -> normalized to precomposed form."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        # Already precomposed, NFC is idempotent
+        content = "\u00e9 hello"
+        result, _ = _normalize_with_fence_detection(content)
+        assert "\u00e9" in result
+
+    def test_decomposed_inside_fence_preserved(self) -> None:
+        """U+0065 U+0301 (decomposed e-acute) inside fence preserved as-is."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        decomposed = "e\u0301"  # Two codepoints
+        content = f"```\n{decomposed}\n```"
+        result, _ = _normalize_with_fence_detection(content)
+        # The decomposed form must survive -- it should NOT become \u00e9
+        # Verify by checking the actual codepoints are preserved
+        lines = result.split("\n")
+        content_line = lines[1]  # The line between fences
+        assert content_line == decomposed
+        assert len(content_line) == 2  # Two codepoints, not one
+
+
+class TestNormalizeWithFenceDetectionSpanOffsets:
+    """Verify fence span offsets are valid for the RETURNED string."""
+
+    def test_span_offsets_valid_for_returned_string(self) -> None:
+        """Fence span offsets must index correctly into the returned string."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "before\n```python\nhello world\n```\nafter"
+        result, spans = _normalize_with_fence_detection(content)
+        assert len(spans) == 1
+        start, end, marker, tag = spans[0]
+        # Extract the span from the returned string
+        span_text = result[start:end]
+        # Must contain opening fence, content, and closing fence
+        assert "```python" in span_text or "```" in span_text
+        assert "hello world" in span_text
+
+    def test_span_offsets_with_nfc_length_change(self) -> None:
+        """When NFC changes string length outside fence, offsets still valid.
+
+        This is the CRITICAL SINGLE-PASS INVARIANT test: offsets must be
+        valid for the returned normalized string, not the original input.
+        """
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        # Decomposed e-acute (2 codepoints) outside fence becomes precomposed (1 codepoint)
+        decomposed = "e\u0301"  # 2 codepoints
+        content = f"{decomposed}\n```\ncontent\n```"
+        result, spans = _normalize_with_fence_detection(content)
+
+        assert len(spans) == 1
+        start, end, marker, tag = spans[0]
+
+        # The NFC normalization shortened the first line by 1 codepoint
+        # Verify offsets are for the RETURNED string (post-NFC)
+        span_text = result[start:end]
+        assert "content" in span_text
+        assert result[:start].endswith("\n") or start == 0
+
+    def test_info_tag_captured(self) -> None:
+        """Info tag is captured in the span tuple."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "```python\nhello\n```"
+        _, spans = _normalize_with_fence_detection(content)
+        assert len(spans) == 1
+        _, _, marker, tag = spans[0]
+        assert marker == "```"
+        assert tag == "python"
+
+    def test_info_tag_none_when_absent(self) -> None:
+        """Info tag is None when no tag provided."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "```\nhello\n```"
+        _, spans = _normalize_with_fence_detection(content)
+        assert len(spans) == 1
+        _, _, _, tag = spans[0]
+        assert tag is None
+
+    def test_info_tag_stripped(self) -> None:
+        """Info tag has trailing whitespace stripped."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "```python   \nhello\n```"
+        _, spans = _normalize_with_fence_detection(content)
+        _, _, _, tag = spans[0]
+        assert tag == "python"
+
+
+class TestNormalizeWithFenceDetectionErrors:
+    """Error cases for _normalize_with_fence_detection()."""
+
+    def test_unterminated_fence_raises_e006(self) -> None:
+        """Fence opened but never closed raises E006."""
+        from octave_mcp.core.lexer import LexerError, _normalize_with_fence_detection
+
+        content = "```python\nhello\nworld"
+        with pytest.raises(LexerError) as exc_info:
+            _normalize_with_fence_detection(content)
+        assert exc_info.value.error_code == "E006"
+
+    def test_e006_message_contains_fence_marker(self) -> None:
+        """E006 error message contains the fence marker."""
+        from octave_mcp.core.lexer import LexerError, _normalize_with_fence_detection
+
+        content = "````python\nhello"
+        with pytest.raises(LexerError) as exc_info:
+            _normalize_with_fence_detection(content)
+        assert "````" in str(exc_info.value)
+
+    def test_e006_message_contains_open_line(self) -> None:
+        """E006 error message contains the line number where fence opened."""
+        from octave_mcp.core.lexer import LexerError, _normalize_with_fence_detection
+
+        content = "before\n```\nhello"
+        with pytest.raises(LexerError) as exc_info:
+            _normalize_with_fence_detection(content)
+        assert "line 2" in str(exc_info.value)
+
+    def test_nested_fence_equal_length_raises_e007(self) -> None:
+        """Equal length fence inside open fence raises E007."""
+        from octave_mcp.core.lexer import LexerError, _normalize_with_fence_detection
+
+        content = "```\n```python\nhello\n```"
+        with pytest.raises(LexerError) as exc_info:
+            _normalize_with_fence_detection(content)
+        assert exc_info.value.error_code == "E007"
+
+    def test_nested_fence_longer_raises_e007(self) -> None:
+        """Longer fence inside open fence raises E007."""
+        from octave_mcp.core.lexer import LexerError, _normalize_with_fence_detection
+
+        content = "```\n````\nhello\n```"
+        with pytest.raises(LexerError) as exc_info:
+            _normalize_with_fence_detection(content)
+        assert exc_info.value.error_code == "E007"
+
+    def test_shorter_fence_inside_is_content(self) -> None:
+        """Shorter fence inside open fence treated as content (not error)."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "````\n```\nhello\n````"
+        result, spans = _normalize_with_fence_detection(content)
+        assert len(spans) == 1
+        # The ``` inside should be preserved as content
+        start, end, _, _ = spans[0]
+        span_text = result[start:end]
+        assert "```" in span_text
+
+
+class TestNormalizeWithFenceDetectionMultiple:
+    """Multiple literal zones and edge cases."""
+
+    def test_multiple_fences(self) -> None:
+        """Multiple literal zones in one document."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "```\nfirst\n```\nbetween\n```\nsecond\n```"
+        result, spans = _normalize_with_fence_detection(content)
+        assert len(spans) == 2
+        # Verify both spans are valid
+        for start, end, marker, _tag in spans:
+            assert marker == "```"
+            span_text = result[start:end]
+            assert "```" in span_text
+
+    def test_empty_literal_zone(self) -> None:
+        """Empty literal zone: opening fence immediately followed by closing fence."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "```\n```"
+        result, spans = _normalize_with_fence_detection(content)
+        assert len(spans) == 1
+        start, end, marker, tag = spans[0]
+        assert marker == "```"
+
+    def test_idempotent_without_fences(self) -> None:
+        """Round-trip: result is idempotent for content without literal zones."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "hello world\nline two"
+        result1, _ = _normalize_with_fence_detection(content)
+        result2, _ = _normalize_with_fence_detection(result1)
+        assert result1 == result2
+
+    def test_fence_marker_four_backticks(self) -> None:
+        """4-backtick fence marker correctly tracked."""
+        from octave_mcp.core.lexer import _normalize_with_fence_detection
+
+        content = "````python\nhello\n````"
+        _, spans = _normalize_with_fence_detection(content)
+        assert len(spans) == 1
+        _, _, marker, tag = spans[0]
+        assert marker == "````"
+        assert tag == "python"
