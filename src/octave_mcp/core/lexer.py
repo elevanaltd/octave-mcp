@@ -134,6 +134,10 @@ OPERATOR_CHARS = frozenset(
 # Captures: (1) indent, (2) full fence+info, (3) the backtick sequence, (4) info tag
 FENCE_PATTERN = re.compile(r"^( {0,3})((`{3,})([^\n`]*)?)$")
 
+# Detects inline fence syntax: KEY::```info_tag (fence on same line as key)
+# This is invalid OCTAVE -- the fence must start on the line AFTER the key
+_INLINE_FENCE_PATTERN = re.compile(r"^.*::(`{3,})")
+
 
 def _evaluate_fence_line(
     backtick_seq: str,
@@ -283,10 +287,24 @@ def _normalize_with_fence_detection(
             output_offset += len(normalized_line) + 1
 
     if in_fence:
+        # Check if any line before the detected fence opening has an inline fence
+        # (KEY::``` on same line) -- a common mistake that produces a misleading E006
+        inline_hint = ""
+        for check_line_num, check_line in enumerate(lines, start=1):
+            if check_line_num >= open_line:
+                break
+            if _INLINE_FENCE_PATTERN.match(check_line):
+                inline_hint = (
+                    f" Hint: line {check_line_num} appears to use inline fence syntax "
+                    f"({check_line.strip()!r}). Literal zones must start on the line "
+                    f"AFTER the key: write 'KEY::' on one line, then '{current_fence_marker}' "
+                    f"on the next."
+                )
+                break
         raise LexerError(
             f"E006: Unterminated literal zone. Fence '{current_fence_marker}' "
             f"opened at line {open_line} was never closed. "
-            f"Add a matching closing fence: {current_fence_marker}",
+            f"Add a matching closing fence: {current_fence_marker}.{inline_hint}",
             open_line,
             1,
             "E006",
