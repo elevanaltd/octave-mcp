@@ -755,7 +755,8 @@ class LiteralConstraint(Constraint):
                         expected="LiteralZoneValue",
                         got=type(value).__name__,
                         message=(
-                            f"Field '{path}' expected LITERAL (fenced code block), " f"got {type(value).__name__}"
+                            f"E007_LITERAL_TYPE: Field '{path}' expected LITERAL "
+                            f"(fenced code block), got {type(value).__name__}"
                         ),
                     )
                 ],
@@ -802,7 +803,10 @@ class LangConstraint(Constraint):
                         constraint=f"LANG[{self.expected_lang}]",
                         expected="LiteralZoneValue",
                         got=type(value).__name__,
-                        message=(f"LANG constraint requires a literal zone, " f"got {type(value).__name__}"),
+                        message=(
+                            f"E007_LANG_MISMATCH: LANG constraint requires a literal zone, "
+                            f"got {type(value).__name__}"
+                        ),
                     )
                 ],
             )
@@ -819,7 +823,7 @@ class LangConstraint(Constraint):
                         expected=self.expected_lang,
                         got=actual_tag or "(none)",
                         message=(
-                            f"Field '{path}' expected language tag "
+                            f"E007_LANG_MISMATCH: Field '{path}' expected language tag "
                             f"'{self.expected_lang}', got '{actual_tag or '(none)'}'"
                         ),
                     )
