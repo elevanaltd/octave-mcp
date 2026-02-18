@@ -11,7 +11,7 @@ Tests cover:
 - I5 compliance: literal_zones_validated is always False in validator output
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, LiteralZoneValue
+from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue
 from octave_mcp.core.validator import Validator, _count_literal_zones
 
 # ---------------------------------------------------------------------------
@@ -286,3 +286,131 @@ class TestValidationStatusFlags:
         # Validator never validates literal zone content
         literal_zones_validated = False  # Always False per I5
         assert literal_zones_validated is False
+
+
+# ---------------------------------------------------------------------------
+# Fix 1 (CE review): _count_literal_zones() must recurse into ListValue/InlineMap
+# ---------------------------------------------------------------------------
+
+
+def _make_doc_with_literal_zone_in_list_value(
+    key: str = "SNIPPETS",
+    line: int = 3,
+) -> Document:
+    """Build a Document where a literal zone is nested inside a ListValue assignment."""
+    lzv = LiteralZoneValue(content="print('hello')", info_tag="python")
+    list_val = ListValue(items=["plain_string", lzv])
+    assignment = Assignment(key=key, value=list_val, line=line)
+    section = Block(key="SECTION", children=[assignment])
+    return Document(name="TEST_DOC", sections=[section])
+
+
+def _make_doc_with_literal_zone_in_inline_map(
+    key: str = "MAP_FIELD",
+    line: int = 4,
+) -> Document:
+    """Build a Document where a literal zone is nested inside an InlineMap assignment."""
+    lzv = LiteralZoneValue(content="SELECT 1", info_tag="sql")
+    inline_map = InlineMap(pairs={"code": lzv, "label": "query"})
+    assignment = Assignment(key=key, value=inline_map, line=line)
+    section = Block(key="SECTION", children=[assignment])
+    return Document(name="TEST_DOC", sections=[section])
+
+
+def _make_doc_with_multiple_literal_zones_in_list() -> Document:
+    """Build a Document with two literal zones inside a single ListValue."""
+    lzv1 = LiteralZoneValue(content="print('a')", info_tag="python")
+    lzv2 = LiteralZoneValue(content='{"x": 1}', info_tag="json")
+    list_val = ListValue(items=[lzv1, "plain", lzv2])
+    assignment = Assignment(key="MULTI", value=list_val, line=5)
+    section = Block(key="SECTION", children=[assignment])
+    return Document(name="TEST_DOC", sections=[section])
+
+
+class TestCountLiteralZonesRecursion:
+    """Tests for _count_literal_zones() recursion into ListValue/InlineMap (Fix 1).
+
+    These tests exercise the CE finding: literal zones nested inside list or map
+    values were silently missed, causing wrong zone_report metadata (T13/T14).
+    """
+
+    def test_literal_zone_in_list_value_is_found(self):
+        """_count_literal_zones finds a LiteralZoneValue inside a ListValue."""
+        doc = _make_doc_with_literal_zone_in_list_value()
+        result = _count_literal_zones(doc)
+        assert len(result) == 1
+
+    def test_literal_zone_in_list_value_has_correct_key(self):
+        """_count_literal_zones returns the assignment key for list-nested zone."""
+        doc = _make_doc_with_literal_zone_in_list_value(key="SNIPPETS")
+        result = _count_literal_zones(doc)
+        assert result[0]["key"] == "SNIPPETS"
+
+    def test_literal_zone_in_list_value_has_correct_info_tag(self):
+        """_count_literal_zones returns the correct info_tag for list-nested zone."""
+        doc = _make_doc_with_literal_zone_in_list_value()
+        result = _count_literal_zones(doc)
+        assert result[0]["info_tag"] == "python"
+
+    def test_literal_zone_in_list_value_has_correct_line(self):
+        """_count_literal_zones returns the assignment line for list-nested zone."""
+        doc = _make_doc_with_literal_zone_in_list_value(line=7)
+        result = _count_literal_zones(doc)
+        assert result[0]["line"] == 7
+
+    def test_multiple_literal_zones_in_list_value_all_found(self):
+        """_count_literal_zones finds all literal zones inside a single ListValue."""
+        doc = _make_doc_with_multiple_literal_zones_in_list()
+        result = _count_literal_zones(doc)
+        # Both zones inside the list must be found; the key is the assignment key
+        assert len(result) == 2
+
+    def test_literal_zone_in_inline_map_is_found(self):
+        """_count_literal_zones finds a LiteralZoneValue inside an InlineMap."""
+        doc = _make_doc_with_literal_zone_in_inline_map()
+        result = _count_literal_zones(doc)
+        assert len(result) == 1
+
+    def test_literal_zone_in_inline_map_has_correct_key(self):
+        """_count_literal_zones returns the assignment key for inline-map nested zone."""
+        doc = _make_doc_with_literal_zone_in_inline_map(key="MAP_FIELD")
+        result = _count_literal_zones(doc)
+        assert result[0]["key"] == "MAP_FIELD"
+
+    def test_literal_zone_in_inline_map_has_correct_info_tag(self):
+        """_count_literal_zones returns the info_tag for inline-map nested zone."""
+        doc = _make_doc_with_literal_zone_in_inline_map()
+        result = _count_literal_zones(doc)
+        assert result[0]["info_tag"] == "sql"
+
+    def test_plain_items_in_list_are_not_counted(self):
+        """_count_literal_zones does not count plain strings inside a ListValue."""
+        lzv = LiteralZoneValue(content="code", info_tag="python")
+        list_val = ListValue(items=["plain", 42, lzv])
+        assignment = Assignment(key="MIX", value=list_val, line=2)
+        section = Block(key="SECTION", children=[assignment])
+        doc = Document(name="TEST_DOC", sections=[section])
+        result = _count_literal_zones(doc)
+        # Only the LiteralZoneValue inside the list should be counted
+        assert len(result) == 1
+
+    def test_inline_map_with_no_literal_zones_not_counted(self):
+        """_count_literal_zones does not count InlineMap with no literal zones."""
+        inline_map = InlineMap(pairs={"a": "string", "b": 42})
+        assignment = Assignment(key="MAP", value=inline_map, line=3)
+        section = Block(key="SECTION", children=[assignment])
+        doc = Document(name="TEST_DOC", sections=[section])
+        result = _count_literal_zones(doc)
+        assert len(result) == 0
+
+    def test_direct_and_nested_zones_both_counted(self):
+        """_count_literal_zones counts both direct and list-nested literal zones."""
+        direct_lzv = LiteralZoneValue(content="direct", info_tag="python")
+        nested_lzv = LiteralZoneValue(content="nested", info_tag="json")
+        a_direct = Assignment(key="DIRECT", value=direct_lzv, line=2)
+        list_val = ListValue(items=[nested_lzv])
+        a_list = Assignment(key="LIST", value=list_val, line=6)
+        section = Block(key="SECTION", children=[a_direct, a_list])
+        doc = Document(name="TEST_DOC", sections=[section])
+        result = _count_literal_zones(doc)
+        assert len(result) == 2
