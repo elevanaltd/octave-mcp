@@ -220,10 +220,12 @@ class TestEjectMarkdownLiteralZone:
         """Markdown output must have opening and closing fence markers."""
         result = await _eject(_DOC_ONE_ZONE, fmt="markdown")
         output = result["output"]
-        # Opening: ```python, closing: ```
+        # Opening fence: ```python (may be prefixed with markdown bold **KEY**: )
+        # Closing fence: ``` on its own line
         lines = output.split("\n")
-        fence_lines = [line for line in lines if line.startswith("```")]
-        # Must have at least 2 fence lines (opening and closing)
+        # Count lines that contain ``` (opening may be on same line as key label)
+        fence_lines = [line for line in lines if "```" in line]
+        # Must have at least 2 occurrences (opening and closing fence)
         assert len(fence_lines) >= 2
 
     @pytest.mark.asyncio
