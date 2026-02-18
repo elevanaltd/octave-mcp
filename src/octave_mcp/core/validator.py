@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue
+from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, LiteralZoneValue
 from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
 from octave_mcp.core.routing import InvalidTargetError, RoutingLog, TargetRegistry, TargetRouter
 from octave_mcp.core.schema_extractor import (
@@ -76,11 +76,20 @@ class Validator:
         self._inheritance_resolver: InheritanceResolver = InheritanceResolver()
 
     def _to_python_value(self, value: Any) -> Any:
-        """Convert AST values to Python primitives for constraint evaluation."""
+        """Convert AST values to Python primitives for constraint evaluation.
+
+        LiteralZoneValue is returned as-is: TYPE[LITERAL] and LANG[] constraints
+        operate directly on the object (Issue #235 T12).
+        """
         if isinstance(value, ListValue):
             return [self._to_python_value(item) for item in value.items]
         if isinstance(value, InlineMap):
             return {k: self._to_python_value(v) for k, v in value.pairs.items()}
+        if isinstance(value, LiteralZoneValue):
+            # Literal zones remain as-is for constraint evaluation.
+            # TYPE[LITERAL] and LANG[] constraints operate on the object directly.
+            # D4: content is opaque; no conversion or normalization applied.
+            return value
         return value
 
     def validate(
@@ -433,3 +442,79 @@ def validate(
     """
     validator = Validator(schema)
     return validator.validate(doc, strict, section_schemas)
+
+
+def _count_literal_zones(doc: Document) -> list[dict[str, Any]]:
+    """Return per-zone metadata for all LiteralZoneValue instances in a Document.
+
+    Issue #235 T12: Shared utility used by the validator and MCP tools (T13, T14).
+
+    Returns per-zone metadata rather than a plain count so that MCP tools can
+    populate ``zone_report.literal.zones`` with key/info_tag/line entries.
+
+    D4: Content is opaque -- only envelope metadata (key, info_tag, line) is
+    reported.  I5: Caller is responsible for setting ``literal_zones_validated=False``.
+
+    **Line semantics**: The ``line`` field records the source line of the
+    *assignment* (the ``KEY::`` line), not the line of the opening fence
+    marker (the ` ``` ` line).  ``LiteralZoneValue`` does not store its own
+    source position; only the containing ``Assignment`` node carries a line
+    number (inherited from ``ASTNode.line``).  The fence opening always
+    appears on ``assignment.line + 1`` in well-formed OCTAVE documents, but
+    this function does not compute that offset -- it exposes the assignment
+    line directly.  Consumers that need the fence line should add 1 to the
+    reported ``line`` value.
+
+    Args:
+        doc: Parsed Document AST to inspect.
+
+    Returns:
+        List of dicts, each with keys:
+          - "key":      Assignment key (str)
+          - "info_tag": Language tag from fence opener, or None
+          - "line":     Source line number of the *assignment* node (the
+                        ``KEY::`` line), NOT the fence opening line.
+
+        Returns an empty list when no literal zones are present.
+    """
+    zones: list[dict[str, Any]] = []
+
+    def _collect_from_value(key: str, value: Any, line: int) -> None:
+        """Recursively collect LiteralZoneValue instances from a value.
+
+        Descends into ListValue.items and InlineMap.pairs so that literal
+        zones nested inside list or map assignments are not silently missed
+        (Fix for CE review finding: T13/T14 zone_report metadata correctness).
+
+        Args:
+            key:   Assignment key (used as the zone key in the report entry).
+            value: The assignment value to inspect (may be any AST value type).
+            line:  Source line of the containing assignment.
+        """
+        if isinstance(value, LiteralZoneValue):
+            zones.append(
+                {
+                    "key": key,
+                    "info_tag": value.info_tag,
+                    "line": line,
+                }
+            )
+        elif isinstance(value, ListValue):
+            for item in value.items:
+                _collect_from_value(key, item, line)
+        elif isinstance(value, InlineMap):
+            for v in value.pairs.values():
+                _collect_from_value(key, v, line)
+
+    def _traverse(nodes: list[ASTNode]) -> None:
+        for node in nodes:
+            if isinstance(node, Assignment):
+                _collect_from_value(node.key, node.value, node.line)
+            elif isinstance(node, Block):
+                _traverse(node.children)
+            elif hasattr(node, "children"):
+                # Handles Section nodes and any future container nodes.
+                _traverse(node.children)
+
+    _traverse(doc.sections)
+    return zones

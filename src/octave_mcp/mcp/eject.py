@@ -19,11 +19,13 @@ from typing import Any
 
 import yaml
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue
+from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue
 from octave_mcp.core.gbnf_compiler import GBNFCompiler, compile_gbnf_from_meta
 from octave_mcp.core.parser import parse
 from octave_mcp.core.projector import project
+from octave_mcp.core.repair_log import LiteralZoneRepairLog
 from octave_mcp.core.schema_extractor import extract_schema_from_document
+from octave_mcp.core.validator import _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 
 
@@ -61,7 +63,16 @@ def _convert_value(value: Any) -> Any:
     Returns:
         Native Python value
     """
-    if isinstance(value, ListValue):
+    if isinstance(value, LiteralZoneValue):
+        # Issue #235 T15: Export literal zones as structured dict (match point 5).
+        # I1: content verbatim — no transformation. I3: no Python repr leak.
+        return {
+            "__literal_zone__": True,
+            "content": value.content,
+            "info_tag": value.info_tag,
+            "fence_marker": value.fence_marker,
+        }
+    elif isinstance(value, ListValue):
         return [_convert_value(item) for item in value.items]
     elif isinstance(value, InlineMap):
         return {k: _convert_value(v) for k, v in value.pairs.items()}
@@ -101,7 +112,15 @@ def _format_markdown_value(value: Any) -> str:
     Returns:
         Human-readable string representation for markdown
     """
-    if isinstance(value, ListValue):
+    if isinstance(value, LiteralZoneValue):
+        # Issue #235 T15: Emit literal zone as markdown fenced code block (match point 6).
+        # I1: content verbatim. I3: no Python repr leak.
+        tag = value.info_tag or ""
+        content = value.content
+        if content and not content.endswith("\n"):
+            content = content + "\n"
+        return f"{value.fence_marker}{tag}\n{content}{value.fence_marker}"
+    elif isinstance(value, ListValue):
         # Format list items, recursively formatting nested values
         items = [_format_markdown_value(item) for item in value.items]
         return ", ".join(str(item) for item in items)
@@ -273,6 +292,28 @@ META:
         # Project to desired mode
         result = project(doc, mode=mode)
 
+        # Issue #235 T15: Compute literal zone info once; add to each format's return dict.
+        # Uses the filtered_doc (after projection) so zone count reflects the projected view.
+        zones = _count_literal_zones(result.filtered_doc)
+        zone_extras: dict[str, Any] = {}
+        if zones:
+            zone_extras["contains_literal_zones"] = True
+            zone_extras["literal_zone_count"] = len(zones)
+            zone_extras["literal_zones_validated"] = False  # I5: always False (D4: content opaque)
+            zone_extras["zone_report"] = {
+                "dsl": {"status": "valid", "errors": []},
+                "container": {
+                    "status": "preserved" if result.filtered_doc.raw_frontmatter else "absent",
+                },
+                "literal": {
+                    "status": "preserved",
+                    "count": len(zones),
+                    "content_validated": False,
+                    "zones": zones,
+                },
+            }
+            zone_extras["literal_zone_repair_log"] = LiteralZoneRepairLog(entries=[]).to_dict()
+
         # Convert to requested output format
         # IL-PLACEHOLDER-FIX-002-REWORK: Use filtered AST from projection for all formats
         # I5 (Schema Sovereignty): All outputs must include validation_status
@@ -286,6 +327,7 @@ META:
                 "lossy": result.lossy,
                 "fields_omitted": result.fields_omitted,
                 "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+                **zone_extras,
             }
 
         elif output_format == "yaml":
@@ -297,6 +339,7 @@ META:
                 "lossy": result.lossy,
                 "fields_omitted": result.fields_omitted,
                 "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+                **zone_extras,
             }
 
         elif output_format == "markdown":
@@ -307,6 +350,7 @@ META:
                 "lossy": result.lossy,
                 "fields_omitted": result.fields_omitted,
                 "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+                **zone_extras,
             }
 
         elif output_format == "gbnf":
@@ -328,6 +372,7 @@ META:
                 "fields_omitted": [],
                 "validation_status": "UNVALIDATED",  # I5: Explicit bypass
                 "format": "gbnf",  # Indicate output format
+                **zone_extras,
             }
 
         else:  # output_format == "octave"
@@ -336,4 +381,5 @@ META:
                 "lossy": result.lossy,
                 "fields_omitted": result.fields_omitted,
                 "validation_status": "UNVALIDATED",  # I5: Explicit bypass
+                **zone_extras,
             }
