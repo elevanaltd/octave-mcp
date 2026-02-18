@@ -394,3 +394,98 @@ class TestLangConstraintE007Subtype:
         """LangConstraint error code remains 'E007' for non-literal value."""
         result = LangConstraint("python").evaluate("string", path="test.field")
         assert result.errors[0].code == "E007"
+
+
+# ---------------------------------------------------------------------------
+# Fix 3 (CE review): LANG[] empty tag and None/empty info_tag rejection
+# ---------------------------------------------------------------------------
+
+
+class TestLangConstraintEmptyInfoTagRejection:
+    """Fix 3: LangConstraint must reject info_tag=None and info_tag="" as always invalid.
+
+    Previously, LangConstraint("") evaluated LiteralZoneValue(info_tag=None) and
+    LiteralZoneValue(info_tag="") as valid because both normalized to "" == "".
+    This created validation theater (I5 violation).
+
+    Decision:
+    - info_tag=None is always invalid for any LangConstraint (no tag present)
+    - info_tag="" is always invalid (empty string is not a valid language tag)
+    - LANG[] (empty expected_lang) is rejected at parse time in ConstraintChain.parse()
+    """
+
+    def test_none_info_tag_invalid_for_nonempty_lang(self):
+        """LangConstraint('python') rejects info_tag=None (already tested, regression guard)."""
+        lzv = LiteralZoneValue(info_tag=None)
+        result = LangConstraint("python").evaluate(lzv, path="test.field")
+        assert result.valid is False
+
+    def test_none_info_tag_invalid_even_when_expected_lang_is_empty_string(self):
+        """LangConstraint('') must NOT accept info_tag=None (validation theater)."""
+        # LANG[] creates LangConstraint("") after lowercasing; previously this
+        # passed because both normalize to "". Fix: None is always invalid.
+        lzv = LiteralZoneValue(info_tag=None)
+        result = LangConstraint("").evaluate(lzv, path="test.field")
+        assert result.valid is False
+
+    def test_empty_string_info_tag_invalid_for_nonempty_lang(self):
+        """LangConstraint('python') rejects info_tag='' (empty is not a language tag)."""
+        lzv = LiteralZoneValue(info_tag="")
+        result = LangConstraint("python").evaluate(lzv, path="test.field")
+        assert result.valid is False
+
+    def test_empty_string_info_tag_invalid_even_when_expected_lang_is_empty(self):
+        """LangConstraint('') must NOT accept info_tag='' (validation theater)."""
+        # This is the degenerate LANG[] case: both normalize to "" and compare equal.
+        # Fix: empty info_tag is never valid regardless of expected_lang.
+        lzv = LiteralZoneValue(info_tag="")
+        result = LangConstraint("").evaluate(lzv, path="test.field")
+        assert result.valid is False
+
+    def test_none_info_tag_error_message_describes_absence(self):
+        """LangConstraint error for None info_tag includes '(none)' in got field."""
+        lzv = LiteralZoneValue(info_tag=None)
+        result = LangConstraint("python").evaluate(lzv, path="test.field")
+        # Already tested in existing tests; here we confirm it still holds
+        assert result.errors[0].got == "(none)"
+
+    def test_empty_info_tag_error_message_describes_empty(self):
+        """LangConstraint error for empty info_tag includes '(empty)' or similar in got."""
+        lzv = LiteralZoneValue(info_tag="")
+        result = LangConstraint("python").evaluate(lzv, path="test.field")
+        # The got field should distinguish empty from none
+        assert result.errors[0].got in ("(empty)", "(none)", "")
+
+    def test_valid_lang_constraint_still_passes_with_correct_tag(self):
+        """Regression: LangConstraint('python') still accepts info_tag='python'."""
+        lzv = LiteralZoneValue(info_tag="python")
+        result = LangConstraint("python").evaluate(lzv, path="test.field")
+        assert result.valid is True
+
+
+class TestConstraintChainParseLangEmpty:
+    """Fix 3: ConstraintChain.parse('LANG[]') should raise ValueError.
+
+    An empty LANG[] tag is a degenerate constraint that can never produce
+    meaningful validation (it would accept an empty info_tag, which is not
+    a valid language tag). Rejecting it at parse time prevents confusion.
+    """
+
+    def test_parse_lang_empty_raises_value_error(self):
+        """ConstraintChain.parse('LANG[]') raises ValueError for empty tag."""
+        import pytest
+
+        with pytest.raises(ValueError, match="LANG"):
+            ConstraintChain.parse("LANG[]")
+
+    def test_parse_lang_with_valid_tag_still_works(self):
+        """ConstraintChain.parse('LANG[python]') still succeeds (regression)."""
+        chain = ConstraintChain.parse("LANG[python]")
+        assert len(chain.constraints) == 1
+        assert isinstance(chain.constraints[0], LangConstraint)
+
+    def test_parse_lang_sql_still_works(self):
+        """ConstraintChain.parse('LANG[sql]') still succeeds (regression)."""
+        chain = ConstraintChain.parse("LANG[sql]")
+        assert isinstance(chain.constraints[0], LangConstraint)
+        assert chain.constraints[0].expected_lang == "sql"
