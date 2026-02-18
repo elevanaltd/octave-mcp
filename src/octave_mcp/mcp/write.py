@@ -35,8 +35,9 @@ from octave_mcp.core.hydrator import resolve_hermetic_standard
 from octave_mcp.core.lexer import tokenize
 from octave_mcp.core.parser import parse, parse_with_warnings
 from octave_mcp.core.repair import repair
+from octave_mcp.core.repair_log import LiteralZoneRepairLog
 from octave_mcp.core.schema_extractor import SchemaDefinition
-from octave_mcp.core.validator import Validator
+from octave_mcp.core.validator import Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 from octave_mcp.schemas.loader import get_builtin_schema, load_schema, load_schema_by_name
 
@@ -1012,6 +1013,27 @@ class WriteTool(BaseTool):
             )
 
         result["corrections"] = corrections
+
+        # Issue #235 T14: Literal zone reporting (§8.2, §8.4)
+        # After emit, populate zone_report when literal zones are present.
+        zones = _count_literal_zones(doc)
+        if zones:
+            result["contains_literal_zones"] = True
+            result["literal_zone_count"] = len(zones)
+            result["literal_zones_validated"] = False  # I5: always False (D4: content opaque)
+            result["zone_report"] = {
+                "dsl": {"status": "valid", "errors": []},
+                "container": {
+                    "status": "preserved" if doc.raw_frontmatter else "absent",
+                },
+                "literal": {
+                    "status": "preserved",
+                    "count": len(zones),
+                    "content_validated": False,  # D4: content opaque; I5: honest
+                    "zones": zones,
+                },
+            }
+            result["literal_zone_repair_log"] = LiteralZoneRepairLog(entries=[]).to_dict()
 
         # Schema Validation (I5 Schema Sovereignty)
         if schema_name:
