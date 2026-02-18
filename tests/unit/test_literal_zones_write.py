@@ -8,6 +8,7 @@ Issue #235: Verifies that LiteralZoneValue is handled correctly in:
 - write.py: literal zone content preserved byte-for-byte (T14)
 """
 
+import hashlib
 import os
 import tempfile
 
@@ -15,6 +16,8 @@ import pytest
 
 from octave_mcp.core.ast_nodes import LiteralZoneValue
 from octave_mcp.core.emitter import is_absent, needs_quotes
+from octave_mcp.core.parser import parse
+from octave_mcp.core.validator import _count_literal_zones
 from octave_mcp.mcp.write import WriteTool, _normalize_value_for_ast
 
 _TOOL = WriteTool()
@@ -323,3 +326,191 @@ class TestWriteContentPreservation:
         assert "contains_literal_zones" not in result
         assert "literal_zone_count" not in result
         assert "literal_zones_validated" not in result
+
+
+# ===========================================================================
+# T14-EXACT: Exact byte-for-byte content equality after round-trip
+# ===========================================================================
+
+# These constants are the EXACT content that the parser stores in LiteralZoneValue.content
+# after round-trip.  The parser captures everything between the opening fence newline
+# and the closing fence line -- the trailing newline before the closing ``` is NOT
+# part of the content (the parser strips it).  This is the true byte-for-byte content.
+_LITERAL_CONTENT_PYTHON = 'print("hello")'
+_LITERAL_CONTENT_TABS = "\tindented with tabs\n\t\tdouble indent"
+_LITERAL_CONTENT_SPECIAL = "x = 1\n# comment with unicode: \u00e9\t\ttabs too"
+
+_DOC_EXACT_PYTHON = """\
+===DOC===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+
+CODE::
+```python
+print("hello")
+```
+===END===
+"""
+
+_DOC_EXACT_TABS = """\
+===DOC===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+
+CODE::
+```
+\tindented with tabs
+\t\tdouble indent
+```
+===END===
+"""
+
+_DOC_EXACT_SPECIAL = """\
+===DOC===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+
+CODE::
+```python
+x = 1
+# comment with unicode: \u00e9\t\ttabs too
+```
+===END===
+"""
+
+
+def _find_literal_zone_content(doc_text: str, key: str = "CODE") -> str:
+    """Parse a written document and return the literal zone content for ``key``."""
+    doc = parse(doc_text)
+    zones = _count_literal_zones(doc)
+    matching = [z for z in zones if z["key"] == key]
+    assert matching, f"No literal zone with key={key!r} found in parsed document"
+    # Re-extract the LiteralZoneValue from the parsed document directly.
+    # Walk the AST to find the assignment with the given key.
+    from octave_mcp.core.ast_nodes import Assignment, Block
+
+    def _find(nodes: list) -> str | None:
+        for node in nodes:
+            if isinstance(node, Assignment) and node.key == key:
+                from octave_mcp.core.ast_nodes import LiteralZoneValue as LZV
+
+                if isinstance(node.value, LZV):
+                    return node.value.content
+            if isinstance(node, Block):
+                result = _find(node.children)
+                if result is not None:
+                    return result
+        return None
+
+    content = _find(doc.sections)
+    assert content is not None, f"LiteralZoneValue for key={key!r} not found in AST"
+    return content
+
+
+class TestWriteContentPreservationExact:
+    """Exact byte-for-byte equality of literal zone content through the write pipeline.
+
+    These tests address the CE non-blocking finding: prior tests used substring
+    checks (``in``), which cannot detect mutations that still contain the expected
+    substring.  Spec requirement (I1/D3): content between fences must be preserved
+    with no alteration whatsoever -- zero-processing, bijective.
+
+    Strategy: write -> read back file -> re-parse with ``parse()`` -> extract
+    ``LiteralZoneValue.content`` from AST -> assert exact equality to original.
+    """
+
+    @pytest.mark.asyncio
+    async def test_python_content_exact_equality_after_roundtrip(self) -> None:
+        """Parsed zone.content must equal original content exactly (not just substring)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "test.oct.md")
+            result = await _TOOL.execute(target_path=target, content=_DOC_EXACT_PYTHON)
+            assert result["status"] == "success"
+            with open(target, encoding="utf-8") as f:
+                written = f.read()
+            content = _find_literal_zone_content(written)
+            assert (
+                content == _LITERAL_CONTENT_PYTHON
+            ), f"Expected exact content {_LITERAL_CONTENT_PYTHON!r}, got {content!r}"
+
+    @pytest.mark.asyncio
+    async def test_tabs_content_exact_equality_after_roundtrip(self) -> None:
+        """Tab characters must be preserved exactly (not converted to spaces)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "test.oct.md")
+            result = await _TOOL.execute(target_path=target, content=_DOC_EXACT_TABS)
+            assert result["status"] == "success"
+            with open(target, encoding="utf-8") as f:
+                written = f.read()
+            content = _find_literal_zone_content(written)
+            assert (
+                content == _LITERAL_CONTENT_TABS
+            ), f"Expected exact tab-preserved content {_LITERAL_CONTENT_TABS!r}, got {content!r}"
+
+    @pytest.mark.asyncio
+    async def test_special_chars_content_exact_equality_after_roundtrip(self) -> None:
+        """Unicode and mixed whitespace content must be preserved exactly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "test.oct.md")
+            result = await _TOOL.execute(target_path=target, content=_DOC_EXACT_SPECIAL)
+            assert result["status"] == "success"
+            with open(target, encoding="utf-8") as f:
+                written = f.read()
+            content = _find_literal_zone_content(written)
+            assert (
+                content == _LITERAL_CONTENT_SPECIAL
+            ), f"Expected exact content {_LITERAL_CONTENT_SPECIAL!r}, got {content!r}"
+
+    @pytest.mark.asyncio
+    async def test_content_hash_equality_after_roundtrip(self) -> None:
+        """SHA-256 hash of zone content must match after round-trip through write pipeline."""
+        original_hash = hashlib.sha256(_LITERAL_CONTENT_PYTHON.encode("utf-8")).hexdigest()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "test.oct.md")
+            result = await _TOOL.execute(target_path=target, content=_DOC_EXACT_PYTHON)
+            assert result["status"] == "success"
+            with open(target, encoding="utf-8") as f:
+                written = f.read()
+            content = _find_literal_zone_content(written)
+            roundtrip_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+            assert roundtrip_hash == original_hash, (
+                f"Hash mismatch: original={original_hash}, after round-trip={roundtrip_hash}. "
+                f"Content changed from {_LITERAL_CONTENT_PYTHON!r} to {content!r}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_two_zone_contents_exact_equality_after_roundtrip(self) -> None:
+        """Both zones in a two-zone document must be preserved exactly."""
+        # Content as the parser will store it (no trailing newline before closing fence).
+        content_python = 'print("hello")'
+        content_json = '{"key": "value"}'
+        doc = """\
+===DOC===
+META:
+  TYPE::"TEST"
+  VERSION::"1.0"
+
+CODE::
+```python
+print("hello")
+```
+
+CONFIG::
+```json
+{"key": "value"}
+```
+===END===
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "test.oct.md")
+            result = await _TOOL.execute(target_path=target, content=doc)
+            assert result["status"] == "success"
+            with open(target, encoding="utf-8") as f:
+                written = f.read()
+            code_content = _find_literal_zone_content(written, key="CODE")
+            config_content = _find_literal_zone_content(written, key="CONFIG")
+            assert code_content == content_python, f"CODE zone: expected {content_python!r}, got {code_content!r}"
+            assert config_content == content_json, f"CONFIG zone: expected {content_json!r}, got {config_content!r}"
