@@ -317,3 +317,80 @@ class TestConstraintChainParseRegression:
         chain = ConstraintChain.parse("TYPE[LITERAL]")
         assert not isinstance(chain.constraints[0], TypeConstraint)
         assert isinstance(chain.constraints[0], LiteralConstraint)
+
+
+# ---------------------------------------------------------------------------
+# Fix 2 (CE review): E007 subtype discipline in LiteralConstraint/LangConstraint
+# ---------------------------------------------------------------------------
+
+
+class TestLiteralConstraintE007Subtype:
+    """Fix 2: LiteralConstraint errors must use E007_LITERAL_TYPE subtype in message.
+
+    The error code field remains "E007" (family code), but the message must include
+    the subtype prefix "E007_LITERAL_TYPE:" to avoid semantic collision with the
+    existing E007_UNCLOSED_LIST (parser.py) and E007_NESTED_FENCE (lexer.py) uses.
+    """
+
+    def test_literal_constraint_string_error_message_has_subtype(self):
+        """LiteralConstraint error message for string value contains 'E007_LITERAL_TYPE'."""
+        result = LiteralConstraint().evaluate("string value", path="test.field")
+        assert result.valid is False
+        assert "E007_LITERAL_TYPE" in result.errors[0].message
+
+    def test_literal_constraint_int_error_message_has_subtype(self):
+        """LiteralConstraint error message for int value contains 'E007_LITERAL_TYPE'."""
+        result = LiteralConstraint().evaluate(42, path="test.field")
+        assert result.valid is False
+        assert "E007_LITERAL_TYPE" in result.errors[0].message
+
+    def test_literal_constraint_none_error_message_has_subtype(self):
+        """LiteralConstraint error message for None value contains 'E007_LITERAL_TYPE'."""
+        result = LiteralConstraint().evaluate(None, path="test.field")
+        assert result.valid is False
+        assert "E007_LITERAL_TYPE" in result.errors[0].message
+
+    def test_literal_constraint_error_code_still_e007(self):
+        """LiteralConstraint error code remains 'E007' (family code unchanged)."""
+        result = LiteralConstraint().evaluate("bad", path="test.field")
+        assert result.errors[0].code == "E007"
+
+
+class TestLangConstraintE007Subtype:
+    """Fix 2: LangConstraint errors must use E007_LANG_MISMATCH subtype in message.
+
+    Both error paths in LangConstraint (non-LiteralZoneValue value, and mismatched
+    info_tag) must include 'E007_LANG_MISMATCH' in their message strings.
+    The error code field remains "E007" (family code).
+    """
+
+    def test_lang_constraint_non_literal_error_message_has_subtype(self):
+        """LangConstraint error message for non-LiteralZoneValue contains 'E007_LANG_MISMATCH'."""
+        result = LangConstraint("python").evaluate("string", path="test.field")
+        assert result.valid is False
+        assert "E007_LANG_MISMATCH" in result.errors[0].message
+
+    def test_lang_constraint_mismatched_tag_error_message_has_subtype(self):
+        """LangConstraint error message for mismatched info_tag contains 'E007_LANG_MISMATCH'."""
+        lzv = LiteralZoneValue(info_tag="json")
+        result = LangConstraint("python").evaluate(lzv, path="test.field")
+        assert result.valid is False
+        assert "E007_LANG_MISMATCH" in result.errors[0].message
+
+    def test_lang_constraint_none_tag_error_message_has_subtype(self):
+        """LangConstraint error message for None info_tag contains 'E007_LANG_MISMATCH'."""
+        lzv = LiteralZoneValue(info_tag=None)
+        result = LangConstraint("python").evaluate(lzv, path="test.field")
+        assert result.valid is False
+        assert "E007_LANG_MISMATCH" in result.errors[0].message
+
+    def test_lang_constraint_error_code_still_e007(self):
+        """LangConstraint error code remains 'E007' (family code unchanged)."""
+        lzv = LiteralZoneValue(info_tag="json")
+        result = LangConstraint("python").evaluate(lzv, path="test.field")
+        assert result.errors[0].code == "E007"
+
+    def test_lang_constraint_non_literal_error_code_still_e007(self):
+        """LangConstraint error code remains 'E007' for non-literal value."""
+        result = LangConstraint("python").evaluate("string", path="test.field")
+        assert result.errors[0].code == "E007"
