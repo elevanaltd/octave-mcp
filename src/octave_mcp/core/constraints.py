@@ -902,9 +902,9 @@ class ConstraintChain:
         - ``∧`` operator: "REQ∧TYPE[STRING]∧ENUM[A,B]"
         - Space separator: "REQ TYPE[LITERAL] LANG[python]"
 
-        Tokens are extracted by a greedy regex that captures each keyword plus
-        its optional bracket argument (e.g. ``LANG[python]``, ``ENUM[A,B,C]``).
-        This avoids splitting inside brackets.
+        Uses a depth-aware character scan so that brackets and parentheses inside
+        a token argument (e.g. ``REGEX["^[a-z]+$"]``) are never treated as
+        separators.  Spaces are only treated as separators at bracket depth 0.
 
         Args:
             constraint_str: Raw constraint string to split.
@@ -916,10 +916,30 @@ class ConstraintChain:
         if "∧" in constraint_str:
             return [p.strip() for p in constraint_str.split("∧") if p.strip()]
 
-        # Space-separated: tokenise with a regex so we never split inside brackets.
-        # Pattern captures: WORD optionally followed by [bracketed content] or (parens).
-        token_re = re.compile(r"[A-Z_]+(?:\[[^\]]*\]|\([^)]*\))?")
-        return token_re.findall(constraint_str)
+        # Space-separated: split at whitespace that is NOT inside brackets/parens.
+        # Walk character-by-character, tracking bracket depth.
+        tokens: list[str] = []
+        current: list[str] = []
+        depth = 0
+        for ch in constraint_str:
+            if ch in ("[", "("):
+                depth += 1
+                current.append(ch)
+            elif ch in ("]", ")"):
+                depth -= 1
+                current.append(ch)
+            elif ch == " " and depth == 0:
+                token = "".join(current).strip()
+                if token:
+                    tokens.append(token)
+                current = []
+            else:
+                current.append(ch)
+        # Flush the last token.
+        token = "".join(current).strip()
+        if token:
+            tokens.append(token)
+        return tokens
 
     @classmethod
     def parse(cls, constraint_str: str) -> "ConstraintChain":
