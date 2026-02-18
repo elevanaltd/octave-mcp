@@ -455,6 +455,16 @@ def _count_literal_zones(doc: Document) -> list[dict[str, Any]]:
     D4: Content is opaque -- only envelope metadata (key, info_tag, line) is
     reported.  I5: Caller is responsible for setting ``literal_zones_validated=False``.
 
+    **Line semantics**: The ``line`` field records the source line of the
+    *assignment* (the ``KEY::`` line), not the line of the opening fence
+    marker (the ` ``` ` line).  ``LiteralZoneValue`` does not store its own
+    source position; only the containing ``Assignment`` node carries a line
+    number (inherited from ``ASTNode.line``).  The fence opening always
+    appears on ``assignment.line + 1`` in well-formed OCTAVE documents, but
+    this function does not compute that offset -- it exposes the assignment
+    line directly.  Consumers that need the fence line should add 1 to the
+    reported ``line`` value.
+
     Args:
         doc: Parsed Document AST to inspect.
 
@@ -462,7 +472,8 @@ def _count_literal_zones(doc: Document) -> list[dict[str, Any]]:
         List of dicts, each with keys:
           - "key":      Assignment key (str)
           - "info_tag": Language tag from fence opener, or None
-          - "line":     Source line number of the assignment (int)
+          - "line":     Source line number of the *assignment* node (the
+                        ``KEY::`` line), NOT the fence opening line.
 
         Returns an empty list when no literal zones are present.
     """

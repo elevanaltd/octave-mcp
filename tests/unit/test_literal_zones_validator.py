@@ -414,3 +414,105 @@ class TestCountLiteralZonesRecursion:
         doc = Document(name="TEST_DOC", sections=[section])
         result = _count_literal_zones(doc)
         assert len(result) == 2
+
+
+# ---------------------------------------------------------------------------
+# Fix 2 (CE review): Document line semantics of _count_literal_zones()
+# ---------------------------------------------------------------------------
+
+
+class TestCountLiteralZonesLineSemantics:
+    """Document and assert the line semantics of _count_literal_zones().
+
+    CE non-blocking finding: the ``line`` field in each zone entry records the
+    *assignment* line (the ``KEY::`` line), NOT the opening fence line (the
+    ` ``` ` line).  This is because ``LiteralZoneValue`` has no ``line``
+    attribute -- only the containing ``Assignment`` node (via ``ASTNode.line``)
+    carries a source position.
+
+    In a well-formed OCTAVE document the fence opening is always on
+    ``assignment.line + 1``, but ``_count_literal_zones()`` does not apply
+    that offset.  These tests document this invariant explicitly so that
+    downstream consumers are not misled.
+    """
+
+    def test_line_field_equals_assignment_line_not_fence_line(self):
+        """zone entry['line'] equals assignment.line (KEY:: line), not fence line.
+
+        In a real document the layout is::
+
+            KEY::        ← assignment at line N  (reported as 'line')
+            ```python    ← fence opens at line N+1  (NOT reported)
+            content
+            ```
+
+        The reported line is N (assignment), not N+1 (fence).
+        """
+        assignment_line = 5
+        lzv = LiteralZoneValue(content="x = 1", info_tag="python")
+        assignment = Assignment(key="CODE", value=lzv, line=assignment_line)
+        section = Block(key="SECTION", children=[assignment])
+        doc = Document(name="TEST_DOC", sections=[section])
+
+        result = _count_literal_zones(doc)
+
+        assert len(result) == 1
+        # The reported line must be the assignment line, not the fence line.
+        # Fence line would be assignment_line + 1 = 6; assignment line is 5.
+        assert result[0]["line"] == assignment_line, (
+            f"Expected assignment line {assignment_line}, got {result[0]['line']}. "
+            "Note: _count_literal_zones() reports the KEY:: assignment line, "
+            "not the opening ``` fence line (assignment_line + 1)."
+        )
+
+    def test_line_field_is_not_fence_line(self):
+        """Explicitly assert that line != assignment_line + 1 (i.e., not the fence line)."""
+        assignment_line = 10
+        lzv = LiteralZoneValue(content="SELECT 1", info_tag="sql")
+        assignment = Assignment(key="QUERY", value=lzv, line=assignment_line)
+        section = Block(key="SECTION", children=[assignment])
+        doc = Document(name="TEST_DOC", sections=[section])
+
+        result = _count_literal_zones(doc)
+
+        assert len(result) == 1
+        fence_line = assignment_line + 1  # where the ``` would appear
+        # The reported line is the assignment line, never the fence line.
+        assert result[0]["line"] != fence_line, (
+            "Unexpected: _count_literal_zones() returned the fence line. "
+            "The contract says it returns the assignment (KEY::) line."
+        )
+        assert result[0]["line"] == assignment_line
+
+    def test_literal_zone_value_has_no_line_attribute(self):
+        """LiteralZoneValue stores no source line -- only Assignment does.
+
+        This documents why _count_literal_zones() must use assignment.line
+        rather than value.line: LiteralZoneValue has no line field.
+        """
+        lzv = LiteralZoneValue(content="code", info_tag="python")
+        assert not hasattr(lzv, "line"), (
+            "LiteralZoneValue unexpectedly gained a 'line' attribute. "
+            "If this is now available, _count_literal_zones() should be updated "
+            "to use value.line (the fence opening line) instead of assignment.line."
+        )
+
+    def test_consumers_can_compute_fence_line_by_adding_one(self):
+        """Document the offset: fence_line = reported_line + 1.
+
+        Consumers needing the opening fence line should add 1 to zone['line'].
+        This test makes the +1 offset explicit and machine-checked.
+        """
+        assignment_line = 7
+        lzv = LiteralZoneValue(content="data", info_tag="json")
+        assignment = Assignment(key="DATA", value=lzv, line=assignment_line)
+        section = Block(key="SECTION", children=[assignment])
+        doc = Document(name="TEST_DOC", sections=[section])
+
+        result = _count_literal_zones(doc)
+
+        assert len(result) == 1
+        reported_line = result[0]["line"]
+        # Contract: reported_line is assignment line; fence is reported_line + 1.
+        expected_fence_line = reported_line + 1
+        assert expected_fence_line == assignment_line + 1
