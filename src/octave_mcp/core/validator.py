@@ -468,17 +468,37 @@ def _count_literal_zones(doc: Document) -> list[dict[str, Any]]:
     """
     zones: list[dict[str, Any]] = []
 
+    def _collect_from_value(key: str, value: Any, line: int) -> None:
+        """Recursively collect LiteralZoneValue instances from a value.
+
+        Descends into ListValue.items and InlineMap.pairs so that literal
+        zones nested inside list or map assignments are not silently missed
+        (Fix for CE review finding: T13/T14 zone_report metadata correctness).
+
+        Args:
+            key:   Assignment key (used as the zone key in the report entry).
+            value: The assignment value to inspect (may be any AST value type).
+            line:  Source line of the containing assignment.
+        """
+        if isinstance(value, LiteralZoneValue):
+            zones.append(
+                {
+                    "key": key,
+                    "info_tag": value.info_tag,
+                    "line": line,
+                }
+            )
+        elif isinstance(value, ListValue):
+            for item in value.items:
+                _collect_from_value(key, item, line)
+        elif isinstance(value, InlineMap):
+            for v in value.pairs.values():
+                _collect_from_value(key, v, line)
+
     def _traverse(nodes: list[ASTNode]) -> None:
         for node in nodes:
             if isinstance(node, Assignment):
-                if isinstance(node.value, LiteralZoneValue):
-                    zones.append(
-                        {
-                            "key": node.key,
-                            "info_tag": node.value.info_tag,
-                            "line": node.line,
-                        }
-                    )
+                _collect_from_value(node.key, node.value, node.line)
             elif isinstance(node, Block):
                 _traverse(node.children)
             elif hasattr(node, "children"):
