@@ -36,13 +36,15 @@ GREETING::hello world
 """
 
 # A doc with exactly one literal zone
+# Note: OCTAVE syntax requires the fence on the line AFTER the key (VALUE:: then newline then ```)
 DOC_ONE_ZONE = """\
 ===CODE_DOC===
 META:
   TYPE::"TEST"
   VERSION::"1.0"
 
-CODE::```python
+CODE::
+```python
 hello
 ```
 ===END===
@@ -58,7 +60,8 @@ META:
   TYPE::"TEST"
   VERSION::"1.0"
 
-CODE::```python
+CODE::
+```python
 hello
 ```
 ===END===
@@ -71,11 +74,13 @@ META:
   TYPE::"TEST"
   VERSION::"1.0"
 
-CODE::```python
+CODE::
+```python
 print("hello")
 ```
 
-CONFIG::```json
+CONFIG::
+```json
 {"key": "value"}
 ```
 ===END===
@@ -321,6 +326,6 @@ class TestAcceptanceCriterion:
     @pytest.mark.asyncio
     async def test_acceptance_literal_status_preserved(self) -> None:
         """Acceptance: validate doc with literal zone returns zone_report.literal.status == 'preserved'."""
-        doc = "===DOC===\nCODE::```python\nhello\n```\n===END===\n"
+        doc = "===DOC===\nCODE::\n```python\nhello\n```\n===END===\n"
         result = await _validate(doc)
         assert result["zone_report"]["literal"]["status"] == "preserved"

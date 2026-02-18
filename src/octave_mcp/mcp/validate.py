@@ -18,8 +18,9 @@ from typing import Any
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.parser import parse_with_warnings
 from octave_mcp.core.repair import repair
+from octave_mcp.core.repair_log import LiteralZoneRepairLog
 from octave_mcp.core.schema_extractor import SchemaDefinition
-from octave_mcp.core.validator import Validator
+from octave_mcp.core.validator import Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
 
@@ -432,6 +433,28 @@ class ValidateTool(BaseTool):
         try:
             doc, parse_repairs = parse_with_warnings(content)
             result["repairs"].extend(parse_repairs)
+
+            # Issue #235 T13: Literal zone reporting (§8.1, §8.4)
+            # After parse, before validation — count zones and populate zone_report.
+            zones = _count_literal_zones(doc)
+            if zones:
+                result["contains_literal_zones"] = True
+                result["literal_zone_count"] = len(zones)
+                result["literal_zones_validated"] = False  # I5: always False (D4: content opaque)
+                result["zone_report"] = {
+                    "dsl": {"status": "valid", "errors": []},
+                    "container": {
+                        "status": "preserved" if doc.raw_frontmatter else "absent",
+                    },
+                    "literal": {
+                        "status": "preserved",
+                        "count": len(zones),
+                        "content_validated": False,  # D4: content opaque; I5: honest
+                        "zones": zones,
+                    },
+                }
+                result["literal_zone_repair_log"] = LiteralZoneRepairLog(entries=[]).to_dict()
+
         except Exception as e:
             result["status"] = "error"
             # Check if it's a tokenization or parse error
