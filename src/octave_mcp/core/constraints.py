@@ -1,11 +1,11 @@
 """OCTAVE constraint evaluation (Gap 2).
 
-Implements constraint chain evaluation with 11 constraint types:
+Implements constraint chain evaluation with 13 constraint types:
 - REQ: Required field (must be present, not None/empty)
 - OPT: Optional field (can be missing)
 - CONST[X]: Constant value (must equal X)
 - ENUM[a,b,c]: Enumerated values (must be one of list, supports prefix matching)
-- TYPE[X]: Type check (STRING|NUMBER|LIST|BOOLEAN) - preferred lexer-compatible syntax
+- TYPE[X]: Type check (STRING|NUMBER|LIST|BOOLEAN|LITERAL) - preferred lexer-compatible syntax
 - TYPE(X): Type check legacy syntax (works with direct ConstraintChain.parse() only)
 - REGEX[pat]: Pattern matching
 - DIR: Directory path validation
@@ -14,6 +14,7 @@ Implements constraint chain evaluation with 11 constraint types:
 - MAX_LENGTH[N]: Maximum collection/string size
 - MIN_LENGTH[N]: Minimum collection/string size
 - DATE: ISO8601 date format validation
+- LANG[tag]: Literal zone language tag validation (Issue #235)
 
 Constraint chains are evaluated left-to-right with fail-fast semantics.
 Conflict detection identifies incompatible constraint combinations.
@@ -24,6 +25,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+from octave_mcp.core.ast_nodes import LiteralZoneValue
 
 
 @dataclass
@@ -729,6 +732,110 @@ class Iso8601Constraint(Constraint):
         return r"\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})?)?"
 
 
+@dataclass
+class LiteralConstraint(Constraint):
+    """TYPE[LITERAL] constraint: value must be a LiteralZoneValue.
+
+    Issue #235: Validates that a field contains a literal zone.
+    Does NOT validate the content of the literal zone (D4: content opaque).
+
+    I5: Honest about what is validated -- only the presence and type.
+    """
+
+    def evaluate(self, value: Any, path: str = "") -> ValidationResult:
+        """Evaluate TYPE[LITERAL] constraint."""
+        if not isinstance(value, LiteralZoneValue):
+            return ValidationResult(
+                valid=False,
+                errors=[
+                    ValidationError(
+                        code="E007",
+                        path=path,
+                        constraint="TYPE[LITERAL]",
+                        expected="LiteralZoneValue",
+                        got=type(value).__name__,
+                        message=(
+                            f"Field '{path}' expected LITERAL (fenced code block), " f"got {type(value).__name__}"
+                        ),
+                    )
+                ],
+            )
+        return ValidationResult(valid=True)
+
+    def to_string(self) -> str:
+        return "TYPE[LITERAL]"
+
+    def compile(self) -> str:
+        """Compile TYPE[LITERAL] to a placeholder pattern (literal zones are opaque)."""
+        return r".*"
+
+
+@dataclass
+class LangConstraint(Constraint):
+    """LANG[tag] constraint: literal zone must have matching info_tag.
+
+    Issue #235: Validates the language tag on a literal zone.
+    Does NOT validate the content against the language grammar (D4: content opaque).
+
+    Comparison is case-insensitive (e.g., 'PYTHON' matches 'python').
+
+    Args:
+        expected_lang: Expected language tag (e.g., "python", "json").
+                       Stored in lowercase.
+    """
+
+    expected_lang: str
+
+    def __post_init__(self) -> None:
+        """Normalise expected_lang to lowercase."""
+        self.expected_lang = self.expected_lang.lower()
+
+    def evaluate(self, value: Any, path: str = "") -> ValidationResult:
+        """Evaluate LANG[tag] constraint."""
+        if not isinstance(value, LiteralZoneValue):
+            return ValidationResult(
+                valid=False,
+                errors=[
+                    ValidationError(
+                        code="E007",
+                        path=path,
+                        constraint=f"LANG[{self.expected_lang}]",
+                        expected="LiteralZoneValue",
+                        got=type(value).__name__,
+                        message=(f"LANG constraint requires a literal zone, " f"got {type(value).__name__}"),
+                    )
+                ],
+            )
+
+        actual_tag = (value.info_tag or "").lower()
+        if actual_tag != self.expected_lang:
+            return ValidationResult(
+                valid=False,
+                errors=[
+                    ValidationError(
+                        code="E007",
+                        path=path,
+                        constraint=f"LANG[{self.expected_lang}]",
+                        expected=self.expected_lang,
+                        got=actual_tag or "(none)",
+                        message=(
+                            f"Field '{path}' expected language tag "
+                            f"'{self.expected_lang}', got '{actual_tag or '(none)'}'"
+                        ),
+                    )
+                ],
+            )
+
+        return ValidationResult(valid=True)
+
+    def to_string(self) -> str:
+        return f"LANG[{self.expected_lang}]"
+
+    def compile(self) -> str:
+        """Compile LANG[tag] to a placeholder pattern (content opaque)."""
+        return r".*"
+
+
 def _parse_atom(s: str) -> Any:
     """Parse atom value from constraint string.
 
@@ -788,12 +895,40 @@ class ConstraintChain:
         self.constraints = constraints
 
     @classmethod
+    def _split_parts(cls, constraint_str: str) -> list[str]:
+        """Split a constraint string into individual constraint tokens.
+
+        Supports two separator styles:
+        - ``∧`` operator: "REQ∧TYPE[STRING]∧ENUM[A,B]"
+        - Space separator: "REQ TYPE[LITERAL] LANG[python]"
+
+        Tokens are extracted by a greedy regex that captures each keyword plus
+        its optional bracket argument (e.g. ``LANG[python]``, ``ENUM[A,B,C]``).
+        This avoids splitting inside brackets.
+
+        Args:
+            constraint_str: Raw constraint string to split.
+
+        Returns:
+            List of stripped, non-empty token strings.
+        """
+        # If ∧ is present use it as the separator (existing behaviour).
+        if "∧" in constraint_str:
+            return [p.strip() for p in constraint_str.split("∧") if p.strip()]
+
+        # Space-separated: tokenise with a regex so we never split inside brackets.
+        # Pattern captures: WORD optionally followed by [bracketed content] or (parens).
+        token_re = re.compile(r"[A-Z_]+(?:\[[^\]]*\]|\([^)]*\))?")
+        return token_re.findall(constraint_str)
+
+    @classmethod
     def parse(cls, constraint_str: str) -> "ConstraintChain":
         """Parse constraint string into ConstraintChain.
 
         Supports:
         - Single: "REQ"
-        - Chain: "REQ∧TYPE(STRING)"
+        - ∧-chain: "REQ∧TYPE[STRING]"
+        - Space-chain: "REQ TYPE[LITERAL] LANG[python]"
         - Parameters: "ENUM[A,B,C]", "CONST[X]", "REGEX["pattern"]"
 
         Args:
@@ -804,8 +939,7 @@ class ConstraintChain:
         """
         constraints: list[Constraint] = []
 
-        # Split by ∧ operator
-        parts = constraint_str.split("∧")
+        parts = cls._split_parts(constraint_str)
 
         for part in parts:
             part = part.strip()
@@ -824,6 +958,13 @@ class ConstraintChain:
             elif part == "ISO8601":
                 # Full ISO8601 datetime support
                 constraints.append(Iso8601Constraint())
+            elif part == "TYPE[LITERAL]":
+                # Issue #235: TYPE[LITERAL] -> LiteralConstraint (not TypeConstraint)
+                constraints.append(LiteralConstraint())
+            elif part.startswith("LANG[") and part.endswith("]"):
+                # Issue #235: LANG[tag] -> LangConstraint
+                lang_tag = part[5:-1]
+                constraints.append(LangConstraint(expected_lang=lang_tag))
             elif part.startswith("CONST[") and part.endswith("]"):
                 # Extract value from CONST[value] - I2 fix: use _parse_atom
                 const_value_str = part[6:-1]
