@@ -169,3 +169,77 @@ FIELD::[value1, value2
     # Points to the unclosed bracket location
     assert error.line == 5
     assert error.column == 8
+
+
+# ---------------------------------------------------------------------------
+# T17: EBNF Grammar -- literal_value production (Issue #235)
+# ---------------------------------------------------------------------------
+
+GRAMMAR_FILE = Path(__file__).parent.parent / "docs" / "grammar" / "octave-v1.0-grammar.ebnf"
+
+
+def test_grammar_file_exists():
+    """Grammar file must exist at the expected path."""
+    assert GRAMMAR_FILE.exists(), f"Grammar file not found: {GRAMMAR_FILE}"
+
+
+def test_grammar_literal_value_production_exists():
+    """Grammar file must contain the literal_value production (Issue #235)."""
+    content = GRAMMAR_FILE.read_text()
+    assert "literal_value" in content, (
+        "Grammar file missing 'literal_value' production. "
+        "Issue #235 T17 requires adding the literal_value EBNF rule."
+    )
+
+
+def test_grammar_value_production_includes_literal_value():
+    """The 'value' production in the grammar must include 'literal_value'."""
+    content = GRAMMAR_FILE.read_text()
+    # Find the value production block
+    assert "| literal_value" in content, (
+        "Grammar 'value' production must include '| literal_value'. "
+        "Issue #235 T17 requires updating the value production."
+    )
+
+
+def test_grammar_code_fence_production_exists():
+    """Grammar file must contain the code_fence production."""
+    content = GRAMMAR_FILE.read_text()
+    assert "code_fence" in content, (
+        "Grammar file missing 'code_fence' production. "
+        "Issue #235 T17 requires adding code_fence with opening/closing fences."
+    )
+
+
+def test_grammar_fence_content_production_exists():
+    """Grammar file must contain opening_fence and closing_fence productions."""
+    content = GRAMMAR_FILE.read_text()
+    assert "opening_fence" in content, "Grammar missing 'opening_fence' production."
+    assert "closing_fence" in content, "Grammar missing 'closing_fence' production."
+    assert "fence_content" in content, "Grammar missing 'fence_content' production."
+
+
+def test_grammar_constraint_comments_present():
+    """Grammar must include constraint comments explaining fence length matching."""
+    content = GRAMMAR_FILE.read_text()
+    # Check that fence length constraint is documented
+    assert (
+        "closing fence length must equal opening fence length" in content
+    ), "Grammar must document the fence length matching constraint."
+
+
+def test_grammar_section_4b_exists():
+    """Grammar file must contain SECTION 4b for literal values."""
+    content = GRAMMAR_FILE.read_text()
+    assert "SECTION 4b" in content, "Grammar file must contain SECTION 4b: LITERAL VALUES (Issue #235)."
+
+
+def test_grammar_no_duplicate_sections():
+    """Grammar file must not have duplicate SECTION markers (structural integrity)."""
+    content = GRAMMAR_FILE.read_text()
+    import re
+
+    section_markers = re.findall(r"\(\* SECTION \d+[a-z]?:", content)
+    assert len(section_markers) == len(
+        set(section_markers)
+    ), f"Grammar file has duplicate section markers: {section_markers}"

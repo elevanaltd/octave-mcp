@@ -110,6 +110,7 @@ value = string_literal
       | version_literal
       | variable_reference
       | list_value
+      | literal_value          (* NEW: Issue #235 *)
       | section_reference
       | identifier_value
       | flow_expression ;
@@ -121,6 +122,35 @@ identifier_value = identifier, { block_operator, identifier }, [ bracket_annotat
 (* Section reference in value position: TARGET *)
 (* Source: parser.py lines 1227-1251 *)
 section_reference = section_operator, ( identifier | number_literal ) ;
+
+
+(* ========================================================================== *)
+(* SECTION 4b: LITERAL VALUES (Issue #235)                                    *)
+(* Source: lexer.py fence detection, parser.py parse_literal_zone()           *)
+(* ========================================================================== *)
+
+(* Literal zone: fenced code block with optional info tag *)
+(* Fence must be 3+ backticks; closing fence must match opening length *)
+literal_value = code_fence ;
+
+code_fence = opening_fence, [ info_tag ], newline,
+             fence_content,
+             closing_fence ;
+
+opening_fence = backtick, backtick, backtick, { backtick } ;
+
+closing_fence = backtick, backtick, backtick, { backtick } ;
+(* Constraint: closing fence length must equal opening fence length *)
+
+info_tag = identifier ;  (* e.g., python, json, yaml *)
+
+fence_content = { ? any character including tabs and newlines ? } ;
+(* Constraint: fence_content must NOT contain a sequence of backticks *)
+(* equal to or longer than the opening fence at line start             *)
+(* Use a longer fence (fence-length scaling) to wrap content with      *)
+(* inner fences: e.g., ```` to wrap content containing ```             *)
+
+backtick = "`" ;
 
 
 (* ========================================================================== *)
