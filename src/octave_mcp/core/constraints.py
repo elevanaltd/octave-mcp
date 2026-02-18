@@ -811,7 +811,46 @@ class LangConstraint(Constraint):
                 ],
             )
 
-        actual_tag = (value.info_tag or "").lower()
+        # Fix 3 (CE review): info_tag=None and info_tag="" are always invalid.
+        # An absent or empty language tag cannot match any expected language;
+        # normalizing both to "" caused validation theater when expected_lang
+        # was also "" (degenerate LANG[] case). Explicit checks prevent this.
+        if value.info_tag is None:
+            return ValidationResult(
+                valid=False,
+                errors=[
+                    ValidationError(
+                        code="E007",
+                        path=path,
+                        constraint=f"LANG[{self.expected_lang}]",
+                        expected=self.expected_lang or "(any)",
+                        got="(none)",
+                        message=(
+                            f"E007_LANG_MISMATCH: Field '{path}' expected language tag "
+                            f"'{self.expected_lang}', got '(none)' (no info_tag on literal zone)"
+                        ),
+                    )
+                ],
+            )
+        if value.info_tag == "":
+            return ValidationResult(
+                valid=False,
+                errors=[
+                    ValidationError(
+                        code="E007",
+                        path=path,
+                        constraint=f"LANG[{self.expected_lang}]",
+                        expected=self.expected_lang or "(any)",
+                        got="(empty)",
+                        message=(
+                            f"E007_LANG_MISMATCH: Field '{path}' expected language tag "
+                            f"'{self.expected_lang}', got '(empty)' (empty info_tag is not a valid language tag)"
+                        ),
+                    )
+                ],
+            )
+
+        actual_tag = value.info_tag.lower()
         if actual_tag != self.expected_lang:
             return ValidationResult(
                 valid=False,
@@ -821,10 +860,10 @@ class LangConstraint(Constraint):
                         path=path,
                         constraint=f"LANG[{self.expected_lang}]",
                         expected=self.expected_lang,
-                        got=actual_tag or "(none)",
+                        got=actual_tag,
                         message=(
                             f"E007_LANG_MISMATCH: Field '{path}' expected language tag "
-                            f"'{self.expected_lang}', got '{actual_tag or '(none)'}'"
+                            f"'{self.expected_lang}', got '{actual_tag}'"
                         ),
                     )
                 ],
@@ -987,7 +1026,17 @@ class ConstraintChain:
                 constraints.append(LiteralConstraint())
             elif part.startswith("LANG[") and part.endswith("]"):
                 # Issue #235: LANG[tag] -> LangConstraint
+                # Fix 3 (CE review): reject empty LANG[] at parse time.
+                # An empty tag is a degenerate constraint that accepts nothing
+                # meaningful; fail early with a clear error rather than silently
+                # creating a LangConstraint("") that behaves as validation theater.
                 lang_tag = part[5:-1]
+                if not lang_tag.strip():
+                    raise ValueError(
+                        "LANG[] requires a non-empty language tag. "
+                        "Use LANG[python], LANG[json], etc. "
+                        "An empty LANG[] constraint cannot match any valid language tag."
+                    )
                 constraints.append(LangConstraint(expected_lang=lang_tag))
             elif part.startswith("CONST[") and part.endswith("]"):
                 # Extract value from CONST[value] - I2 fix: use _parse_atom
