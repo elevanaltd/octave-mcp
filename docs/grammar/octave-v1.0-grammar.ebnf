@@ -139,8 +139,19 @@ code_fence = opening_fence, [ info_tag ], newline,
 
 opening_fence = backtick, backtick, backtick, { backtick } ;
 
-closing_fence = backtick, backtick, backtick, { backtick } ;
-(* Constraint: closing fence length must equal opening fence length *)
+closing_fence = backtick, backtick, backtick, { backtick }, { space } ;
+(* CONSTRAINT C1: The closing fence MUST contain EXACTLY the same number of  *)
+(*   backticks as the opening fence.  A backtick sequence shorter or longer  *)
+(*   than the opening fence is NOT treated as a closing fence:               *)
+(*     shorter  -> treated as fence_content (fence-length scaling)           *)
+(*     longer   -> E007_NESTED_FENCE error                                   *)
+(*   This is enforced by _evaluate_fence_line() in lexer.py (CASE 1 / 2-3). *)
+(* CONSTRAINT C2: Trailing whitespace after the backtick sequence is         *)
+(*   permitted on the closing fence line (stripped before comparison).       *)
+(*   Any trailing NON-whitespace character makes the line an E007_NESTED_FENCE*)
+(*   error, not a valid closing fence, even when the backtick count matches. *)
+(*   Source: `not trailing_content.strip()` test in _evaluate_fence_line()   *)
+(*   (lexer.py CASE 1: `seq_len == open_len and not trailing_content.strip()`)*)
 
 info_tag = identifier ;  (* e.g., python, json, yaml *)
 

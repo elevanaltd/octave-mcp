@@ -13,6 +13,8 @@ support is added:
 
 from pathlib import Path
 
+import pytest
+
 from octave_mcp.core.ast_nodes import LiteralZoneValue
 from octave_mcp.core.lexer import LexerError
 from octave_mcp.core.parser import ParserError, parse
@@ -195,10 +197,18 @@ def test_no_backtick_collision_in_corpus() -> None:
     This uses the same regression guard logic as test_a9_migration_no_regressions:
     for each failing spec file, check if it also fails on main. Only fail if a
     file passes on main but fails on this branch (true regression).
+
+    FAIL-CLOSED: git show operational errors (timeout, bad repo state, path issues)
+    are never silently swallowed.  Only stderr patterns that confirm the file does
+    not exist on main ("does not exist", "exists on disk", "unknown revision") allow
+    the file to be skipped as a legitimately new file.  Any other error fails loudly.
     """
     import subprocess
 
     repo_root = Path(__file__).parent.parent
+
+    # Patterns indicating a file genuinely does not exist on main branch
+    _NEW_FILE_PATTERNS = ("does not exist", "exists on disk", "unknown revision")
 
     # Check all spec files (the most important corpus for this project)
     spec_dir = repo_root / "src" / "octave_mcp" / "resources" / "specs"
@@ -217,8 +227,8 @@ def test_no_backtick_collision_in_corpus() -> None:
             continue  # Passes -- no regression
 
         # Fails on branch -- check if it also fails on main
+        rel_path = f.relative_to(repo_root)
         try:
-            rel_path = f.relative_to(repo_root)
             result = subprocess.run(
                 ["git", "show", f"main:{rel_path}"],
                 capture_output=True,
@@ -226,20 +236,36 @@ def test_no_backtick_collision_in_corpus() -> None:
                 cwd=repo_root,
                 timeout=10,
             )
-            if result.returncode != 0:
-                continue  # File doesn't exist on main -- new file, not a regression
+        except subprocess.TimeoutExpired:
+            pytest.fail(
+                f"A9 gate: git show timed out for '{rel_path}'. "
+                "The git command took longer than 10 seconds. "
+                "Fix the repository environment before re-running."
+            )
 
-            main_error = None
-            try:
-                parse(result.stdout)
-            except Exception as me:
-                main_error = me
+        if result.returncode != 0:
+            stderr_lower = result.stderr.lower()
+            if any(pat in stderr_lower for pat in _NEW_FILE_PATTERNS):
+                # Legitimately new file -- not a regression
+                continue
+            # Any other non-zero exit is an operational error -- fail loudly
+            pytest.fail(
+                f"A9 gate: git show failed for '{rel_path}' with exit code "
+                f"{result.returncode}.\n"
+                f"  stderr: {result.stderr.strip()!r}\n"
+                "This is an operational error (bad repo state, path format issue, etc.). "
+                "Fix the environment before re-running."
+            )
 
-            if main_error is None:
-                # Passes on main but fails on branch -- REGRESSION
-                regressions.append((f.name, str(branch_error)[:100]))
-        except Exception:
-            continue  # git show failed -- skip
+        main_error = None
+        try:
+            parse(result.stdout)
+        except Exception as me:
+            main_error = me
+
+        if main_error is None:
+            # Passes on main but fails on branch -- REGRESSION
+            regressions.append((f.name, str(branch_error)[:100]))
 
     if regressions:
         lines = "\n".join(f"  - {name}: {err}" for name, err in regressions)

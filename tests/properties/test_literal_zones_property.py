@@ -13,8 +13,7 @@ from hypothesis import strategies as st
 
 from octave_mcp.core.ast_nodes import LiteralZoneValue
 from octave_mcp.core.emitter import emit
-from octave_mcp.core.lexer import LexerError
-from octave_mcp.core.parser import ParserError, parse
+from octave_mcp.core.parser import parse
 
 # ---------------------------------------------------------------------------
 # Strategy helpers
@@ -84,16 +83,16 @@ def test_any_content_round_trips_with_fence_scaling(fence_and_content: tuple[str
     assume(max_line_start_run < len(fence))
 
     octave = f"===DOC===\nCODE::\n{fence}\n{content}\n{fence}\n===END==="
-    try:
-        doc1 = parse(octave)
-        emitted = emit(doc1)
-        doc2 = parse(emitted)
-        # Round-trip fidelity: content is identical through parse->emit->parse
-        assert doc1.sections[0].value.content == doc2.sections[0].value.content
-    except (LexerError, ParserError):
-        # Some content may be invalid OCTAVE outside the fence
-        # (e.g., content that creates malformed OCTAVE structural tokens)
-        pass
+    # No except: the outer OCTAVE structure is fixed and valid; fence content
+    # is preserved verbatim by the lexer (D3: zero processing).  The assume()
+    # above already filters the only known-invalid case (nested fence at line
+    # start).  Swallowing LexerError/ParserError here would be validation
+    # theater -- any such failure represents a real parser/emitter regression.
+    doc1 = parse(octave)
+    emitted = emit(doc1)
+    doc2 = parse(emitted)
+    # Round-trip fidelity: content is identical through parse->emit->parse
+    assert doc1.sections[0].value.content == doc2.sections[0].value.content
 
 
 @given(st.integers(min_value=3, max_value=10))

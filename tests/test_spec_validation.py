@@ -222,10 +222,9 @@ def test_grammar_fence_content_production_exists():
 def test_grammar_constraint_comments_present():
     """Grammar must include constraint comments explaining fence length matching."""
     content = GRAMMAR_FILE.read_text()
-    # Check that fence length constraint is documented
-    assert (
-        "closing fence length must equal opening fence length" in content
-    ), "Grammar must document the fence length matching constraint."
+    # Check that normative fence length constraints are documented (CONSTRAINT C1/C2)
+    assert "CONSTRAINT C1" in content, "Grammar must contain normative CONSTRAINT C1 (exact closing fence length)."
+    assert "CONSTRAINT C2" in content, "Grammar must contain normative CONSTRAINT C2 (trailing whitespace allowed)."
 
 
 def test_grammar_section_4b_exists():

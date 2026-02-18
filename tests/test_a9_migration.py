@@ -65,9 +65,17 @@ def _get_main_content(file_path: Path) -> str | None:
     """Get file content from main branch via git show.
 
     Returns None if the file doesn't exist on main (new file = not a regression).
+
+    FAIL-CLOSED: Any git error that is NOT a "file not found on main" condition
+    causes pytest.fail() so that operational failures are never silently treated
+    as "new file -- skip".  Only the following stderr patterns indicate a
+    legitimately new file and warrant returning None:
+      - "does not exist"
+      - "exists on disk"
+      - "unknown revision"
     """
+    rel_path = file_path.relative_to(REPO_ROOT)
     try:
-        rel_path = file_path.relative_to(REPO_ROOT)
         result = subprocess.run(
             ["git", "show", f"main:{rel_path}"],
             capture_output=True,
@@ -75,14 +83,36 @@ def _get_main_content(file_path: Path) -> str | None:
             cwd=REPO_ROOT,
             timeout=10,
         )
-        if result.returncode != 0:
-            # File doesn't exist on main (new file) -- not a regression
-            return None
-        return result.stdout
     except subprocess.TimeoutExpired:
-        return None
-    except Exception:
-        return None
+        pytest.fail(
+            f"A9 gate: git show timed out for '{rel_path}'. "
+            "The git command took longer than 10 seconds. "
+            "Fix the repository environment before re-running."
+        )
+    except Exception as exc:
+        pytest.fail(
+            f"A9 gate: git show raised an unexpected exception for '{rel_path}': {exc!r}. "
+            "Fix the repository environment before re-running."
+        )
+
+    if result.returncode != 0:
+        stderr_lower = result.stderr.lower()
+        # Patterns that indicate the file genuinely does not exist on main
+        _NEW_FILE_PATTERNS = ("does not exist", "exists on disk", "unknown revision")
+        if any(pat in stderr_lower for pat in _NEW_FILE_PATTERNS):
+            # Legitimately new file -- not a regression
+            return None
+        # Any other non-zero exit is an operational git error -- fail loudly
+        pytest.fail(
+            f"A9 gate: git show failed for '{rel_path}' with exit code "
+            f"{result.returncode}.\n"
+            f"  stderr: {result.stderr.strip()!r}\n"
+            f"  stdout: {result.stdout.strip()!r}\n"
+            "This is an operational error (bad repo state, path format issue, etc.). "
+            "Fix the environment before re-running."
+        )
+
+    return result.stdout
 
 
 def test_a9_migration_no_regressions() -> None:
