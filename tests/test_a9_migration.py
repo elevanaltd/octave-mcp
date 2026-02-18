@@ -61,50 +61,75 @@ def _try_parse(content: str) -> Exception | None:
         return e
 
 
+def _try_git_show(ref: str, rel_path: Path) -> subprocess.CompletedProcess[str]:
+    """Run git show <ref>:<rel_path> and return the CompletedProcess result."""
+    return subprocess.run(
+        ["git", "show", f"{ref}:{rel_path}"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        timeout=10,
+    )
+
+
 def _get_main_content(file_path: Path) -> str | None:
     """Get file content from main branch via git show.
 
     Returns None if the file doesn't exist on main (new file = not a regression).
 
-    FAIL-CLOSED: Any git error that is NOT a "file not found on main" condition
-    causes pytest.fail() so that operational failures are never silently treated
-    as "new file -- skip".  Only the following stderr patterns indicate a
-    legitimately new file and warrant returning None:
-      - "does not exist"
-      - "exists on disk"
-      - "unknown revision"
+    FAIL-CLOSED: Operational git errors (timeout, unexpected exception, unknown
+    error exit) cause pytest.fail() so they are never silently treated as
+    "new file -- skip".
+
+    REF FALLBACK: Tries "main" first, then "origin/main".  This handles CI
+    shallow-clone environments where no local "main" branch exists but the
+    remote tracking ref "origin/main" is available.
+
+    stderr patterns and their meaning:
+      "does not exist" / "exists on disk" / "unknown revision"
+          → file genuinely absent on that ref; stop trying and return None.
+      "invalid object name"
+          → the ref itself doesn't exist locally (e.g., CI shallow clone);
+            try next ref in sequence.
+      anything else
+          → operational error; pytest.fail() immediately.
     """
     rel_path = file_path.relative_to(REPO_ROOT)
-    try:
-        result = subprocess.run(
-            ["git", "show", f"main:{rel_path}"],
-            capture_output=True,
-            text=True,
-            cwd=REPO_ROOT,
-            timeout=10,
-        )
-    except subprocess.TimeoutExpired:
-        pytest.fail(
-            f"A9 gate: git show timed out for '{rel_path}'. "
-            "The git command took longer than 10 seconds. "
-            "Fix the repository environment before re-running."
-        )
-    except Exception as exc:
-        pytest.fail(
-            f"A9 gate: git show raised an unexpected exception for '{rel_path}': {exc!r}. "
-            "Fix the repository environment before re-running."
-        )
+    # Patterns that confirm the file does not exist on a ref
+    _NEW_FILE_PATTERNS = ("does not exist", "exists on disk", "unknown revision")
 
-    if result.returncode != 0:
+    for ref in ("main", "origin/main"):
+        try:
+            result = _try_git_show(ref, rel_path)
+        except subprocess.TimeoutExpired:
+            pytest.fail(
+                f"A9 gate: git show {ref} timed out for '{rel_path}'. "
+                "The git command took longer than 10 seconds. "
+                "Fix the repository environment before re-running."
+            )
+        except Exception as exc:
+            pytest.fail(
+                f"A9 gate: git show {ref} raised an unexpected exception "
+                f"for '{rel_path}': {exc!r}. "
+                "Fix the repository environment before re-running."
+            )
+
+        if result.returncode == 0:
+            return result.stdout
+
         stderr_lower = result.stderr.lower()
-        # Patterns that indicate the file genuinely does not exist on main
-        _NEW_FILE_PATTERNS = ("does not exist", "exists on disk", "unknown revision")
+
+        # File does not exist on this ref -- stop, it's a new file
         if any(pat in stderr_lower for pat in _NEW_FILE_PATTERNS):
-            # Legitimately new file -- not a regression
             return None
-        # Any other non-zero exit is an operational git error -- fail loudly
+
+        # Ref itself doesn't exist locally (CI shallow clone) -- try origin/main
+        if "invalid object name" in stderr_lower:
+            continue
+
+        # Any other non-zero exit is a genuine operational error -- fail loudly
         pytest.fail(
-            f"A9 gate: git show failed for '{rel_path}' with exit code "
+            f"A9 gate: git show {ref} failed for '{rel_path}' with exit code "
             f"{result.returncode}.\n"
             f"  stderr: {result.stderr.strip()!r}\n"
             f"  stdout: {result.stdout.strip()!r}\n"
@@ -112,7 +137,9 @@ def _get_main_content(file_path: Path) -> str | None:
             "Fix the environment before re-running."
         )
 
-    return result.stdout
+    # Both refs exhausted with "invalid object name" -- no main ref available.
+    # Cannot determine regression status; treat conservatively as skip.
+    return None
 
 
 def test_a9_migration_no_regressions() -> None:

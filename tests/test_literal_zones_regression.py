@@ -202,12 +202,17 @@ def test_no_backtick_collision_in_corpus() -> None:
     are never silently swallowed.  Only stderr patterns that confirm the file does
     not exist on main ("does not exist", "exists on disk", "unknown revision") allow
     the file to be skipped as a legitimately new file.  Any other error fails loudly.
+
+    REF FALLBACK: Tries "main" then "origin/main" to support CI shallow-clone
+    environments where no local "main" branch exists.  "invalid object name" in
+    stderr indicates a missing local ref and triggers the fallback; it does NOT
+    indicate a missing file and must NOT be treated as a new-file skip.
     """
     import subprocess
 
     repo_root = Path(__file__).parent.parent
 
-    # Patterns indicating a file genuinely does not exist on main branch
+    # Patterns indicating a file genuinely does not exist on that ref
     _NEW_FILE_PATTERNS = ("does not exist", "exists on disk", "unknown revision")
 
     # Check all spec files (the most important corpus for this project)
@@ -226,40 +231,62 @@ def test_no_backtick_collision_in_corpus() -> None:
         if branch_error is None:
             continue  # Passes -- no regression
 
-        # Fails on branch -- check if it also fails on main
+        # Fails on branch -- check if it also fails on main.
+        # Try "main" first; fall back to "origin/main" if the local ref is absent
+        # (CI shallow clone produces "invalid object name 'main'" for missing local refs).
         rel_path = f.relative_to(repo_root)
-        try:
-            result = subprocess.run(
-                ["git", "show", f"main:{rel_path}"],
-                capture_output=True,
-                text=True,
-                cwd=repo_root,
-                timeout=10,
-            )
-        except subprocess.TimeoutExpired:
-            pytest.fail(
-                f"A9 gate: git show timed out for '{rel_path}'. "
-                "The git command took longer than 10 seconds. "
-                "Fix the repository environment before re-running."
-            )
+        main_content: str | None = None  # None means skip (new file or no ref)
+        _found_ref = False
 
-        if result.returncode != 0:
+        for ref in ("main", "origin/main"):
+            try:
+                result = subprocess.run(
+                    ["git", "show", f"{ref}:{rel_path}"],
+                    capture_output=True,
+                    text=True,
+                    cwd=repo_root,
+                    timeout=10,
+                )
+            except subprocess.TimeoutExpired:
+                pytest.fail(
+                    f"A9 gate: git show {ref} timed out for '{rel_path}'. "
+                    "The git command took longer than 10 seconds. "
+                    "Fix the repository environment before re-running."
+                )
+
+            if result.returncode == 0:
+                main_content = result.stdout
+                _found_ref = True
+                break
+
             stderr_lower = result.stderr.lower()
+
+            # File does not exist on this ref -- stop, it's a new file
             if any(pat in stderr_lower for pat in _NEW_FILE_PATTERNS):
-                # Legitimately new file -- not a regression
+                main_content = None
+                _found_ref = True
+                break
+
+            # Ref itself doesn't exist locally (CI shallow clone) -- try origin/main
+            if "invalid object name" in stderr_lower:
                 continue
-            # Any other non-zero exit is an operational error -- fail loudly
+
+            # Any other non-zero exit is a genuine operational error -- fail loudly
             pytest.fail(
-                f"A9 gate: git show failed for '{rel_path}' with exit code "
+                f"A9 gate: git show {ref} failed for '{rel_path}' with exit code "
                 f"{result.returncode}.\n"
                 f"  stderr: {result.stderr.strip()!r}\n"
                 "This is an operational error (bad repo state, path format issue, etc.). "
                 "Fix the environment before re-running."
             )
 
+        # If both refs exhausted with "invalid object name", treat as skip (no ref available)
+        if main_content is None:
+            continue
+
         main_error = None
         try:
-            parse(result.stdout)
+            parse(main_content)
         except Exception as me:
             main_error = me
 
