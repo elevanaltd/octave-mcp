@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-02-19 - "Three-Zone Model" Release
+
+This release completes the Three-Zone Model architecture for OCTAVE documents, delivering Zone 3 (Explicit Literal Zones) as a new first-class language feature and fixing Zone 2 (Preserving Container) which was silently broken.
+
+### Added
+
+- **Literal Zones — Zone 3** (#235) - Fenced code blocks as first-class OCTAVE values
+  - New `LiteralZoneValue` AST node with verbatim content preserved without normalization
+  - Backtick fence syntax (`` ` `` `` ` `` `` ` ``) for literal zone values with optional language tags (e.g. `` ```python ``)
+  - `FENCE_OPEN`, `FENCE_CLOSE`, `LITERAL_CONTENT` token types in lexer
+  - NFC normalization bypass inside literal zones (I1 compliance — preserving meaning)
+  - Tab bypass inside literal zones
+  - Round-trip fidelity: `parse(emit(parse(D))) == parse(D)` for all literal zones
+  - `LiteralZoneRepairLog` for I4 audit trail
+  - `TYPE[LITERAL]` schema constraint for validating literal zone fields
+  - `LANG[python]` schema constraint for requiring specific language tags
+  - Zone reporting in all three MCP tools (`octave_validate`, `octave_write`, `octave_eject`)
+  - `contains_literal_zones`, `literal_zone_count`, `literal_zones_validated` flags in all tool responses
+  - A9 migration gate: existing documents unaffected (non-breaking)
+  - LITERAL type documented in core spec and EBNF grammar
+
+### Fixed
+
+- **Zone 2 Container Preservation** (#234) - YAML frontmatter now preserved through `emit()` round-trips
+  - Parser correctly stored `raw_frontmatter` on `Document` AST but emitter silently discarded it
+  - `emit()` now prepends frontmatter byte-for-byte before grammar sentinel and envelope
+  - Empty and whitespace-only frontmatter correctly treated as absent (prevents empty `---\n\n---` blocks)
+  - All three MCP tools inherit preservation automatically via `emit()` pipeline
+  - Skill files, pattern files, and agent files with YAML discovery headers now work correctly with `octave_write`
+  - 9 new tests: round-trip, byte-for-byte fidelity, format options interaction, edge cases
+
+### Architecture
+
+- **Three-Zone Model** fully implemented:
+  - Zone 1: Normalizing DSL — canonical operators, unicode normalization, deterministic emit (enforced since v1.0.0)
+  - Zone 2: Preserving Container — YAML frontmatter byte-for-byte preservation (completed in this release)
+  - Zone 3: Explicit Literal Zones — fenced code blocks with zero processing (new in this release)
+- North Star updated to v1.2 reflecting Three-Zone Model as structural pattern
+
+### Quality Gates
+
+- All changes reviewed per tier requirements (CRS + CE dual gate)
+- 2039 tests passing, 0 failures
+- Constitutional compliance verified: I1, I2, I3, I4, I5
+
 ## [1.2.1] - 2026-02-15 - "Specification Refinement" (Re-release)
 
 This is a re-release of v1.2.0 to fix a critical packaging issue where `__version__` in `__init__.py` was not synchronized with `pyproject.toml`.
@@ -362,7 +407,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.0.0...v1.1.0
