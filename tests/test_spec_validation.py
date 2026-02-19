@@ -169,3 +169,128 @@ FIELD::[value1, value2
     # Points to the unclosed bracket location
     assert error.line == 5
     assert error.column == 8
+
+
+# ---------------------------------------------------------------------------
+# T17: EBNF Grammar -- literal_value production (Issue #235)
+# ---------------------------------------------------------------------------
+
+GRAMMAR_FILE = Path(__file__).parent.parent / "docs" / "grammar" / "octave-v1.0-grammar.ebnf"
+
+
+def test_grammar_file_exists():
+    """Grammar file must exist at the expected path."""
+    assert GRAMMAR_FILE.exists(), f"Grammar file not found: {GRAMMAR_FILE}"
+
+
+def test_grammar_literal_value_production_exists():
+    """Grammar file must contain the literal_value production (Issue #235)."""
+    content = GRAMMAR_FILE.read_text()
+    assert "literal_value" in content, (
+        "Grammar file missing 'literal_value' production. "
+        "Issue #235 T17 requires adding the literal_value EBNF rule."
+    )
+
+
+def test_grammar_value_production_includes_literal_value():
+    """The 'value' production in the grammar must include 'literal_value'."""
+    content = GRAMMAR_FILE.read_text()
+    # Find the value production block
+    assert "| literal_value" in content, (
+        "Grammar 'value' production must include '| literal_value'. "
+        "Issue #235 T17 requires updating the value production."
+    )
+
+
+def test_grammar_code_fence_production_exists():
+    """Grammar file must contain the code_fence production."""
+    content = GRAMMAR_FILE.read_text()
+    assert "code_fence" in content, (
+        "Grammar file missing 'code_fence' production. "
+        "Issue #235 T17 requires adding code_fence with opening/closing fences."
+    )
+
+
+def test_grammar_fence_content_production_exists():
+    """Grammar file must contain opening_fence and closing_fence productions."""
+    content = GRAMMAR_FILE.read_text()
+    assert "opening_fence" in content, "Grammar missing 'opening_fence' production."
+    assert "closing_fence" in content, "Grammar missing 'closing_fence' production."
+    assert "fence_content" in content, "Grammar missing 'fence_content' production."
+
+
+def test_grammar_constraint_comments_present():
+    """Grammar must include constraint comments explaining fence length matching."""
+    content = GRAMMAR_FILE.read_text()
+    # Check that normative fence length constraints are documented (CONSTRAINT C1/C2)
+    assert "CONSTRAINT C1" in content, "Grammar must contain normative CONSTRAINT C1 (exact closing fence length)."
+    assert "CONSTRAINT C2" in content, "Grammar must contain normative CONSTRAINT C2 (trailing whitespace allowed)."
+
+
+def test_grammar_section_4b_exists():
+    """Grammar file must contain SECTION 4b for literal values."""
+    content = GRAMMAR_FILE.read_text()
+    assert "SECTION 4b" in content, "Grammar file must contain SECTION 4b: LITERAL VALUES (Issue #235)."
+
+
+def test_grammar_no_duplicate_sections():
+    """Grammar file must not have duplicate SECTION markers (structural integrity)."""
+    content = GRAMMAR_FILE.read_text()
+    import re
+
+    section_markers = re.findall(r"\(\* SECTION \d+[a-z]?:", content)
+    assert len(section_markers) == len(
+        set(section_markers)
+    ), f"Grammar file has duplicate section markers: {section_markers}"
+
+
+# ---------------------------------------------------------------------------
+# T18: Core Spec -- LITERAL type and literal zone documentation (Issue #235)
+# ---------------------------------------------------------------------------
+
+CORE_SPEC_FILE = Path(__file__).parent.parent / "src" / "octave_mcp" / "resources" / "specs" / "octave-core-spec.oct.md"
+
+
+def test_core_spec_parses_after_literal_zone_additions():
+    """Core spec must parse without errors after Issue #235 T18 additions."""
+    from octave_mcp.core.parser import parse
+
+    content = CORE_SPEC_FILE.read_text()
+    doc = parse(content)
+    assert doc is not None, "Core spec produced None document after T18 changes."
+
+
+def test_core_spec_contains_literal_keyword():
+    """Core spec Section 3 (TYPES) must contain 'LITERAL' keyword."""
+    content = CORE_SPEC_FILE.read_text()
+    assert "LITERAL" in content, (
+        "Core spec missing 'LITERAL' keyword in Section 3. "
+        "Issue #235 T18 requires adding LITERAL type documentation."
+    )
+
+
+def test_core_spec_contains_literal_zones_keyword():
+    """Core spec Section 6b (VALIDATION_CHECKLIST) must contain 'literal_zones'."""
+    content = CORE_SPEC_FILE.read_text()
+    assert "literal_zones" in content or "LITERAL_ZONES" in content, (
+        "Core spec missing 'literal_zones' keyword in Section 6b. "
+        "Issue #235 T18 requires adding LITERAL_ZONES validation checklist."
+    )
+
+
+def test_core_spec_contains_literal_zone_pattern():
+    """Core spec Section 7 (CANONICAL_EXAMPLES) must contain 'LITERAL_ZONE_PATTERN'."""
+    content = CORE_SPEC_FILE.read_text()
+    assert "LITERAL_ZONE_PATTERN" in content, (
+        "Core spec missing 'LITERAL_ZONE_PATTERN' in Section 7. "
+        "Issue #235 T18 requires adding canonical example pattern."
+    )
+
+
+def test_core_spec_contains_literal_fence():
+    """Core spec Section 2c must contain 'LITERAL_FENCE' for syntax reference."""
+    content = CORE_SPEC_FILE.read_text()
+    assert "LITERAL_FENCE" in content, (
+        "Core spec missing 'LITERAL_FENCE' in Section 2c. "
+        "Issue #235 T18 requires adding LITERAL_FENCE syntax documentation."
+    )

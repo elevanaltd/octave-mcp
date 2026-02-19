@@ -127,6 +127,8 @@ CONTAINER::[a,b,c][bare_brackets_are_lists]
 CONSTRUCTOR::NAME[args][e.g._REGEX[pattern]_ENUM[a,b]]
 HOLOGRAPHIC::["value"∧CONSTRAINT→§TARGET][schema_mode]
 RULE::NAME[...]_is_constructor|bare_[...]_is_container
+LITERAL_FENCE::backtick_fence[3_or_more_backticks][optional_info_tag][fenced_code_block]
+FENCE_SCALING::N_backticks_where_N_is_3_or_more[inner_content_may_contain_shorter_fences]
 
 §3::TYPES
 STRING::bare_word|"quoted"[when:spaces,special,reserved]
@@ -135,6 +137,14 @@ BOOLEAN::true|false[lowercase_only]
 NULL::null[lowercase_only]
 LIST::[a,b,c]|[][empty_allowed]
 ESCAPES::["quote","backslash","newline","tab"][inside_quotes_only]
+LITERAL::backtick_fence[3_or_more_backticks][optional_info_tag][fenced_code_block]
+LITERAL_RULES::[
+  zero_processing_between_fences,
+  NFC_bypass_for_content,
+  tabs_allowed_inside_literal_zones,
+  info_tag_preserved_not_validated,
+  empty_literal_distinct_from_absent
+]
 
 §3b::QUOTING_RULES
 // When to use quotes - critical for spec compliance
@@ -229,6 +239,13 @@ SCHEMA_MODE::[
   constraints_before_target,
   target_uses_section_prefix
 ]
+LITERAL_ZONES::[
+  opening_fence_matches_closing_fence,
+  no_nested_fences_of_equal_or_greater_length,
+  info_tag_on_opening_fence_only,
+  content_between_fences_verbatim,
+  empty_literal_zone_is_valid
+]
 
 §7::CANONICAL_EXAMPLES
 // Reference patterns only. Not standalone documents.
@@ -268,6 +285,17 @@ BLOCK_INHERITANCE_PATTERN:
   RISKS[→§RISK_LOG]:
     CRITICAL::["auth_bypass"∧REQ]
     WARNING::["rate_limit"∧OPT→§SELF]
+
+// LITERAL ZONE PATTERN (Issue #235): Fenced code block preserving content exactly.
+// Use 3+ backticks as fence; closing fence must match opening length.
+// Content is raw: no NFC normalization, no escape processing, tabs allowed.
+// Empty literal zone is distinct from absent value (I2: deterministic absence).
+// Fence-length scaling: use N+1 backticks to wrap content with N-backtick fences.
+LITERAL_ZONE_PATTERN:
+  CODE::backtick_python_fence[python_info_tag][verbatim_python_code]
+  CONFIG::backtick_json_fence[json_info_tag][verbatim_json_content]
+  EMPTY_LITERAL::backtick_fence[empty_content][distinct_from_absent]
+  SCALED_FENCE::4_backtick_fence[wraps_content_containing_3_backtick_fences]
 
 // PRECEDENCE EXAMPLES
 PARSE_AS:
