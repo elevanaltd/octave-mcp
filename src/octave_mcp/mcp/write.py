@@ -1025,6 +1025,7 @@ class WriteTool(BaseTool):
                 "dsl": {"status": "valid", "errors": []},
                 "container": {
                     "status": "preserved" if doc.raw_frontmatter else "absent",
+                    "validation_status": "UNVALIDATED",  # I5: no schema covers Zone 2 yet (#244)
                 },
                 "literal": {
                     "status": "preserved",
