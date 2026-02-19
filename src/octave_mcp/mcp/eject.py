@@ -304,6 +304,7 @@ META:
                 "dsl": {"status": "valid", "errors": []},
                 "container": {
                     "status": "preserved" if result.filtered_doc.raw_frontmatter else "absent",
+                    "validation_status": "UNVALIDATED",  # I5: no schema covers Zone 2 yet (#244)
                 },
                 "literal": {
                     "status": "preserved",
