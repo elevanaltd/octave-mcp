@@ -12,7 +12,7 @@ Tests AST → canonical OCTAVE string emission with:
 import pytest
 
 from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue
-from octave_mcp.core.emitter import emit, emit_meta, emit_value
+from octave_mcp.core.emitter import FormatOptions, emit, emit_meta, emit_value
 from octave_mcp.core.parser import parse
 
 
@@ -471,3 +471,38 @@ class TestFrontmatterPreservation:
         # parts[0] is empty (before first ---), parts[1] is frontmatter,
         # parts[2] contains envelope + separator section onward
         assert len(parts) >= 3, f"Expected at least 3 parts split by ---, got {len(parts)}"
+
+    def test_empty_string_frontmatter_treated_as_absent(self):
+        """raw_frontmatter="" should NOT emit empty ---\\n\\n--- block."""
+        doc = Document(
+            name="TEST",
+            sections=[Assignment(key="KEY", value="val")],
+            raw_frontmatter="",
+        )
+        result = emit(doc)
+        assert not result.startswith("---")
+        assert result.startswith("===TEST===")
+
+    def test_whitespace_only_frontmatter_treated_as_absent(self):
+        """raw_frontmatter with only whitespace should NOT emit."""
+        doc = Document(
+            name="TEST",
+            sections=[Assignment(key="KEY", value="val")],
+            raw_frontmatter="   \n  \n  ",
+        )
+        result = emit(doc)
+        assert not result.startswith("---")
+        assert result.startswith("===TEST===")
+
+    def test_frontmatter_survives_trailing_whitespace_strip(self):
+        """Frontmatter content survives format_options trailing_whitespace='strip'."""
+        doc = Document(
+            name="TEST",
+            sections=[Assignment(key="KEY", value="val")],
+            raw_frontmatter="name: test-skill\ndescription: A skill",
+        )
+        opts = FormatOptions(trailing_whitespace="strip")
+        result = emit(doc, format_options=opts)
+        assert result.startswith("---\n")
+        assert "name: test-skill" in result
+        assert "description: A skill" in result

@@ -509,7 +509,7 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     # Issue #234: Zone 2 (Preserving Container) - prepend YAML frontmatter
     # when present on Document. Frontmatter is byte-for-byte preserved (no
     # normalization). Must appear before grammar sentinel and envelope.
-    if doc.raw_frontmatter is not None:
+    if doc.raw_frontmatter is not None and doc.raw_frontmatter.strip():
         lines.append("---")
         lines.append(doc.raw_frontmatter)
         lines.append("---")
