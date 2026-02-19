@@ -12,7 +12,7 @@ Tests AST → canonical OCTAVE string emission with:
 import pytest
 
 from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue
-from octave_mcp.core.emitter import emit, emit_meta, emit_value
+from octave_mcp.core.emitter import FormatOptions, emit, emit_meta, emit_value
 from octave_mcp.core.parser import parse
 
 
@@ -354,3 +354,155 @@ class TestEmitterEdgeCases:
         result = emit(doc)
         assert "PRESENT::here" in result
         assert "ABSENT" not in result
+
+
+class TestFrontmatterPreservation:
+    """Test Zone 2 (Preserving Container) - YAML frontmatter round-trip.
+
+    Issue #234: The emitter must preserve raw_frontmatter when present
+    on the Document AST. This ensures Zone 2 container data survives
+    parse -> emit round-trips without loss (I1: syntactic fidelity).
+    """
+
+    def test_emit_preserves_frontmatter(self):
+        """emit() should prepend raw_frontmatter when present on Document."""
+        doc = Document(
+            name="TEST_SKILL",
+            sections=[Assignment(key="PURPOSE", value="Test skill")],
+            raw_frontmatter="name: test-skill\ndescription: A test skill",
+        )
+        result = emit(doc)
+        assert result.startswith("---\n")
+        assert "name: test-skill" in result
+        assert "description: A test skill" in result
+        # Frontmatter must be closed before envelope
+        fm_end = result.index("---\n", 3)  # Find second ---
+        envelope_start = result.index("===TEST_SKILL===")
+        assert fm_end < envelope_start
+
+    def test_emit_no_frontmatter_when_none(self):
+        """emit() should NOT add frontmatter when raw_frontmatter is None."""
+        doc = Document(
+            name="TEST",
+            sections=[Assignment(key="KEY", value="val")],
+        )
+        result = emit(doc)
+        assert not result.startswith("---")
+        assert result.startswith("===TEST===")
+
+    def test_roundtrip_frontmatter_preserved(self):
+        """Parse a document with frontmatter, emit it, frontmatter preserved."""
+        original = (
+            "---\n"
+            "name: test-skill\n"
+            "description: A test skill for frontmatter preservation\n"
+            'allowed-tools: ["Read", "Write", "Edit"]\n'
+            'version: "1.0.0"\n'
+            "---\n"
+            "\n"
+            "===TEST_SKILL===\n"
+            "META:\n"
+            "  TYPE::SKILL\n"
+            '  VERSION::"1.0.0"\n'
+            "  STATUS::ACTIVE\n"
+            "\n"
+            "\u00a71::CORE\n"
+            'PURPOSE::"Test skill"\n'
+            "\n"
+            "===END==="
+        )
+        doc = parse(original)
+        assert doc.raw_frontmatter is not None
+        emitted = emit(doc)
+        # The emitted output must contain the frontmatter
+        assert emitted.startswith("---\n")
+        assert "name: test-skill" in emitted
+        assert 'allowed-tools: ["Read", "Write", "Edit"]' in emitted
+        assert 'version: "1.0.0"' in emitted
+        # Re-parse to verify round-trip
+        doc2 = parse(emitted)
+        assert doc2.raw_frontmatter == doc.raw_frontmatter
+
+    def test_roundtrip_no_frontmatter_unchanged(self):
+        """Parse a pure OCTAVE file (no frontmatter) -> emit -> no frontmatter added."""
+        original = (
+            "===PURE_DOC===\n" "META:\n" "  TYPE::TEST\n" "\n" "\u00a71::SECTION\n" "KEY::value\n" "\n" "===END==="
+        )
+        doc = parse(original)
+        assert doc.raw_frontmatter is None
+        emitted = emit(doc)
+        assert not emitted.startswith("---")
+        assert emitted.startswith("===PURE_DOC===")
+
+    def test_frontmatter_byte_for_byte_preserved(self):
+        """Frontmatter content must be byte-for-byte preserved (no normalization)."""
+        # Include special characters, tabs, unusual spacing
+        raw_fm = 'name: test-skill\n  nested: "value with :: colons"\ntags: [a, b, c]'
+        doc = Document(
+            name="TEST",
+            sections=[Assignment(key="KEY", value="val")],
+            raw_frontmatter=raw_fm,
+        )
+        result = emit(doc)
+        # Extract frontmatter from result
+        lines = result.split("\n")
+        assert lines[0] == "---"
+        # Find closing ---
+        close_idx = None
+        for i in range(1, len(lines)):
+            if lines[i] == "---":
+                close_idx = i
+                break
+        assert close_idx is not None
+        extracted_fm = "\n".join(lines[1:close_idx])
+        assert extracted_fm == raw_fm
+
+    def test_frontmatter_separator_no_conflict_with_doc_separator(self):
+        """Frontmatter --- markers must not conflict with doc.has_separator."""
+        doc = Document(
+            name="TEST",
+            sections=[Assignment(key="KEY", value="val")],
+            raw_frontmatter="name: test",
+            has_separator=True,
+        )
+        result = emit(doc)
+        # Should have frontmatter --- pair AND document ---
+        parts = result.split("---")
+        # parts[0] is empty (before first ---), parts[1] is frontmatter,
+        # parts[2] contains envelope + separator section onward
+        assert len(parts) >= 3, f"Expected at least 3 parts split by ---, got {len(parts)}"
+
+    def test_empty_string_frontmatter_treated_as_absent(self):
+        """raw_frontmatter="" should NOT emit empty ---\\n\\n--- block."""
+        doc = Document(
+            name="TEST",
+            sections=[Assignment(key="KEY", value="val")],
+            raw_frontmatter="",
+        )
+        result = emit(doc)
+        assert not result.startswith("---")
+        assert result.startswith("===TEST===")
+
+    def test_whitespace_only_frontmatter_treated_as_absent(self):
+        """raw_frontmatter with only whitespace should NOT emit."""
+        doc = Document(
+            name="TEST",
+            sections=[Assignment(key="KEY", value="val")],
+            raw_frontmatter="   \n  \n  ",
+        )
+        result = emit(doc)
+        assert not result.startswith("---")
+        assert result.startswith("===TEST===")
+
+    def test_frontmatter_survives_trailing_whitespace_strip(self):
+        """Frontmatter content survives format_options trailing_whitespace='strip'."""
+        doc = Document(
+            name="TEST",
+            sections=[Assignment(key="KEY", value="val")],
+            raw_frontmatter="name: test-skill\ndescription: A skill",
+        )
+        opts = FormatOptions(trailing_whitespace="strip")
+        result = emit(doc, format_options=opts)
+        assert result.startswith("---\n")
+        assert "name: test-skill" in result
+        assert "description: A skill" in result

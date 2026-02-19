@@ -506,6 +506,15 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     """
     lines = []
 
+    # Issue #234: Zone 2 (Preserving Container) - prepend YAML frontmatter
+    # when present on Document. Frontmatter is byte-for-byte preserved (no
+    # normalization). Must appear before grammar sentinel and envelope.
+    if doc.raw_frontmatter is not None and doc.raw_frontmatter.strip():
+        lines.append("---")
+        lines.append(doc.raw_frontmatter)
+        lines.append("---")
+        lines.append("")  # blank line separator between frontmatter and envelope
+
     # Issue #48 Phase 2: Emit grammar sentinel if present
     # Grammar sentinel must appear BEFORE the envelope
     if doc.grammar_version:
