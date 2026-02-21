@@ -984,3 +984,15 @@ class TestAngleBracketAnnotation:
         assert tokens[1].type == TokenType.ASSIGN
         assert tokens[2].type == TokenType.IDENTIFIER
         assert tokens[2].value == "enabled"
+
+    def test_qualifier_must_start_with_letter_or_underscore(self):
+        """Qualifier starting with digit should NOT form annotation."""
+        # A<1x> — '1' is not a valid identifier start, so '<' is standalone
+        with pytest.raises(LexerError):
+            tokenize("A<1x>")
+
+    def test_invalid_qualifier_with_hyphen_start(self):
+        """Qualifier starting with hyphen should NOT form annotation."""
+        # A<-x> — '-' is not a valid identifier start
+        with pytest.raises(LexerError):
+            tokenize("A<-x>")

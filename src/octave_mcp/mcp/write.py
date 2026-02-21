@@ -286,9 +286,27 @@ class WriteTool(BaseTool):
             # When inside brackets (depth > 0), accumulate lines and test the
             # complete block once all brackets are balanced.
             if stripped:
-                # Count bracket transitions on this line
-                line_opens = stripped.count("[")
-                line_closes = stripped.count("]")
+                # Count bracket transitions on this line, skipping brackets
+                # inside quoted strings to avoid false depth changes.
+                line_opens = 0
+                line_closes = 0
+                in_quote = False
+                escape_next = False
+                for ch in stripped:
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if ch == "\\":
+                        escape_next = True
+                        continue
+                    if ch == '"':
+                        in_quote = not in_quote
+                        continue
+                    if not in_quote:
+                        if ch == "[":
+                            line_opens += 1
+                        elif ch == "]":
+                            line_closes += 1
 
                 if bracket_depth > 0:
                     # Inside a bracket block - accumulate unconditionally

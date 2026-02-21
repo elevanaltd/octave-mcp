@@ -2630,3 +2630,37 @@ class TestSalvageBracketDepthAwareness:
                     f"Issue #248: Salvaged bracket content should produce parseable OCTAVE. "
                     f"Parse error: {e}\nContent:\n{written}"
                 )
+
+    @pytest.mark.asyncio
+    async def test_salvage_brackets_inside_quoted_strings_not_counted(self):
+        """Brackets inside quoted strings should not affect bracket depth tracking.
+
+        Issue #248 CRS finding: REGEX::"[A-Z" contains a '[' inside quotes
+        that should NOT increment bracket depth.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Content with brackets inside quoted strings and a genuine error (tab)
+            content = "===TEST===\n" 'REGEX::"[A-Z]+"\n' "VALID::true\n" "\tBAD_TAB::error\n" "===END==="
+
+            await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # The quoted bracket should not cause bracket accumulation.
+            # The REGEX and VALID lines should survive as normal keys.
+            # The tab line should be a parse error.
+            assert "REGEX" in written
+            assert "VALID" in written
+            assert "_PARSE_ERROR_LINE_" in written or "_SALVAGED" in written

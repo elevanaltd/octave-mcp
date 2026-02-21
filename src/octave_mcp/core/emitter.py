@@ -72,8 +72,9 @@ class FormatOptions:
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*\Z")
 
 # Issue #248: Pattern for NAME<qualifier> annotation syntax (§2c)
-# Matches identifiers with angle bracket qualifiers, e.g., ATHENA<strategic_wisdom>
-ANNOTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*<[A-Za-z0-9_.\-]+>\Z")
+# Must match lexer rules: qualifier starts with letter/underscore, body is identifier chars.
+# No hyphens or digits as start char — mirrors _is_valid_identifier_start in lexer.
+ANNOTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*<[A-Za-z_][A-Za-z0-9_]*>\Z")
 
 # Issue #181: Variable pattern for $VAR, $1:name placeholders
 # Variables start with $ and contain alphanumeric, underscore, or colon

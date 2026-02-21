@@ -799,3 +799,18 @@ CORE:
         assert isinstance(block.children[1], Assignment)
         assert block.children[1].key == "ROLE"
         assert block.children[1].value == "IMPLEMENTATION_LEAD"
+
+    def test_emitter_quotes_invalid_annotation(self):
+        """Values that look like annotations but have invalid qualifiers must be quoted."""
+        from octave_mcp.core.emitter import needs_quotes
+
+        # Valid annotations — should NOT need quotes
+        assert not needs_quotes("ATHENA<strategic_wisdom>")
+        assert not needs_quotes("X<y>")
+
+        # Invalid qualifier start (digit) — MUST need quotes
+        assert needs_quotes("A<1x>")
+
+        # Invalid chars — MUST need quotes
+        assert needs_quotes("A<x->")
+        assert needs_quotes("A<x y>")
