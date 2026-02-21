@@ -2340,3 +2340,327 @@ BROKEN::path\\\\to\\\\file with "quotes"
                     f"Salvaged content should be valid OCTAVE after escaping fix. "
                     f"Parse error: {e}\nContent:\n{written}"
                 )
+
+
+class TestSalvageBracketDepthAwareness:
+    """Issue #248 Bug 2: _localized_salvage must handle multi-line nested bracket blocks.
+
+    When salvage mode processes content with multi-line nested [...]  blocks,
+    lines like `],` and `]` are syntactically valid ONLY in the context of an
+    open bracket. Tested in isolation they fail, causing false _PARSE_ERROR_LINE_N
+    wrapping that destroys document structure.
+
+    The fix must track bracket depth so that continuation lines inside brackets
+    are accumulated and tested as a complete block, not individually.
+    """
+
+    @pytest.mark.asyncio
+    async def test_salvage_simple_multiline_brackets_no_false_errors(self):
+        """Issue #248: Multi-line bracket block should not produce false _PARSE_ERROR markers.
+
+        When salvage is triggered by a genuine error (tab character), multi-line bracket
+        blocks in the same document must not have their `[` and `]` lines wrapped
+        as _PARSE_ERROR. These lines are only invalid when tested in isolation.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Tab on BROKEN line triggers full parse failure -> salvage path.
+            # The multi-line bracket block must survive salvage intact.
+            content = (
+                "===BRACKET_TEST===\n"
+                "META:\n"
+                "  TYPE::TEST\n"
+                "CORE::[\n"
+                "  ROLE::AGENT,\n"
+                "  MISSION::BUILD\n"
+                "]\n"
+                "BROKEN::has\ttab\n"
+                "===END==="
+            )
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # Count _PARSE_ERROR markers - only the BROKEN line should be wrapped
+            import re
+
+            parse_error_markers = re.findall(r"_PARSE_ERROR_LINE_\d+", written)
+            # Only 1 genuine error (the tab line), not the bracket lines
+            assert len(parse_error_markers) <= 1, (
+                f"Issue #248 BUG: Expected at most 1 _PARSE_ERROR (for tab line), "
+                f"got {len(parse_error_markers)}: {parse_error_markers}. "
+                f"Bracket lines were falsely wrapped. Content:\n{written}"
+            )
+
+            # CORE bracket structure should be preserved as a field, not as error markers
+            assert "CORE::" in written, f"CORE field should be preserved. Content:\n{written}"
+
+    @pytest.mark.asyncio
+    async def test_salvage_deeply_nested_brackets_three_levels(self):
+        """Issue #248: Deeply nested (3+ levels) bracket blocks should survive salvage.
+
+        When a genuine error triggers salvage, deeply nested structures like:
+            OUTER::[
+              INNER::[
+                DEEP::[A,B,C]
+              ],
+              OTHER::VALUE
+            ]
+        must not produce false _PARSE_ERROR markers on `[` and `]` lines.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = (
+                "===DEEP_NEST===\n"
+                "META:\n"
+                "  TYPE::TEST\n"
+                "OUTER::[\n"
+                "  INNER::[\n"
+                "    DEEP::[A,B,C]\n"
+                "  ],\n"
+                "  OTHER::VALUE\n"
+                "]\n"
+                "BAD::x\ty\n"
+                "===END==="
+            )
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            import re
+
+            parse_error_markers = re.findall(r"_PARSE_ERROR_LINE_\d+", written)
+            # Only 1 genuine error (the tab line)
+            assert len(parse_error_markers) <= 1, (
+                f"Issue #248 BUG: Expected at most 1 _PARSE_ERROR (for tab line), "
+                f"got {len(parse_error_markers)}: {parse_error_markers}. "
+                f"Deeply nested bracket lines were falsely wrapped. Content:\n{written}"
+            )
+
+            # Verify structural preservation
+            assert "OUTER::" in written, f"OUTER should be preserved. Content:\n{written}"
+
+    @pytest.mark.asyncio
+    async def test_salvage_mixed_valid_brackets_and_genuine_errors(self):
+        """Issue #248: Multi-line brackets should survive but genuine errors still get wrapped.
+
+        Content mixing multi-line bracket blocks with actual broken syntax should:
+        - Preserve bracket blocks without false _PARSE_ERROR on [ or ] lines
+        - Still wrap genuinely broken lines (e.g., tabs) as _PARSE_ERROR
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = (
+                "===MIXED===\n"
+                "META:\n"
+                "  TYPE::TEST\n"
+                "LIST::[\n"
+                "  A,\n"
+                "  B,\n"
+                "  C\n"
+                "]\n"
+                "BROKEN::has\ttab\n"
+                "SIMPLE::value\n"
+                "===END==="
+            )
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # The broken line (with tab) SHOULD still be wrapped as _PARSE_ERROR
+            assert (
+                "_PARSE_ERROR" in written
+            ), f"Genuine parse error (tab character) should still be wrapped. Content:\n{written}"
+
+            # The valid bracket content and simple fields should be preserved
+            assert "LIST::" in written, f"LIST bracket block should be preserved. Content:\n{written}"
+            assert "SIMPLE::" in written, f"SIMPLE field should be preserved. Content:\n{written}"
+
+    @pytest.mark.asyncio
+    async def test_salvage_multiline_bracket_with_trailing_comma(self):
+        """Issue #248: Closing `],` (bracket with trailing comma) must not become _PARSE_ERROR.
+
+        This is the exact pattern from the bug report:
+            CORE::[
+              ROLE::AGENT_NAME,
+              ACTIVATION::[
+                FORCE::STRUCTURE,
+                ESSENCE::ARCHITECT
+              ],
+              MISSION::SOMETHING
+            ]
+        The `],` and `]` lines fail isolation testing and get wrapped.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = (
+                "===AGENT===\n"
+                "META:\n"
+                "  TYPE::AGENT\n"
+                "CORE::[\n"
+                "  ROLE::AGENT_NAME,\n"
+                "  ACTIVATION::[\n"
+                "    FORCE::STRUCTURE,\n"
+                "    ESSENCE::ARCHITECT\n"
+                "  ],\n"
+                "  MISSION::SOMETHING\n"
+                "]\n"
+                "ERR::a\tb\n"
+                "===END==="
+            )
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            import re
+
+            parse_error_markers = re.findall(r"_PARSE_ERROR_LINE_\d+", written)
+            # Only 1 genuine error (the tab line), not the bracket lines
+            assert len(parse_error_markers) <= 1, (
+                f"Issue #248 BUG: Expected at most 1 _PARSE_ERROR (for tab line), "
+                f"got {len(parse_error_markers)}: {parse_error_markers}. "
+                f"Bracket continuation lines like '],', ']' were falsely wrapped. Content:\n{written}"
+            )
+
+            # The nested structure should be preserved
+            assert "CORE::" in written, f"CORE should be preserved. Content:\n{written}"
+
+    @pytest.mark.asyncio
+    async def test_salvage_bracket_block_parseable_output(self):
+        """Issue #248: Salvaged content with bracket blocks must be parseable OCTAVE.
+
+        The output from salvage mode must be valid OCTAVE that can be parsed again,
+        even when bracket blocks are present alongside genuine errors.
+        """
+        from octave_mcp.core.parser import parse as octave_parse
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = (
+                "===PARSEABLE===\n"
+                "META:\n"
+                "  TYPE::TEST\n"
+                "DATA::[\n"
+                "  ITEM1::VALUE1,\n"
+                "  ITEM2::VALUE2\n"
+                "]\n"
+                "EXTRA::field\n"
+                "BAD::x\ty\n"
+                "===END==="
+            )
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # Output must be parseable
+            try:
+                parsed = octave_parse(written)
+                assert parsed is not None
+            except Exception as e:
+                pytest.fail(
+                    f"Issue #248: Salvaged bracket content should produce parseable OCTAVE. "
+                    f"Parse error: {e}\nContent:\n{written}"
+                )
+
+    @pytest.mark.asyncio
+    async def test_salvage_brackets_inside_quoted_strings_not_counted(self):
+        """Brackets inside quoted strings should not affect bracket depth tracking.
+
+        Issue #248 CRS finding: REGEX::"[A-Z" contains a '[' inside quotes
+        that should NOT increment bracket depth.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Content with brackets inside quoted strings and a genuine error (tab)
+            content = "===TEST===\n" 'REGEX::"[A-Z]+"\n' "VALID::true\n" "\tBAD_TAB::error\n" "===END==="
+
+            await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # The quoted bracket should not cause bracket accumulation.
+            # The REGEX and VALID lines should survive as normal keys.
+            # The tab line should be a parse error.
+            assert "REGEX" in written
+            assert "VALID" in written
+            assert "_PARSE_ERROR_LINE_" in written or "_SALVAGED" in written

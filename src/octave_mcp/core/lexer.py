@@ -408,6 +408,12 @@ def _match_unicode_identifier(content: str, pos: int) -> str | None:
     Multi-codepoint emoji (ZWJ sequences, skin tones) are supported by
     consuming all valid identifier characters including combining marks.
 
+    Issue #248: Also matches NAME<qualifier> annotation syntax (§2c).
+    When a valid identifier is followed by '<', we look ahead for a
+    valid qualifier (identifier chars) and closing '>'. This produces
+    a single identifier token like "ATHENA<strategic_wisdom>".
+    Standalone '<' or '>' outside this pattern still errors per §3b.
+
     Args:
         content: Full content string
         pos: Starting position
@@ -433,6 +439,27 @@ def _match_unicode_identifier(content: str, pos: int) -> str | None:
 
     if end == pos:
         return None
+
+    # Issue #248: Check for angle bracket annotation NAME<qualifier>
+    # Only match if we consumed a valid identifier AND next char is '<'
+    # The qualifier must start with a valid identifier start char (not '-')
+    # and be followed by valid identifier body chars, then '>'.
+    # This prevents '<->' (tension operator alias) from being consumed.
+    if end < len(content) and content[end] == "<":
+        qualifier_start = end + 1
+        # Qualifier must start with a valid identifier start char
+        if qualifier_start < len(content) and _is_valid_identifier_start(content[qualifier_start]):
+            qualifier_end = qualifier_start + 1
+            # Consume remaining qualifier characters (identifier body chars)
+            while qualifier_end < len(content) and _is_valid_identifier_char(content[qualifier_end]):
+                qualifier_end += 1
+            # Strip trailing hyphens from qualifier (same as identifier rule)
+            while qualifier_end > qualifier_start + 1 and content[qualifier_end - 1] == "-":
+                qualifier_end -= 1
+            # Must have closing '>'
+            if qualifier_end < len(content) and content[qualifier_end] == ">":
+                # Valid NAME<qualifier> -- extend end past '>'
+                end = qualifier_end + 1
 
     return content[pos:end]
 

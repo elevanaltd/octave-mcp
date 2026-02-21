@@ -71,6 +71,11 @@ class FormatOptions:
 
 IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*\Z")
 
+# Issue #248: Pattern for NAME<qualifier> annotation syntax (§2c)
+# Must match lexer rules: qualifier starts with letter/underscore, body is identifier chars.
+# No hyphens or digits as start char — mirrors _is_valid_identifier_start in lexer.
+ANNOTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*<[A-Za-z_][A-Za-z0-9_]*>\Z")
+
 # Issue #181: Variable pattern for $VAR, $1:name placeholders
 # Variables start with $ and contain alphanumeric, underscore, or colon
 VARIABLE_PATTERN = re.compile(r"^\$[A-Za-z0-9_:]+\Z")
@@ -122,6 +127,10 @@ def needs_quotes(value: Any) -> bool:
     # Issue #181: Variables ($VAR, $1:name) don't need quotes
     # Check this BEFORE identifier pattern since $ is not a valid identifier start
     if VARIABLE_PATTERN.match(value):
+        return False
+
+    # Issue #248: NAME<qualifier> annotations don't need quotes (§2c)
+    if ANNOTATION_PATTERN.match(value):
         return False
 
     # If it's not a valid identifier, it needs quotes

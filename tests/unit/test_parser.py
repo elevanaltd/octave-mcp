@@ -689,3 +689,128 @@ BUILD::123 1.0.0
         assert isinstance(assignment, Assignment)
         assert assignment.key == "BUILD"
         assert assignment.value == "123 1.0.0"
+
+
+class TestAngleBracketAnnotationParsing:
+    """Test NAME<qualifier> annotation syntax parsing (Issue #248, §2c)."""
+
+    def test_parse_annotation_as_value(self):
+        """NAME<qualifier> should parse as a string value in assignment."""
+        content = """===TEST===
+ARCHETYPE::ATHENA<strategic_wisdom>
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.key == "ARCHETYPE"
+        assert assignment.value == "ATHENA<strategic_wisdom>"
+
+    def test_parse_annotation_in_list(self):
+        """NAME<qualifier> items should parse correctly in lists."""
+        content = """===TEST===
+ARCHETYPES::[ATHENA<strategic_wisdom>,ODYSSEUS<navigation>,HERMES<translation>]
+===END==="""
+        doc = parse(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert isinstance(assignment.value, ListValue)
+        assert len(assignment.value.items) == 3
+        assert assignment.value.items[0] == "ATHENA<strategic_wisdom>"
+        assert assignment.value.items[1] == "ODYSSEUS<navigation>"
+        assert assignment.value.items[2] == "HERMES<translation>"
+
+    def test_parse_annotation_in_block(self):
+        """NAME<qualifier> should parse inside nested blocks."""
+        content = """===TEST===
+IDENTITY:
+  ARCHETYPE::ATHENA<strategic_wisdom>
+===END==="""
+        doc = parse(content)
+        block = doc.sections[0]
+        assert isinstance(block, Block)
+        child = block.children[0]
+        assert isinstance(child, Assignment)
+        assert child.value == "ATHENA<strategic_wisdom>"
+
+    def test_parse_annotation_lenient_mode(self):
+        """NAME<qualifier> should parse in lenient mode too."""
+        content = """===TEST===
+ARCHETYPE::ATHENA<strategic_wisdom>
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        assert assignment.value == "ATHENA<strategic_wisdom>"
+
+    def test_tension_operator_no_regression(self):
+        """<-> tension operator should still work after annotation support."""
+        content = """===TEST===
+DYNAMIC::Speed<->Quality
+===END==="""
+        doc, _ = parse_with_warnings(content)
+        assert len(doc.sections) == 1
+        assignment = doc.sections[0]
+        assert isinstance(assignment, Assignment)
+        # <-> normalizes to ⇌ (tension operator)
+        assert "⇌" in assignment.value
+
+    def test_round_trip_annotation(self):
+        """NAME<qualifier> should round-trip through parse -> emit."""
+        from octave_mcp.core.emitter import emit
+
+        content = """===TEST===
+ARCHETYPE::ATHENA<strategic_wisdom>
+===END==="""
+        doc = parse(content)
+        output = emit(doc)
+        assert "ATHENA<strategic_wisdom>" in output
+
+        # Parse again to verify round-trip
+        doc2 = parse(output)
+        assert doc2.sections[0].value == "ATHENA<strategic_wisdom>"
+
+    def test_round_trip_annotation_list(self):
+        """List of NAME<qualifier> should round-trip through parse -> emit."""
+        from octave_mcp.core.emitter import emit
+
+        content = """===TEST===
+ARCHETYPES::[ATHENA<strategic_wisdom>,ODYSSEUS<navigation>]
+===END==="""
+        doc = parse(content)
+        output = emit(doc)
+        assert "ATHENA<strategic_wisdom>" in output
+        assert "ODYSSEUS<navigation>" in output
+
+    def test_annotation_with_indentation(self):
+        """Annotation should not break indentation tracking (regression check)."""
+        content = """===TEST===
+CORE:
+  ARCHETYPE::[ATHENA<strategic_wisdom>,ATLAS<structural_foundation>]
+  ROLE::IMPLEMENTATION_LEAD
+===END==="""
+        doc = parse(content)
+        block = doc.sections[0]
+        assert isinstance(block, Block)
+        assert len(block.children) == 2
+        assert isinstance(block.children[0], Assignment)
+        assert isinstance(block.children[1], Assignment)
+        assert block.children[1].key == "ROLE"
+        assert block.children[1].value == "IMPLEMENTATION_LEAD"
+
+    def test_emitter_quotes_invalid_annotation(self):
+        """Values that look like annotations but have invalid qualifiers must be quoted."""
+        from octave_mcp.core.emitter import needs_quotes
+
+        # Valid annotations — should NOT need quotes
+        assert not needs_quotes("ATHENA<strategic_wisdom>")
+        assert not needs_quotes("X<y>")
+
+        # Invalid qualifier start (digit) — MUST need quotes
+        assert needs_quotes("A<1x>")
+
+        # Invalid chars — MUST need quotes
+        assert needs_quotes("A<x->")
+        assert needs_quotes("A<x y>")

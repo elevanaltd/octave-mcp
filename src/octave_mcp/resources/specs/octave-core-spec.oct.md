@@ -125,10 +125,17 @@ RECOMMENDATION::prefer_canonical_unicode_in_emission
 §2c::BRACKET_FORMS
 CONTAINER::[a,b,c][bare_brackets_are_lists]
 CONSTRUCTOR::NAME[args][e.g._REGEX[pattern]_ENUM[a,b]]
+ANNOTATION::NAME<qualifier>[e.g._ATHENA<strategic_wisdom>_ODYSSEUS<navigation>]
 HOLOGRAPHIC::["value"∧CONSTRAINT→§TARGET][schema_mode]
-RULE::NAME[...]_is_constructor|bare_[...]_is_container
+RULE::NAME[...]_is_constructor|bare_[...]_is_container|NAME<...>_is_annotation
 LITERAL_FENCE::backtick_fence[3_or_more_backticks][optional_info_tag][fenced_code_block]
 FENCE_SCALING::N_backticks_where_N_is_3_or_more[inner_content_may_contain_shorter_fences]
+
+// ANNOTATION vs CONSTRUCTOR:
+// NAME[args] = schema/validation construct (REGEX[pattern], ENUM[a,b], TYPE[STRING])
+// NAME<qualifier> = semantic facet qualifier (ATHENA<strategic_wisdom>, HERMES<translation>)
+// Annotations leverage LLM generics-training (TypeScript/Rust/Java) for zero-friction comprehension.
+// Angle brackets are NOT structural containers — they qualify an identifier with a semantic facet.
 
 §3::TYPES
 STRING::bare_word|"quoted"[when:spaces,special,reserved]
@@ -158,6 +165,11 @@ MUST_QUOTE::[
   cross_references["see octave-core-spec §6"],
   section_markers_in_values["§SELF reference"]
 ]
+
+// NOTE: Angle brackets in NAME<qualifier> annotation form (§2c) are NOT special chars.
+// They are a defined bracket form and do not require quoting.
+// ATHENA<strategic_wisdom> is valid bare syntax.
+// Standalone < or > outside annotation form must be quoted.
 
 QUOTE_GUIDELINES::
   IF[contains_non_alphanumeric]→quote_it
@@ -296,6 +308,10 @@ LITERAL_ZONE_PATTERN:
   CONFIG::backtick_json_fence[json_info_tag][verbatim_json_content]
   EMPTY_LITERAL::backtick_fence[empty_content][distinct_from_absent]
   SCALED_FENCE::4_backtick_fence[wraps_content_containing_3_backtick_fences]
+
+// ANNOTATION PATTERN (semantic facet qualifier on identifiers)
+ARCHETYPE_EXAMPLE::[ATHENA<strategic_wisdom>,ODYSSEUS<navigation>,HERMES<translation>]
+SINGLE_ANNOTATION::ATHENA<strict>
 
 // PRECEDENCE EXAMPLES
 PARSE_AS:

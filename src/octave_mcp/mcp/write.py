@@ -252,10 +252,15 @@ class WriteTool(BaseTool):
             doc.meta = {"TYPE": schema_name or "UNKNOWN", "VERSION": "1.0"}
 
         # Parse content line-by-line to identify valid vs failing lines
+        # Issue #248: Track bracket depth so multi-line [...] blocks are tested
+        # as complete units rather than line-by-line (which falsely rejects ] and ],)
         lines = content.split("\n")
         salvaged_sections: list[ASTNode] = []
         error_lines: list[tuple[int, str]] = []
         current_valid_lines: list[str] = []
+        bracket_depth = 0
+        bracket_block_lines: list[str] = []
+        bracket_block_start_indices: list[int] = []
 
         # Skip envelope and end markers for line-by-line processing
         in_content = False
@@ -276,9 +281,80 @@ class WriteTool(BaseTool):
             if not in_content:
                 continue
 
-            # Try to parse this line as valid OCTAVE
+            # Issue #248: Track bracket depth for multi-line bracket blocks.
+            # Lines like `],` and `]` are only valid inside an open bracket context.
+            # When inside brackets (depth > 0), accumulate lines and test the
+            # complete block once all brackets are balanced.
             if stripped:
-                # Wrap in minimal document for parsing
+                # Count bracket transitions on this line, skipping brackets
+                # inside quoted strings to avoid false depth changes.
+                line_opens = 0
+                line_closes = 0
+                in_quote = False
+                escape_next = False
+                for ch in stripped:
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if ch == "\\":
+                        escape_next = True
+                        continue
+                    if ch == '"':
+                        in_quote = not in_quote
+                        continue
+                    if not in_quote:
+                        if ch == "[":
+                            line_opens += 1
+                        elif ch == "]":
+                            line_closes += 1
+
+                if bracket_depth > 0:
+                    # Inside a bracket block - accumulate unconditionally
+                    bracket_block_lines.append(line)
+                    bracket_block_start_indices.append(i)
+                    bracket_depth += line_opens - line_closes
+
+                    if bracket_depth <= 0:
+                        # Brackets balanced - flush accumulated valid lines then
+                        # test the complete bracket block
+                        bracket_depth = 0
+
+                        # First, flush any pre-bracket valid lines
+                        if current_valid_lines:
+                            try:
+                                vbc = "===TEST===\n" + "\n".join(current_valid_lines) + "\n===END==="
+                                vd = parse(vbc)
+                                salvaged_sections.extend(vd.sections)
+                            except Exception:
+                                for vl in current_valid_lines:
+                                    if vl.strip():
+                                        salvaged_sections.append(Assignment(key="_SALVAGED_LINE", value=vl))
+
+                        # Now test the bracket block as a complete unit
+                        # (opening line was stored as first bracket_block_lines entry)
+                        try:
+                            block_content = "===TEST===\n" + "\n".join(bracket_block_lines) + "\n===END==="
+                            valid_doc = parse(block_content)
+                            salvaged_sections.extend(valid_doc.sections)
+                        except Exception:
+                            # Bracket block failed as a unit - wrap as a single
+                            # salvaged assignment preserving the full block text
+                            block_text = "\n".join(bracket_block_lines)
+                            salvaged_sections.append(Assignment(key="_SALVAGED_BLOCK", value=block_text))
+
+                        current_valid_lines = []
+                        bracket_block_lines = []
+                        bracket_block_start_indices = []
+                    continue
+
+                if line_opens > line_closes:
+                    # Opening a new multi-line bracket block
+                    bracket_depth = line_opens - line_closes
+                    bracket_block_lines = [line]
+                    bracket_block_start_indices = [i]
+                    continue
+
+                # Normal line (no open bracket context) - test in isolation
                 test_content = f"===TEST===\n{line}\n===END==="
                 try:
                     parse(test_content)
@@ -302,6 +378,28 @@ class WriteTool(BaseTool):
                 # Empty line - keep in current valid block
                 if current_valid_lines:
                     current_valid_lines.append(line)
+
+        # Flush any remaining bracket block (unbalanced brackets at end of doc)
+        if bracket_block_lines:
+            # First flush pre-bracket valid lines
+            if current_valid_lines:
+                try:
+                    vbc = "===TEST===\n" + "\n".join(current_valid_lines) + "\n===END==="
+                    vd = parse(vbc)
+                    salvaged_sections.extend(vd.sections)
+                except Exception:
+                    for vl in current_valid_lines:
+                        if vl.strip():
+                            salvaged_sections.append(Assignment(key="_SALVAGED_LINE", value=vl))
+            # Try bracket block as unit; if it fails, wrap as single error
+            try:
+                block_content = "===TEST===\n" + "\n".join(bracket_block_lines) + "\n===END==="
+                valid_doc = parse(block_content)
+                salvaged_sections.extend(valid_doc.sections)
+            except Exception:
+                block_text = "\n".join(bracket_block_lines)
+                salvaged_sections.append(Assignment(key="_SALVAGED_BLOCK", value=block_text))
+            current_valid_lines = []
 
         # Flush remaining valid lines
         if current_valid_lines:
