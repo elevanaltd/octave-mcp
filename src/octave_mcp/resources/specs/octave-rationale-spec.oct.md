@@ -27,10 +27,23 @@ GOALS:
   4::ENABLE_GENERATION::schemas_define_valid_output_space_before_emission
 
 §2::SYNTAX_DECISIONS
-NO_CURLY_BRACES:
+NO_CURLY_BRACES_AS_CONTAINERS:
   REASON::avoids_json_bias
-  EXPLANATION::"The moment an LLM sees '{', it biases towards valid JSON, requiring quoted keys and trailing commas. OCTAVE uses indentation for hierarchy."
+  EXPLANATION::"The moment an LLM sees '{ key: value }', it biases towards valid JSON, requiring quoted keys and trailing commas. OCTAVE uses indentation for hierarchy, not braces."
+  SCOPE::"Structural containers only. Curly braces must be quoted when used in values (§3b)."
   BENEFIT::[template_safety_for_jinja,token_savings,no_escaping_needed]
+
+ANGLE_BRACKET_ANNOTATIONS:
+  REASON::generics_training_weight
+  EXPLANATION::"LLMs have massive training weight on generics syntax (TypeScript, Rust, Java, C#). NAME<qualifier> leverages this to signal 'this identifier, parameterized by this facet' with zero cognitive friction."
+  SYNTAX::NAME<qualifier>[e.g._ATHENA<strategic_wisdom>]
+  VERSUS_ALTERNATIVES::[
+    curly_braces_trigger_json_bias,
+    square_brackets_overloaded_with_containers_and_constructors,
+    parentheses_trigger_function_call_or_english_aside,
+    angle_brackets_uniquely_map_to_type_parameterization
+  ]
+  EVIDENCE::"Empirical testing across Claude, Codex, Gemini: all models immediately interpret <qualifier> as type parameter/semantic constraint. Zero disambiguation required."
 
 DOUBLE_COLON__::__:
   REASON::strong_binding
