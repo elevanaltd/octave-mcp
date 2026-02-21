@@ -906,3 +906,81 @@ class TestUnbalancedBracketDetection:
         assert "E_UNBALANCED_BRACKET" in error_str
         assert "line 1" in error_str
         assert "column 1" in error_str
+
+
+class TestAngleBracketAnnotation:
+    """Test NAME<qualifier> angle bracket annotation syntax (Issue #248, §2c)."""
+
+    def test_simple_annotation_tokenizes_as_identifier(self):
+        """ATHENA<strategic_wisdom> should tokenize as single IDENTIFIER."""
+        tokens, _ = tokenize("ATHENA<strategic_wisdom>")
+        # Should produce: IDENTIFIER("ATHENA<strategic_wisdom>"), EOF
+        identifiers = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        assert len(identifiers) == 1
+        assert identifiers[0].value == "ATHENA<strategic_wisdom>"
+
+    def test_annotation_in_assignment(self):
+        """NAME<qualifier> should work as a value in assignment."""
+        tokens, _ = tokenize("ARCHETYPE::ATHENA<strategic_wisdom>")
+        assert tokens[0].type == TokenType.IDENTIFIER
+        assert tokens[0].value == "ARCHETYPE"
+        assert tokens[1].type == TokenType.ASSIGN
+        assert tokens[2].type == TokenType.IDENTIFIER
+        assert tokens[2].value == "ATHENA<strategic_wisdom>"
+
+    def test_annotation_with_underscore_qualifier(self):
+        """Qualifier can contain underscores."""
+        tokens, _ = tokenize("HERMES<api_translation>")
+        identifiers = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        assert len(identifiers) == 1
+        assert identifiers[0].value == "HERMES<api_translation>"
+
+    def test_annotation_preserves_case(self):
+        """Annotation should preserve case of both name and qualifier."""
+        tokens, _ = tokenize("MyArchetype<MyQualifier>")
+        identifiers = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        assert len(identifiers) == 1
+        assert identifiers[0].value == "MyArchetype<MyQualifier>"
+
+    def test_annotation_in_list(self):
+        """NAME<qualifier> should work inside lists."""
+        tokens, _ = tokenize("[ATHENA<strategic_wisdom>,ODYSSEUS<navigation>]")
+        identifiers = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        assert len(identifiers) == 2
+        assert identifiers[0].value == "ATHENA<strategic_wisdom>"
+        assert identifiers[1].value == "ODYSSEUS<navigation>"
+
+    def test_tension_operator_still_works(self):
+        """<-> tension operator must not be broken by angle bracket support."""
+        tokens, _ = tokenize("A<->B")
+        tension_tokens = [t for t in tokens if t.type == TokenType.TENSION]
+        assert len(tension_tokens) == 1
+        assert tension_tokens[0].value == "⇌"  # Normalized to unicode
+
+    def test_standalone_angle_bracket_errors(self):
+        """Standalone < outside annotation should error (spec §3b)."""
+        with pytest.raises(LexerError):
+            tokenize("5 < 10")
+
+    def test_annotation_multiple_words_qualifier(self):
+        """Qualifier with multiple words separated by underscores."""
+        tokens, _ = tokenize("ATLAS<structural_foundation_deep>")
+        identifiers = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        assert len(identifiers) == 1
+        assert identifiers[0].value == "ATLAS<structural_foundation_deep>"
+
+    def test_annotation_single_char_qualifier(self):
+        """Single-character qualifier should work."""
+        tokens, _ = tokenize("X<y>")
+        identifiers = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        assert len(identifiers) == 1
+        assert identifiers[0].value == "X<y>"
+
+    def test_annotation_as_key_in_assignment(self):
+        """NAME<qualifier> as key in KEY::value pattern."""
+        tokens, _ = tokenize("ATHENA<strict>::enabled")
+        assert tokens[0].type == TokenType.IDENTIFIER
+        assert tokens[0].value == "ATHENA<strict>"
+        assert tokens[1].type == TokenType.ASSIGN
+        assert tokens[2].type == TokenType.IDENTIFIER
+        assert tokens[2].value == "enabled"
