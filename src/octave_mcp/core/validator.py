@@ -132,6 +132,15 @@ class Validator:
                     section_schema = section_schemas.get(section_key)
             self._validate_section(section, strict, section_schema)
 
+        # Issue #244: Validate Zone 2 (YAML frontmatter) when schema defines frontmatter
+        # This is opt-in: only schemas with frontmatter defs trigger validation.
+        # I1: Read-only inspection, never alters Zone 2 content.
+        if section_schemas is not None:
+            for schema_def in section_schemas.values():
+                if schema_def.frontmatter:
+                    fm_errors = validate_frontmatter(doc.raw_frontmatter, schema_def)
+                    self.errors.extend(fm_errors)
+
         return self.errors
 
     def _validate_meta(self, meta: dict[str, Any], strict: bool) -> None:
@@ -442,6 +451,106 @@ def validate(
     """
     validator = Validator(schema)
     return validator.validate(doc, strict, section_schemas)
+
+
+def validate_frontmatter(
+    raw_frontmatter: str | None,
+    schema: SchemaDefinition,
+) -> list[ValidationError]:
+    """Validate YAML frontmatter against schema frontmatter definitions (Issue #244).
+
+    Extends I5 Schema Sovereignty to Zone 2 (YAML frontmatter). This function
+    is opt-in: it only validates when the schema defines frontmatter requirements.
+
+    I1 compliance: This is read-only inspection. Zone 2 content is never altered.
+    I5 compliance: If we can't validate, we say so (E_FM_PARSE for bad YAML).
+
+    Args:
+        raw_frontmatter: Raw YAML frontmatter string from Document.raw_frontmatter.
+                         May be None if no frontmatter is present.
+        schema: SchemaDefinition that may contain frontmatter field definitions.
+
+    Returns:
+        List of ValidationError. Empty if no frontmatter requirements in schema
+        or if all requirements are satisfied.
+    """
+    # No frontmatter definitions in schema = nothing to validate (opt-in)
+    if not schema.frontmatter:
+        return []
+
+    errors: list[ValidationError] = []
+
+    # If frontmatter is absent but schema requires fields, report each required field
+    if raw_frontmatter is None:
+        for field_name, field_def in schema.frontmatter.items():
+            if field_def.required:
+                errors.append(
+                    ValidationError(
+                        code="E_FM_REQUIRED",
+                        message=f"Required frontmatter field '{field_name}' is missing",
+                        field_path=f"frontmatter.{field_name}",
+                    )
+                )
+        return errors
+
+    # Parse YAML frontmatter
+    import yaml
+
+    try:
+        parsed = yaml.safe_load(raw_frontmatter)
+    except yaml.YAMLError as e:
+        errors.append(
+            ValidationError(
+                code="E_FM_PARSE",
+                message=f"Failed to parse YAML frontmatter: {e}",
+                field_path="frontmatter",
+            )
+        )
+        return errors
+
+    # Handle case where YAML parses to non-dict (e.g., scalar string)
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    # Validate each defined frontmatter field
+    for field_name, field_def in schema.frontmatter.items():
+        value = parsed.get(field_name)
+
+        # Check required fields
+        if field_def.required and value is None:
+            errors.append(
+                ValidationError(
+                    code="E_FM_REQUIRED",
+                    message=f"Required frontmatter field '{field_name}' is missing",
+                    field_path=f"frontmatter.{field_name}",
+                )
+            )
+            continue
+
+        # Skip type validation for absent optional fields
+        if value is None:
+            continue
+
+        # Type validation
+        type_map: dict[str, type | tuple[type, ...]] = {
+            "STRING": str,
+            "LIST": list,
+            "BOOLEAN": bool,
+        }
+        expected_type = type_map.get(field_def.field_type)
+        if expected_type and not isinstance(value, expected_type):
+            errors.append(
+                ValidationError(
+                    code="E_FM_TYPE",
+                    message=(
+                        f"Frontmatter field '{field_name}' expected {field_def.field_type}, "
+                        f"got {type(value).__name__}"
+                    ),
+                    field_path=f"frontmatter.{field_name}",
+                )
+            )
+
+    return errors
 
 
 def _count_literal_zones(doc: Document) -> list[dict[str, Any]]:

@@ -1,11 +1,12 @@
 """OCTAVE schema extraction from documents (Issue #93).
 
-Extracts schema definitions (POLICY, FIELDS blocks) from parsed OCTAVE documents
-using holographic pattern parsing.
+Extracts schema definitions (POLICY, FIELDS, FRONTMATTER blocks) from parsed
+OCTAVE documents using holographic pattern parsing.
 
 This module provides:
-- SchemaDefinition: Complete schema definition with policy and fields
+- SchemaDefinition: Complete schema definition with policy, fields, and frontmatter
 - FieldDefinition: Single field definition with holographic pattern
+- FrontmatterFieldDef: Frontmatter field definition for Zone 2 validation (Issue #244)
 - PolicyDefinition: POLICY block configuration
 - InheritanceResolver: Block target inheritance resolution (Issue #189)
 - DepthLimitError: Raised when inheritance depth exceeds MAX_DEPTH
@@ -196,6 +197,24 @@ class PolicyDefinition:
 
 
 @dataclass
+class FrontmatterFieldDef:
+    """Frontmatter field definition for Zone 2 validation (Issue #244).
+
+    Describes a single field expected in YAML frontmatter.
+    Used by schemas that extend I5 Schema Sovereignty to Zone 2.
+
+    Attributes:
+        name: Field name as it appears in YAML frontmatter (e.g., "allowed-tools")
+        required: Whether this field must be present
+        field_type: Expected YAML type: STRING, LIST, or BOOLEAN
+    """
+
+    name: str
+    required: bool = False
+    field_type: str = "STRING"
+
+
+@dataclass
 class FieldDefinition:
     """Single field definition extracted from FIELDS block.
 
@@ -226,6 +245,7 @@ class SchemaDefinition:
         version: Schema version (from META block)
         policy: POLICY block configuration
         fields: Dictionary of field name -> FieldDefinition
+        frontmatter: Dictionary of frontmatter field name -> FrontmatterFieldDef (Issue #244)
         default_target: Block-level default target for feudal inheritance (Issue #103)
         warnings: List of warnings generated during extraction (M3 CE violation #3)
     """
@@ -234,6 +254,7 @@ class SchemaDefinition:
     version: str | None = None
     policy: PolicyDefinition = field(default_factory=PolicyDefinition)
     fields: dict[str, FieldDefinition] = field(default_factory=dict)
+    frontmatter: dict[str, FrontmatterFieldDef] = field(default_factory=dict)
     default_target: str | None = None
     warnings: list[SchemaExtractionWarning] = field(default_factory=list)
 
@@ -596,17 +617,69 @@ def _items_based_reconstruction(items: list[Any]) -> str:
     return f"[{''.join(parts)}]"
 
 
+def _extract_frontmatter_defs(sections: list[Any]) -> dict[str, FrontmatterFieldDef]:
+    """Extract FRONTMATTER block from schema document sections (Issue #244).
+
+    Parses a FRONTMATTER block that defines Zone 2 (YAML frontmatter) field
+    requirements. Each child block within FRONTMATTER describes one field:
+
+        FRONTMATTER:
+          name:
+            REQUIRED::true
+            TYPE::STRING
+          allowed-tools:
+            REQUIRED::true
+            TYPE::LIST
+
+    Args:
+        sections: List of document sections (Assignment, Block, Section)
+
+    Returns:
+        Dictionary of field name -> FrontmatterFieldDef.
+        Empty dict if no FRONTMATTER block found.
+    """
+    frontmatter: dict[str, FrontmatterFieldDef] = {}
+
+    for section in sections:
+        if isinstance(section, Block) and section.key == "FRONTMATTER":
+            for child in section.children:
+                if isinstance(child, Block):
+                    # Each child block is a frontmatter field definition
+                    field_name = child.key
+                    required = False
+                    field_type = "STRING"
+
+                    for grandchild in child.children:
+                        if isinstance(grandchild, Assignment):
+                            if grandchild.key == "REQUIRED":
+                                val = grandchild.value
+                                if isinstance(val, bool):
+                                    required = val
+                                elif isinstance(val, str):
+                                    required = val.lower() == "true"
+                            elif grandchild.key == "TYPE":
+                                field_type = str(grandchild.value)
+
+                    frontmatter[field_name] = FrontmatterFieldDef(
+                        name=field_name,
+                        required=required,
+                        field_type=field_type,
+                    )
+
+    return frontmatter
+
+
 def extract_schema_from_document(doc: Document) -> SchemaDefinition:
     """Extract schema definition from parsed OCTAVE document.
 
-    Parses POLICY and FIELDS blocks, extracts holographic patterns,
+    Parses POLICY, FIELDS, and FRONTMATTER blocks, extracts holographic patterns,
     and builds a complete SchemaDefinition.
 
     Args:
         doc: Parsed Document AST
 
     Returns:
-        SchemaDefinition with extracted policy and fields
+        SchemaDefinition with extracted policy, fields, and frontmatter
 
     Example:
         >>> doc = parse('''
@@ -643,11 +716,15 @@ def extract_schema_from_document(doc: Document) -> SchemaDefinition:
     # Extract FIELDS block (M3 CE violation #3: now returns warnings)
     fields, warnings = _extract_fields(doc.sections)
 
+    # Extract FRONTMATTER block (Issue #244: Zone 2 validation)
+    frontmatter = _extract_frontmatter_defs(doc.sections)
+
     return SchemaDefinition(
         name=name,
         version=version,
         policy=policy,
         fields=fields,
+        frontmatter=frontmatter,
         default_target=default_target,
         warnings=warnings,
     )
