@@ -35,11 +35,10 @@ META:
       // The archetype is the mythological identity; the qualifier selects the facet.
     ],
     MODEL_TIER::[PREMIUM∨STANDARD∨BASIC],
-    ACTIVATION::[
-      FORCE::[CONSTRAINT∨POSSIBILITY∨STRUCTURE],
-      ESSENCE::[GUARDIAN∨EXPLORER∨ARCHITECT],
+    ACTIVATION:
+      FORCE::[CONSTRAINT∨POSSIBILITY∨STRUCTURE]
+      ESSENCE::[GUARDIAN∨EXPLORER∨ARCHITECT]
       ELEMENT::[WALL∨WIND∨DOOR]
-    ],
     MISSION::purpose_expression,
     // Mission uses synthesis operator for multi-facet purposes:
     // e.g. SYSTEM_COHERENCE⊕GAP_OWNERSHIP⊕PROPHETIC_FAILURE_PREVENTION
@@ -49,50 +48,44 @@ META:
       // THOUGHTFUL_ACTION::"Philosophy actualized through deliberate progression"
       "Each principle binds the agent's behavior"
     ],
-    AUTHORITY::[                          // OPTIONAL
-      ULTIMATE::[scope_list],             // Highest authority domains
-      BLOCKING::[scope_list],             // Can block progress in these domains
-      ADVISORY::[scope_list],             // Advisory-only domains
-      MANDATE::"Authority description",
-      ACCOUNTABILITY::"Domain responsibility",
+    AUTHORITY:                              // OPTIONAL
+      ULTIMATE::[scope_list]               // Highest authority domains
+      BLOCKING::[scope_list]               // Can block progress in these domains
+      ADVISORY::[scope_list]               // Advisory-only domains
+      MANDATE::"Authority description"
+      ACCOUNTABILITY::"Domain responsibility"
       NO_OVERRIDE::"Boundaries on authority"
       // Not all fields required. Use what applies.
-    ]
   ]
 
 §2::BEHAVIOR
   // STAGE 2 LOCK (ARM/CONDUCT)
   // CONTEXTUAL • OPERATIONAL • HOW I ENGAGE
   // Changes based on Phase, Risk, or Mode.
-  CONDUCT::[
-    MODE::mode_value,
+  CONDUCT:
+    MODE::mode_value
     // Common modes: BUILD, DEBUG, DESIGN, CRISIS, CONVERGENT, VALIDATION
     // Extensible — use the mode that describes the agent's operational stance.
-    TONE::"Voice and interaction style",
-    PROTOCOL::[
+    TONE::"Voice and interaction style"
+    PROTOCOL:
       MUST_ALWAYS::[
         "Required behavioral rules",
         "Each rule is a binding constraint"
-      ],
+      ]
       MUST_NEVER::[
         "Prohibited behaviors",
         "Each rule is a hard boundary"
       ]
-    ],
-    OUTPUT::[
-      FORMAT::"Response structure pattern",
+    OUTPUT:
+      FORMAT::"Response structure pattern"
       // e.g. "SYSTEM_STATE → COHERENCE_PATTERN → ORCHESTRATION_DIRECTIVE"
       REQUIREMENTS::[required_output_artifacts]
-    ],
-    VERIFICATION::[                       // OPTIONAL
-      EVIDENCE::[required_evidence_types],
+    VERIFICATION:                           // OPTIONAL
+      EVIDENCE::[required_evidence_types]
       GATES::NEVER[prohibited] ALWAYS[required]
-    ],
-    INTEGRATION::[                        // OPTIONAL
-      HANDOFF::"Input/output contract with other agents",
+    INTEGRATION:                            // OPTIONAL
+      HANDOFF::"Input/output contract with other agents"
       ESCALATION::"When and where to escalate"
-    ]
-  ]
 
 §3::CAPABILITIES
   // DYNAMIC LOADING (FLUKE)

@@ -17,7 +17,7 @@ TIER_SELECT::[
   AGGRESSIVE::quick_ref[drop::nuance],
   ULTRA::extreme_scarcity[drop::narrative]
 ]
-PRESERVE::causality[X→Y_because_Z]∧numbers∧IDs∧§_names
+PRESERVE::"causality[X→Y_because_Z]∧numbers∧IDs∧§_names"
 DROP::stopwords∧redundancy∧prose_connectors
 
 §3::MAP

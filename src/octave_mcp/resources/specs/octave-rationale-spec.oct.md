@@ -22,7 +22,7 @@ HOLOGRAPHIC_PRINCIPLE::"Value, constraint, and routing encoded in single line - 
 
 GOALS:
   1::ELIMINATE_AMBIGUITY::prose_is_probabilistic|OCTAVE_is_deterministic
-  2::OPTIMIZE_CONTEXT::reduce_token_usage_by_30_percent_vs_JSON
+  2::OPTIMIZE_CONTEXT::"reduce_token_usage_by_30_percent_vs_JSON"
   3::PREVENT_HALLUCINATION::strong_syntax_anchors_reduce_drift
   4::ENABLE_GENERATION::schemas_define_valid_output_space_before_emission
 
@@ -92,7 +92,7 @@ STOPWORDS_IN_DATA:
 
 §5::OPERATIONAL_SAFETY
 STRICT_ENVELOPES:
-  START_END::[===NAME===...===END===]
+  START_END::"[===NAME===...===END===]"
   REASON::"Prevents 'run-on' generation. Gives the parser definitive start/stop signals."
 
 VERSIONING:

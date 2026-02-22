@@ -26,9 +26,7 @@ SPEC_FILES = sorted(SPECS_DIR.rglob("*.oct.md"))
 
 # Known issues - specs that have parsing problems
 # Format: {filename: "reason for exclusion"}
-KNOWN_ISSUES = {
-    "octave-primers-spec.oct.md": "LexerError E005 line 45 col 24: Unexpected character '\\'",
-}
+KNOWN_ISSUES = {}
 
 
 @pytest.mark.timeout(10)
