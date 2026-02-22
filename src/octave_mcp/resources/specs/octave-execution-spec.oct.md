@@ -78,7 +78,7 @@ MULTI_ERROR::returns_first_only[fix_one_retry]
 ALWAYS_CHECKED::[
   constraint_conflicts[REQ∧OPT,ENUM∧CONST],
   target_existence[must_be_declared_or_builtin],
-  type_mismatches[STRING_vs_NUMBER],
+  "type_mismatches[STRING_vs_NUMBER]",
   regex_validity[pattern_must_compile],
   depth_limits[100_levels_max],
   grammar_compilability[schema_can_generate_valid_output]
@@ -100,7 +100,7 @@ V5_LEGACY::[generate→validate→error→fix→retry][deprecated]
 
 ON_PARSE_ERROR:
   ACTION::check_envelope_and_indent_first
-  COMMON::[tabs,missing_===END===,space_around_::]
+  COMMON::[tabs,"missing_===END===","space_around_::"]
 
 ON_COMPILE_ERROR:
   ACTION::fix_schema_before_generation

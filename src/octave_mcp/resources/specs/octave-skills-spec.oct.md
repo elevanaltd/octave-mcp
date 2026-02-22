@@ -161,20 +161,18 @@ BACKWARD_COMPATIBILITY::[
 
 §8::VALIDATION
 
-V7_VALIDATION::[
-  META_REQUIRED::[TYPE::SKILL,VERSION,STATUS],
-  ENVELOPE::===NAME===[matches_YAML_NAME],
-  SYNTAX::passes_octave_validation,
-  SIZE::under_constraint_limits,
-  ANCHOR_KERNEL::recommended[warn_if_missing_for_anchor_enabled_skills]
-]
-
-V6_VALIDATION::[
-  META_REQUIRED::[TYPE::SKILL,VERSION,STATUS],
-  ENVELOPE::===NAME===[matches_YAML_NAME],
-  SYNTAX::passes_octave_validation,
+V7_VALIDATION:
+  META_REQUIRED::[TYPE::SKILL,VERSION,STATUS]
+  ENVELOPE::"===NAME===[matches_YAML_NAME]"
+  SYNTAX::passes_octave_validation
   SIZE::under_constraint_limits
-]
+  ANCHOR_KERNEL::recommended[warn_if_missing_for_anchor_enabled_skills]
+
+V6_VALIDATION:
+  META_REQUIRED::[TYPE::SKILL,VERSION,STATUS]
+  ENVELOPE::"===NAME===[matches_YAML_NAME]"
+  SYNTAX::passes_octave_validation
+  SIZE::under_constraint_limits
 
 V5_VALIDATION_DEPRECATED::[
   frontmatter::valid_yaml,
@@ -228,21 +226,22 @@ ANCHOR_KERNEL_TEMPLATE::"§ANCHOR_KERNEL NEVER::[{forbidden}] MUST::[{required}]
 
 PLACEMENT::before_final_END_of_skill_envelope
 
-EXAMPLE_COORDINATION_SKILL::[
-  §ANCHOR_KERNEL,
-  LANE::COORDINATION_ONLY,
-  NEVER::[direct_code_implementation, bypass_delegation],
-  MUST::[delegate_to_specialists, update_coordination_docs],
-  DELEGATE::[CODE_FIX::impl_lead, TEST::ute, ARCHITECTURE::tech_architect],
-  END_KERNEL
-]
+EXAMPLE_COORDINATION_SKILL:
+  ANCHOR_KERNEL::start
+  LANE::COORDINATION_ONLY
+  NEVER::[direct_code_implementation, bypass_delegation]
+  MUST::[delegate_to_specialists, update_coordination_docs]
+  DELEGATE:
+    CODE_FIX::impl_lead
+    TEST::ute
+    ARCHITECTURE::tech_architect
+  END_KERNEL::marker
 
-EXAMPLE_DETECTION_SKILL::[
-  §ANCHOR_KERNEL,
-  NEVER::[ignore_signals, skip_analysis],
-  MUST::[report_findings, cite_evidence],
-  SIGNALS::[placeholder_patterns, stub_indicators, incomplete_implementations],
-  END_KERNEL
-]
+EXAMPLE_DETECTION_SKILL:
+  ANCHOR_KERNEL::start
+  NEVER::[ignore_signals, skip_analysis]
+  MUST::[report_findings, cite_evidence]
+  SIGNALS::[placeholder_patterns, stub_indicators, incomplete_implementations]
+  END_KERNEL::marker
 
 ===END===

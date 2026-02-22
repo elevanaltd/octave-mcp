@@ -1,6 +1,6 @@
 [project]
 name = "octave-mcp"
-version = "1.4.0"
+version = "1.4.1"
 description = "OCTAVE MCP Server - Lenient-to-Canonical OCTAVE pipeline with schema validation and generative holographic contracts"
 readme = "README.md"
 requires-python = ">=3.11"

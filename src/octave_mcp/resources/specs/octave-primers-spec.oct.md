@@ -50,7 +50,7 @@ META:
     PURPOSE::"Success criteria"
     FORMAT::MUST::[criterion_list]
     REQUIRED::[valid_OCTAVE,preserve_§_names_verbatim]
-    TOKENS::<10
+    TOKENS::"<10"
 
 §3::ANTI_PATTERNS
   AVOID::[
@@ -69,18 +69,18 @@ META:
   RATIONALE::none→complete
   AUDIENCE::LLM→human+LLM
   METAPHOR::cheat_sheet→textbook
-  COMPRESSION::ULTRA[50%]→LOSSLESS[100%]
+  COMPRESSION::"ULTRA[50%]→LOSSLESS[100%]"
 
 §5::VALIDATION_CRITERIA
   VALID_PRIMER::[
-    tokens<300∧
-    has_one_shot∧
-    has_purpose_line∧
-    has_operator_legend∧
-    no_explanations∧
-    executable_immediately∧
-    self_referential[uses_format_it_teaches]∧
-    compression_tier==ULTRA
+    "tokens<300",
+    has_one_shot,
+    has_purpose_line,
+    has_operator_legend,
+    no_explanations,
+    executable_immediately,
+    "self_referential[uses_format_it_teaches]",
+    "compression_tier==ULTRA"
   ]
 
 ===END===

@@ -30,11 +30,11 @@ META:
 
   3::HERMETIC_ANCHORING
     RULE::"Frozen Standards."
-    DEV::`standard: latest` (local).
-    PROD::`standard: frozen@sha256:...` (immutable).
+    DEV::"standard: latest (local)"
+    PROD::"standard: frozen@sha256:... (immutable)"
 
 §3::IMPACT
-  CODEBASE::Streamline `hydrator.py` (remove dynamic resolution), refactor `parser.py` (two-pass), pivot `constraints.py` (compile vs evaluate).
+  CODEBASE::"Streamline hydrator.py (remove dynamic resolution), refactor parser.py (two-pass), pivot constraints.py (compile vs evaluate)."
   VERSIONING::Bump LLM Profiles to 6.0.0. Bump Package to v0.4.0.
   SECURITY::Root-of-Trust signature required for base schemas.
 

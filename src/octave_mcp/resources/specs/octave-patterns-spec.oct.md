@@ -43,11 +43,10 @@ RECOMMENDED_SECTIONS::[
   §4::USED_BY::"Agents and contexts where pattern applies"
 ]
 
-MINIMAL_VALID_PATTERN::[
-  META::[TYPE::PATTERN,VERSION,PURPOSE],
-  §1::CORE_PRINCIPLE,
-  §ANCHOR_KERNEL
-]
+MINIMAL_VALID_PATTERN:
+  META::[TYPE::PATTERN,VERSION,PURPOSE]
+  §1::CORE_PRINCIPLE
+  ANCHOR_KERNEL::required
 
 §3::ANCHOR_KERNEL_FORMAT
 
@@ -73,13 +72,12 @@ OVERFLOW_STRATEGY::[if_pattern_exceeds_limit→consider_splitting_or_promoting_t
 
 §5::VALIDATION
 
-VALIDATION_RULES::[
-  META_REQUIRED::[TYPE::PATTERN,VERSION,PURPOSE],
-  ENVELOPE::PATTERN_NAME[must_match_filename],
-  ANCHOR_KERNEL::required[§ANCHOR_KERNEL...END_KERNEL],
-  SYNTAX::passes_octave_validation,
+VALIDATION_RULES:
+  META_REQUIRED::[TYPE::PATTERN,VERSION,PURPOSE]
+  ENVELOPE::PATTERN_NAME[must_match_filename]
+  ANCHOR_KERNEL::required[§ANCHOR_KERNEL...END_KERNEL]
+  SYNTAX::passes_octave_validation
   SIZE::under_constraint_limits
-]
 
 VALIDATION_ERRORS::[
   MISSING_ANCHOR_KERNEL::"Pattern requires §ANCHOR_KERNEL for anchor injection",
@@ -92,43 +90,39 @@ VALIDATION_ERRORS::[
 // See .hestai-sys/library/patterns/ for concrete examples
 // Template structure (envelope delimiters shown as placeholders):
 
-V1_TEMPLATE_STRUCTURE::[
-  ENVELOPE_START::PATTERN_NAME[three_equals_delimiters],
-  META::[TYPE::PATTERN,VERSION,PURPOSE],
-  BODY_SECTIONS::§1_through_§4,
-  ANCHOR_KERNEL_SECTION::§ANCHOR_KERNEL,
-  KERNEL_TERMINATOR::END_KERNEL[three_equals],
+V1_TEMPLATE_STRUCTURE:
+  ENVELOPE_START::PATTERN_NAME[three_equals_delimiters]
+  META::[TYPE::PATTERN,VERSION,PURPOSE]
+  BODY_SECTIONS::§1_through_§4
+  ANCHOR_KERNEL_SECTION::§ANCHOR_KERNEL
+  KERNEL_TERMINATOR::END_KERNEL[three_equals]
   ENVELOPE_END::END[three_equals_delimiter]
-]
 
-SECTION_PATTERN::[
-  §1::CORE_PRINCIPLE::[ESSENTIAL,ANTI_PATTERN,ENFORCEMENT],
-  §2::DECISION_FRAMEWORK::[BEFORE_ACTION,QUALITY_GATE],
-  §3::USED_BY::[AGENTS,CONTEXT],
-  §ANCHOR_KERNEL::[TARGET,NEVER,MUST,GATE]
-]
+SECTION_PATTERN:
+  §1::CORE_PRINCIPLE::[ESSENTIAL,ANTI_PATTERN,ENFORCEMENT]
+  §2::DECISION_FRAMEWORK::[BEFORE_ACTION,QUALITY_GATE]
+  §3::USED_BY::[AGENTS,CONTEXT]
+  ANCHOR_KERNEL::[TARGET,NEVER,MUST,GATE]
 
 §7::EXAMPLE_PATTERNS
 
 // Reference: .hestai-sys/library/patterns/mip-orchestration.oct.md
 
-MIP_ORCHESTRATION_SUMMARY::[
-  ENVELOPE::MIP_ORCHESTRATION,
-  META::[TYPE::PATTERN,VERSION::1.0,PURPOSE::minimal_intervention_orchestration],
-  §1::CORE_PRINCIPLE[ESSENTIAL::system_coherence,ANTI_PATTERN::coordination_theater],
-  §2::METRICS[TARGET::62_percent_essential_38_coordination_max],
-  §3::DECISION_FRAMEWORK[BEFORE::coherence_question,GATE::value_or_theater],
-  §4::USED_BY[AGENTS::[holistic_orchestrator,system_orchestrator]],
-  §ANCHOR_KERNEL::[TARGET,NEVER,MUST,GATE]
-]
+MIP_ORCHESTRATION_SUMMARY:
+  ENVELOPE::MIP_ORCHESTRATION
+  META::[TYPE::PATTERN,"VERSION::1.0",PURPOSE::minimal_intervention_orchestration]
+  §1::CORE_PRINCIPLE[ESSENTIAL::system_coherence,ANTI_PATTERN::coordination_theater]
+  §2::METRICS[TARGET::62_percent_essential_38_coordination_max]
+  §3::DECISION_FRAMEWORK[BEFORE::coherence_question,GATE::value_or_theater]
+  §4::USED_BY[AGENTS::[holistic_orchestrator,system_orchestrator]]
+  ANCHOR_KERNEL::[TARGET,NEVER,MUST,GATE]
 
-TDD_DISCIPLINE_SUMMARY::[
-  ENVELOPE::TDD_DISCIPLINE,
-  META::[TYPE::PATTERN,VERSION::1.0,PURPOSE::red_green_refactor_enforcement],
-  §1::CORE_PROTOCOL[CYCLE::[RED,GREEN,REFACTOR]],
-  §2::GIT_WORKFLOW[PATTERN::[test_commit,feat_commit,refactor_commit]],
+TDD_DISCIPLINE_SUMMARY:
+  ENVELOPE::TDD_DISCIPLINE
+  META::[TYPE::PATTERN,"VERSION::1.0",PURPOSE::red_green_refactor_enforcement]
+  §1::CORE_PROTOCOL[CYCLE::[RED,GREEN,REFACTOR]]
+  §2::GIT_WORKFLOW[PATTERN::[test_commit,feat_commit,refactor_commit]]
   §3::ANTI_PATTERNS[AVOID::[TEST_AFTER,SINGLE_COMMIT,MOCKING_EVERYTHING]]
-]
 
 §8::FORBIDDEN
 
@@ -142,27 +136,21 @@ NEVER::[
 
 §9::DISTINCTION_FROM_SKILLS
 
-PATTERNS_COMPARED_TO_SKILLS::[
-  DISCOVERY::[
-    SKILLS::yaml_frontmatter_enables_trigger_based_discovery,
+PATTERNS_COMPARED_TO_SKILLS:
+  DISCOVERY:
+    SKILLS::yaml_frontmatter_enables_trigger_based_discovery
     PATTERNS::referenced_by_agent_definitions_not_auto_discovered
-  ],
-  PURPOSE::[
-    SKILLS::define_agent_behavior_and_tool_restrictions,
+  PURPOSE:
+    SKILLS::define_agent_behavior_and_tool_restrictions
     PATTERNS::encode_reusable_decision_frameworks
-  ],
-  STRUCTURE::[
-    SKILLS::yaml_frontmatter+octave_envelope,
+  STRUCTURE:
+    SKILLS::yaml_frontmatter+octave_envelope
     PATTERNS::octave_envelope_only
-  ],
-  SIZE::[
-    SKILLS::up_to_500_lines,
+  SIZE:
+    SKILLS::up_to_500_lines
     PATTERNS::up_to_150_lines
-  ],
-  ANCHOR_KERNEL::[
-    SKILLS::recommended_for_anchor_injection,
+  ANCHOR_KERNEL:
+    SKILLS::recommended_for_anchor_injection
     PATTERNS::required_for_anchor_injection
-  ]
-]
 
 ===END===

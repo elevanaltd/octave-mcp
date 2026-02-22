@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-02-22 - "Spec Hygiene" Patch
+
+### Fixed
+- **8 active .oct.md spec/primer parse failures** — All bundled specs and primers now parse cleanly
+  - Primers spec: quoted bare `<`, `%`, `==` characters
+  - Compression primer: quoted `§_names` value
+  - Agents, patterns, skills specs: restructured nested inline maps to block format
+  - Execution, rationale specs: closed unclosed lists, quoted `vs` boundary values
+  - ADR-003: replaced bare backticks with quoted strings
+- Cleared `KNOWN_ISSUES` in `test_spec_validation.py` — all specs pass validation
+
 ## [1.4.0] - 2026-02-22 - "Annotation Syntax" Release
 
 This release introduces angle-bracket annotation syntax (`NAME<qualifier>`) as a new identifier feature, fixes bracket-depth-aware salvage in `octave_write`, and resolves spec parse failures blocking CI validation.
