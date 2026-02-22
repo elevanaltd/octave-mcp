@@ -6,7 +6,7 @@ META:
   STATUS::APPROVED
   APPROVED_DATE::"2025-12-28"
   UPDATED::"2026-02-22"
-  FULL_DOC::".hestai/workflow/000-OCTAVE-MCP-NORTH-STAR.md"
+  FULL_DOC::".hestai/north-star/000-OCTAVE-MCP-NORTH-STAR.md"
   COMPRESSION_TIER::AGGRESSIVE
   LOSS_PROFILE::"drop_narrative_preserve_protocol⊕examples"
 CORE_IDENTITY::"OCTAVE-MCP is a loss accounting system for LLM communication"

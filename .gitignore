@@ -38,20 +38,11 @@ htmlcov/
 # Claude Code
 CLAUDE.md
 
-# HestAI report scratch area
-.hestai/reports/scratch/
+# HestAI working state (Tier 3: symlinked to .hestai-state/, shared across worktrees)
+.hestai/state
 
-# HestAI context state (ephemeral session state)
-.hestai/context/state/
-
-# Active Sessions (Ephemeral)
-.hestai/sessions/active/
-
-# Raw session transcripts (too large, keep compressed .oct.md only)
-.hestai/sessions/archive/*-raw.jsonl
-
-# Operational timestamps (session-specific state)
-.hestai/last_cleanup
+# HestAI shared working state directory (context, reports, sessions, research)
+.hestai-state/
 
 # Git worktrees
 worktrees/

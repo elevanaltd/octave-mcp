@@ -29,14 +29,14 @@ PHASE_STRUCTURE:
 
   D0::DISCOVERY:
     STATUS::COMPLETE
-    ARTIFACT::.hestai/workflow/000-OCTAVE-MCP-NORTH-STAR.md
+    ARTIFACT::.hestai/north-star/000-OCTAVE-MCP-NORTH-STAR.md
     GATE::"North star defined with OCTAVE protocol immutables"
     OWNER::requirements-steward
 
   D1::REQUIREMENTS:
     STATUS::COMPLETE
     ARTIFACTS::[
-      north_star::".hestai/workflow/000-OCTAVE-MCP-NORTH-STAR.md",
+      north_star::".hestai/north-star/000-OCTAVE-MCP-NORTH-STAR.md",
       immutables::[I1_syntactic_fidelity,I2_deterministic_absence,I3_mirror_constraint,I4_transform_auditability,I5_schema_sovereignty],
       tool_decision::3_tools[validate,write,eject]
     ]

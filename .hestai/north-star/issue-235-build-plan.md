@@ -4,7 +4,7 @@
 **Date**: 2026-02-17
 **Author**: task-decomposer (PERMIT_SID: 66ebe005-64b4-42f4-a333-be9054542e84)
 **Phase**: B1_BUILD_PLAN
-**Blueprint**: `.hestai/workflow/literal-zones-blueprint.md` v1.1.0 (B0-AMENDED)
+**Blueprint**: `.hestai/north-star/literal-zones-blueprint.md` v1.1.0 (B0-AMENDED)
 **Branch**: `issue-235-literal-zones`
 **Target Release**: v1.3.0
 
