@@ -333,7 +333,17 @@ variable_reference = "$", ( letter | digit | "_" | ":" ), { letter | digit | "_"
 
 (* Identifier: starts with letter/underscore/emoji, contains alphanum/underscore/hyphen/emoji *)
 (* Note: Hyphens not allowed at end. Emoji support per GH#186. *)
-identifier = identifier_start, { identifier_char } ;
+(* Issue #248: Identifiers may include an angle-bracket annotation NAME<qualifier>. *)
+(* The lexer produces a single IDENTIFIER token for the whole form. *)
+identifier = identifier_start, { identifier_char }, [ angle_annotation ] ;
+
+(* Angle-bracket annotation: NAME<qualifier> syntax (Issue #248) *)
+(* Source: lexer.py _match_unicode_identifier() lines 443-462 *)
+(* Source: emitter.py ANNOTATION_PATTERN line 77 *)
+(* The qualifier follows standard identifier rules (start + body). *)
+(* Standalone '<' or '>' outside this pattern remain E005 errors. *)
+(* Replaces NAME{qualifier} which conflicted with bracket parsing. *)
+angle_annotation = "<", identifier_start, { identifier_char }, ">" ;
 
 identifier_start = letter | "_" | "." | "/" | unicode_symbol ;
 
@@ -496,6 +506,13 @@ digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
 (* 8. COLON-PATH VALUES                                                       *)
 (*    Identifiers followed by : and more identifiers form colon paths:        *)
 (*    REFERENCE::MODULE:SUBMODULE:COMPONENT -> "MODULE:SUBMODULE:COMPONENT"   *)
+(*                                                                            *)
+(* 9. ANGLE-BRACKET ANNOTATIONS (GH#248)                                      *)
+(*    Identifiers may include a <qualifier> annotation suffix.                *)
+(*    The lexer produces a single IDENTIFIER token for NAME<qualifier>.       *)
+(*    Examples: HEPHAESTUS<implementation_craft>, ATLAS<structural_foundation> *)
+(*    Standalone '<' or '>' outside this pattern cause E005 errors.           *)
+(*    Replaces NAME{qualifier} which conflicted with bracket parsing.         *)
 (*                                                                            *)
 (* ========================================================================== *)
 
