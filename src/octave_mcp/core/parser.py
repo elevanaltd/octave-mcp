@@ -1495,13 +1495,21 @@ class Parser:
         from octave-core-spec.oct.md section 5::MODES.
         Inline map values must be atoms - nested inline maps are forbidden.
         Only enforced in strict mode; lenient mode emits warning.
+
+        Issue #246: Also recognizes NUMBER::value as inline map syntax.
+        Numbered-key syntax (e.g., 1::"string") inside list literals must be
+        parsed as InlineMap items, not flattened into separate tokens.
         """
         # Check for inline map [k::v, k2::v2]
-        if self.current().type == TokenType.IDENTIFIER and self.peek().type == TokenType.ASSIGN:
+        # Issue #246: Also handle NUMBER::value (numbered-key syntax in lists)
+        is_identifier_key = self.current().type == TokenType.IDENTIFIER and self.peek().type == TokenType.ASSIGN
+        is_number_key = self.current().type == TokenType.NUMBER and self.peek().type == TokenType.ASSIGN
+        if is_identifier_key or is_number_key:
             # Inline map item
             pairs: dict[str, Any] = {}
-            key = self.current().value
             key_token = self.current()  # Capture for error reporting
+            # Issue #246: Convert NUMBER key to string for consistent InlineMap handling
+            key = str(self.current().value) if is_number_key else self.current().value
             self.advance()
             self.expect(TokenType.ASSIGN)
             value = self.parse_value()
