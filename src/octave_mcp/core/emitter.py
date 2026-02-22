@@ -185,10 +185,22 @@ def emit_value(value: Any) -> str:
         if not value.items:
             return "[]"
         # I2: Filter out Absent items before emission
-        items = [emit_value(item) for item in value.items if not is_absent(item)]
-        return f"[{','.join(items)}]"
+        # Issue #246: InlineMap items within lists must be emitted as bare k::v pairs
+        # (without extra brackets) since the ListValue already provides the outer [...]
+        parts: list[str] = []
+        for item in value.items:
+            if is_absent(item):
+                continue
+            if isinstance(item, InlineMap):
+                # Emit inline map pairs directly without wrapping brackets
+                inline_pairs = [f"{k}::{emit_value(v)}" for k, v in item.pairs.items() if not is_absent(v)]
+                parts.append(",".join(inline_pairs))
+            else:
+                parts.append(emit_value(item))
+        return f"[{','.join(parts)}]"
     elif isinstance(value, InlineMap):
         # I2: Filter out pairs with Absent values before emission
+        # Standalone InlineMap (not inside a list) keeps its brackets
         pairs = [f"{k}::{emit_value(v)}" for k, v in value.pairs.items() if not is_absent(v)]
         return f"[{','.join(pairs)}]"
     elif isinstance(value, HolographicValue):
