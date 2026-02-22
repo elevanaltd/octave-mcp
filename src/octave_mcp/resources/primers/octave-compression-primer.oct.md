@@ -39,5 +39,5 @@ IN::"Users authenticate before dashboard. Failed logins trigger alerts for secur
 OUT::AUTH::login→validate→dashboard,FAIL::alert,INTENT::security⇌usability
 
 §6::NEVER
-AVOID::[markdown,JSON,YAML,nesting>3,losing_numbers]
+AVOID::[markdown,JSON,YAML,"nesting>3",losing_numbers]
 ===END===

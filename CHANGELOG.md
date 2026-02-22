@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-02-22 - "Annotation Syntax" Release
+
+This release introduces angle-bracket annotation syntax (`NAME<qualifier>`) as a new identifier feature, fixes bracket-depth-aware salvage in `octave_write`, and resolves spec parse failures blocking CI validation.
+
+### Added
+- **NAME\<qualifier\> Annotation Syntax** (#248) — New angle-bracket annotation syntax for identifiers
+  - Lexer tokenizes `NAME<qualifier>` as a single IDENTIFIER token
+  - Emitter preserves annotations in canonical output without quoting
+  - Replaces `NAME{qualifier}` which conflicted with bracket parsing
+  - Spec updates: core v6.0.0, rationale v6.0.0, agents v6.2.0
+
+### Fixed
+- **Bracket-depth-aware salvage** (#248) — `octave_write` salvage mode now correctly counts bracket depth
+  - Previously could mis-count brackets inside quoted strings
+  - Tightened emitter regex for quote-aware bracket matching
+- **Primers spec parse failure** — Fixed bare `\n` in `FORMAT` value causing E005 lexer error
+  - Restructured value to use quoted string representation
+- **Compression primer parse failure** — Fixed bare `>` character causing E005 lexer error
+  - Quoted the value containing the `>` to prevent angle-bracket ambiguity
+
+### Documentation
+- EBNF grammar updated with `angle_annotation` production rule and Appendix C note (Section 10, Note 9)
+- Spec files updated for annotation syntax documentation
+
+### Quality Gates
+- 2080 tests passing, 0 failures
+- Constitutional compliance verified: I1, I2, I3, I4, I5
+
 ## [1.3.0] - 2026-02-19 - "Three-Zone Model" Release
 
 This release completes the Three-Zone Model architecture for OCTAVE documents, delivering Zone 3 (Explicit Literal Zones) as a new first-class language feature and fixing Zone 2 (Preserving Container) which was silently broken.
@@ -407,7 +435,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.1.0...v1.2.0

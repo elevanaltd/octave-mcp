@@ -2,18 +2,21 @@
 META:
   TYPE::CURRENT_STATE
   VERSION::"2.0"
-  UPDATED::"2026-02-19T00:00:00Z"
-  BRANCH::main
+  UPDATED::"2026-02-22T00:00:00Z"
+  BRANCH::release-v140-prep
 PHASE::B5_DOCUMENTATION
-STATUS::v1_3_0_release_preparation
-ACTIVE_WORK::[]
+STATUS::v1_4_0_release_preparation
+ACTIVE_WORK::[
+  1::v1_4_0_release_prep[P0_fixes+P1_release_mechanics]
+]
 BLOCKED::[]
 NEXT_ACTIONS::[
-  1::prepare_v1_3_0_release,
+  1::complete_v1_4_0_release,
   2::update_pypi_package,
-  3::update_documentation
+  3::migrate_ecosystem_annotation_syntax
 ]
 RECENT_MERGES::[
+  [PR_249::issue_248_annotation_syntax_and_salvage_fix],
   [PR_240::literal_zones_phase5_migration],
   [PR_239::literal_zones_phase3_4],
   [PR_238::literal_zones_lexer_fix],
@@ -35,7 +38,7 @@ RECENT_MERGES::[
   [PR_178::critical_write_fixes]
 ]
 QUALITY_GATES::[
-  [tests::"2044 passing"],
+  [tests::"2080 passing"],
   [mypy::PASSING],
   [ruff::PASSING],
   [black::PASSING],
@@ -43,8 +46,8 @@ QUALITY_GATES::[
 ]
 MILESTONES_COMPLETED::[M1,M2,M3,M4]
 CROSS_PROJECT_STATUS::[
-  [OCTAVE_MCP::v1_0_0_rc],
-  [HestAI_MCP::awaiting_stable_OCTAVE],
+  [OCTAVE_MCP::v1_4_0_prep],
+  [HestAI_MCP::awaiting_v1_4_0],
   [debate_hall::OCTAVE_binding_active]
 ]
 ===END===

@@ -43,7 +43,7 @@ META:
 
   §2d::ONE_SHOT
     PURPOSE::"Single perfect transformation"
-    FORMAT::IN::"prose"\nOUT::octave_result
+    FORMAT::"IN::prose / OUT::octave_result"
     DENSITY::maximum_compression_shown
 
   §2e::VALIDATE
