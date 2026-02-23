@@ -819,8 +819,24 @@ class Parser:
             # Parse block children
             children: list[ASTNode] = []
 
+            # Issue #259: Literal zone directly after block colon (no indented children).
+            # Token stream: IDENTIFIER -> BLOCK ':' -> NEWLINE -> FENCE_OPEN ...
+            # After skip_whitespace() the NEWLINE is consumed and current() is FENCE_OPEN.
+            # The normal INDENT-gated path would leave children empty, silently dropping
+            # the literal zone (I1 violation). Parse it here into a bare-key Assignment.
+            if self.current().type == TokenType.FENCE_OPEN:
+                lzv = self.parse_literal_zone()
+                children.append(
+                    Assignment(
+                        key="",
+                        value=lzv,
+                        line=self.current().line,
+                        column=self.current().column,
+                    )
+                )
+
             # Expect indentation for children
-            if self.current().type == TokenType.INDENT:
+            elif self.current().type == TokenType.INDENT:
                 child_indent = self.current().value
                 self.advance()
 
@@ -865,6 +881,25 @@ class Parser:
                     # the next token is a sibling/ancestor, not a child
                     if current_line_indent < child_indent:
                         break
+
+                    # Issue #259: Literal zone as a child inside an indented block body.
+                    # FENCE_OPEN is not an IDENTIFIER so parse_section() returns None,
+                    # causing the loop to break and silently drop the literal zone (I1).
+                    # Parse it here directly as a bare-key Assignment child.
+                    if self.current().type == TokenType.FENCE_OPEN:
+                        lzv = self.parse_literal_zone()
+                        children.append(
+                            Assignment(
+                                key="",
+                                value=lzv,
+                                line=self.current().line,
+                                column=self.current().column,
+                                leading_comments=pending_comments or [],
+                            )
+                        )
+                        pending_comments = []
+                        current_line_indent = 0
+                        continue
 
                     # Parse child with any pending comments
                     child = self.parse_section(child_indent, pending_comments)
