@@ -1198,12 +1198,16 @@ class WriteTool(BaseTool):
 
             if lenient:
                 # Detect likely OCTAVE structure using line-anchored patterns to avoid false positives in prose.
-                # Example false positive to avoid: "use Foo::Bar" in a sentence.
+                # GH#263 rework round 4: Only strong, unambiguous OCTAVE signals trigger structured mode.
+                # - assignment_line (KEY::value): The :: operator is definitively OCTAVE syntax.
+                # - envelope_line (===NAME===): Definitively OCTAVE envelope markers.
+                # Weak signals like block_line (KEY:\s*$) and meta_block (META:) are excluded
+                # because they match prose headers like "Title:", "Note:", "Summary:", "META:".
+                # Real OCTAVE files with META: blocks always contain :: assignments inside,
+                # so they are still detected via assignment_line.
                 assignment_line = re.search(r"(?m)^[ \t]*[A-Za-z_][A-Za-z0-9_.]*::", parse_input) is not None
-                block_line = re.search(r"(?m)^[ \t]*[A-Za-z_][A-Za-z0-9_.]*:\s*$", parse_input) is not None
-                meta_block = re.search(r"(?m)^META:\s*$", parse_input) is not None
                 envelope_line = re.search(r"(?m)^===.+===\s*$", parse_input) is not None
-                looks_structured = assignment_line or block_line or meta_block or envelope_line
+                looks_structured = assignment_line or envelope_line
 
                 if looks_structured:
                     # GH#263: Pre-process curly-brace annotations ONLY for confirmed OCTAVE content.

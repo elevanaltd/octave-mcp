@@ -187,6 +187,68 @@ class TestPlainTextCurlyBracePreservation:
         assert "FOO<bar>" not in written, "FOO{bar} must NOT be rewritten to FOO<bar> in plain text"
 
     @pytest.mark.asyncio
+    async def test_block_line_header_does_not_trigger_structured_mode(self, write_tool, tmp_path):
+        """GH#263 rework round 4: 'Title:\\n' in plain prose must NOT trigger structured mode.
+
+        The block_line regex (KEY:\\s*$) matches 'Title:', 'Note:', 'Summary:' etc.
+        in plain text. This is too broad — a single colon-terminated header in prose
+        should NOT cause the content to be treated as OCTAVE.
+        """
+        target = str(tmp_path / "test.oct.md")
+        content = "Title:\nThis prose has FOO{bar} and should stay as-is."
+        result = await write_tool.execute(target_path=target, content=content, lenient=True)
+        assert result["status"] == "success"
+        # Must NOT trigger curly-brace repair (I1: syntactic fidelity)
+        corrections = result.get("corrections", [])
+        repair_corrections = [c for c in corrections if "W_REPAIR_CANDIDATE" in c.get("code", "")]
+        assert len(repair_corrections) == 0, "Plain text with 'Title:' header should NOT trigger curly-brace repair"
+        # Must NOT drop prose lines as bare lines
+        bare_line_drops = [c for c in corrections if "W_LENIENT_BARE_LINE_DROPPED" in c.get("code", "")]
+        assert len(bare_line_drops) == 0, "Prose lines should NOT be dropped as bare lines"
+        # Written file must preserve FOO{bar}
+        with open(target, encoding="utf-8") as f:
+            written = f.read()
+        assert "FOO{bar}" in written, "FOO{bar} must be preserved in plain text"
+        assert "FOO<bar>" not in written, "FOO{bar} must NOT be rewritten to FOO<bar>"
+
+    @pytest.mark.asyncio
+    async def test_meta_block_alone_does_not_trigger_structured_mode(self, write_tool, tmp_path):
+        """META: alone (without :: assignments) should NOT trigger structured mode.
+
+        A line like 'META:' by itself could appear in prose. Only when combined
+        with actual OCTAVE syntax (:: or ===...===) should it indicate structure.
+        """
+        target = str(tmp_path / "test.oct.md")
+        content = "META:\nSome plain text about metadata with FOO{bar}."
+        result = await write_tool.execute(target_path=target, content=content, lenient=True)
+        assert result["status"] == "success"
+        corrections = result.get("corrections", [])
+        repair_corrections = [c for c in corrections if "W_REPAIR_CANDIDATE" in c.get("code", "")]
+        assert len(repair_corrections) == 0, "META: alone should NOT trigger curly-brace repair"
+
+    @pytest.mark.asyncio
+    async def test_double_colon_still_triggers_structured_mode(self, write_tool, tmp_path):
+        """KEY::value (double colon) is unambiguous OCTAVE and must trigger structured mode."""
+        target = str(tmp_path / "test.oct.md")
+        content = "TYPE::EXAMPLE\nARCHETYPE::ATHENA{strategic_wisdom}"
+        result = await write_tool.execute(target_path=target, content=content, lenient=True)
+        assert result["status"] == "success"
+        corrections = result.get("corrections", [])
+        repair_corrections = [c for c in corrections if "W_REPAIR_CANDIDATE" in c.get("code", "")]
+        assert len(repair_corrections) >= 1, "Content with :: assignments must still trigger curly-brace repair"
+
+    @pytest.mark.asyncio
+    async def test_envelope_still_triggers_structured_mode(self, write_tool, tmp_path):
+        """===NAME=== envelope markers are unambiguous OCTAVE and must trigger structured mode."""
+        target = str(tmp_path / "test.oct.md")
+        content = '===TEST===\nMETA:\n  TYPE::"EXAMPLE"\nARCHETYPE::ATHENA{strategic_wisdom}\n===END==='
+        result = await write_tool.execute(target_path=target, content=content, lenient=True)
+        assert result["status"] == "success"
+        corrections = result.get("corrections", [])
+        repair_corrections = [c for c in corrections if "W_REPAIR_CANDIDATE" in c.get("code", "")]
+        assert len(repair_corrections) >= 1, "Content with ===...=== envelopes must still trigger curly-brace repair"
+
+    @pytest.mark.asyncio
     async def test_octave_content_curly_braces_still_repaired(self, write_tool, tmp_path):
         """Confirmed OCTAVE DSL content should still have curly braces repaired."""
         target = str(tmp_path / "test.oct.md")
