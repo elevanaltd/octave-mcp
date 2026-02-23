@@ -1165,10 +1165,18 @@ class WriteTool(BaseTool):
                     baseline_content_for_diff = ""
                 if baseline_content_for_diff:
                     try:
-                        baseline_doc = parse(baseline_content_for_diff)
+                        try:
+                            baseline_doc = parse(baseline_content_for_diff)
+                        except Exception:
+                            baseline_doc, _ = parse_with_warnings(baseline_content_for_diff)
+                        original_metrics = extract_structural_metrics(baseline_doc)
                     except Exception:
-                        baseline_doc, _ = parse_with_warnings(baseline_content_for_diff)
-                    original_metrics = extract_structural_metrics(baseline_doc)
+                        # GH#266: Both parse() and parse_with_warnings() may fail on
+                        # pre-repair content (e.g. NAME{qualifier} curly braces).
+                        # Gracefully degrade: set original_metrics=None so the pipeline
+                        # continues to the curly brace repair step at line ~1216.
+                        # The metrics diff will simply be omitted from the response.
+                        original_metrics = None
 
             # Check base_hash if provided AND file exists (CAS guard)
             if base_hash and file_exists:
