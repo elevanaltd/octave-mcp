@@ -356,7 +356,21 @@ def emit_block(block: Block, indent: int = 0, format_options: FormatOptions | No
         if isinstance(child, Assignment):
             if is_absent(child.value):
                 continue
-            lines.append(emit_assignment(child, indent + 1, format_options))
+            # Issue #259: Bare-key literal zone child (key="") produced by the parser
+            # when a fenced literal zone appears directly in the block body (no key prefix).
+            # Emit just the fence block lines without a key:: header line.
+            if child.key == "" and isinstance(child.value, LiteralZoneValue):
+                child_indent_str = "  " * (indent + 1)
+                lzv = child.value
+                opening = f"{child_indent_str}{lzv.fence_marker}"
+                if lzv.info_tag:
+                    opening += lzv.info_tag
+                lines.append(opening)
+                if lzv.content:
+                    lines.append(lzv.content)
+                lines.append(f"{child_indent_str}{lzv.fence_marker}")
+            else:
+                lines.append(emit_assignment(child, indent + 1, format_options))
         elif isinstance(child, Block):
             lines.append(emit_block(child, indent + 1, format_options))
         elif isinstance(child, Section):

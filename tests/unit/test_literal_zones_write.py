@@ -6,6 +6,8 @@ Issue #235: Verifies that LiteralZoneValue is handled correctly in:
 - write.py: _normalize_value_for_ast() returns LiteralZoneValue unchanged
 - write.py: zone_report and repair_log added to response when literal zones present
 - write.py: literal zone content preserved byte-for-byte (T14)
+
+Issue #259: Literal zone content inside a block value (KEY:) must survive normalization.
 """
 
 import hashlib
@@ -514,3 +516,150 @@ CONFIG::
             config_content = _find_literal_zone_content(written, key="CONFIG")
             assert code_content == content_python, f"CODE zone: expected {content_python!r}, got {code_content!r}"
             assert config_content == content_json, f"CONFIG zone: expected {content_json!r}, got {config_content!r}"
+
+
+# ===========================================================================
+# Issue #259: Literal zone content inside block value (KEY:) must survive
+# ===========================================================================
+
+# Reproduction case from issue #259:
+# TEMPLATE: (block syntax, single colon) followed immediately by a fenced literal
+# zone. After octave_write normalization the literal zone content was silently
+# dropped — I1::SYNTACTIC_FIDELITY and I4::TRANSFORM_AUDITABILITY violations.
+_DOC_BLOCK_WITH_LITERAL_ZONE = """\
+===SCHEMA===
+META:
+  TYPE::PROTOCOL_DEFINITION
+
+§6::SCHEMA_SKELETON
+TEMPLATE:
+```octave
+===MY_SCHEMA===
+META:
+  TYPE::PROTOCOL_DEFINITION
+===END===
+```
+===END===
+"""
+
+_DOC_BLOCK_WITH_LITERAL_ZONE_INDENTED = """\
+===SCHEMA===
+META:
+  TYPE::PROTOCOL_DEFINITION
+
+OUTER:
+  TEMPLATE:
+  ```octave
+  ===MY_SCHEMA===
+  META:
+    TYPE::PROTOCOL_DEFINITION
+  ===END===
+  ```
+===END===
+"""
+
+
+class TestIssue259LiteralZoneInBlockValue:
+    """Issue #259: Literal zone in block value must survive octave_write normalization.
+
+    I1::SYNTACTIC_FIDELITY — normalization must not alter semantics; literal zones
+    are exempt from normalization and must be preserved exactly.
+    I4::TRANSFORM_AUDITABILITY — if bits are lost there must be a receipt; silent
+    dropping with no W_STRUCT or E_ code is a violation.
+    """
+
+    def test_parser_preserves_literal_zone_in_block_body(self) -> None:
+        """Parser must parse the literal zone inside a block body (not drop it).
+
+        Issue #259 RED: TEMPLATE: followed by a fence currently produces an
+        empty Block node (children=[]) — the LiteralZoneValue is never parsed.
+        """
+        from octave_mcp.core.ast_nodes import Assignment, Block, Section
+        from octave_mcp.core.parser import parse as octave_parse
+
+        doc = octave_parse(_DOC_BLOCK_WITH_LITERAL_ZONE)
+        # §6::SCHEMA_SKELETON is a Section; TEMPLATE: block is inside it.
+        # Find the TEMPLATE block wherever it lives.
+        template_block: Block | None = None
+        for node in doc.sections:
+            if isinstance(node, Block) and node.key == "TEMPLATE":
+                template_block = node
+                break
+            if isinstance(node, Section):
+                for child in node.children:
+                    if isinstance(child, Block) and child.key == "TEMPLATE":
+                        template_block = child
+                        break
+
+        assert template_block is not None, "TEMPLATE block not found in parsed AST"
+        assert len(template_block.children) > 0, (
+            "Issue #259: TEMPLATE block has no children — literal zone content was silently dropped. "
+            "Expected at least one child (the literal zone)."
+        )
+        # The child should carry a LiteralZoneValue
+        lz_found = False
+        for child in template_block.children:
+            if isinstance(child, Assignment) and isinstance(child.value, LiteralZoneValue):
+                lz_found = True
+                assert (
+                    "===MY_SCHEMA===" in child.value.content
+                ), f"Literal zone content should contain '===MY_SCHEMA===', got: {child.value.content!r}"
+                break
+        assert lz_found, (
+            f"No child with LiteralZoneValue found in TEMPLATE block. " f"Children: {template_block.children!r}"
+        )
+
+    def test_emitter_preserves_literal_zone_in_block_body(self) -> None:
+        """Emitter must emit the literal zone inside a block body intact.
+
+        Issue #259 RED: After parse+emit, the literal zone content (===MY_SCHEMA===)
+        is currently absent from the emitted output.
+        """
+        from octave_mcp.core.emitter import emit
+        from octave_mcp.core.parser import parse as octave_parse
+
+        doc = octave_parse(_DOC_BLOCK_WITH_LITERAL_ZONE)
+        output = emit(doc)
+        assert "===MY_SCHEMA===" in output, (
+            f"Issue #259: Literal zone content ('===MY_SCHEMA===') was silently dropped "
+            f"during emission. Emitted output:\n{output}"
+        )
+        assert "TEMPLATE:" in output, "TEMPLATE: block header must appear in output"
+
+    @pytest.mark.asyncio
+    async def test_octave_write_preserves_literal_zone_in_block_body(self) -> None:
+        """octave_write normalization must not strip literal zone inside a block body.
+
+        Issue #259 RED: The full octave_write pipeline (parse → normalize → emit)
+        currently drops the literal zone content silently.
+        """
+        result = await _write_content_result(_DOC_BLOCK_WITH_LITERAL_ZONE)
+        assert result["status"] == "success", f"Write failed: {result}"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "test.oct.md")
+            result = await _TOOL.execute(target_path=target, content=_DOC_BLOCK_WITH_LITERAL_ZONE)
+            assert result["status"] == "success"
+            with open(target, encoding="utf-8") as f:
+                written = f.read()
+        assert "===MY_SCHEMA===" in written, (
+            f"Issue #259: Literal zone content dropped by octave_write normalization. " f"Written file:\n{written}"
+        )
+        assert "TEMPLATE:" in written, "TEMPLATE: block header must survive in written file"
+
+    def test_round_trip_preserves_literal_zone_in_block_body(self) -> None:
+        """Parse → emit must preserve the literal zone in a block body round-trip.
+
+        Issue #259 RED: This is the core I1 fidelity check.
+        """
+        from octave_mcp.core.emitter import emit
+        from octave_mcp.core.parser import parse as octave_parse
+
+        doc = octave_parse(_DOC_BLOCK_WITH_LITERAL_ZONE)
+        output = emit(doc)
+        # The content of the literal zone must be present in the emitted output
+        assert "===MY_SCHEMA===" in output, (
+            "Issue #259 / I1 violation: literal zone content not preserved in round-trip. " f"Output:\n{output}"
+        )
+        assert "TYPE::PROTOCOL_DEFINITION" in output, (
+            "Issue #259 / I1 violation: literal zone body content dropped in round-trip. " f"Output:\n{output}"
+        )
