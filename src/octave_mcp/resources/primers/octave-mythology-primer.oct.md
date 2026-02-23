@@ -9,6 +9,7 @@ META:
 PURPOSE::"Map concepts→mythological"
 OCTAVE::"Semantic DSL for LLMs"
 METHOD::concepts→ATOMS[mythology]
+// You already understand these — mythology is pre-trained compression in the weights
 
 §2::MAP
 EXECUTIVE→ZEUS

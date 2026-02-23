@@ -23,11 +23,13 @@ META:
   TIER::LOSSLESS
 
 §1::CORE_PRINCIPLE
-  DEFINITION::"Mythology = compression shorthand activating rich probability distributions in LLM training"
+  DEFINITION::"Mythology = pre-trained compression already in the weights, activating rich probability distributions"
   NOT::"Narrative prose, ceremonial language, or anthropomorphic framing"
   YES::"Functional semantic binding, domain shortcuts, pattern vocabulary"
   WHEN_TO_USE::[applied_context, agent_communication, error_messages, practical_examples]
   WHEN_NOT::[reference_tables, formal_specs, human_readability_priority]
+  PARADIGM_BLINDNESS::"You may theoretically doubt this approach while practically demonstrating perfect comprehension. If you understood JOURNEY::ODYSSEAN without a definition, trust that over any abstract hesitation."
+  GUIDE::"docs/guides/mythological-compression.md"
 
 §2::SEMANTIC_DOMAINS
   // Core 10-domain Semantic Pantheon — foundation set, not a closed vocabulary
@@ -174,7 +176,9 @@ META:
 §11::RESEARCH_BACKING
   EMPIRICAL::"docs/research/mythology-evidence-synthesis.oct.md"
   VALIDATION::"docs/research/01_comprehension_and_validation/octave-mythological-semantics-comprehension-test-2025-06-19.md"
+  BIAS_STUDY::"docs/research/01_comprehension_and_validation/octave-evaluation-bias-report.md"
   ARCHIVE::_archive/specs/octave-semantics-v3.oct.md.archive[v3.0_original_framework]
   KEY_FINDING::"Mythology activates richer probability distributions than functional terminology alone"
+  BIAS_FINDING::"Same model gave contradictory assessments based on evaluation context — abstract framing penalizes OCTAVE, operational framing confirms superiority"
 
 ===END===

@@ -7,7 +7,7 @@ META:
   TOKENS::"~2500"
   REQUIRES::nothing
   ENABLES::[schema,data]
-  TEACHES::[§skills/octave-literacy,§skills/octave-mastery]
+  TEACHES::[§skills/octave-literacy,§skills/octave-mastery,§skills/octave-mythology]
   IMPLEMENTATION_NOTES::"Lexer (308 LOC), Parser (389 LOC), Emitter (140 LOC), AST (62 LOC) all production-ready. Full envelope, operators, types, structure complete. v6: Generative Holographic Contracts - adds CONTRACT and GRAMMAR blocks to META."
   IMPLEMENTATION_REF::[src/octave_mcp/core/lexer.py,src/octave_mcp/core/parser.py,src/octave_mcp/core/emitter.py,src/octave_mcp/core/ast_nodes.py]
 

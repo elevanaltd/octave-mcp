@@ -15,6 +15,8 @@ META:
   TIER::LOSSLESS
   SPEC_REFERENCE::octave-core-spec.oct.md
   V6_FEATURES::"Adds CONTRACT/GRAMMAR blocks, assembly rules, .oct.md extension"
+  NEXT_SKILLS::[octave-mastery, octave-mythology]
+  // octave-mythology provides mythological compression — OCTAVE's semantic density advantage
 
 §1::CORE_SYNTAX
   ASSIGNMENT::KEY::value   // Double colon is MANDATORY for data
