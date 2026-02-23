@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **I5 Zone 2 frontmatter validation** (#244) — Opt-in YAML frontmatter validation extending Schema Sovereignty to Zone 2. New error codes: `E_FM_REQUIRED`, `E_FM_TYPE`, `E_FM_PARSE`. First use-case: SKILL schema validates both OCTAVE body and YAML frontmatter
+- **`normalize` mode for `octave_write` tool** — Validates and normalizes a document without writing to the file system; useful for dry-run checks and CI pipelines
+- **SKILL builtin schema** (`schemas/builtin/skill.oct.md`) — Validates both the OCTAVE body and YAML frontmatter of skill files
+
+### Fixed
+- **Canonicaliser numbered-key syntax inside list literals** (#246) — `1::"value"` patterns inside list literals no longer flattened to separate tokens; fixes round-trip fidelity for numbered keys
+- **Emitter InlineMap bracket wrapping in lists** — Prevents nested list artifacts on re-parse when InlineMaps appear inside list values
+
+### Documentation
+- Archived mythology debate decisions from issue #110 review session
+- Restored mythological compression principle across OCTAVE documentation (#110)
+- Normalized all decision docs to OCTAVE canonical form
+
 ## [1.4.1] - 2026-02-22 - "Spec Hygiene" Patch
 
 ### Fixed
@@ -446,7 +460,7 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.1...HEAD
 [1.4.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.0...v1.2.1
