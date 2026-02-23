@@ -1,0 +1,28 @@
+===SKILL_SCHEMA===
+META:
+  TYPE::SCHEMA
+  VERSION::"1.0.0"
+  STATUS::ACTIVE
+---
+FRONTMATTER:
+  name:
+    REQUIRED::true
+    TYPE::STRING
+  description:
+    REQUIRED::true
+    TYPE::STRING
+  allowed-tools:
+    REQUIRED::true
+    TYPE::LIST
+  version:
+    REQUIRED::false
+    TYPE::STRING
+  triggers:
+    REQUIRED::false
+    TYPE::LIST
+---
+FIELDS:
+  TYPE::["SKILL"∧REQ∧ENUM[SKILL]]
+  VERSION::["1.0"∧REQ]
+  STATUS::["ACTIVE"∧OPT∧ENUM[ACTIVE,DRAFT,DEPRECATED]]
+===END===
