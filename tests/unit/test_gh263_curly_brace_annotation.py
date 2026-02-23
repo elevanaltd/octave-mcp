@@ -157,6 +157,47 @@ class TestWriteToolCurlyBrace:
         assert "ATHENA{strategic_wisdom}" not in written
 
 
+class TestPlainTextCurlyBracePreservation:
+    """GH#263 rework: plain text with curly braces must NOT be repaired.
+
+    When content has no OCTAVE structure (no ::, no ===...=== envelopes, no META:),
+    it gets RAW-wrapped. Curly-brace repair must only apply to confirmed OCTAVE DSL,
+    not plain text. Otherwise FOO{bar} in prose becomes FOO<bar>.
+    """
+
+    @pytest.fixture
+    def write_tool(self):
+        return WriteTool()
+
+    @pytest.mark.asyncio
+    async def test_plain_text_curly_braces_not_repaired(self, write_tool, tmp_path):
+        """Plain text content should not have curly braces repaired."""
+        target = str(tmp_path / "test.oct.md")
+        content = "This prose has FOO{bar} and should stay as-is."
+        result = await write_tool.execute(target_path=target, content=content, lenient=True)
+        assert result["status"] == "success"
+        # The content should be RAW-wrapped without FOO{bar} being changed
+        corrections = result.get("corrections", [])
+        repair_corrections = [c for c in corrections if "W_REPAIR_CANDIDATE" in c.get("code", "")]
+        assert len(repair_corrections) == 0, "Plain text should NOT trigger curly-brace repair"
+        # Read the written file to verify FOO{bar} is preserved
+        with open(target, encoding="utf-8") as f:
+            written = f.read()
+        assert "FOO{bar}" in written, "Plain text FOO{bar} must be preserved, not rewritten to FOO<bar>"
+        assert "FOO<bar>" not in written, "FOO{bar} must NOT be rewritten to FOO<bar> in plain text"
+
+    @pytest.mark.asyncio
+    async def test_octave_content_curly_braces_still_repaired(self, write_tool, tmp_path):
+        """Confirmed OCTAVE DSL content should still have curly braces repaired."""
+        target = str(tmp_path / "test.oct.md")
+        content = '===TEST===\nMETA:\n  TYPE::"EXAMPLE"\nARCHETYPE::ATHENA{strategic_wisdom}\n===END==='
+        result = await write_tool.execute(target_path=target, content=content, lenient=True)
+        assert result["status"] == "success"
+        corrections = result.get("corrections", [])
+        repair_corrections = [c for c in corrections if "W_REPAIR_CANDIDATE" in c.get("code", "")]
+        assert len(repair_corrections) >= 1, "OCTAVE DSL should still trigger curly-brace repair"
+
+
 class TestExistingAnnotationTests:
     """Verify existing angle-bracket annotation tests still pass."""
 

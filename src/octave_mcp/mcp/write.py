@@ -1197,11 +1197,6 @@ class WriteTool(BaseTool):
                 )
 
             if lenient:
-                # GH#263: Pre-process curly-brace annotations before parsing
-                # I4 (Transform Auditability): repairs logged in corrections
-                parse_input, curly_corrections = self._repair_curly_brace_annotations(parse_input)
-                corrections.extend(curly_corrections)
-
                 # Detect likely OCTAVE structure using line-anchored patterns to avoid false positives in prose.
                 # Example false positive to avoid: "use Foo::Bar" in a sentence.
                 assignment_line = re.search(r"(?m)^[ \t]*[A-Za-z_][A-Za-z0-9_.]*::", parse_input) is not None
@@ -1209,6 +1204,14 @@ class WriteTool(BaseTool):
                 meta_block = re.search(r"(?m)^META:\s*$", parse_input) is not None
                 envelope_line = re.search(r"(?m)^===.+===\s*$", parse_input) is not None
                 looks_structured = assignment_line or block_line or meta_block or envelope_line
+
+                if looks_structured:
+                    # GH#263: Pre-process curly-brace annotations ONLY for confirmed OCTAVE content.
+                    # Plain text with FOO{bar} must not be mutated (I1 syntactic fidelity).
+                    # I4 (Transform Auditability): repairs logged in corrections.
+                    parse_input, curly_corrections = self._repair_curly_brace_annotations(parse_input)
+                    corrections.extend(curly_corrections)
+
                 if not looks_structured and parse_input.strip():
                     parse_input, wrap_corrections = self._wrap_plain_text_as_doc(parse_input, schema_name)
                     corrections.extend(wrap_corrections)
