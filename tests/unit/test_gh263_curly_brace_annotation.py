@@ -266,6 +266,13 @@ class TestRepairZoneBoundaries:
         assert "LOGOS<reasoning>" in repaired
         assert len(corrections) == 2
 
+    def test_repair_does_not_mutate_escaped_quoted_strings(self, write_tool):
+        """Escaped quotes inside strings must not break protection."""
+        content = '===TEST===\nDESC::"foo \\"ATHENA{inner}\\" bar"\nTYPE::ATHENA{outer}\n===END==='
+        repaired, corrections = write_tool._repair_curly_brace_annotations(content)
+        assert "ATHENA{inner}" in repaired, "Escaped quoted content should be preserved"
+        assert "ATHENA<outer>" in repaired, "Zone 1 content should still be repaired"
+
     def test_unicode_annotation_repair_limitation(self, write_tool):
         """Document that the write pre-processor regex does not handle Unicode/emoji identifiers.
 

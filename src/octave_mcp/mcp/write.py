@@ -202,7 +202,7 @@ class WriteTool(BaseTool):
             protected.append((fence_start, len(content)))
 
         # Find quoted strings: text between "" on a line (after ::)
-        quote_pattern = re.compile(r'"[^"]*"')
+        quote_pattern = re.compile(r'"(?:[^"\\]|\\.)*"')
         for m in quote_pattern.finditer(content):
             protected.append((m.start(), m.end()))
 
