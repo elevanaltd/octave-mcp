@@ -1505,10 +1505,12 @@ class Parser:
 
         items: list[Any] = []
 
-        # Issue #179: Track inline map keys for duplicate detection
-        inline_map_keys: dict[str, int] = {}  # key -> first occurrence line
-
         # Parse list items
+        # GH#270: Removed cross-item inline map key duplicate tracking.
+        # Each InlineMap item in a list is a separate array entry, so repeated
+        # keys across items (e.g., [REGEX::"a", REGEX::"b"]) are intentional
+        # and must not trigger W_DUPLICATE_KEY warnings. The previous tracking
+        # (Issue #179) incorrectly treated list items as map entries.
         while True:
             # Skip whitespace/newlines/indents (valid anywhere between items)
             while self.current().type in (TokenType.NEWLINE, TokenType.INDENT):
@@ -1519,33 +1521,9 @@ class Parser:
             if self.current().type in (TokenType.LIST_END, TokenType.EOF, TokenType.ENVELOPE_END):
                 break
 
-            # Issue #179: Capture line before parsing item for accurate duplicate reporting
-            item_line = self.current().line
-
             # Parse item value
             item = self.parse_list_item()
             items.append(item)
-
-            # Issue #179: Check for duplicate keys in inline maps
-            if isinstance(item, InlineMap):
-                for key in item.pairs.keys():
-                    if key in inline_map_keys:
-                        # I4 Audit: Emit warning for duplicate key in inline map
-                        self.warnings.append(
-                            {
-                                "type": "lenient_parse",
-                                "subtype": "duplicate_key",
-                                "key": key,
-                                "first_line": inline_map_keys[key],
-                                "duplicate_line": item_line,
-                                "message": (
-                                    f"W_DUPLICATE_KEY::{key} at line {item_line} "
-                                    f"overwrites previous definition at line {inline_map_keys[key]}"
-                                ),
-                            }
-                        )
-                    else:
-                        inline_map_keys[key] = item_line
 
             # Check for comma
             if self.current().type == TokenType.COMMA:
