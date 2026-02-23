@@ -4,10 +4,11 @@ Provides the MCP server with OCTAVE tools:
 - octave_validate (schema validation and repair)
 - octave_write (unified file writing: creation and amendment)
 - octave_eject (projection to different modes/formats)
+- octave_compile_grammar (compile schema/contract to constraint grammar)
 
 Environment Variables:
 - DISABLED_TOOLS: Comma-separated list of tools to disable.
-  Available tools: octave_validate, octave_write, octave_eject
+  Available tools: octave_validate, octave_write, octave_eject, octave_compile_grammar
   Example: DISABLED_TOOLS=octave_eject
 - OCTAVE_MCP_SKIP_SYNC: Set to "1" to skip dependency sync on startup.
 - MCP_TRANSPORT: Transport type ("stdio" or "http"). Default: stdio
@@ -36,6 +37,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from octave_mcp.mcp.base_tool import BaseTool
+from octave_mcp.mcp.compile_grammar import CompileGrammarTool
 from octave_mcp.mcp.eject import EjectTool
 from octave_mcp.mcp.validate import ValidateTool
 from octave_mcp.mcp.write import WriteTool
@@ -166,6 +168,7 @@ def create_server() -> Server:
         "octave_validate": ValidateTool(),
         "octave_write": WriteTool(),
         "octave_eject": EjectTool(),
+        "octave_compile_grammar": CompileGrammarTool(),
     }
 
     # Apply DISABLED_TOOLS filter
