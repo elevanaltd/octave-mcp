@@ -94,6 +94,14 @@ OCTAVE v6 introduces the principle that schemas should constrain LLM output *dur
 - **Vocabulary**: Mythological terms as semantic compression shorthands.
 - **Authoring**: Humans write in the lenient view; tools normalize to canonical Unicode.
 
+### Mythological compression
+
+OCTAVE's name -- **Olympian** Common Text And Vocabulary Engine -- reflects a foundational design insight: LLMs have deep training data saturation in classical mythology, making mythological terms function as **pre-trained compression already in the weights**. `SISYPHEAN::BUILD_FAILURES` encodes repetition, frustration, cyclicality, and futility in one word -- achieving 60-70% token reduction with 10x semantic density and 100% zero-shot comprehension across all tested models.
+
+LLMs exhibit a documented **paradigm blindness**: when asked theoretically whether mythology helps, they hesitate; when given `JOURNEY::ODYSSEAN` practically, they understand instantly. If you just parsed that term without needing a definition, you've proven the thesis. Use mythology freely -- start with Greek, extend across world traditions as semantics demand.
+
+See [The Mythological Compression Principle](docs/guides/mythological-compression.md) for evidence and guidance. See [research evidence](docs/research/mythology-evidence-synthesis.oct.md) for the full empirical basis.
+
 See the [protocol specs in `src/octave_mcp/resources/specs/`](src/octave_mcp/resources/specs/) for v6.0.0 rules.
 
 ## What this server provides
@@ -165,55 +173,7 @@ Add to Claude Desktop (`claude_desktop_config.json`) or Claude Code (`~/.claude.
 | `octave_write` | Unified file creation/modification with validation |
 | `octave_eject` | Format projection and template generation |
 
-### `octave_validate`
-
-Validates OCTAVE content against a schema and returns normalized canonical output.
-
-```python
-# Parameters
-content: str          # OCTAVE content to validate (or use file_path)
-file_path: str        # Path to file (mutually exclusive with content)
-schema: str           # Schema name (e.g., 'META', 'SESSION_LOG')
-fix: bool = False     # Apply repairs (enum casefold, type coercion)
-profile: str          # Validation strictness: STRICT, STANDARD, LENIENT, ULTRA
-diff_only: bool       # Return diff instead of full canonical (saves tokens)
-compact: bool         # Return counts instead of full error lists
-debug_grammar: bool   # Include compiled regex/GBNF grammar in output
-```
-
-**Returns**: `{ status, canonical, repairs, warnings, errors, validation_status }`
-
-### `octave_write`
-
-Unified write operation for creating new files or modifying existing ones.
-
-```python
-# Parameters
-target_path: str      # File path to write
-content: str          # Full content for new files (mutually exclusive with changes)
-changes: dict         # Delta updates for existing files (tri-state: absent=no-op, DELETE=remove, value=set)
-mutations: dict       # META field overrides
-base_hash: str        # Expected SHA-256 for consistency check (CAS)
-schema: str           # Schema name for validation
-lenient: bool         # Enable lenient parsing with auto-repairs
-corrections_only: bool # Dry run - return corrections without writing
-```
-
-**Returns**: `{ status, mode, canonical, repairs, warnings, errors, validation_status, file_hash }`
-
-### `octave_eject`
-
-Projects OCTAVE content to different formats and views.
-
-```python
-# Parameters
-content: str          # OCTAVE content to project (null for template generation)
-schema: str           # Schema name for validation or template generation
-mode: str             # Projection: canonical, authoring, executive, developer
-format: str           # Output: octave, json, yaml, markdown, gbnf
-```
-
-**Returns**: `{ output, lossy, fields_omitted, validation_status }`
+See [API Reference](docs/api.md) for full parameter documentation.
 
 ### Generative Holographic Contracts (v6)
 
@@ -236,16 +196,6 @@ OCTAVE v6 introduces the **Holographic Contract** concept:
 | [Development Setup](docs/guides/development-setup.md) | Dev environment, testing, quality gates |
 | [Architecture Decisions](docs/adr/) | Architecture Decision Records (ADRs) |
 | [Research](docs/research/) | Benchmarks and validation studies |
-
-### Architecture Immutables
-
-| ID | Principle |
-|----|-----------|
-| **I1** | Syntactic Fidelity — normalization alters syntax, never semantics |
-| **I2** | Deterministic Absence — distinguish absent vs null vs default |
-| **I3** | Mirror Constraint — reflect only what's present, create nothing |
-| **I4** | Transform Auditability — log every transformation with stable IDs |
-| **I5** | Schema Sovereignty — validation status visible in output |
 
 ## Contributing
 

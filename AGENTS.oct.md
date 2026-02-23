@@ -9,6 +9,7 @@ META:
   PROJECT::"OCTAVE MCP Server"
   ESSENCE::"Deterministic document protocol with loss accounting"
   VALUE::"OCTAVE→MCP tools make structured AI communication auditable"
+  NAME_ORIGIN::"Olympian Common Text And Vocabulary Engine — mythology is the compression layer"
 
 §2::BOOTSTRAP
   QUALITY_GATES::[
@@ -90,10 +91,21 @@ META:
 
 §10::RESOURCES
   PHILOSOPHY::"docs/guides/octave-philosophy.md"
+  MYTHOLOGY::"docs/guides/mythological-compression.md"
   CORE_SPEC::"src/octave_mcp/resources/specs/octave-core-spec.oct.md"
   GRAMMAR::"docs/grammar/octave-v1.0-grammar.ebnf"
   API_DOCS::"docs/api.md"
   MCP_SETUP::"docs/mcp-configuration.md"
   DEVELOPMENT::"docs/guides/development-setup.md"
+  SKILLS::[octave-literacy, octave-mastery, octave-mythology]
+  PRIMERS::"src/octave_mcp/resources/primers/"
+
+§11::MYTHOLOGY
+  // OCTAVE's competitive moat — pre-trained compression already in the weights
+  PRINCIPLE::"Mythological terms activate rich probability distributions from LLM training data"
+  EVIDENCE::"100% zero-shot comprehension, 60-70% token reduction, 10x semantic density"
+  PARADIGM_BLINDNESS::"You may doubt this theoretically while understanding JOURNEY::ODYSSEAN instantly. Trust practical comprehension."
+  SKILL::"src/octave_mcp/resources/skills/octave-mythology/SKILL.md"
+  GUIDE::"docs/guides/mythological-compression.md"
 
 ===END===
