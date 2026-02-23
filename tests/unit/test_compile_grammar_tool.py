@@ -256,3 +256,187 @@ class TestCompileGrammarParameterValidation:
         result = await tool.execute(schema="SKILL")
 
         assert "validation_status" in result
+
+
+class TestCompileGrammarConstTyping:
+    """Regression tests for CE Finding 1: CONST values must preserve native types.
+
+    str(constraint.const_value) coerces all const values to strings.
+    This makes JSON Schema unsatisfiable for non-string types:
+      NUMBER + CONST[5]    → {"const": "5"}  (wrong, should be 5)
+      BOOLEAN + CONST[true] → {"const": "True"} (wrong, should be true)
+      NULL + CONST[null]   → {"const": "None"} (wrong, should be null)
+    """
+
+    @pytest.fixture
+    def tool(self):
+        """Create CompileGrammarTool instance."""
+        return CompileGrammarTool()
+
+    @pytest.mark.asyncio
+    async def test_const_number_preserved_as_number(self, tool):
+        """CONST[5] on a NUMBER field must produce JSON Schema const: 5 (integer), not '5'."""
+        content = """===TYPED_SCHEMA===
+META:
+  TYPE::TYPED_SCHEMA
+  VERSION::"1.0"
+
+FIELDS:
+  COUNT::["5"∧CONST[5]∧TYPE[NUMBER]]
+===END==="""
+
+        result = await tool.execute(content=content, format="json_schema")
+
+        assert result["status"] == "success"
+        parsed = json.loads(result["grammar"])
+        count_schema = parsed["properties"]["COUNT"]
+        # The const value must be the native integer 5, not the string "5"
+        assert count_schema["const"] == 5
+        assert isinstance(count_schema["const"], int | float)
+
+    @pytest.mark.asyncio
+    async def test_const_boolean_preserved_as_boolean(self, tool):
+        """CONST[true] on a BOOLEAN field must produce JSON Schema const: true, not 'True'."""
+        content = """===TYPED_SCHEMA===
+META:
+  TYPE::TYPED_SCHEMA
+  VERSION::"1.0"
+
+FIELDS:
+  FLAG::["true"∧CONST[true]∧TYPE[BOOLEAN]]
+===END==="""
+
+        result = await tool.execute(content=content, format="json_schema")
+
+        assert result["status"] == "success"
+        parsed = json.loads(result["grammar"])
+        flag_schema = parsed["properties"]["FLAG"]
+        # The const value must be boolean True, not the string "True"
+        assert flag_schema["const"] is True
+        assert isinstance(flag_schema["const"], bool)
+
+    @pytest.mark.asyncio
+    async def test_const_null_preserved_as_null(self, tool):
+        """CONST[null] must produce JSON Schema const: null (None), not 'None'."""
+        content = """===TYPED_SCHEMA===
+META:
+  TYPE::TYPED_SCHEMA
+  VERSION::"1.0"
+
+FIELDS:
+  EMPTY::["null"∧CONST[null]]
+===END==="""
+
+        result = await tool.execute(content=content, format="json_schema")
+
+        assert result["status"] == "success"
+        parsed = json.loads(result["grammar"])
+        empty_schema = parsed["properties"]["EMPTY"]
+        # The const value must be null (None in Python), not the string "None"
+        assert empty_schema["const"] is None
+
+    @pytest.mark.asyncio
+    async def test_const_string_still_works(self, tool):
+        """CONST['hello'] on a STRING field must still produce const: 'hello'."""
+        content = """===TYPED_SCHEMA===
+META:
+  TYPE::TYPED_SCHEMA
+  VERSION::"1.0"
+
+FIELDS:
+  LABEL::["hello"∧CONST["hello"]]
+===END==="""
+
+        result = await tool.execute(content=content, format="json_schema")
+
+        assert result["status"] == "success"
+        parsed = json.loads(result["grammar"])
+        label_schema = parsed["properties"]["LABEL"]
+        assert label_schema["const"] == "hello"
+        assert isinstance(label_schema["const"], str)
+
+
+class TestCompileGrammarErrorEnvelope:
+    """Regression tests for CE Finding 2: compile paths must return structured errors.
+
+    Unexpected exceptions in schema load/compile paths must be caught and
+    returned as {"status": "error", "errors": [...]} rather than propagating
+    as transport-level exceptions.
+    """
+
+    @pytest.fixture
+    def tool(self):
+        """Create CompileGrammarTool instance."""
+        return CompileGrammarTool()
+
+    @pytest.mark.asyncio
+    async def test_malformed_content_returns_structured_error(self, tool):
+        """Malformed content that raises during schema extraction returns error envelope."""
+        # Content that parses but produces an invalid/unusual structure
+        # that may cause downstream failures
+        result = await tool.execute(content="{{{not_valid_octave_at_all}}}")
+
+        # Must return structured error, not raise an exception
+        assert result["status"] == "error"
+        assert "errors" in result
+        assert len(result["errors"]) > 0
+        assert all("code" in e and "message" in e for e in result["errors"])
+
+    @pytest.mark.asyncio
+    async def test_compile_exception_returns_structured_error_not_crash(self, tool):
+        """Exception during grammar compilation returns structured error envelope."""
+        from unittest.mock import patch
+
+        # Patch GBNFCompiler.compile_schema to raise an unexpected exception
+        with patch(
+            "octave_mcp.mcp.compile_grammar.GBNFCompiler.compile_schema",
+            side_effect=RuntimeError("Unexpected compiler internal error"),
+        ):
+            result = await tool.execute(schema="SKILL")
+
+        # Must return structured error dict, not raise
+        assert isinstance(result, dict)
+        assert result["status"] == "error"
+        assert "errors" in result
+        assert len(result["errors"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_json_schema_conversion_exception_returns_structured_error(self, tool):
+        """Exception during _gbnf_to_json_schema returns structured error envelope."""
+        from unittest.mock import patch
+
+        with patch(
+            "octave_mcp.mcp.compile_grammar._gbnf_to_json_schema",
+            side_effect=RuntimeError("Unexpected JSON schema conversion error"),
+        ):
+            result = await tool.execute(schema="SKILL", format="json_schema")
+
+        assert isinstance(result, dict)
+        assert result["status"] == "error"
+        assert "errors" in result
+        assert len(result["errors"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_load_schema_exception_returns_structured_error(self, tool):
+        """Exception during load_schema_by_name returns structured error envelope."""
+        from unittest.mock import patch
+
+        with patch(
+            "octave_mcp.mcp.compile_grammar.load_schema_by_name",
+            side_effect=OSError("Disk read failure"),
+        ):
+            result = await tool.execute(schema="SKILL")
+
+        assert isinstance(result, dict)
+        assert result["status"] == "error"
+        assert "errors" in result
+        assert len(result["errors"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_error_envelope_has_required_fields(self, tool):
+        """All error responses include status, errors, and validation_status fields."""
+        result = await tool.execute(schema="NONEXISTENT_SCHEMA_XYZ")
+
+        assert result["status"] == "error"
+        assert "errors" in result
+        assert "validation_status" in result

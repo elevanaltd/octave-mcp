@@ -78,7 +78,7 @@ def _gbnf_to_json_schema(schema: SchemaDefinition) -> str:
                 if isinstance(constraint, EnumConstraint):
                     field_schema["enum"] = list(constraint.allowed_values)
                 elif isinstance(constraint, ConstConstraint):
-                    field_schema["const"] = str(constraint.const_value)
+                    field_schema["const"] = constraint.const_value
                 elif isinstance(constraint, TypeConstraint):
                     type_map = {
                         "STRING": "string",
@@ -239,7 +239,17 @@ class CompileGrammarTool(BaseTool):
 
         if schema_name_param is not None:
             # Load schema by name from builtin registry
-            schema_def = load_schema_by_name(schema_name_param)
+            try:
+                schema_def = load_schema_by_name(schema_name_param)
+            except Exception as e:
+                return self._error_response(
+                    [
+                        {
+                            "code": "E_SCHEMA",
+                            "message": f"Failed to load schema '{schema_name_param}': {e}",
+                        }
+                    ]
+                )
             if schema_def is None:
                 return self._error_response(
                     [
@@ -332,14 +342,24 @@ class CompileGrammarTool(BaseTool):
             )
 
         # Compile to requested format
-        if output_format == "gbnf":
-            compiler = GBNFCompiler()
-            grammar = compiler.compile_schema(schema_def, include_envelope=True)
-        elif output_format == "json_schema":
-            grammar = _gbnf_to_json_schema(schema_def)
-        else:
-            # Should not reach here due to earlier validation
-            return self._error_response([{"code": "E_FORMAT", "message": f"Unsupported format: {output_format}"}])
+        try:
+            if output_format == "gbnf":
+                compiler = GBNFCompiler()
+                grammar = compiler.compile_schema(schema_def, include_envelope=True)
+            elif output_format == "json_schema":
+                grammar = _gbnf_to_json_schema(schema_def)
+            else:
+                # Should not reach here due to earlier validation
+                return self._error_response([{"code": "E_FORMAT", "message": f"Unsupported format: {output_format}"}])
+        except Exception as e:
+            return self._error_response(
+                [
+                    {
+                        "code": "E_COMPILE",
+                        "message": f"Grammar compilation failed: {e}",
+                    }
+                ]
+            )
 
         return {
             "status": "success",
