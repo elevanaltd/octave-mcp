@@ -145,11 +145,121 @@ def _normalize_value_for_ast(value: Any) -> Any:
     return value
 
 
+# GH#263: Regex pattern for detecting NAME{qualifier} curly-brace annotations
+# Matches: identifier characters followed by {qualifier_chars}
+# The identifier pattern mirrors _is_valid_identifier_start/char from lexer.py
+_CURLY_BRACE_ANNOTATION_PATTERN = re.compile(r"([A-Za-z_][A-Za-z0-9_./\-]*)\{([A-Za-z_][A-Za-z0-9_./\-]*)\}")
+
+
 class WriteTool(BaseTool):
     """MCP tool for octave_write - unified write operation for OCTAVE files."""
 
     # Security: allowed file extensions
     ALLOWED_EXTENSIONS = {".oct.md", ".octave", ".md"}
+
+    def _repair_curly_brace_annotations(self, content: str) -> tuple[str, list[dict[str, Any]]]:
+        """GH#263: Pre-process content to repair NAME{qualifier} -> NAME<qualifier>.
+
+        I1 (Syntactic Fidelity): Only applies to Zone 1 (normalizing DSL) content.
+        Quoted strings, literal zones (fenced blocks), and comments are protected.
+
+        I4 (Transform Auditability): Every repair is logged with original and repaired
+        syntax for full auditability.
+
+        Args:
+            content: Raw content that may contain curly-brace annotations
+
+        Returns:
+            Tuple of (repaired_content, list of correction records)
+        """
+        corrections: list[dict[str, Any]] = []
+
+        # Build a set of character ranges that are protected from repair:
+        # 1. Literal zones (``` fenced blocks) - Zone 3
+        # 2. Quoted strings (text between "" after ::) - Zone 2
+        # 3. Comments (// to end of line)
+        protected: list[tuple[int, int]] = []
+
+        # Find literal zone boundaries (``` fences)
+        in_fence = False
+        fence_start = 0
+        offset = 0
+        for line in content.split("\n"):
+            line_start = offset
+            offset += len(line) + 1  # +1 for the newline separator
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                if not in_fence:
+                    in_fence = True
+                    fence_start = line_start
+                else:
+                    in_fence = False
+                    fence_end = line_start + len(line)
+                    protected.append((fence_start, fence_end))
+
+        # If fence was never closed, protect from fence_start to end
+        if in_fence:
+            protected.append((fence_start, len(content)))
+
+        # Find quoted strings: text between "" on a line (after ::)
+        quote_pattern = re.compile(r'"(?:[^"\\]|\\.)*"')
+        for m in quote_pattern.finditer(content):
+            protected.append((m.start(), m.end()))
+
+        # Find comments: // to end of line
+        comment_pattern = re.compile(r"//[^\n]*")
+        for m in comment_pattern.finditer(content):
+            protected.append((m.start(), m.end()))
+
+        # Sort protected ranges for efficient lookup
+        protected.sort()
+
+        def _is_protected(pos: int) -> bool:
+            """Check if a position falls within any protected range."""
+            for start, end in protected:
+                if start <= pos < end:
+                    return True
+                if start > pos:
+                    break
+            return False
+
+        # Apply regex only to unprotected regions
+        repaired = content
+        # Collect matches that are in Zone 1 (unprotected)
+        zone1_matches = []
+        for match in _CURLY_BRACE_ANNOTATION_PATTERN.finditer(content):
+            if not _is_protected(match.start()):
+                zone1_matches.append(match)
+
+        for match in zone1_matches:
+            original = match.group(0)
+            name = match.group(1)
+            qualifier = match.group(2)
+            suggested = f"{name}<{qualifier}>"
+
+            corrections.append(
+                {
+                    "code": "W_REPAIR_CANDIDATE",
+                    "tier": "LENIENT_PARSE",
+                    "message": (
+                        f"W_REPAIR_CANDIDATE::{original} repaired to {suggested}. "
+                        f"Use angle brackets <> for annotation qualifiers, not curly braces {{}}."
+                    ),
+                    "before": original,
+                    "after": suggested,
+                    "safe": True,
+                    "semantics_changed": False,
+                }
+            )
+
+        # Replace only unprotected matches (process in reverse to preserve offsets)
+        if corrections:
+            for match in reversed(zone1_matches):
+                name = match.group(1)
+                qualifier = match.group(2)
+                repaired = repaired[: match.start()] + f"{name}<{qualifier}>" + repaired[match.end() :]
+
+        return repaired, corrections
 
     def _unwrap_markdown_code_fence(self, content: str) -> tuple[str, bool]:
         """Extract OCTAVE payload from a single outer markdown code fence.
@@ -655,7 +765,10 @@ class WriteTool(BaseTool):
                             continue
 
                         # User-controlled symlink - reject
-                        return False, "Symlinks in path are not allowed for security reasons"
+                        return (
+                            False,
+                            f"Symlinks in path are not allowed for security reasons: '{target_path}'. Use corrections_only=true to preview normalization without writing.",
+                        )
 
         except Exception as e:
             return False, f"Path resolution failed: {str(e)}"
@@ -1085,12 +1198,24 @@ class WriteTool(BaseTool):
 
             if lenient:
                 # Detect likely OCTAVE structure using line-anchored patterns to avoid false positives in prose.
-                # Example false positive to avoid: "use Foo::Bar" in a sentence.
+                # GH#263 rework round 4: Only strong, unambiguous OCTAVE signals trigger structured mode.
+                # - assignment_line (KEY::value): The :: operator is definitively OCTAVE syntax.
+                # - envelope_line (===NAME===): Definitively OCTAVE envelope markers.
+                # Weak signals like block_line (KEY:\s*$) and meta_block (META:) are excluded
+                # because they match prose headers like "Title:", "Note:", "Summary:", "META:".
+                # Real OCTAVE files with META: blocks always contain :: assignments inside,
+                # so they are still detected via assignment_line.
                 assignment_line = re.search(r"(?m)^[ \t]*[A-Za-z_][A-Za-z0-9_.]*::", parse_input) is not None
-                block_line = re.search(r"(?m)^[ \t]*[A-Za-z_][A-Za-z0-9_.]*:\s*$", parse_input) is not None
-                meta_block = re.search(r"(?m)^META:\s*$", parse_input) is not None
                 envelope_line = re.search(r"(?m)^===.+===\s*$", parse_input) is not None
-                looks_structured = assignment_line or block_line or meta_block or envelope_line
+                looks_structured = assignment_line or envelope_line
+
+                if looks_structured:
+                    # GH#263: Pre-process curly-brace annotations ONLY for confirmed OCTAVE content.
+                    # Plain text with FOO{bar} must not be mutated (I1 syntactic fidelity).
+                    # I4 (Transform Auditability): repairs logged in corrections.
+                    parse_input, curly_corrections = self._repair_curly_brace_annotations(parse_input)
+                    corrections.extend(curly_corrections)
+
                 if not looks_structured and parse_input.strip():
                     parse_input, wrap_corrections = self._wrap_plain_text_as_doc(parse_input, schema_name)
                     corrections.extend(wrap_corrections)
@@ -1331,7 +1456,12 @@ class WriteTool(BaseTool):
             if path_obj.exists() and path_obj.is_symlink():
                 return self._error_envelope(
                     target_path,
-                    [{"code": "E_WRITE", "message": "Cannot write to symlink target"}],
+                    [
+                        {
+                            "code": "E_WRITE",
+                            "message": f"Cannot write to symlink target '{target_path}'. Use corrections_only=true to preview normalization without writing.",
+                        }
+                    ],
                     result["corrections"],
                 )
 
@@ -1378,10 +1508,26 @@ class WriteTool(BaseTool):
                     os.unlink(temp_path)
                 raise
 
+        except PermissionError:
+            return self._error_envelope(
+                target_path,
+                [
+                    {
+                        "code": "E_WRITE",
+                        "message": f"Permission denied writing '{target_path}'. Use corrections_only=true to preview normalization without writing.",
+                    }
+                ],
+                result["corrections"],
+            )
         except Exception as e:
             return self._error_envelope(
                 target_path,
-                [{"code": "E_WRITE", "message": f"Write error: {str(e)}"}],
+                [
+                    {
+                        "code": "E_WRITE",
+                        "message": f"Write error: {str(e)}. Use corrections_only=true to preview normalization without writing.",
+                    }
+                ],
                 result["corrections"],
             )
 

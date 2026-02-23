@@ -401,7 +401,45 @@ def _is_valid_identifier_char(char: str) -> bool:
     return False
 
 
-def _match_unicode_identifier(content: str, pos: int) -> str | None:
+def _match_curly_brace_annotation(content: str, end: int) -> tuple[int, int, int] | None:
+    """Check for a curly-brace annotation pattern NAME{qualifier} at position.
+
+    GH#263: Detects curly-brace annotation syntax that should use angle brackets.
+    Called after the base identifier has been consumed up to `end`.
+
+    Args:
+        content: Full content string
+        end: Position immediately after the base identifier (should point to '{')
+
+    Returns:
+        Tuple of (qualifier_start, qualifier_end, close_brace_pos) if pattern found,
+        None otherwise.
+    """
+    if end >= len(content) or content[end] != "{":
+        return None
+
+    qualifier_start = end + 1
+    # Qualifier must start with a valid identifier start char
+    if qualifier_start >= len(content) or not _is_valid_identifier_start(content[qualifier_start]):
+        return None
+
+    qualifier_end = qualifier_start + 1
+    # Consume remaining qualifier characters (identifier body chars)
+    while qualifier_end < len(content) and _is_valid_identifier_char(content[qualifier_end]):
+        qualifier_end += 1
+    # Strip trailing hyphens from qualifier (same as identifier rule)
+    while qualifier_end > qualifier_start + 1 and content[qualifier_end - 1] == "-":
+        qualifier_end -= 1
+    # Must have closing '}'
+    if qualifier_end < len(content) and content[qualifier_end] == "}":
+        return qualifier_start, qualifier_end, qualifier_end
+
+    return None
+
+
+def _match_unicode_identifier(
+    content: str, pos: int, lenient: bool = False, repairs: list[Any] | None = None
+) -> str | None:
     """Match a unicode-aware identifier starting at position (GH#186).
 
     Handles emoji and unicode symbols as valid identifier characters.
@@ -414,9 +452,15 @@ def _match_unicode_identifier(content: str, pos: int) -> str | None:
     a single identifier token like "ATHENA<strategic_wisdom>".
     Standalone '<' or '>' outside this pattern still errors per §3b.
 
+    GH#263: Also detects NAME{qualifier} curly-brace annotation patterns.
+    In lenient mode, auto-repairs {} -> <> and logs a W_REPAIR_CANDIDATE.
+    In strict mode, returns only the base identifier (caller handles E005).
+
     Args:
         content: Full content string
         pos: Starting position
+        lenient: If True, auto-repair curly-brace annotations to angle brackets
+        repairs: Mutable list to append repair records to (used in lenient mode)
 
     Returns:
         Matched identifier string, or None if no match
@@ -460,6 +504,39 @@ def _match_unicode_identifier(content: str, pos: int) -> str | None:
             if qualifier_end < len(content) and content[qualifier_end] == ">":
                 # Valid NAME<qualifier> -- extend end past '>'
                 end = qualifier_end + 1
+
+    # GH#263: Check for curly-brace annotation NAME{qualifier}
+    # This is a common mistake — users write {} instead of <>
+    curly_match = _match_curly_brace_annotation(content, end)
+    if curly_match is not None:
+        qualifier_start, qualifier_end, close_brace_pos = curly_match
+        base_name = content[pos:end]
+        qualifier = content[qualifier_start:qualifier_end]
+        original = f"{base_name}{{{qualifier}}}"
+        repaired = f"{base_name}<{qualifier}>"
+
+        if lenient and repairs is not None:
+            # Auto-repair: return the identifier with angle brackets
+            # and log the repair for I4 auditability
+            repairs.append(
+                {
+                    "type": "repair_candidate",
+                    "subtype": "curly_brace_annotation",
+                    "original": original,
+                    "repaired": repaired,
+                    "line": 0,  # Will be updated by caller with actual line
+                    "column": 0,  # Will be updated by caller with actual column
+                    "message": (
+                        f"W_REPAIR_CANDIDATE::{original} repaired to {repaired}. "
+                        f"Use angle brackets <> for annotation qualifiers, not curly braces {{}}."
+                    ),
+                }
+            )
+            # Consume past the closing '}'
+            end = close_brace_pos + 1
+            return repaired
+        # In strict mode: return only the base identifier
+        # The caller will hit E005 on '{' with enhanced error message
 
     return content[pos:end]
 
@@ -628,11 +705,12 @@ def _check_invalid_envelope(content: str, pos: int, line: int, column: int) -> L
     )
 
 
-def tokenize(content: str) -> tuple[list[Token], list[Any]]:
+def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any]]:
     """Tokenize OCTAVE content with ASCII alias normalization.
 
     Args:
         content: Raw OCTAVE text
+        lenient: If True, auto-repair curly-brace annotations (GH#263)
 
     Returns:
         Tuple of (tokens, repairs)
@@ -964,8 +1042,16 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 continue
 
             # GH#186: Try unicode identifier matching for emoji and symbols
-            unicode_id = _match_unicode_identifier(content, pos)
+            # GH#263: Pass lenient flag for curly-brace annotation auto-repair
+            unicode_id = _match_unicode_identifier(content, pos, lenient=lenient, repairs=repairs)
             if unicode_id:
+                # GH#263: Update line/column on any repair_candidate entries
+                # that were just appended by _match_unicode_identifier
+                for r in repairs:
+                    if r.get("type") == "repair_candidate" and r.get("line") == 0 and r.get("column") == 0:
+                        r["line"] = line
+                        r["column"] = column
+
                 token = Token(TokenType.IDENTIFIER, unicode_id, line, column)
                 tokens.append(token)
 
@@ -1014,6 +1100,26 @@ def tokenize(content: str) -> tuple[list[Token], list[Any]]:
                 column += len(unicode_id)
                 pos += len(unicode_id)
                 continue
+
+            # GH#263: Enhanced error for curly-brace annotation pattern
+            # Detect '{' after an identifier and provide W_REPAIR_CANDIDATE hint
+            if content[pos] == "{" and tokens and tokens[-1].type == TokenType.IDENTIFIER:
+                prev_name = tokens[-1].value
+                # Try to match the curly-brace annotation pattern
+                curly_match = _match_curly_brace_annotation(content, pos)
+                if curly_match is not None:
+                    qualifier_start, qualifier_end, close_brace_pos = curly_match
+                    qualifier = content[qualifier_start:qualifier_end]
+                    original = f"{prev_name}{{{qualifier}}}"
+                    suggested = f"{prev_name}<{qualifier}>"
+                    raise LexerError(
+                        f"Unexpected character: '{{'. "
+                        f"W_REPAIR_CANDIDATE::{original} should be {suggested}. "
+                        f"Use angle brackets <> for annotation qualifiers, not curly braces {{}}.",
+                        line,
+                        column,
+                        "E005",
+                    )
 
             # Unrecognized character
             raise LexerError(f"Unexpected character: '{content[pos]}'", line, column, "E005")
