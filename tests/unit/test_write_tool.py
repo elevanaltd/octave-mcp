@@ -338,8 +338,8 @@ KEY::value
             assert "content" in error_messages.lower() or "changes" in error_messages.lower()
 
     @pytest.mark.asyncio
-    async def test_write_neither_content_nor_changes(self):
-        """Test that either content or changes must be provided."""
+    async def test_write_neither_content_nor_changes_nonexistent_file(self):
+        """Test that normalize mode (no content, no changes) errors on non-existent file."""
         from octave_mcp.mcp.write import WriteTool
 
         tool = WriteTool()
@@ -349,10 +349,10 @@ KEY::value
 
             result = await tool.execute(
                 target_path=target_path,
-                # Neither content nor changes provided
+                # Neither content nor changes = normalize mode, but file doesn't exist
             )
 
-            # Should error - need one of them
+            # Should error - normalize requires existing file
             assert result["status"] == "error"
 
     @pytest.mark.asyncio
@@ -2664,3 +2664,209 @@ class TestSalvageBracketDepthAwareness:
             assert "REGEX" in written
             assert "VALID" in written
             assert "_PARSE_ERROR_LINE_" in written or "_SALVAGED" in written
+
+
+class TestNormalizeMode:
+    """Tests for normalize mode: octave_write with neither content nor changes.
+
+    When both content and changes are None, octave_write should read the
+    existing file, parse it, emit canonical form, and write it back.
+    This is pure I1 (Syntactic Fidelity) enforcement.
+    """
+
+    @pytest.mark.asyncio
+    async def test_normalize_existing_file(self):
+        """Normalize mode reads, parses, emits canonical form, and writes back."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Write a file with non-canonical formatting (extra spaces, etc.)
+            original = '===TEST===\nMETA:\n  TYPE::"EXAMPLE"\n  VERSION::"1.0"\nKEY::value\n===END==='
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(original)
+
+            result = await tool.execute(target_path=target_path)
+
+            assert result["status"] == "success"
+            assert result["path"] == target_path
+            assert result["mode"] == "normalize"
+            assert "canonical_hash" in result
+            assert result["canonical_hash"] != ""
+            assert "corrections" in result
+            assert isinstance(result["corrections"], list)
+            assert "diff" in result
+            assert "diff_unified" in result
+            assert "errors" in result
+            assert isinstance(result["errors"], list)
+            assert "validation_status" in result
+
+            # File should have been written with canonical content
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+            assert "===TEST===" in written
+            assert "KEY" in written
+
+    @pytest.mark.asyncio
+    async def test_normalize_nonexistent_file_errors(self):
+        """Normalize mode should error when file does not exist."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "nonexistent.oct.md")
+
+            result = await tool.execute(target_path=target_path)
+
+            assert result["status"] == "error"
+            assert any(e["code"] == "E_FILE" for e in result["errors"])
+
+    @pytest.mark.asyncio
+    async def test_normalize_corrections_only_dry_run(self):
+        """Normalize with corrections_only=True returns diff without writing."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            original = '===TEST===\nMETA:\n  TYPE::"EXAMPLE"\n  VERSION::"1.0"\nKEY::value\n===END==='
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(original)
+
+            result = await tool.execute(
+                target_path=target_path,
+                corrections_only=True,
+            )
+
+            assert result["status"] == "success"
+            assert result["mode"] == "normalize"
+            assert "canonical_hash" in result
+            assert "diff_unified" in result
+
+            # File should NOT have been modified (dry run)
+            with open(target_path, encoding="utf-8") as f:
+                content_after = f.read()
+            assert content_after == original
+
+    @pytest.mark.asyncio
+    async def test_normalize_with_base_hash(self):
+        """Normalize mode supports base_hash CAS guard."""
+        import hashlib
+
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            original = '===TEST===\nMETA:\n  TYPE::"EXAMPLE"\n  VERSION::"1.0"\nKEY::value\n===END==='
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(original)
+
+            correct_hash = hashlib.sha256(original.encode("utf-8")).hexdigest()
+
+            # Correct hash should succeed
+            result = await tool.execute(
+                target_path=target_path,
+                base_hash=correct_hash,
+            )
+            assert result["status"] == "success"
+            assert result["mode"] == "normalize"
+
+    @pytest.mark.asyncio
+    async def test_normalize_with_wrong_base_hash(self):
+        """Normalize mode rejects wrong base_hash."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            original = '===TEST===\nMETA:\n  TYPE::"EXAMPLE"\n  VERSION::"1.0"\nKEY::value\n===END==='
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(original)
+
+            result = await tool.execute(
+                target_path=target_path,
+                base_hash="wrong_hash_value",
+            )
+            assert result["status"] == "error"
+            assert any(e["code"] == "E_HASH" for e in result["errors"])
+
+    @pytest.mark.asyncio
+    async def test_normalize_with_schema_validation(self):
+        """Normalize mode supports schema validation (I5)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            original = '===TEST===\nMETA:\n  TYPE::"EXAMPLE"\n  VERSION::"1.0"\nKEY::value\n===END==='
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(original)
+
+            result = await tool.execute(
+                target_path=target_path,
+                schema="nonexistent_schema_xyz",
+            )
+            # Should succeed (schema not found = UNVALIDATED, not error)
+            assert result["status"] == "success"
+            assert result["mode"] == "normalize"
+            assert result["validation_status"] == "UNVALIDATED"
+
+    @pytest.mark.asyncio
+    async def test_normalize_idempotent(self):
+        """Normalizing an already-canonical file should produce identical output."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # First, create a canonical file via content mode
+            result1 = await tool.execute(
+                target_path=target_path,
+                content='===TEST===\nMETA:\n  TYPE::"EXAMPLE"\n  VERSION::"1.0"\nKEY::value\n===END===',
+            )
+            assert result1["status"] == "success"
+            hash_after_create = result1["canonical_hash"]
+
+            # Now normalize it - should produce same hash
+            result2 = await tool.execute(target_path=target_path)
+            assert result2["status"] == "success"
+            assert result2["mode"] == "normalize"
+            assert result2["canonical_hash"] == hash_after_create
+
+    @pytest.mark.asyncio
+    async def test_normalize_produces_audit_trail(self):
+        """I4: Normalize operations must produce audit trail (corrections, diff)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            original = '===TEST===\nMETA:\n  TYPE::"EXAMPLE"\n  VERSION::"1.0"\nKEY::value\n===END==='
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(original)
+
+            result = await tool.execute(target_path=target_path)
+
+            assert result["status"] == "success"
+            assert result["mode"] == "normalize"
+            # I4: corrections and diff must be present
+            assert "corrections" in result
+            assert "diff" in result
+            assert "diff_unified" in result
