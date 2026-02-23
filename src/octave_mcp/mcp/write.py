@@ -145,11 +145,58 @@ def _normalize_value_for_ast(value: Any) -> Any:
     return value
 
 
+# GH#263: Regex pattern for detecting NAME{qualifier} curly-brace annotations
+# Matches: identifier characters followed by {qualifier_chars}
+# The identifier pattern mirrors _is_valid_identifier_start/char from lexer.py
+_CURLY_BRACE_ANNOTATION_PATTERN = re.compile(r"([A-Za-z_][A-Za-z0-9_./\-]*)\{([A-Za-z_][A-Za-z0-9_./\-]*)\}")
+
+
 class WriteTool(BaseTool):
     """MCP tool for octave_write - unified write operation for OCTAVE files."""
 
     # Security: allowed file extensions
     ALLOWED_EXTENSIONS = {".oct.md", ".octave", ".md"}
+
+    def _repair_curly_brace_annotations(self, content: str) -> tuple[str, list[dict[str, Any]]]:
+        """GH#263: Pre-process content to repair NAME{qualifier} -> NAME<qualifier>.
+
+        I4 (Transform Auditability): Every repair is logged with original and repaired
+        syntax for full auditability.
+
+        Args:
+            content: Raw content that may contain curly-brace annotations
+
+        Returns:
+            Tuple of (repaired_content, list of correction records)
+        """
+        corrections: list[dict[str, Any]] = []
+        repaired = content
+
+        for match in _CURLY_BRACE_ANNOTATION_PATTERN.finditer(content):
+            original = match.group(0)
+            name = match.group(1)
+            qualifier = match.group(2)
+            suggested = f"{name}<{qualifier}>"
+
+            corrections.append(
+                {
+                    "code": "W_REPAIR_CANDIDATE",
+                    "tier": "LENIENT_PARSE",
+                    "message": (
+                        f"W_REPAIR_CANDIDATE::{original} repaired to {suggested}. "
+                        f"Use angle brackets <> for annotation qualifiers, not curly braces {{}}."
+                    ),
+                    "before": original,
+                    "after": suggested,
+                    "safe": True,
+                    "semantics_changed": False,
+                }
+            )
+
+        if corrections:
+            repaired = _CURLY_BRACE_ANNOTATION_PATTERN.sub(r"\1<\2>", content)
+
+        return repaired, corrections
 
     def _unwrap_markdown_code_fence(self, content: str) -> tuple[str, bool]:
         """Extract OCTAVE payload from a single outer markdown code fence.
@@ -655,7 +702,10 @@ class WriteTool(BaseTool):
                             continue
 
                         # User-controlled symlink - reject
-                        return False, "Symlinks in path are not allowed for security reasons"
+                        return (
+                            False,
+                            f"Symlinks in path are not allowed for security reasons: '{target_path}'. Use corrections_only=true to preview normalization without writing.",
+                        )
 
         except Exception as e:
             return False, f"Path resolution failed: {str(e)}"
@@ -1084,6 +1134,11 @@ class WriteTool(BaseTool):
                 )
 
             if lenient:
+                # GH#263: Pre-process curly-brace annotations before parsing
+                # I4 (Transform Auditability): repairs logged in corrections
+                parse_input, curly_corrections = self._repair_curly_brace_annotations(parse_input)
+                corrections.extend(curly_corrections)
+
                 # Detect likely OCTAVE structure using line-anchored patterns to avoid false positives in prose.
                 # Example false positive to avoid: "use Foo::Bar" in a sentence.
                 assignment_line = re.search(r"(?m)^[ \t]*[A-Za-z_][A-Za-z0-9_.]*::", parse_input) is not None
@@ -1331,7 +1386,12 @@ class WriteTool(BaseTool):
             if path_obj.exists() and path_obj.is_symlink():
                 return self._error_envelope(
                     target_path,
-                    [{"code": "E_WRITE", "message": "Cannot write to symlink target"}],
+                    [
+                        {
+                            "code": "E_WRITE",
+                            "message": f"Cannot write to symlink target '{target_path}'. Use corrections_only=true to preview normalization without writing.",
+                        }
+                    ],
                     result["corrections"],
                 )
 
@@ -1378,10 +1438,26 @@ class WriteTool(BaseTool):
                     os.unlink(temp_path)
                 raise
 
+        except PermissionError:
+            return self._error_envelope(
+                target_path,
+                [
+                    {
+                        "code": "E_WRITE",
+                        "message": f"Permission denied writing '{target_path}'. Use corrections_only=true to preview normalization without writing.",
+                    }
+                ],
+                result["corrections"],
+            )
         except Exception as e:
             return self._error_envelope(
                 target_path,
-                [{"code": "E_WRITE", "message": f"Write error: {str(e)}"}],
+                [
+                    {
+                        "code": "E_WRITE",
+                        "message": f"Write error: {str(e)}. Use corrections_only=true to preview normalization without writing.",
+                    }
+                ],
                 result["corrections"],
             )
 

@@ -788,6 +788,68 @@ DEBATE_TRANSCRIPT:
             )
 
             assert result["status"] == "error"
+            # GH#264: Error message should include path and corrections_only hint
+            error_msg = result["errors"][0]["message"]
+            assert link_path in error_msg, f"Symlink error should include the path '{link_path}', got: {error_msg}"
+            assert (
+                "corrections_only=true" in error_msg
+            ), f"Symlink error should include corrections_only hint, got: {error_msg}"
+
+    @pytest.mark.asyncio
+    async def test_write_permission_denied_error_message(self):
+        """GH#264: Permission denied errors should include path and corrections_only hint."""
+        from unittest.mock import patch
+
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "readonly.oct.md")
+
+            # Mock os.replace to raise PermissionError (simulates read-only target)
+            with patch("os.replace", side_effect=PermissionError("Permission denied")):
+                result = await tool.execute(
+                    target_path=target_path,
+                    content="===TEST===\nKEY::value\n===END===",
+                )
+
+            assert result["status"] == "error"
+            error_msg = result["errors"][0]["message"]
+            assert (
+                "Permission denied" in error_msg
+            ), f"Permission error should mention 'Permission denied', got: {error_msg}"
+            assert (
+                target_path in error_msg
+            ), f"Permission error should include the path '{target_path}', got: {error_msg}"
+            assert (
+                "corrections_only=true" in error_msg
+            ), f"Permission error should include corrections_only hint, got: {error_msg}"
+
+    @pytest.mark.asyncio
+    async def test_write_generic_error_includes_hint(self):
+        """GH#264: Generic write errors should include corrections_only hint."""
+        from unittest.mock import patch
+
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Mock os.replace to raise a generic OS error
+            with patch("os.replace", side_effect=OSError("Disk full")):
+                result = await tool.execute(
+                    target_path=target_path,
+                    content="===TEST===\nKEY::value\n===END===",
+                )
+
+            assert result["status"] == "error"
+            error_msg = result["errors"][0]["message"]
+            assert (
+                "corrections_only=true" in error_msg
+            ), f"Generic write error should include corrections_only hint, got: {error_msg}"
 
     @pytest.mark.asyncio
     async def test_write_atomic_operation(self):
