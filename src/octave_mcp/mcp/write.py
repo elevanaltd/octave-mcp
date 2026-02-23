@@ -1,7 +1,8 @@
 """MCP tool for OCTAVE write (GH#51 Tool Consolidation).
 
 Implements octave_write tool - replaces octave_create + octave_amend with:
-- Unified write with content XOR changes parameter model
+- Unified write with content XOR changes parameter model (or neither for normalize)
+- Normalize mode: omit both content and changes to re-emit existing file in canonical form
 - Tri-state semantics for changes: absent=no-op, {"$op":"DELETE"}=remove, null=empty
 - base_hash CAS guard in BOTH modes when file exists
 - Unified envelope: status, path, canonical_hash, corrections, diff, errors, validation_status
@@ -525,6 +526,7 @@ class WriteTool(BaseTool):
             "Unified entry point for writing OCTAVE files. "
             "Handles creation (new files) and modification (existing files). "
             "Use content for full payload, changes for delta updates. "
+            "Omit both content and changes to normalize an existing file in-place. "
             "Replaces octave_create and octave_amend."
         )
 
@@ -933,12 +935,6 @@ class WriteTool(BaseTool):
                 ],
             )
 
-        if content is None and changes is None:
-            return self._error_envelope(
-                target_path,
-                [{"code": "E_INPUT", "message": "Must provide either content or changes"}],
-            )
-
         path_obj = Path(target_path)
         file_exists = path_obj.exists()
 
@@ -948,6 +944,46 @@ class WriteTool(BaseTool):
         canonical_metrics: StructuralMetrics | None = None
         canonical_content = ""
         corrections: list[dict[str, Any]] = []
+
+        # Determine mode
+        normalize_mode = content is None and changes is None
+
+        if normalize_mode:
+            # NORMALIZE MODE: read existing file, parse, emit canonical form, write back
+            # Pure I1 (Syntactic Fidelity) enforcement: normalization alters syntax never semantics
+            if not file_exists:
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_FILE", "message": "File does not exist - normalize mode requires existing file"}],
+                )
+
+            # Read existing file
+            try:
+                with open(target_path, encoding="utf-8") as f:
+                    baseline_content_for_diff = f.read()
+            except Exception as e:
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_READ", "message": f"Read error: {str(e)}"}],
+                )
+
+            # Check base_hash if provided (CAS guard)
+            if base_hash:
+                current_hash = self._compute_hash(baseline_content_for_diff)
+                if current_hash != base_hash:
+                    return self._error_envelope(
+                        target_path,
+                        [
+                            {
+                                "code": "E_HASH",
+                                "message": f"Hash mismatch - file has been modified (expected {base_hash[:8]}..., got {current_hash[:8]}...)",
+                            }
+                        ],
+                    )
+
+            # Feed through parse -> emit pipeline (reuse content-mode logic)
+            # I3 (Mirror Constraint): reflect only what is present, create nothing
+            content = baseline_content_for_diff
 
         if changes is not None:
             # CHANGES MODE (Amend) - file must exist
@@ -1264,6 +1300,10 @@ class WriteTool(BaseTool):
                 else:
                     result["validation_status"] = "VALIDATED"
             # else: schema not found - remain UNVALIDATED (bypass is visible)
+
+        # I4 (Transform Auditability): record the mode in the response envelope
+        if normalize_mode:
+            result["mode"] = "normalize"
 
         # Diff-first output + hashes (works for dry-run)
         result["diff_unified"] = self._build_unified_diff(baseline_content_for_diff, canonical_content)
