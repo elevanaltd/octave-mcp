@@ -338,8 +338,8 @@ KEY::value
             assert "content" in error_messages.lower() or "changes" in error_messages.lower()
 
     @pytest.mark.asyncio
-    async def test_write_neither_content_nor_changes(self):
-        """Test that either content or changes must be provided."""
+    async def test_write_neither_content_nor_changes_nonexistent_file(self):
+        """Test that normalize mode (no content, no changes) errors on non-existent file."""
         from octave_mcp.mcp.write import WriteTool
 
         tool = WriteTool()
@@ -349,10 +349,10 @@ KEY::value
 
             result = await tool.execute(
                 target_path=target_path,
-                # Neither content nor changes provided
+                # Neither content nor changes = normalize mode, but file doesn't exist
             )
 
-            # Should error - need one of them
+            # Should error - normalize requires existing file
             assert result["status"] == "error"
 
     @pytest.mark.asyncio
