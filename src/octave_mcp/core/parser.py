@@ -278,6 +278,41 @@ class Parser:
             return comment
         return None
 
+    def _peek_past_brackets_at(self, bracket_start: int) -> TokenType:
+        """Return the token type immediately after the bracket group starting at bracket_start.
+
+        Used to perform look-ahead past a LIST_START...LIST_END group. Handles nested
+        brackets correctly.
+
+        GH#261: Enables parse_value() to detect IDENTIFIER[bracket]OPERATOR patterns
+        and dispatch them to parse_flow_expression() rather than the multi-word path.
+
+        Args:
+            bracket_start: Token index where the LIST_START token is located.
+
+        Returns:
+            TokenType of the first token after the matching LIST_END, or TokenType.EOF
+            if no match found.
+        """
+        if bracket_start >= len(self.tokens) or self.tokens[bracket_start].type != TokenType.LIST_START:
+            if bracket_start < len(self.tokens):
+                return self.tokens[bracket_start].type
+            return TokenType.EOF
+
+        depth = 1
+        i = bracket_start + 1
+        while i < len(self.tokens) and depth > 0:
+            t = self.tokens[i]
+            if t.type == TokenType.LIST_START:
+                depth += 1
+            elif t.type == TokenType.LIST_END:
+                depth -= 1
+            i += 1
+
+        if i < len(self.tokens):
+            return self.tokens[i].type
+        return TokenType.EOF
+
     def _consume_bracket_annotation(self, capture: bool = False) -> str | None:
         """Consume bracket annotation [content] if present.
 
@@ -1241,6 +1276,15 @@ class Parser:
                 # Expression with operators like A->B->C, X+Y, A@B, A~B, Speed vs Quality, etc.
                 return self.parse_flow_expression()
 
+            # GH#261: Detect IDENTIFIER[bracket]OPERATOR pattern (e.g., CONST[X]∧CONST[Y]).
+            # When next token is LIST_START, scan past the bracket group to check if an
+            # expression operator follows. If so, dispatch to parse_flow_expression() which
+            # will handle the embedded brackets and trailing annotations correctly.
+            if next_token.type == TokenType.LIST_START:
+                token_after_bracket = self._peek_past_brackets_at(self.pos + 1)
+                if token_after_bracket in EXPRESSION_OPERATORS:
+                    return self.parse_flow_expression()
+
             # GH#66: Capture multi-word bare values
             # Examples: "Main content", "Hello World Again"
             # Stops at: NEWLINE, COMMA, LIST_END, ENVELOPE markers, operators
@@ -1891,8 +1935,53 @@ class Parser:
                 # Issue #181: Handle VARIABLE tokens in flow expressions
                 parts.append(self.current().value)
                 self.advance()
+                # GH#261: After consuming an identifier, check for an embedded bracket group
+                # (e.g., CONST[X] in CONST[X]∧CONST[Y], or ENUM[A,B] in ENUM[A,B]∧CONST[C]).
+                # A bracket group is "embedded" (part of the expression) when the token
+                # after it is NOT a list-terminating token (COMMA, LIST_END, NEWLINE, EOF,
+                # ENVELOPE markers). In that case consume and include it as part of the
+                # expression string. The actual trailing annotation (followed by list
+                # delimiter) is handled after the loop by _consume_bracket_annotation().
+                if self.current().type == TokenType.LIST_START:
+                    token_after = self._peek_past_brackets_at(self.pos)
+                    if token_after not in (
+                        TokenType.COMMA,
+                        TokenType.LIST_END,
+                        TokenType.NEWLINE,
+                        TokenType.EOF,
+                        TokenType.ENVELOPE_END,
+                        TokenType.ENVELOPE_START,
+                    ):
+                        # Embedded bracket group: consume and include in expression string
+                        bracket_parts = ["["]
+                        self.advance()  # Consume [
+                        depth = 1
+                        while depth > 0 and self.current().type != TokenType.EOF:
+                            if self.current().type == TokenType.LIST_START:
+                                depth += 1
+                                bracket_parts.append("[")
+                            elif self.current().type == TokenType.LIST_END:
+                                depth -= 1
+                                if depth > 0:
+                                    bracket_parts.append("]")
+                            elif self.current().type == TokenType.COMMA:
+                                bracket_parts.append(",")
+                            elif self.current().type == TokenType.IDENTIFIER:
+                                bracket_parts.append(self.current().value)
+                            elif self.current().type == TokenType.STRING:
+                                bracket_parts.append(f'"{self.current().value}"')
+                            elif self.current().type == TokenType.NUMBER:
+                                bracket_parts.append(_token_to_str(self.current()))
+                            self.advance()
+                        bracket_parts.append("]")
+                        parts.append("".join(bracket_parts))
             else:
                 break
+
+        # GH#261: Consume trailing bracket annotation if present (e.g., [mutually_exclusive]
+        # after REQ∧OPT). This is consistent with all other parse_value() paths which call
+        # _consume_bracket_annotation(capture=False) before returning.
+        self._consume_bracket_annotation(capture=False)
 
         # GH#184: Check for chained tension (more than one tension operator)
         if tension_count > 1 and first_tension_token is not None:
