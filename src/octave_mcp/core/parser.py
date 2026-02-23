@@ -137,6 +137,17 @@ VALUE_TOKENS: frozenset[TokenType] = frozenset(
 )
 
 
+def _has_annotation(value: str) -> bool:
+    """Check if a token value contains an angle-bracket annotation like NAME<qualifier>.
+
+    GH#269: Annotated identifiers like NEVER<X> are structured tokens that must
+    NOT be coalesced with adjacent tokens during multi-word capture. This helper
+    detects the NAME<qualifier> pattern so the parser can split them into separate
+    ListValue items instead of joining them into a single string.
+    """
+    return "<" in value and value.endswith(">")
+
+
 def _token_to_str(token: Token) -> str:
     """Convert token to string, preserving raw lexeme for NUMBER tokens (GH#66).
 
@@ -1317,7 +1328,45 @@ class Parser:
             start_line = token.line
             start_column = token.column
 
+            # GH#269: Detect annotated identifiers (NAME<qualifier>) in value position.
+            # When ANY token contains an angle-bracket annotation, the tokens are
+            # structured values that must NOT be coalesced into a single string.
+            # Instead, collect them as separate items in a ListValue.
+            # Example: GATES::NEVER<X> ALWAYS<Y> -> ListValue([NEVER<X>, ALWAYS<Y>])
+            # This preserves I1::SYNTACTIC_FIDELITY — normalization must not alter semantics.
+            first_is_annotated = _has_annotation(parts[0])
+            if first_is_annotated and self.current().type in VALUE_TOKENS:
+                # Collect all remaining value tokens as separate list items
+                items: list[str] = [parts[0]]
+                while self.current().type in VALUE_TOKENS:
+                    items.append(_token_to_str(self.current()))
+                    self.advance()
+                self._consume_bracket_annotation(capture=False)
+                return ListValue(items=items)
+
             while self.current().type in VALUE_TOKENS:
+                # GH#269: If the next token is an annotated identifier, stop coalescing
+                # and return what we have so far plus remaining tokens as a ListValue.
+                next_val = _token_to_str(self.current())
+                if _has_annotation(next_val):
+                    # We already have word_parts (possibly multiple bare words coalesced).
+                    # Collect this annotated token and any further tokens as separate items.
+                    items_split: list[str] = []
+                    if len(word_parts) > 1:
+                        # Coalesce the bare words we already collected into one item
+                        items_split.append(" ".join(word_parts))
+                    else:
+                        items_split.append(word_parts[0])
+                    # Add the annotated token
+                    items_split.append(next_val)
+                    self.advance()
+                    # Continue collecting remaining value tokens
+                    while self.current().type in VALUE_TOKENS:
+                        items_split.append(_token_to_str(self.current()))
+                        self.advance()
+                    self._consume_bracket_annotation(capture=False)
+                    return ListValue(items=items_split)
+
                 # Check if next token after this identifier is an operator
                 # If so, we're starting an expression, not a multi-word value
                 if self.peek().type in EXPRESSION_OPERATORS:
