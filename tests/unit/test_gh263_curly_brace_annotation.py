@@ -26,10 +26,12 @@ class TestLexerCurlyBraceDetection:
     def test_curly_brace_emits_repair_candidate_in_repairs(self):
         """NAME{qualifier} should include W_REPAIR_CANDIDATE in repairs list
         even when it raises E005, to guide the user toward the correct syntax."""
-        with pytest.raises(LexerError):
+        with pytest.raises(LexerError) as exc_info:
             tokenize("ATHENA{strategic_wisdom}")
-        # The repair hint is available as structured data in the exception
-        # (implementation will add a structured hint to the LexerError)
+        error = exc_info.value
+        # The W_REPAIR_CANDIDATE hint must be present in the error message
+        assert "W_REPAIR_CANDIDATE" in str(error)
+        assert "ATHENA<strategic_wisdom>" in str(error)
 
     def test_curly_brace_repair_candidate_has_original_and_suggested(self):
         """W_REPAIR_CANDIDATE should include original and suggested syntax."""
@@ -175,3 +177,107 @@ class TestExistingAnnotationTests:
         """Standalone < outside annotation should still error."""
         with pytest.raises(LexerError):
             tokenize("5 < 10")
+
+
+class TestRepairZoneBoundaries:
+    """GH#263 rework: _repair_curly_brace_annotations must respect zone boundaries.
+
+    The regex pre-processor must NOT mutate content inside:
+    - Quoted strings (Zone 2 preserving container)
+    - Literal zones (Zone 3 explicit literal zones)
+    - Comments
+
+    This ensures I1 (syntactic fidelity) and literal zone opacity.
+    """
+
+    @pytest.fixture
+    def write_tool(self):
+        return WriteTool()
+
+    def test_repair_does_not_mutate_quoted_strings(self, write_tool):
+        """Curly-brace patterns inside quoted values must NOT be rewritten.
+
+        DESC::"ATHENA{strategic_wisdom}" should preserve the quoted content verbatim.
+        """
+        content = 'DESC::"ATHENA{strategic_wisdom}"'
+        repaired, corrections = write_tool._repair_curly_brace_annotations(content)
+        # The quoted string must remain untouched
+        assert 'DESC::"ATHENA{strategic_wisdom}"' in repaired
+        # No corrections should be generated for quoted content
+        assert len(corrections) == 0
+
+    def test_repair_does_not_mutate_literal_zones(self, write_tool):
+        """Curly-brace patterns inside literal zones (fenced blocks) must NOT be rewritten.
+
+        Content between ``` fences is Zone 3 and must be opaque to normalization.
+        """
+        content = (
+            "EXAMPLE::\n" "```\n" "print('ATHENA{strategic_wisdom}')\n" "```\n" "ARCHETYPE::ATHENA{strategic_wisdom}"
+        )
+        repaired, corrections = write_tool._repair_curly_brace_annotations(content)
+        # The literal zone content must remain untouched
+        assert "print('ATHENA{strategic_wisdom}')" in repaired
+        # But the Zone 1 content outside fences SHOULD be repaired
+        assert "ARCHETYPE::ATHENA<strategic_wisdom>" in repaired
+        # Only one correction (for the Zone 1 content)
+        assert len(corrections) == 1
+
+    def test_repair_does_not_mutate_comments(self, write_tool):
+        """Curly-brace patterns inside comments must NOT be rewritten.
+
+        // ATHENA{strategic_wisdom} is a comment and should not be mutated.
+        """
+        content = "// ATHENA{strategic_wisdom}\nARCHETYPE::ATHENA{strategic_wisdom}"
+        repaired, corrections = write_tool._repair_curly_brace_annotations(content)
+        # Comment content must remain untouched
+        assert "// ATHENA{strategic_wisdom}" in repaired
+        # Zone 1 content SHOULD be repaired
+        assert "ARCHETYPE::ATHENA<strategic_wisdom>" in repaired
+        # Only one correction (for the Zone 1 content)
+        assert len(corrections) == 1
+
+    def test_repair_does_not_mutate_multiline_quoted_string(self, write_tool):
+        """Double-quoted strings spanning the value after :: must be preserved."""
+        content = 'PURPOSE::"Build ATHENA{wisdom} system"\nTYPE::ATHENA{strategic_wisdom}'
+        repaired, corrections = write_tool._repair_curly_brace_annotations(content)
+        # Quoted value preserved
+        assert 'PURPOSE::"Build ATHENA{wisdom} system"' in repaired
+        # Unquoted Zone 1 value repaired
+        assert "TYPE::ATHENA<strategic_wisdom>" in repaired
+        assert len(corrections) == 1
+
+    def test_repair_handles_multiple_literal_zones(self, write_tool):
+        """Multiple literal zones should all be protected."""
+        content = "NAME::FOO{bar}\n" "```\n" "BAZ{qux}\n" "```\n" "OTHER::AAA{bbb}\n" "```python\n" "CCC{ddd}\n" "```"
+        repaired, corrections = write_tool._repair_curly_brace_annotations(content)
+        # Zone 1 content repaired
+        assert "NAME::FOO<bar>" in repaired
+        assert "OTHER::AAA<bbb>" in repaired
+        # Literal zone content NOT repaired
+        assert "BAZ{qux}" in repaired
+        assert "CCC{ddd}" in repaired
+        assert len(corrections) == 2
+
+    def test_repair_preserves_zone1_content_correctly(self, write_tool):
+        """Zone 1 (normalizing DSL) content with curly braces should still be repaired."""
+        content = "ARCHETYPE::ATHENA{strategic_wisdom}\nCOGNITION::LOGOS{reasoning}"
+        repaired, corrections = write_tool._repair_curly_brace_annotations(content)
+        assert "ATHENA<strategic_wisdom>" in repaired
+        assert "LOGOS<reasoning>" in repaired
+        assert len(corrections) == 2
+
+    def test_unicode_annotation_repair_limitation(self, write_tool):
+        """Document that the write pre-processor regex does not handle Unicode/emoji identifiers.
+
+        The lexer supports emoji identifiers like emoji{qualifier}, but the write
+        pre-processor regex only matches ASCII identifiers. This is an accepted
+        limitation since Unicode annotation qualifiers with curly braces are
+        extremely rare in practice.
+        """
+        # Emoji identifier with curly brace should NOT be repaired by the pre-processor
+        # (it will be handled by the lexer in lenient mode instead)
+        content = "\U0001f9e0{alpha}"
+        repaired, corrections = write_tool._repair_curly_brace_annotations(content)
+        # The pre-processor does not match emoji identifiers - this is accepted
+        assert "\U0001f9e0{alpha}" in repaired
+        assert len(corrections) == 0

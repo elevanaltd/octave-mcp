@@ -160,6 +160,9 @@ class WriteTool(BaseTool):
     def _repair_curly_brace_annotations(self, content: str) -> tuple[str, list[dict[str, Any]]]:
         """GH#263: Pre-process content to repair NAME{qualifier} -> NAME<qualifier>.
 
+        I1 (Syntactic Fidelity): Only applies to Zone 1 (normalizing DSL) content.
+        Quoted strings, literal zones (fenced blocks), and comments are protected.
+
         I4 (Transform Auditability): Every repair is logged with original and repaired
         syntax for full auditability.
 
@@ -170,9 +173,65 @@ class WriteTool(BaseTool):
             Tuple of (repaired_content, list of correction records)
         """
         corrections: list[dict[str, Any]] = []
-        repaired = content
 
+        # Build a set of character ranges that are protected from repair:
+        # 1. Literal zones (``` fenced blocks) - Zone 3
+        # 2. Quoted strings (text between "" after ::) - Zone 2
+        # 3. Comments (// to end of line)
+        protected: list[tuple[int, int]] = []
+
+        # Find literal zone boundaries (``` fences)
+        in_fence = False
+        fence_start = 0
+        offset = 0
+        for line in content.split("\n"):
+            line_start = offset
+            offset += len(line) + 1  # +1 for the newline separator
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                if not in_fence:
+                    in_fence = True
+                    fence_start = line_start
+                else:
+                    in_fence = False
+                    fence_end = line_start + len(line)
+                    protected.append((fence_start, fence_end))
+
+        # If fence was never closed, protect from fence_start to end
+        if in_fence:
+            protected.append((fence_start, len(content)))
+
+        # Find quoted strings: text between "" on a line (after ::)
+        quote_pattern = re.compile(r'"[^"]*"')
+        for m in quote_pattern.finditer(content):
+            protected.append((m.start(), m.end()))
+
+        # Find comments: // to end of line
+        comment_pattern = re.compile(r"//[^\n]*")
+        for m in comment_pattern.finditer(content):
+            protected.append((m.start(), m.end()))
+
+        # Sort protected ranges for efficient lookup
+        protected.sort()
+
+        def _is_protected(pos: int) -> bool:
+            """Check if a position falls within any protected range."""
+            for start, end in protected:
+                if start <= pos < end:
+                    return True
+                if start > pos:
+                    break
+            return False
+
+        # Apply regex only to unprotected regions
+        repaired = content
+        # Collect matches that are in Zone 1 (unprotected)
+        zone1_matches = []
         for match in _CURLY_BRACE_ANNOTATION_PATTERN.finditer(content):
+            if not _is_protected(match.start()):
+                zone1_matches.append(match)
+
+        for match in zone1_matches:
             original = match.group(0)
             name = match.group(1)
             qualifier = match.group(2)
@@ -193,8 +252,12 @@ class WriteTool(BaseTool):
                 }
             )
 
+        # Replace only unprotected matches (process in reverse to preserve offsets)
         if corrections:
-            repaired = _CURLY_BRACE_ANNOTATION_PATTERN.sub(r"\1<\2>", content)
+            for match in reversed(zone1_matches):
+                name = match.group(1)
+                qualifier = match.group(2)
+                repaired = repaired[: match.start()] + f"{name}<{qualifier}>" + repaired[match.end() :]
 
         return repaired, corrections
 
