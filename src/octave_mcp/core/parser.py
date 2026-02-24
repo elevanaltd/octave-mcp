@@ -324,6 +324,36 @@ class Parser:
             return self.tokens[i].type
         return TokenType.EOF
 
+    def _is_adjacent_bracket(self) -> bool:
+        """Check if current LIST_START token is immediately adjacent to the previous token.
+
+        GH#276 rework: Per OCTAVE spec, constructor syntax requires `[` immediately
+        adjacent to NAME (no whitespace). `NAME[args]` is a constructor, but
+        `NAME [args]` (with space) is NAME followed by a separate list.
+
+        Returns:
+            True if the bracket is adjacent (constructor syntax), False if there's
+            a whitespace gap (separate list).
+        """
+        if self.pos < 1:
+            return False
+        prev = self.tokens[self.pos - 1]
+        bracket = self.current()
+        if prev.line != bracket.line:
+            return False
+        # Compute the raw text length of the previous token
+        if prev.type == TokenType.NUMBER and prev.raw is not None:
+            prev_len = len(prev.raw)
+        elif prev.type == TokenType.BOOLEAN:
+            prev_len = 4 if prev.value else 5  # "true" or "false"
+        elif prev.type == TokenType.NULL:
+            prev_len = 4  # "null"
+        elif prev.type == TokenType.STRING:
+            prev_len = len(prev.value) + 2  # Surrounding quotes
+        else:
+            prev_len = len(str(prev.value))
+        return prev.column + prev_len == bracket.column
+
     def _consume_bracket_annotation(self, capture: bool = False) -> str | None:
         """Consume bracket annotation [content] if present.
 
@@ -357,25 +387,42 @@ class Parser:
             return None
 
         # Capture mode: collect tokens for annotation string
+        # GH#276 round 2: Use blacklist approach — capture ALL tokens inside
+        # brackets except LIST_END (which terminates). This is future-proof:
+        # any new token type will automatically be preserved instead of silently
+        # dropped, satisfying I1 (syntactic fidelity).
+        #
+        # GH#276 round 3: Also skip COMMENT, NEWLINE, and INDENT tokens.
+        # These are non-semantic tokens that should not become constructor
+        # payload data, just as they are filtered in list parsing (I1/I4).
+        _SKIP_TYPES = {TokenType.COMMENT, TokenType.NEWLINE, TokenType.INDENT}
+
         annotation_tokens: list[str] = []
 
         while bracket_depth > 0 and self.current().type != TokenType.EOF:
-            if self.current().type == TokenType.LIST_START:
+            tok = self.current()
+            if tok.type == TokenType.LIST_START:
                 bracket_depth += 1
                 annotation_tokens.append("[")
-            elif self.current().type == TokenType.LIST_END:
+            elif tok.type == TokenType.LIST_END:
                 bracket_depth -= 1
                 if bracket_depth > 0:  # Don't include the final ]
                     annotation_tokens.append("]")
-            elif self.current().type == TokenType.IDENTIFIER:
-                annotation_tokens.append(self.current().value)
-            elif self.current().type == TokenType.COMMA:
+            elif tok.type == TokenType.COMMA:
                 annotation_tokens.append(",")
-            elif self.current().type == TokenType.STRING:
-                annotation_tokens.append(f'"{self.current().value}"')
+            elif tok.type in _SKIP_TYPES:
+                pass  # Non-semantic tokens: skip silently
+            else:
+                # Blacklist approach: capture any token between [ and ].
+                # Use _token_to_str for consistent stringification of all
+                # value types (NUMBER with raw, BOOLEAN, NULL, VERSION,
+                # VARIABLE, STRING with quotes, IDENTIFIER, operators, etc.)
+                annotation_tokens.append(_token_to_str(tok))
             self.advance()
 
-        return "".join(annotation_tokens) if annotation_tokens else None
+        # GH#276 rework: Return empty string for empty brackets FOO[]
+        # instead of None, so FOO<> is emitted (I4 auditability).
+        return "".join(annotation_tokens) if annotation_tokens else ""
 
     def _parse_block_target_annotation(self) -> str | None:
         """Parse block target annotation [->TARGET] syntax.
@@ -1079,7 +1126,15 @@ class Parser:
                         "column": start_column,
                     }
                 )
-                self._consume_bracket_annotation(capture=False)
+                # GH#276 round 2: Handle trailing bracket annotations.
+                if self.current().type == TokenType.LIST_START:
+                    if self._is_adjacent_bracket():
+                        self._consume_bracket_annotation(capture=False)
+                    else:
+                        # Non-adjacent bracket: capture to prevent data loss (I4).
+                        annotation = self._consume_bracket_annotation(capture=True)
+                        if annotation is not None:
+                            result = f"{result} [{annotation}]"
                 return result
 
             # Standalone STRING
@@ -1154,7 +1209,14 @@ class Parser:
                 )
 
                 # Consume bracket annotation if present (like IDENTIFIER path)
-                self._consume_bracket_annotation(capture=False)
+                # GH#276 round 2: Handle trailing bracket annotations.
+                if self.current().type == TokenType.LIST_START:
+                    if self._is_adjacent_bracket():
+                        self._consume_bracket_annotation(capture=False)
+                    else:
+                        annotation = self._consume_bracket_annotation(capture=True)
+                        if annotation is not None:
+                            result = f"{result} [{annotation}]"
 
                 return result
 
@@ -1189,7 +1251,15 @@ class Parser:
                         "column": start_column,
                     }
                 )
-                self._consume_bracket_annotation(capture=False)
+                # GH#276 round 2: Handle trailing bracket annotations.
+                if self.current().type == TokenType.LIST_START:
+                    if self._is_adjacent_bracket():
+                        self._consume_bracket_annotation(capture=False)
+                    else:
+                        # Non-adjacent bracket: capture to prevent data loss (I4).
+                        annotation = self._consume_bracket_annotation(capture=True)
+                        if annotation is not None:
+                            result = f"{result} [{annotation}]"
                 return result
 
             # Standalone BOOLEAN
@@ -1223,7 +1293,15 @@ class Parser:
                         "column": start_column,
                     }
                 )
-                self._consume_bracket_annotation(capture=False)
+                # GH#276 round 2: Handle trailing bracket annotations.
+                if self.current().type == TokenType.LIST_START:
+                    if self._is_adjacent_bracket():
+                        self._consume_bracket_annotation(capture=False)
+                    else:
+                        # Non-adjacent bracket: capture to prevent data loss (I4).
+                        annotation = self._consume_bracket_annotation(capture=True)
+                        if annotation is not None:
+                            result = f"{result} [{annotation}]"
                 return result
 
             # Standalone NULL
@@ -1257,7 +1335,15 @@ class Parser:
                         "column": start_column,
                     }
                 )
-                self._consume_bracket_annotation(capture=False)
+                # GH#276 round 2: Handle trailing bracket annotations.
+                if self.current().type == TokenType.LIST_START:
+                    if self._is_adjacent_bracket():
+                        self._consume_bracket_annotation(capture=False)
+                    else:
+                        # Non-adjacent bracket: capture to prevent data loss (I4).
+                        annotation = self._consume_bracket_annotation(capture=True)
+                        if annotation is not None:
+                            result = f"{result} [{annotation}]"
                 return result
 
             # Standalone VERSION
@@ -1302,6 +1388,17 @@ class Parser:
             parts = [token.value]
             self.advance()
 
+            # GH#276: Capture constructor bracket annotation NAME[args] -> NAME<args>
+            # Per OCTAVE spec §1b: NAME immediately followed by [args] is constructor
+            # syntax. The bracket contents are semantic arguments that must be preserved.
+            # Convert to canonical angle-bracket form NAME<args> for I1 syntactic fidelity.
+            # GH#276 rework: Adjacency check — only treat as constructor if [ is
+            # immediately adjacent to NAME (no whitespace gap).
+            if self.current().type == TokenType.LIST_START and self._is_adjacent_bracket():
+                annotation = self._consume_bracket_annotation(capture=True)
+                if annotation is not None:
+                    parts[0] = f"{parts[0]}<{annotation}>"
+
             # Collect colon-separated path components (Issue #41 Phase 2)
             # Examples: HERMES:API_TIMEOUT, MODULE:SUBMODULE:COMPONENT
             while self.current().type == TokenType.BLOCK and self.peek().type == TokenType.IDENTIFIER:
@@ -1313,11 +1410,16 @@ class Parser:
 
             # If we consumed colons, return as colon-joined path
             if len(parts) > 1:
-                # GH#85: Consume bracket annotation if present after colon-path value
+                # GH#276: Capture bracket annotation if present after colon-path value
                 # Examples: HERMES:API_TIMEOUT[note], MODULE:SUB[annotation]
-                # Must consume before returning so indentation tracking sees NEWLINE
-                self._consume_bracket_annotation(capture=False)
-                return ":".join(parts)
+                # Preserves constructor args as angle-bracket form for I1 fidelity.
+                # GH#276 rework: Adjacency check — [ must be immediately adjacent.
+                result_path = ":".join(parts)
+                if self.current().type == TokenType.LIST_START and self._is_adjacent_bracket():
+                    annotation = self._consume_bracket_annotation(capture=True)
+                    if annotation is not None:
+                        result_path = f"{result_path}<{annotation}>"
+                return result_path
 
             # GH#66: Continue capturing consecutive identifiers as multi-word value
             # GH#63: Include NUMBER tokens in multi-word capture (convert to string)
@@ -1390,10 +1492,25 @@ class Parser:
                             full_expr = " ".join(str(p) for p in expr_parts) + "".join(str(p) for p in op_parts)
                         else:
                             full_expr = "".join(str(p) for p in op_parts)
-                        self._consume_bracket_annotation(capture=False)
+                        # GH#276 round 2: Handle trailing bracket annotations.
+                        if self.current().type == TokenType.LIST_START:
+                            if self._is_adjacent_bracket():
+                                self._consume_bracket_annotation(capture=False)
+                            else:
+                                annotation = self._consume_bracket_annotation(capture=True)
+                                if annotation is not None:
+                                    full_expr = f"{full_expr} [{annotation}]"
                         return full_expr
 
                     cur_val = _token_to_str(self.current())
+                    self.advance()
+                    # GH#276: Check for constructor bracket annotation after this token
+                    # e.g., ALWAYS[SYSTEM_COHERENCE] -> ALWAYS<SYSTEM_COHERENCE>
+                    # GH#276 rework: Adjacency check — [ must be immediately adjacent.
+                    if self.current().type == TokenType.LIST_START and self._is_adjacent_bracket():
+                        annotation = self._consume_bracket_annotation(capture=True)
+                        if annotation is not None:
+                            cur_val = f"{cur_val}<{annotation}>"
                     if _has_annotation(cur_val):
                         # Flush accumulated bare words before annotated token
                         if bare_words:
@@ -1402,13 +1519,21 @@ class Parser:
                         items.append(cur_val)
                     else:
                         bare_words.append(cur_val)
-                    self.advance()
 
                 # Flush any remaining bare words
                 if bare_words:
                     items.append(" ".join(bare_words))
 
-                self._consume_bracket_annotation(capture=False)
+                # GH#276 round 2: Handle trailing bracket annotations.
+                if self.current().type == TokenType.LIST_START:
+                    if self._is_adjacent_bracket():
+                        self._consume_bracket_annotation(capture=False)
+                    else:
+                        # Non-adjacent bracket: capture into value to prevent data loss (I4).
+                        annotation = self._consume_bracket_annotation(capture=True)
+                        if annotation is not None:
+                            last = items[-1] if items else ""
+                            items[-1] = f"{last} [{annotation}]"
 
                 # Return as ListValue if multiple items, scalar if single
                 if len(items) == 1:
@@ -1455,8 +1580,15 @@ class Parser:
 
                 # Just another word/number in the multi-word value
                 # GH#66: Use _token_to_str to preserve NUMBER lexemes (e.g., 1e10)
-                word_parts.append(_token_to_str(self.current()))
+                cur_word = _token_to_str(self.current())
                 self.advance()
+                # GH#276: Check for constructor bracket annotation after this word
+                # GH#276 rework: Adjacency check — [ must be immediately adjacent.
+                if self.current().type == TokenType.LIST_START and self._is_adjacent_bracket():
+                    annotation = self._consume_bracket_annotation(capture=True)
+                    if annotation is not None:
+                        cur_word = f"{cur_word}<{annotation}>"
+                word_parts.append(cur_word)
 
             # Join words with spaces
             result = " ".join(word_parts)
@@ -1478,7 +1610,18 @@ class Parser:
             # GH#85: Consume bracket annotation if present after value
             # Examples: DONE[annotation], PENDING[[nested,content]]
             # Must consume before returning so indentation tracking sees NEWLINE
-            self._consume_bracket_annotation(capture=False)
+            if self.current().type == TokenType.LIST_START:
+                if self._is_adjacent_bracket():
+                    # Adjacent bracket: constructor annotation, consume without capture
+                    # (already captured in the loop above at line ~1530)
+                    self._consume_bracket_annotation(capture=False)
+                else:
+                    # GH#276 round 2: Non-adjacent bracket `A [B,C]` — the bracket
+                    # content is NOT a constructor annotation but separate list data.
+                    # Capture it into the value to prevent silent data loss (I4).
+                    annotation = self._consume_bracket_annotation(capture=True)
+                    if annotation is not None:
+                        result = f"{result} [{annotation}]"
 
             return result
 
@@ -1508,7 +1651,14 @@ class Parser:
             # Gap 9 regression fix: Consume bracket annotation if present
             # Examples: §X[note], §TARGET[[nested,content]]
             # Must consume before returning so indentation tracking sees NEWLINE
-            self._consume_bracket_annotation(capture=False)
+            # GH#276 round 2: Handle trailing bracket annotations.
+            if self.current().type == TokenType.LIST_START:
+                if self._is_adjacent_bracket():
+                    self._consume_bracket_annotation(capture=False)
+                else:
+                    annotation = self._consume_bracket_annotation(capture=True)
+                    if annotation is not None:
+                        section_marker = f"{section_marker} [{annotation}]"
 
             return section_marker
 
@@ -2033,25 +2183,30 @@ class Parser:
                         TokenType.ENVELOPE_START,
                     ):
                         # Embedded bracket group: consume and include in expression string
+                        # GH#276 round 4: Use blacklist approach (matching
+                        # _consume_bracket_annotation) — capture ALL tokens
+                        # except LIST_END, COMMENT, NEWLINE, INDENT.  This
+                        # prevents silent data loss for BOOLEAN, VARIABLE,
+                        # VERSION and any future token types (I1).
+                        _EXPR_SKIP = {TokenType.COMMENT, TokenType.NEWLINE, TokenType.INDENT}
                         bracket_parts = ["["]
                         self.advance()  # Consume [
                         depth = 1
                         while depth > 0 and self.current().type != TokenType.EOF:
-                            if self.current().type == TokenType.LIST_START:
+                            tok = self.current()
+                            if tok.type == TokenType.LIST_START:
                                 depth += 1
                                 bracket_parts.append("[")
-                            elif self.current().type == TokenType.LIST_END:
+                            elif tok.type == TokenType.LIST_END:
                                 depth -= 1
                                 if depth > 0:
                                     bracket_parts.append("]")
-                            elif self.current().type == TokenType.COMMA:
+                            elif tok.type == TokenType.COMMA:
                                 bracket_parts.append(",")
-                            elif self.current().type == TokenType.IDENTIFIER:
-                                bracket_parts.append(self.current().value)
-                            elif self.current().type == TokenType.STRING:
-                                bracket_parts.append(f'"{self.current().value}"')
-                            elif self.current().type == TokenType.NUMBER:
-                                bracket_parts.append(_token_to_str(self.current()))
+                            elif tok.type in _EXPR_SKIP:
+                                pass  # Non-semantic tokens: skip silently
+                            else:
+                                bracket_parts.append(_token_to_str(tok))
                             self.advance()
                         bracket_parts.append("]")
                         parts.append("".join(bracket_parts))
@@ -2061,7 +2216,15 @@ class Parser:
         # GH#261: Consume trailing bracket annotation if present (e.g., [mutually_exclusive]
         # after REQ∧OPT). This is consistent with all other parse_value() paths which call
         # _consume_bracket_annotation(capture=False) before returning.
-        self._consume_bracket_annotation(capture=False)
+        # GH#276 round 2: Handle trailing bracket annotations.
+        if self.current().type == TokenType.LIST_START:
+            if self._is_adjacent_bracket():
+                self._consume_bracket_annotation(capture=False)
+            else:
+                # Non-adjacent: capture to prevent data loss
+                annotation = self._consume_bracket_annotation(capture=True)
+                if annotation is not None:
+                    parts.append(f"[{annotation}]")
 
         # GH#184: Check for chained tension (more than one tension operator)
         if tension_count > 1 and first_tension_token is not None:
