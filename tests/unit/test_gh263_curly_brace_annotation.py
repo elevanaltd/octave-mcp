@@ -156,6 +156,36 @@ class TestWriteToolCurlyBrace:
         assert "ATHENA<strategic_wisdom>" in written
         assert "ATHENA{strategic_wisdom}" not in written
 
+    @pytest.mark.asyncio
+    async def test_normalize_mode_repairs_curly_braces_gh266(self, write_tool, tmp_path):
+        """GH#266: normalize mode on file with NAME{qualifier} must succeed with lenient=True.
+
+        The baseline parse for metrics runs BEFORE curly brace repair. If both
+        parse() and parse_with_warnings() fail on {, the pipeline crashes.
+        The fix: gracefully degrade original_metrics to None so the pipeline
+        continues to the curly brace repair step.
+        """
+        target = str(tmp_path / "test.oct.md")
+        # Write a file with curly brace syntax directly to disk
+        curly_content = '===TEST===\nMETA:\n  TYPE::"EXAMPLE"\nARCHETYPE::ATLAS{structural_foundation}\n===END==='
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(curly_content)
+
+        # Normalize mode: no content, no changes - just target_path + lenient
+        result = await write_tool.execute(target_path=target, lenient=True)
+        assert result["status"] == "success", f"Normalize mode failed: {result.get('errors', [])}"
+
+        # Verify the repaired output uses angle brackets
+        with open(target, encoding="utf-8") as f:
+            written = f.read()
+        assert "ATLAS<structural_foundation>" in written
+        assert "ATLAS{structural_foundation}" not in written
+
+        # Verify repair was logged in corrections (I4 auditability)
+        corrections = result.get("corrections", [])
+        repair_corrections = [c for c in corrections if "W_REPAIR_CANDIDATE" in c.get("code", "")]
+        assert len(repair_corrections) >= 1
+
 
 class TestPlainTextCurlyBracePreservation:
     """GH#263 rework: plain text with curly braces must NOT be repaired.

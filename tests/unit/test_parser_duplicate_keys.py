@@ -87,29 +87,42 @@ META:
 
 
 class TestDuplicateKeyDetectionInlineMap:
-    """Test duplicate key detection in inline maps [k::v, k::v2]."""
+    """Test duplicate key detection in inline maps [k::v, k::v2].
 
-    def test_detects_duplicate_key_in_inline_map(self):
-        """Should detect duplicate key in inline map and emit warning.
+    GH#270: Separate InlineMap entries in a list are array items, not map entries.
+    Repeated keys across separate InlineMap items should NOT trigger warnings
+    because lists semantically allow repeated keys (e.g., REGEX::"a", REGEX::"b").
+    """
 
-        Inline maps: [k::v, k2::v2, k::v3] - third item duplicates first
+    def test_no_warning_for_repeated_keys_across_inline_map_items(self):
+        """Repeated keys across separate InlineMap items in a list should NOT warn.
+
+        GH#270: [REGEX::"a", REGEX::"b"] is an array of InlineMap entries.
+        Each REGEX is a separate list item -- not a map collision.
         """
         content = """===TEST===
-DATA::[name::Alice, age::30, name::Bob]
+MUST_USE::[REGEX::"^pattern_a", REGEX::"^pattern_b", REGEX::"^pattern_c"]
 ===END==="""
         doc, warnings = parse_with_warnings(content)
 
         # Document should parse successfully
         assert doc is not None
-        assert len(doc.sections) == 1
 
-        # I4 Audit: Should emit warning for duplicate key
+        # Find the MUST_USE assignment
+        must_use = None
+        for node in doc.sections:
+            if hasattr(node, "key") and node.key == "MUST_USE":
+                must_use = node
+                break
+        assert must_use is not None, "MUST_USE field not found"
+        assert hasattr(must_use.value, "items"), "Expected ListValue"
+        assert len(must_use.value.items) == 3, f"Expected 3 items, got {len(must_use.value.items)}"
+
+        # No duplicate key warnings should be emitted for cross-item keys
         duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
-        assert len(duplicate_warnings) >= 1, f"Expected duplicate key warning, got {warnings}"
-
-        # Verify warning identifies the key
-        dup_warning = duplicate_warnings[0]
-        assert dup_warning.get("key") == "name"
+        assert (
+            len(duplicate_warnings) == 0
+        ), f"Should not warn for repeated keys across list items: {duplicate_warnings}"
 
     def test_no_warning_for_unique_keys_in_inline_map(self):
         """Should not emit warning when all inline map keys are unique."""
@@ -119,6 +132,39 @@ DATA::[name::Alice, age::30, city::NYC]
         doc, warnings = parse_with_warnings(content)
 
         # No duplicate key warnings should be emitted
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        assert len(duplicate_warnings) == 0
+
+    def test_preserves_all_entries_with_repeated_keys_in_list(self):
+        """All InlineMap entries with same key must be preserved in list items.
+
+        GH#270: This is the core I1 (syntactic fidelity) test -- the parser
+        must not merge or drop entries just because they share a key name.
+        """
+        content = """===TEST===
+PATTERNS::[PATTERN::"first", PATTERN::"second"]
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assert doc is not None
+        patterns = None
+        for node in doc.sections:
+            if hasattr(node, "key") and node.key == "PATTERNS":
+                patterns = node
+                break
+        assert patterns is not None
+        items = patterns.value.items
+        assert len(items) == 2, f"Both items must be preserved, got {len(items)}"
+
+        # Verify each item has the correct value
+        from octave_mcp.core.ast_nodes import InlineMap
+
+        assert isinstance(items[0], InlineMap)
+        assert isinstance(items[1], InlineMap)
+        assert items[0].pairs.get("PATTERN") == "first"
+        assert items[1].pairs.get("PATTERN") == "second"
+
+        # No spurious warnings
         duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
         assert len(duplicate_warnings) == 0
 

@@ -137,6 +137,17 @@ VALUE_TOKENS: frozenset[TokenType] = frozenset(
 )
 
 
+def _has_annotation(value: str) -> bool:
+    """Check if a token value contains an angle-bracket annotation like NAME<qualifier>.
+
+    GH#269: Annotated identifiers like NEVER<X> are structured tokens that must
+    NOT be coalesced with adjacent tokens during multi-word capture. This helper
+    detects the NAME<qualifier> pattern so the parser can split them into separate
+    ListValue items instead of joining them into a single string.
+    """
+    return "<" in value and value.endswith(">")
+
+
 def _token_to_str(token: Token) -> str:
     """Convert token to string, preserving raw lexeme for NUMBER tokens (GH#66).
 
@@ -1312,10 +1323,100 @@ class Parser:
             # GH#63: Include NUMBER tokens in multi-word capture (convert to string)
             # Issue #140/#141: Include VALUE_TOKENS to prevent data loss
             # Stop at delimiters, operators, or non-value tokens
-            word_parts = [parts[0]]
+
             # Track start position for I4 audit
             start_line = token.line
             start_column = token.column
+
+            # GH#269 rework: Unified accumulator pattern for annotated identifiers.
+            # CRS+CE review identified two problems with the previous two-path approach:
+            # 1. Bare words after annotated tokens weren't coalesced with each other
+            # 2. Early return for annotated-first tokens skipped expression operator checks
+            # 3. Order-dependent behavior (A<X> B C vs A B C<X> gave different results)
+            #
+            # Solution: Lookahead scan to detect if ANY token in the sequence is annotated.
+            # If so, use a unified accumulator loop that:
+            #   - Buffers bare words and coalesces them on flush
+            #   - Emits annotated tokens as separate items
+            #   - Handles expression operators correctly
+            # If not, fall through to existing bare-word coalescing + expression logic.
+
+            has_any_annotation = _has_annotation(parts[0])
+            if not has_any_annotation:
+                # Lookahead: scan upcoming value tokens for annotations
+                scan_pos = self.pos
+                while scan_pos < len(self.tokens) and self.tokens[scan_pos].type in VALUE_TOKENS:
+                    scan_val = _token_to_str(self.tokens[scan_pos])
+                    if _has_annotation(scan_val):
+                        has_any_annotation = True
+                        break
+                    scan_pos += 1
+
+            if has_any_annotation:
+                # GH#269 unified accumulator: bare_words buffer + items list
+                bare_words: list[str] = []
+                items: list[str] = []
+
+                # Process the first token (already consumed)
+                if _has_annotation(parts[0]):
+                    items.append(parts[0])
+                else:
+                    bare_words.append(parts[0])
+
+                # Process remaining value tokens and expression operators
+                while self.current().type in VALUE_TOKENS or self.current().type in EXPRESSION_OPERATORS:
+                    if self.current().type in EXPRESSION_OPERATORS:
+                        # Flush bare_words before operator
+                        if bare_words:
+                            items.append(" ".join(bare_words))
+                            bare_words = []
+                        # Handle expression: collect operator and remaining tokens
+                        expr_parts = list(items) if items else []
+                        # If items is non-empty, the last item starts the expression LHS
+                        # Build expression string from all collected items + operator + rest
+                        op_parts: list[str] = []
+                        while self.current().type in VALUE_TOKENS or self.current().type in EXPRESSION_OPERATORS:
+                            if self.current().type in EXPRESSION_OPERATORS:
+                                op_parts.append(self.current().value)
+                                self.advance()
+                            elif self.current().type in VALUE_TOKENS:
+                                op_parts.append(_token_to_str(self.current()))
+                                self.advance()
+                            else:
+                                break
+                        # Merge: items collected so far become space-joined prefix,
+                        # then operator expression appended
+                        if expr_parts:
+                            full_expr = " ".join(str(p) for p in expr_parts) + "".join(str(p) for p in op_parts)
+                        else:
+                            full_expr = "".join(str(p) for p in op_parts)
+                        self._consume_bracket_annotation(capture=False)
+                        return full_expr
+
+                    cur_val = _token_to_str(self.current())
+                    if _has_annotation(cur_val):
+                        # Flush accumulated bare words before annotated token
+                        if bare_words:
+                            items.append(" ".join(bare_words))
+                            bare_words = []
+                        items.append(cur_val)
+                    else:
+                        bare_words.append(cur_val)
+                    self.advance()
+
+                # Flush any remaining bare words
+                if bare_words:
+                    items.append(" ".join(bare_words))
+
+                self._consume_bracket_annotation(capture=False)
+
+                # Return as ListValue if multiple items, scalar if single
+                if len(items) == 1:
+                    return items[0]
+                return ListValue(items=items)
+
+            # No annotations detected: original bare-word coalescing + expression logic
+            word_parts = [parts[0]]
 
             while self.current().type in VALUE_TOKENS:
                 # Check if next token after this identifier is an operator
@@ -1326,19 +1427,18 @@ class Parser:
                     word_parts.append(_token_to_str(self.current()))
                     self.advance()
                     # Now we need to continue with flow expression parsing
-                    expr_parts = [" ".join(word_parts)]
+                    expr_parts_plain = [" ".join(word_parts)]
                     while self.current().type in VALUE_TOKENS or self.current().type in EXPRESSION_OPERATORS:
                         if self.current().type in EXPRESSION_OPERATORS:
-                            expr_parts.append(self.current().value)
+                            expr_parts_plain.append(self.current().value)
                             self.advance()
                         elif self.current().type in VALUE_TOKENS:
                             # GH#66/#140/#141: Use _token_to_str to preserve all value token lexemes
-                            expr_parts.append(_token_to_str(self.current()))
+                            expr_parts_plain.append(_token_to_str(self.current()))
                             self.advance()
                         else:
                             break
                     # I4 Audit: Emit warning when multi-word coalescing occurs in expression path
-                    # Same pattern as terminal multi-word at line 557-567
                     if len(word_parts) > 1:
                         self.warnings.append(
                             {
@@ -1351,7 +1451,7 @@ class Parser:
                                 "column": start_column,
                             }
                         )
-                    return "".join(str(p) for p in expr_parts)
+                    return "".join(str(p) for p in expr_parts_plain)
 
                 # Just another word/number in the multi-word value
                 # GH#66: Use _token_to_str to preserve NUMBER lexemes (e.g., 1e10)
@@ -1456,10 +1556,12 @@ class Parser:
 
         items: list[Any] = []
 
-        # Issue #179: Track inline map keys for duplicate detection
-        inline_map_keys: dict[str, int] = {}  # key -> first occurrence line
-
         # Parse list items
+        # GH#270: Removed cross-item inline map key duplicate tracking.
+        # Each InlineMap item in a list is a separate array entry, so repeated
+        # keys across items (e.g., [REGEX::"a", REGEX::"b"]) are intentional
+        # and must not trigger W_DUPLICATE_KEY warnings. The previous tracking
+        # (Issue #179) incorrectly treated list items as map entries.
         while True:
             # Skip whitespace/newlines/indents (valid anywhere between items)
             while self.current().type in (TokenType.NEWLINE, TokenType.INDENT):
@@ -1470,33 +1572,9 @@ class Parser:
             if self.current().type in (TokenType.LIST_END, TokenType.EOF, TokenType.ENVELOPE_END):
                 break
 
-            # Issue #179: Capture line before parsing item for accurate duplicate reporting
-            item_line = self.current().line
-
             # Parse item value
             item = self.parse_list_item()
             items.append(item)
-
-            # Issue #179: Check for duplicate keys in inline maps
-            if isinstance(item, InlineMap):
-                for key in item.pairs.keys():
-                    if key in inline_map_keys:
-                        # I4 Audit: Emit warning for duplicate key in inline map
-                        self.warnings.append(
-                            {
-                                "type": "lenient_parse",
-                                "subtype": "duplicate_key",
-                                "key": key,
-                                "first_line": inline_map_keys[key],
-                                "duplicate_line": item_line,
-                                "message": (
-                                    f"W_DUPLICATE_KEY::{key} at line {item_line} "
-                                    f"overwrites previous definition at line {inline_map_keys[key]}"
-                                ),
-                            }
-                        )
-                    else:
-                        inline_map_keys[key] = item_line
 
             # Check for comma
             if self.current().type == TokenType.COMMA:

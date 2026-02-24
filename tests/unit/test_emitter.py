@@ -506,3 +506,227 @@ class TestFrontmatterPreservation:
         assert result.startswith("---\n")
         assert "name: test-skill" in result
         assert "description: A skill" in result
+
+
+class TestMultiLineArrayEmission:
+    """Test multi-line emission for arrays containing structured content (GH#267).
+
+    Arrays with KEY::VALUE pairs or nested arrays should emit multi-line
+    with 2-space indentation. Simple flat arrays remain single-line when short.
+    """
+
+    def test_flat_short_array_stays_single_line(self):
+        """Simple flat arrays under 120 chars remain single-line."""
+        result = emit_value(ListValue(items=["a", "b", "c"]))
+        assert result == "[a,b,c]"
+
+    def test_array_with_kv_pairs_emits_multiline(self):
+        """Arrays containing KEY::VALUE pairs (InlineMap items) emit multi-line."""
+        # An array with InlineMap items inside it
+        items = [
+            InlineMap(pairs={"ROLE": "ORCHESTRATOR"}),
+            InlineMap(pairs={"COGNITION": "LOGOS"}),
+        ]
+        result = emit_value(ListValue(items=items))
+        assert "[\n" in result
+        assert "  ROLE::ORCHESTRATOR,\n" in result
+        assert "  COGNITION::LOGOS\n" in result
+        assert result.endswith("]")
+
+    def test_array_with_nested_array_emits_multiline(self):
+        """Arrays containing nested arrays emit multi-line."""
+        inner = ListValue(items=["ATLAS", "ODYSSEUS"])
+        items = ["ROLE", inner, "MODEL"]
+        result = emit_value(ListValue(items=items))
+        assert "[\n" in result
+        assert result.endswith("]")
+
+    def test_nested_array_indentation(self):
+        """Nested structured arrays get additional 2-space indentation."""
+        inner = ListValue(
+            items=[
+                InlineMap(pairs={"ATLAS": "ultimate_accountability"}),
+                InlineMap(pairs={"ODYSSEUS": "cross_boundary_navigation"}),
+            ]
+        )
+        items = [
+            InlineMap(pairs={"ROLE": "ORCHESTRATOR"}),
+            InlineMap(pairs={"ARCHETYPE": inner}),
+        ]
+        result = emit_value(ListValue(items=items))
+        # The inner structured array should be indented further
+        assert "  ARCHETYPE::[\n" in result
+        assert "    ATLAS::ultimate_accountability,\n" in result
+
+    def test_multiline_in_assignment_context(self):
+        """Multi-line arrays within assignments use correct base indentation."""
+        inner = ListValue(
+            items=[
+                "ATLAS<ultimate_accountability>",
+                "ODYSSEUS<cross_boundary_navigation>",
+            ]
+        )
+        items = [
+            InlineMap(pairs={"ROLE": "HOLISTIC_ORCHESTRATOR"}),
+            InlineMap(pairs={"COGNITION": "LOGOS"}),
+            InlineMap(pairs={"ARCHETYPE": inner}),
+            InlineMap(pairs={"MODEL_TIER": "PREMIUM"}),
+        ]
+        doc = Document(
+            name="TEST",
+            sections=[
+                Block(
+                    key="SECTION",
+                    children=[
+                        Assignment(key="CORE", value=ListValue(items=items)),
+                    ],
+                )
+            ],
+        )
+        result = emit(doc)
+        # The CORE assignment is at indent level 1 (inside SECTION block)
+        # So array content should be at indent level 2 (4 spaces)
+        assert "  CORE::[\n" in result
+        assert "    ROLE::HOLISTIC_ORCHESTRATOR,\n" in result
+        assert "    COGNITION::LOGOS,\n" in result
+        # Inner flat array stays single-line (no k::v pairs inside)
+        assert "    ARCHETYPE::[ATLAS<ultimate_accountability>,ODYSSEUS<cross_boundary_navigation>],\n" in result
+        assert "    MODEL_TIER::PREMIUM\n" in result
+        assert "  ]" in result
+
+    def test_multiline_in_assignment_with_nested_structured_array(self):
+        """Multi-line arrays with nested structured arrays emit recursively."""
+        inner = ListValue(
+            items=[
+                InlineMap(pairs={"ATLAS": "ultimate_accountability"}),
+                InlineMap(pairs={"ODYSSEUS": "cross_boundary_navigation"}),
+            ]
+        )
+        items = [
+            InlineMap(pairs={"ROLE": "HOLISTIC_ORCHESTRATOR"}),
+            InlineMap(pairs={"ARCHETYPE": inner}),
+            InlineMap(pairs={"MODEL_TIER": "PREMIUM"}),
+        ]
+        doc = Document(
+            name="TEST",
+            sections=[
+                Block(
+                    key="SECTION",
+                    children=[
+                        Assignment(key="CORE", value=ListValue(items=items)),
+                    ],
+                )
+            ],
+        )
+        result = emit(doc)
+        # Outer array at indent 1, inner structured array deeper
+        assert "  CORE::[\n" in result
+        assert "    ROLE::HOLISTIC_ORCHESTRATOR,\n" in result
+        assert "    ARCHETYPE::[\n" in result
+        assert "      ATLAS::ultimate_accountability,\n" in result
+        assert "      ODYSSEUS::cross_boundary_navigation\n" in result
+        assert "    ],\n" in result
+        assert "    MODEL_TIER::PREMIUM\n" in result
+        assert "  ]" in result
+
+    def test_multiline_idempotent(self):
+        """Multi-line emission must be deterministic (same input -> same output)."""
+        items = [
+            InlineMap(pairs={"ROLE": "ORCHESTRATOR"}),
+            InlineMap(pairs={"COGNITION": "LOGOS"}),
+        ]
+        result1 = emit_value(ListValue(items=items))
+        result2 = emit_value(ListValue(items=items))
+        assert result1 == result2
+
+    def test_long_flat_array_stays_single_line(self):
+        """Even long flat arrays without structure stay single-line.
+
+        The threshold is about structure, not length. Flat arrays
+        (no :: pairs, no nested arrays) remain single-line.
+        """
+        items = [f"ITEM_{i}" for i in range(20)]
+        result = emit_value(ListValue(items=items))
+        assert "\n" not in result
+
+    def test_array_with_kv_pair_string_values_emits_multiline(self):
+        """Arrays where items contain :: (key-value syntax) should go multi-line."""
+        # This tests InlineMap items with quoted string values
+        items = [
+            InlineMap(pairs={"MUST_ALWAYS": ListValue(items=["Write tests first", "Check coverage"])}),
+        ]
+        result = emit_value(ListValue(items=items))
+        assert "[\n" in result
+
+    def test_closing_bracket_at_parent_indent(self):
+        """Closing ] must be at the parent's indentation level."""
+        items = [
+            InlineMap(pairs={"ROLE": "ORCHESTRATOR"}),
+            InlineMap(pairs={"COGNITION": "LOGOS"}),
+        ]
+        result = emit_value(ListValue(items=items), indent=2)
+        lines = result.split("\n")
+        # Closing bracket should be at indent level 2 (4 spaces)
+        assert lines[-1] == "    ]"
+
+    def test_all_absent_inline_map_skipped_in_multiline(self):
+        """InlineMap where all pairs are Absent should be skipped entirely (GH#267).
+
+        An all-Absent InlineMap produces no visible pairs. Emitting it would
+        insert an empty line inside the array brackets, breaking emit-parse
+        idempotency (I1 violation).
+        """
+        items = [
+            InlineMap(pairs={"A": Absent()}),
+        ]
+        result = emit_value(ListValue(items=items))
+        # With all items filtered out, the result should be an empty array
+        assert result == "[]"
+
+    def test_all_absent_inline_map_among_valid_items(self):
+        """All-Absent InlineMap among valid items should be skipped (GH#267).
+
+        The valid items should still emit normally; only the all-Absent
+        InlineMap item is dropped.
+        """
+        items = [
+            InlineMap(pairs={"ROLE": "ORCHESTRATOR"}),
+            InlineMap(pairs={"DEAD": Absent()}),
+            InlineMap(pairs={"COGNITION": "LOGOS"}),
+        ]
+        result = emit_value(ListValue(items=items))
+        assert "ROLE::ORCHESTRATOR" in result
+        assert "COGNITION::LOGOS" in result
+        assert "DEAD" not in result
+        # Should still be multi-line (has valid InlineMap items)
+        assert "[\n" in result
+
+    def test_mixed_absent_non_absent_inline_map(self):
+        """InlineMap with mix of Absent and non-Absent pairs emits only non-Absent (GH#267).
+
+        Only the pairs with actual values should appear in the output.
+        The Absent pairs are silently dropped per I2.
+        """
+        items = [
+            InlineMap(pairs={"A": "val", "B": Absent()}),
+        ]
+        result = emit_value(ListValue(items=items))
+        assert "A::val" in result
+        assert "B" not in result
+
+    def test_all_absent_inline_map_roundtrip(self):
+        """Emit-parse-emit roundtrip for ListValue with all-Absent InlineMap (GH#267).
+
+        The emitted output must parse back to an equivalent AST that re-emits
+        identically, proving I1 (emit-parse idempotency).
+        """
+        doc = Document(
+            name="TEST",
+            sections=[
+                Assignment(key="K", value=ListValue(items=[InlineMap(pairs={"A": Absent()})])),
+            ],
+        )
+        emitted1 = emit(doc)
+        parsed = parse(emitted1)
+        emitted2 = emit(parsed)
+        assert emitted1 == emitted2

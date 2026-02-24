@@ -153,13 +153,102 @@ def is_absent(value: Any) -> bool:
     return isinstance(value, Absent)
 
 
-def emit_value(value: Any) -> str:
+def _needs_multiline(value: ListValue) -> bool:
+    """Determine if a ListValue needs multi-line emission (GH#267).
+
+    Returns True when the array contains structured content:
+    - InlineMap items (KEY::VALUE pairs)
+    - Nested ListValue items (sub-arrays)
+
+    Simple flat arrays (only plain values like identifiers, strings,
+    numbers, booleans) remain single-line regardless of length.
+    """
+    for item in value.items:
+        if is_absent(item):
+            continue
+        if isinstance(item, InlineMap):
+            # GH#267 rework: Only count InlineMaps with non-Absent pairs.
+            # All-Absent InlineMaps are filtered during emission, so they
+            # shouldn't trigger multi-line mode (I1 idempotency).
+            if any(not is_absent(v) for v in item.pairs.values()):
+                return True
+            continue
+        if isinstance(item, ListValue):
+            return True
+    return False
+
+
+def _emit_multiline_list(value: ListValue, indent: int = 0) -> str:
+    """Emit a ListValue in multi-line format with 2-space indentation (GH#267).
+
+    Used for arrays containing structured content (InlineMap or nested ListValue).
+    Each item gets its own line with proper indentation. Nested arrays recurse
+    with increased indent level.
+
+    Format:
+        [
+          ITEM1,
+          ITEM2
+        ]
+
+    Args:
+        value: The ListValue to emit.
+        indent: Current indentation level for the opening bracket.
+
+    Returns:
+        Multi-line string representation of the array.
+    """
+    child_indent_str = "  " * (indent + 1)
+    close_indent_str = "  " * indent
+
+    parts: list[str] = []
+    for item in value.items:
+        if is_absent(item):
+            continue
+        if isinstance(item, InlineMap):
+            # Issue #246: InlineMap items within lists emit as bare k::v pairs
+            # In multi-line mode, each pair gets its own line
+            inline_pairs = []
+            for k, v in item.pairs.items():
+                if is_absent(v):
+                    continue
+                inline_pairs.append(f"{k}::{emit_value(v, indent + 1)}")
+            # GH#267 fix: skip InlineMap items where all pairs are Absent.
+            # An empty inline_pairs list would produce an empty string in
+            # parts, emitting a blank line that breaks emit-parse idempotency.
+            if inline_pairs:
+                parts.append(",".join(inline_pairs))
+        else:
+            parts.append(emit_value(item, indent + 1))
+
+    # GH#267 fix: if all items were filtered (Absent), return empty array
+    if not parts:
+        return "[]"
+
+    # Build multi-line output: opening [, items with trailing commas, closing ]
+    lines = ["["]
+    for i, part in enumerate(parts):
+        comma = "," if i < len(parts) - 1 else ""
+        lines.append(f"{child_indent_str}{part}{comma}")
+    lines.append(f"{close_indent_str}]")
+    return "\n".join(lines)
+
+
+def emit_value(value: Any, indent: int = 0) -> str:
     """Emit a value in canonical form.
 
     I2 Compliance:
     - Absent values raise ValueError (caller must filter before calling)
     - None values return "null" (explicitly empty)
     - ListValue and InlineMap filter out Absent items/values internally
+
+    GH#267: Multi-line emission for structured arrays.
+    Arrays containing KEY::VALUE pairs or nested arrays emit multi-line
+    with 2-space indentation. Simple flat arrays remain single-line.
+
+    Args:
+        value: The AST value to emit.
+        indent: Current indentation level (used for multi-line arrays).
 
     Raises:
         ValueError: If passed an Absent value directly. This catches
@@ -185,23 +274,23 @@ def emit_value(value: Any) -> str:
         if not value.items:
             return "[]"
         # I2: Filter out Absent items before emission
-        # Issue #246: InlineMap items within lists must be emitted as bare k::v pairs
-        # (without extra brackets) since the ListValue already provides the outer [...]
+        # GH#267: Check if this array needs multi-line emission
+        if _needs_multiline(value):
+            return _emit_multiline_list(value, indent)
+        # Simple flat array: single-line emission
         parts: list[str] = []
         for item in value.items:
             if is_absent(item):
                 continue
-            if isinstance(item, InlineMap):
-                # Emit inline map pairs directly without wrapping brackets
-                inline_pairs = [f"{k}::{emit_value(v)}" for k, v in item.pairs.items() if not is_absent(v)]
-                parts.append(",".join(inline_pairs))
-            else:
-                parts.append(emit_value(item))
+            # GH#267: Skip all-Absent InlineMaps (same guard as multi-line path)
+            if isinstance(item, InlineMap) and not any(not is_absent(v) for v in item.pairs.values()):
+                continue
+            parts.append(emit_value(item, indent))
         return f"[{','.join(parts)}]"
     elif isinstance(value, InlineMap):
         # I2: Filter out pairs with Absent values before emission
         # Standalone InlineMap (not inside a list) keeps its brackets
-        pairs = [f"{k}::{emit_value(v)}" for k, v in value.pairs.items() if not is_absent(v)]
+        pairs = [f"{k}::{emit_value(v, indent)}" for k, v in value.pairs.items() if not is_absent(v)]
         return f"[{','.join(pairs)}]"
     elif isinstance(value, HolographicValue):
         # M3: Emit holographic pattern using raw_pattern for I1 fidelity
@@ -307,7 +396,7 @@ def emit_assignment(assignment: Assignment, indent: int = 0, format_options: For
         lines.append(f"{indent_str}{lzv.fence_marker}")
         return "\n".join(lines)
 
-    value_str = emit_value(assignment.value)
+    value_str = emit_value(assignment.value, indent)
 
     # Emit the assignment line with optional trailing comment
     assignment_line = f"{indent_str}{assignment.key}::{value_str}"
@@ -461,7 +550,7 @@ def emit_meta(meta: dict[str, Any], format_options: FormatOptions | None = None)
         # I2: Skip Absent values
         if is_absent(value):
             continue
-        value_str = emit_value(value)
+        value_str = emit_value(value, indent=1)
         content_lines.append(f"  {key}::{value_str}")
 
     # I2: If all fields were absent, return empty string (no header)
