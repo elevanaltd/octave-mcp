@@ -1323,50 +1323,102 @@ class Parser:
             # GH#63: Include NUMBER tokens in multi-word capture (convert to string)
             # Issue #140/#141: Include VALUE_TOKENS to prevent data loss
             # Stop at delimiters, operators, or non-value tokens
-            word_parts = [parts[0]]
+
             # Track start position for I4 audit
             start_line = token.line
             start_column = token.column
 
-            # GH#269: Detect annotated identifiers (NAME<qualifier>) in value position.
-            # When ANY token contains an angle-bracket annotation, the tokens are
-            # structured values that must NOT be coalesced into a single string.
-            # Instead, collect them as separate items in a ListValue.
-            # Example: GATES::NEVER<X> ALWAYS<Y> -> ListValue([NEVER<X>, ALWAYS<Y>])
-            # This preserves I1::SYNTACTIC_FIDELITY — normalization must not alter semantics.
-            first_is_annotated = _has_annotation(parts[0])
-            if first_is_annotated and self.current().type in VALUE_TOKENS:
-                # Collect all remaining value tokens as separate list items
-                items: list[str] = [parts[0]]
-                while self.current().type in VALUE_TOKENS:
-                    items.append(_token_to_str(self.current()))
+            # GH#269 rework: Unified accumulator pattern for annotated identifiers.
+            # CRS+CE review identified two problems with the previous two-path approach:
+            # 1. Bare words after annotated tokens weren't coalesced with each other
+            # 2. Early return for annotated-first tokens skipped expression operator checks
+            # 3. Order-dependent behavior (A<X> B C vs A B C<X> gave different results)
+            #
+            # Solution: Lookahead scan to detect if ANY token in the sequence is annotated.
+            # If so, use a unified accumulator loop that:
+            #   - Buffers bare words and coalesces them on flush
+            #   - Emits annotated tokens as separate items
+            #   - Handles expression operators correctly
+            # If not, fall through to existing bare-word coalescing + expression logic.
+
+            has_any_annotation = _has_annotation(parts[0])
+            if not has_any_annotation:
+                # Lookahead: scan upcoming value tokens for annotations
+                scan_pos = self.pos
+                while scan_pos < len(self.tokens) and self.tokens[scan_pos].type in VALUE_TOKENS:
+                    scan_val = _token_to_str(self.tokens[scan_pos])
+                    if _has_annotation(scan_val):
+                        has_any_annotation = True
+                        break
+                    scan_pos += 1
+
+            if has_any_annotation:
+                # GH#269 unified accumulator: bare_words buffer + items list
+                bare_words: list[str] = []
+                items: list[str] = []
+
+                # Process the first token (already consumed)
+                if _has_annotation(parts[0]):
+                    items.append(parts[0])
+                else:
+                    bare_words.append(parts[0])
+
+                # Process remaining value tokens and expression operators
+                while self.current().type in VALUE_TOKENS or self.current().type in EXPRESSION_OPERATORS:
+                    if self.current().type in EXPRESSION_OPERATORS:
+                        # Flush bare_words before operator
+                        if bare_words:
+                            items.append(" ".join(bare_words))
+                            bare_words = []
+                        # Handle expression: collect operator and remaining tokens
+                        expr_parts = list(items) if items else []
+                        # If items is non-empty, the last item starts the expression LHS
+                        # Build expression string from all collected items + operator + rest
+                        op_parts: list[str] = []
+                        while self.current().type in VALUE_TOKENS or self.current().type in EXPRESSION_OPERATORS:
+                            if self.current().type in EXPRESSION_OPERATORS:
+                                op_parts.append(self.current().value)
+                                self.advance()
+                            elif self.current().type in VALUE_TOKENS:
+                                op_parts.append(_token_to_str(self.current()))
+                                self.advance()
+                            else:
+                                break
+                        # Merge: items collected so far become space-joined prefix,
+                        # then operator expression appended
+                        if expr_parts:
+                            full_expr = " ".join(str(p) for p in expr_parts) + "".join(str(p) for p in op_parts)
+                        else:
+                            full_expr = "".join(str(p) for p in op_parts)
+                        self._consume_bracket_annotation(capture=False)
+                        return full_expr
+
+                    cur_val = _token_to_str(self.current())
+                    if _has_annotation(cur_val):
+                        # Flush accumulated bare words before annotated token
+                        if bare_words:
+                            items.append(" ".join(bare_words))
+                            bare_words = []
+                        items.append(cur_val)
+                    else:
+                        bare_words.append(cur_val)
                     self.advance()
+
+                # Flush any remaining bare words
+                if bare_words:
+                    items.append(" ".join(bare_words))
+
                 self._consume_bracket_annotation(capture=False)
+
+                # Return as ListValue if multiple items, scalar if single
+                if len(items) == 1:
+                    return items[0]
                 return ListValue(items=items)
 
-            while self.current().type in VALUE_TOKENS:
-                # GH#269: If the next token is an annotated identifier, stop coalescing
-                # and return what we have so far plus remaining tokens as a ListValue.
-                next_val = _token_to_str(self.current())
-                if _has_annotation(next_val):
-                    # We already have word_parts (possibly multiple bare words coalesced).
-                    # Collect this annotated token and any further tokens as separate items.
-                    items_split: list[str] = []
-                    if len(word_parts) > 1:
-                        # Coalesce the bare words we already collected into one item
-                        items_split.append(" ".join(word_parts))
-                    else:
-                        items_split.append(word_parts[0])
-                    # Add the annotated token
-                    items_split.append(next_val)
-                    self.advance()
-                    # Continue collecting remaining value tokens
-                    while self.current().type in VALUE_TOKENS:
-                        items_split.append(_token_to_str(self.current()))
-                        self.advance()
-                    self._consume_bracket_annotation(capture=False)
-                    return ListValue(items=items_split)
+            # No annotations detected: original bare-word coalescing + expression logic
+            word_parts = [parts[0]]
 
+            while self.current().type in VALUE_TOKENS:
                 # Check if next token after this identifier is an operator
                 # If so, we're starting an expression, not a multi-word value
                 if self.peek().type in EXPRESSION_OPERATORS:
@@ -1375,19 +1427,18 @@ class Parser:
                     word_parts.append(_token_to_str(self.current()))
                     self.advance()
                     # Now we need to continue with flow expression parsing
-                    expr_parts = [" ".join(word_parts)]
+                    expr_parts_plain = [" ".join(word_parts)]
                     while self.current().type in VALUE_TOKENS or self.current().type in EXPRESSION_OPERATORS:
                         if self.current().type in EXPRESSION_OPERATORS:
-                            expr_parts.append(self.current().value)
+                            expr_parts_plain.append(self.current().value)
                             self.advance()
                         elif self.current().type in VALUE_TOKENS:
                             # GH#66/#140/#141: Use _token_to_str to preserve all value token lexemes
-                            expr_parts.append(_token_to_str(self.current()))
+                            expr_parts_plain.append(_token_to_str(self.current()))
                             self.advance()
                         else:
                             break
                     # I4 Audit: Emit warning when multi-word coalescing occurs in expression path
-                    # Same pattern as terminal multi-word at line 557-567
                     if len(word_parts) > 1:
                         self.warnings.append(
                             {
@@ -1400,7 +1451,7 @@ class Parser:
                                 "column": start_column,
                             }
                         )
-                    return "".join(str(p) for p in expr_parts)
+                    return "".join(str(p) for p in expr_parts_plain)
 
                 # Just another word/number in the multi-word value
                 # GH#66: Use _token_to_str to preserve NUMBER lexemes (e.g., 1e10)
