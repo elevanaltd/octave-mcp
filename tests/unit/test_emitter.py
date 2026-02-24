@@ -668,3 +668,65 @@ class TestMultiLineArrayEmission:
         lines = result.split("\n")
         # Closing bracket should be at indent level 2 (4 spaces)
         assert lines[-1] == "    ]"
+
+    def test_all_absent_inline_map_skipped_in_multiline(self):
+        """InlineMap where all pairs are Absent should be skipped entirely (GH#267).
+
+        An all-Absent InlineMap produces no visible pairs. Emitting it would
+        insert an empty line inside the array brackets, breaking emit-parse
+        idempotency (I1 violation).
+        """
+        items = [
+            InlineMap(pairs={"A": Absent()}),
+        ]
+        result = emit_value(ListValue(items=items))
+        # With all items filtered out, the result should be an empty array
+        assert result == "[]"
+
+    def test_all_absent_inline_map_among_valid_items(self):
+        """All-Absent InlineMap among valid items should be skipped (GH#267).
+
+        The valid items should still emit normally; only the all-Absent
+        InlineMap item is dropped.
+        """
+        items = [
+            InlineMap(pairs={"ROLE": "ORCHESTRATOR"}),
+            InlineMap(pairs={"DEAD": Absent()}),
+            InlineMap(pairs={"COGNITION": "LOGOS"}),
+        ]
+        result = emit_value(ListValue(items=items))
+        assert "ROLE::ORCHESTRATOR" in result
+        assert "COGNITION::LOGOS" in result
+        assert "DEAD" not in result
+        # Should still be multi-line (has valid InlineMap items)
+        assert "[\n" in result
+
+    def test_mixed_absent_non_absent_inline_map(self):
+        """InlineMap with mix of Absent and non-Absent pairs emits only non-Absent (GH#267).
+
+        Only the pairs with actual values should appear in the output.
+        The Absent pairs are silently dropped per I2.
+        """
+        items = [
+            InlineMap(pairs={"A": "val", "B": Absent()}),
+        ]
+        result = emit_value(ListValue(items=items))
+        assert "A::val" in result
+        assert "B" not in result
+
+    def test_all_absent_inline_map_roundtrip(self):
+        """Emit-parse-emit roundtrip for ListValue with all-Absent InlineMap (GH#267).
+
+        The emitted output must parse back to an equivalent AST that re-emits
+        identically, proving I1 (emit-parse idempotency).
+        """
+        doc = Document(
+            name="TEST",
+            sections=[
+                Assignment(key="K", value=ListValue(items=[InlineMap(pairs={"A": Absent()})])),
+            ],
+        )
+        emitted1 = emit(doc)
+        parsed = parse(emitted1)
+        emitted2 = emit(parsed)
+        assert emitted1 == emitted2

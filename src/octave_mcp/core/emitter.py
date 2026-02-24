@@ -208,9 +208,17 @@ def _emit_multiline_list(value: ListValue, indent: int = 0) -> str:
                 if is_absent(v):
                     continue
                 inline_pairs.append(f"{k}::{emit_value(v, indent + 1)}")
-            parts.append(",".join(inline_pairs))
+            # GH#267 fix: skip InlineMap items where all pairs are Absent.
+            # An empty inline_pairs list would produce an empty string in
+            # parts, emitting a blank line that breaks emit-parse idempotency.
+            if inline_pairs:
+                parts.append(",".join(inline_pairs))
         else:
             parts.append(emit_value(item, indent + 1))
+
+    # GH#267 fix: if all items were filtered (Absent), return empty array
+    if not parts:
+        return "[]"
 
     # Build multi-line output: opening [, items with trailing commas, closing ]
     lines = ["["]
