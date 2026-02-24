@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-1610%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-2258%20passing-brightgreen.svg)]()
 [![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)]()
 
 Production-grade MCP server implementing the **OCTAVE v6** document protocol: **Generative Holographic Contracts**.
@@ -74,7 +74,7 @@ IMMUTABLES::[
 
 ## What It Does
 
-This repository ships the **OCTAVE MCP Server** (v1.0.0)—a Model Context Protocol implementation that transforms OCTAVE documents from passive text into **Generative Holographic Contracts**.
+This repository ships the **OCTAVE MCP Server** (v1.5.0)—a Model Context Protocol implementation that transforms OCTAVE documents from passive text into **Generative Holographic Contracts**.
 
 OCTAVE (Olympian Common Text And Vocabulary Engine) is a deterministic document format and control plane for LLM systems. It keeps meaning durable when text is compressed, routed between agents, or projected into different views.
 
@@ -108,7 +108,7 @@ See the [protocol specs in `src/octave_mcp/resources/specs/`](src/octave_mcp/res
 
 `octave-mcp` bundles the OCTAVE tooling as MCP tools and a CLI.
 
-- **3 MCP tools**: `octave_validate`, `octave_write`, `octave_eject`
+- **4 MCP tools**: `octave_validate`, `octave_write`, `octave_eject`, `octave_compile_grammar`
 - **Grammar Compiler**: Compiles `META.CONTRACT` constraints to GBNF grammars (inspect via `debug_grammar=True`).
 - **Hermetic Hydrator**: Resolves standards without network dependency.
 
@@ -170,8 +170,9 @@ Add to Claude Desktop (`claude_desktop_config.json`) or Claude Code (`~/.claude.
 | Tool | Purpose |
 |------|---------|
 | `octave_validate` | Schema validation + repair suggestions + grammar compilation |
-| `octave_write` | Unified file creation/modification with validation |
+| `octave_write` | Unified file creation/modification with validation (includes `normalize` mode) |
 | `octave_eject` | Format projection and template generation |
+| `octave_compile_grammar` | Direct GBNF grammar compilation from META.CONTRACT constraints |
 
 See [API Reference](docs/api.md) for full parameter documentation.
 
