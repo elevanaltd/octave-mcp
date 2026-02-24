@@ -7,19 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-02-24 - "Parser Resilience" Release
+
+This release introduces the `octave_compile_grammar` MCP tool, Zone 2 frontmatter validation, multi-line array emission, and resolves a broad set of parser and emitter robustness issues surfaced through systematic GitHub issue review.
+
 ### Added
+- **`octave_compile_grammar` MCP tool** (#228) — New fourth tool exposing the GBNF grammar compiler directly, with error-envelope hardening and native const type preservation
 - **I5 Zone 2 frontmatter validation** (#244) — Opt-in YAML frontmatter validation extending Schema Sovereignty to Zone 2. New error codes: `E_FM_REQUIRED`, `E_FM_TYPE`, `E_FM_PARSE`. First use-case: SKILL schema validates both OCTAVE body and YAML frontmatter
 - **`normalize` mode for `octave_write` tool** — Validates and normalizes a document without writing to the file system; useful for dry-run checks and CI pipelines
 - **SKILL builtin schema** (`schemas/builtin/skill.oct.md`) — Validates both the OCTAVE body and YAML frontmatter of skill files
+- **Multi-line emission for structured arrays** (GH#267) — Arrays with 3+ items now emit in multi-line format for readability; empty InlineMap guard prevents emission errors
+- **Curly-brace repair candidate warning** (GH#263, GH#264) — Lexer emits `W_REPAIR_CANDIDATE` for curly-brace annotations; `octave_write` scopes repair to Zone 1 only, skipping quoted strings and literal zones
 
 ### Fixed
+- **Constructor `NAME[args]` round-trip preservation** (GH#276) — Adjacency check, expanded token types, blacklist filtering of COMMENT/NEWLINE/INDENT tokens in bracket capture; fixes data loss for spaced brackets and multi-line constructors
+- **Comments inside array brackets** (GH#272) — `//` comments inside array bracket context now correctly stripped during parsing
+- **Annotated identifier coalescing** (GH#269) — Unified accumulator prevents multi-word coalescing of annotated identifiers
+- **Duplicate key warnings in arrays** (GH#270) — False duplicate key warnings suppressed for repeated keys within array contexts
 - **Canonicaliser numbered-key syntax inside list literals** (#246) — `1::"value"` patterns inside list literals no longer flattened to separate tokens; fixes round-trip fidelity for numbered keys
 - **Emitter InlineMap bracket wrapping in lists** — Prevents nested list artifacts on re-parse when InlineMaps appear inside list values
+- **Literal zone content in block body** (#259) — Literal zone content now preserved correctly when appearing inside block bodies
+- **Bracket annotation after flow expressions** (#261) — Parser now consumes bracket annotations following flow expressions
+- **Write tool robustness** (GH#263, GH#266) — Tightened structure detection to require `::` or `===` signals; graceful baseline parse failure handling; narrowed exception handling with audit receipts; escaped quote handling in curly-brace repair
+- **Grammar compiler** — Preserved native const types and hardened error-envelope handling
 
 ### Documentation
 - Archived mythology debate decisions from issue #110 review session
 - Restored mythological compression principle across OCTAVE documentation (#110)
 - Normalized all decision docs to OCTAVE canonical form
+- Updated schema-spec to reflect all gaps implemented
+
+### Quality Gates
+- 2258 tests passing, 0 failures
+- Constitutional compliance verified: I1, I2, I3, I4, I5
 
 ## [1.4.1] - 2026-02-22 - "Spec Hygiene" Patch
 
@@ -460,7 +480,9 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.1...v1.5.0
+[1.4.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.2.0...v1.2.1
