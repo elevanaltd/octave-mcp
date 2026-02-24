@@ -118,13 +118,20 @@ class TestConstructorAdjacencyCheck:
     """GH#276 rework: NAME [args] (with space) must NOT be treated as constructor."""
 
     def test_constructor_with_space_treated_as_list(self):
-        """X::A [B,C] — space before bracket means it's a list, not constructor args."""
+        """X::A [B,C] — space before bracket means it's a list, not constructor args.
+
+        GH#276 round 2: The bracket content [B,C] must NOT be silently dropped.
+        It should be preserved as list data, not consumed and discarded.
+        """
         content = "===TEST===\nX::A [B,C]\n===END==="
         doc = parse(content)
         output = emit(doc)
         # With a space, [B,C] is a separate list, NOT constructor args on A.
         # A should NOT become A<B,C>
         assert "A<B" not in output, f"Space before bracket was incorrectly treated as constructor. Output:\n{output}"
+        # GH#276 round 2: The bracket content MUST NOT be silently dropped
+        assert "B" in output, f"Spaced bracket content [B,C] was silently dropped! Output:\n{output}"
+        assert "C" in output, f"Spaced bracket content [B,C] was silently dropped! Output:\n{output}"
 
 
 class TestConstructorNonIdentifierArgs:
@@ -170,6 +177,47 @@ class TestConstructorNonIdentifierArgs:
         assert "BAR" in output, f"IDENTIFIER arg dropped in mixed. Output:\n{output}"
         assert "1" in output, f"NUMBER arg dropped in mixed. Output:\n{output}"
         assert "true" in output, f"BOOLEAN arg dropped in mixed. Output:\n{output}"
+
+
+class TestConstructorMissingTokenTypes:
+    """GH#276 round 2: Token types missing from _consume_bracket_annotation whitelist."""
+
+    def test_constructor_version_arg(self):
+        """FOO[1.2.3] must preserve VERSION token argument."""
+        content = "===TEST===\nX::FOO[1.2.3]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "1.2.3" in output, f"VERSION constructor arg dropped. Output:\n{output}"
+        assert "FOO" in output, f"FOO missing. Output:\n{output}"
+
+    def test_constructor_variable_arg(self):
+        """FOO[$VAR] must preserve VARIABLE token argument."""
+        content = "===TEST===\nX::FOO[$VAR]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "$VAR" in output, f"VARIABLE constructor arg dropped. Output:\n{output}"
+        assert "FOO" in output, f"FOO missing. Output:\n{output}"
+
+    def test_constructor_operator_args(self):
+        """FOO[A+B] must preserve SYNTHESIS/operator token."""
+        content = "===TEST===\nX::FOO[A+B]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        # The + normalizes to the unicode ⊕ operator
+        assert "A" in output, f"A lost in operator constructor arg. Output:\n{output}"
+        assert "B" in output, f"B lost in operator constructor arg. Output:\n{output}"
+        # The operator itself must be preserved (either + or its normalized form)
+        has_operator = "+" in output or "\u2295" in output
+        assert has_operator, f"Operator dropped from FOO[A+B]. Output:\n{output}"
+
+    def test_constructor_at_arg(self):
+        """FOO[A@B] must preserve AT token."""
+        content = "===TEST===\nX::FOO[A@B]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "A" in output, f"A lost in AT constructor arg. Output:\n{output}"
+        assert "B" in output, f"B lost in AT constructor arg. Output:\n{output}"
+        assert "@" in output, f"AT operator dropped from FOO[A@B]. Output:\n{output}"
 
 
 class TestConstructorEmptyBrackets:
