@@ -251,9 +251,13 @@ class TestConstructorCommentNewlineFiltering:
         output = emit(doc)
         assert "BAR" in output, f"BAR arg dropped. Output:\n{output}"
         assert "BAZ" in output, f"BAZ arg dropped. Output:\n{output}"
-        # GH#276 round 4: Verify the annotation line itself has no embedded newline
-        annotation_line = [line for line in output.splitlines() if "FOO<" in line][0]
-        assert "\n" not in annotation_line, f"Newline inside the annotation on a single line. Line:\n{annotation_line}"
+        # GH#276 round 4: Verify FOO<...> annotation is entirely on one line
+        # (splitlines strips \n, so check that BAR and BAZ are on the SAME line)
+        annotation_lines = [line for line in output.splitlines() if "FOO<" in line]
+        assert len(annotation_lines) == 1, f"Expected FOO< on exactly one line, got {len(annotation_lines)}"
+        assert (
+            "BAR" in annotation_lines[0] and "BAZ" in annotation_lines[0]
+        ), f"BAR and BAZ must be on the same annotation line. Line: {annotation_lines[0]}"
 
     def test_constructor_comment_only_between_args(self):
         """FOO[A, //note\\nB, //note\\nC] must strip all comments, preserve all args."""
