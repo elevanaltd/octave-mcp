@@ -324,6 +324,36 @@ class Parser:
             return self.tokens[i].type
         return TokenType.EOF
 
+    def _is_adjacent_bracket(self) -> bool:
+        """Check if current LIST_START token is immediately adjacent to the previous token.
+
+        GH#276 rework: Per OCTAVE spec, constructor syntax requires `[` immediately
+        adjacent to NAME (no whitespace). `NAME[args]` is a constructor, but
+        `NAME [args]` (with space) is NAME followed by a separate list.
+
+        Returns:
+            True if the bracket is adjacent (constructor syntax), False if there's
+            a whitespace gap (separate list).
+        """
+        if self.pos < 1:
+            return False
+        prev = self.tokens[self.pos - 1]
+        bracket = self.current()
+        if prev.line != bracket.line:
+            return False
+        # Compute the raw text length of the previous token
+        if prev.type == TokenType.NUMBER and prev.raw is not None:
+            prev_len = len(prev.raw)
+        elif prev.type == TokenType.BOOLEAN:
+            prev_len = 4 if prev.value else 5  # "true" or "false"
+        elif prev.type == TokenType.NULL:
+            prev_len = 4  # "null"
+        elif prev.type == TokenType.STRING:
+            prev_len = len(prev.value) + 2  # Surrounding quotes
+        else:
+            prev_len = len(str(prev.value))
+        return prev.column + prev_len == bracket.column
+
     def _consume_bracket_annotation(self, capture: bool = False) -> str | None:
         """Consume bracket annotation [content] if present.
 
@@ -373,9 +403,24 @@ class Parser:
                 annotation_tokens.append(",")
             elif self.current().type == TokenType.STRING:
                 annotation_tokens.append(f'"{self.current().value}"')
+            elif self.current().type == TokenType.NUMBER:
+                # GH#276 rework: Preserve numeric args (e.g., FOO[1])
+                raw = self.current().raw
+                annotation_tokens.append(raw if raw is not None else str(self.current().value))
+            elif self.current().type == TokenType.BOOLEAN:
+                # GH#276 rework: Preserve boolean args (e.g., FOO[true])
+                annotation_tokens.append("true" if self.current().value else "false")
+            elif self.current().type == TokenType.NULL:
+                # GH#276 rework: Preserve null args (e.g., FOO[null])
+                annotation_tokens.append("null")
+            elif self.current().type == TokenType.FLOW:
+                # GH#276 rework: Preserve flow arrows (e.g., FOO[BAR->BAZ])
+                annotation_tokens.append(str(self.current().value))
             self.advance()
 
-        return "".join(annotation_tokens) if annotation_tokens else None
+        # GH#276 rework: Return empty string for empty brackets FOO[]
+        # instead of None, so FOO<> is emitted (I4 auditability).
+        return "".join(annotation_tokens) if annotation_tokens else ""
 
     def _parse_block_target_annotation(self) -> str | None:
         """Parse block target annotation [->TARGET] syntax.
@@ -1306,7 +1351,9 @@ class Parser:
             # Per OCTAVE spec §1b: NAME immediately followed by [args] is constructor
             # syntax. The bracket contents are semantic arguments that must be preserved.
             # Convert to canonical angle-bracket form NAME<args> for I1 syntactic fidelity.
-            if self.current().type == TokenType.LIST_START:
+            # GH#276 rework: Adjacency check — only treat as constructor if [ is
+            # immediately adjacent to NAME (no whitespace gap).
+            if self.current().type == TokenType.LIST_START and self._is_adjacent_bracket():
                 annotation = self._consume_bracket_annotation(capture=True)
                 if annotation is not None:
                     parts[0] = f"{parts[0]}<{annotation}>"
@@ -1325,8 +1372,9 @@ class Parser:
                 # GH#276: Capture bracket annotation if present after colon-path value
                 # Examples: HERMES:API_TIMEOUT[note], MODULE:SUB[annotation]
                 # Preserves constructor args as angle-bracket form for I1 fidelity.
+                # GH#276 rework: Adjacency check — [ must be immediately adjacent.
                 result_path = ":".join(parts)
-                if self.current().type == TokenType.LIST_START:
+                if self.current().type == TokenType.LIST_START and self._is_adjacent_bracket():
                     annotation = self._consume_bracket_annotation(capture=True)
                     if annotation is not None:
                         result_path = f"{result_path}<{annotation}>"
@@ -1410,7 +1458,8 @@ class Parser:
                     self.advance()
                     # GH#276: Check for constructor bracket annotation after this token
                     # e.g., ALWAYS[SYSTEM_COHERENCE] -> ALWAYS<SYSTEM_COHERENCE>
-                    if self.current().type == TokenType.LIST_START:
+                    # GH#276 rework: Adjacency check — [ must be immediately adjacent.
+                    if self.current().type == TokenType.LIST_START and self._is_adjacent_bracket():
                         annotation = self._consume_bracket_annotation(capture=True)
                         if annotation is not None:
                             cur_val = f"{cur_val}<{annotation}>"
@@ -1477,7 +1526,8 @@ class Parser:
                 cur_word = _token_to_str(self.current())
                 self.advance()
                 # GH#276: Check for constructor bracket annotation after this word
-                if self.current().type == TokenType.LIST_START:
+                # GH#276 rework: Adjacency check — [ must be immediately adjacent.
+                if self.current().type == TokenType.LIST_START and self._is_adjacent_bracket():
                     annotation = self._consume_bracket_annotation(capture=True)
                     if annotation is not None:
                         cur_word = f"{cur_word}<{annotation}>"

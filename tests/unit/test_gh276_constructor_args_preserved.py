@@ -112,3 +112,73 @@ class TestConstructorInNestedContext:
         doc = parse(content)
         output = emit(doc)
         assert "ENFORCE" in output, f"Constructor args dropped in inline map context. Output:\n{output}"
+
+
+class TestConstructorAdjacencyCheck:
+    """GH#276 rework: NAME [args] (with space) must NOT be treated as constructor."""
+
+    def test_constructor_with_space_treated_as_list(self):
+        """X::A [B,C] — space before bracket means it's a list, not constructor args."""
+        content = "===TEST===\nX::A [B,C]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        # With a space, [B,C] is a separate list, NOT constructor args on A.
+        # A should NOT become A<B,C>
+        assert "A<B" not in output, f"Space before bracket was incorrectly treated as constructor. Output:\n{output}"
+
+
+class TestConstructorNonIdentifierArgs:
+    """GH#276 rework: Non-IDENTIFIER token types must be preserved in constructor args."""
+
+    def test_constructor_numeric_arg_preserved(self):
+        """X::FOO[1] must preserve numeric argument."""
+        content = "===TEST===\nX::FOO[1]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "1" in output, f"Numeric constructor arg dropped. Output:\n{output}"
+        # Should be FOO<1> in canonical form
+        assert "FOO" in output, f"FOO missing. Output:\n{output}"
+
+    def test_constructor_boolean_arg_preserved(self):
+        """X::FOO[true] must preserve boolean argument."""
+        content = "===TEST===\nX::FOO[true]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "true" in output, f"Boolean constructor arg dropped. Output:\n{output}"
+
+    def test_constructor_null_arg_preserved(self):
+        """X::FOO[null] must preserve null argument."""
+        content = "===TEST===\nX::FOO[null]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "null" in output, f"Null constructor arg dropped. Output:\n{output}"
+
+    def test_constructor_flow_arrow_arg_preserved(self):
+        """X::FOO[BAR->BAZ] must preserve flow arrow argument."""
+        content = "===TEST===\nX::FOO[BAR->BAZ]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        # The flow arrow -> normalizes to the unicode arrow
+        assert "BAR" in output, f"BAR lost in flow arrow constructor arg. Output:\n{output}"
+        assert "BAZ" in output, f"BAZ lost in flow arrow constructor arg. Output:\n{output}"
+
+    def test_constructor_mixed_args(self):
+        """X::FOO[BAR,1,true] must preserve all mixed argument types."""
+        content = "===TEST===\nX::FOO[BAR,1,true]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "BAR" in output, f"IDENTIFIER arg dropped in mixed. Output:\n{output}"
+        assert "1" in output, f"NUMBER arg dropped in mixed. Output:\n{output}"
+        assert "true" in output, f"BOOLEAN arg dropped in mixed. Output:\n{output}"
+
+
+class TestConstructorEmptyBrackets:
+    """GH#276 rework: Empty brackets FOO[] must not be silently dropped."""
+
+    def test_constructor_empty_brackets(self):
+        """X::FOO[] should preserve empty brackets (not silently drop)."""
+        content = "===TEST===\nX::FOO[]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        # FOO[] should emit as FOO<> (empty annotation preserved) not just FOO
+        assert "FOO<>" in output, f"Empty brackets silently dropped — expected FOO<>. Output:\n{output}"
