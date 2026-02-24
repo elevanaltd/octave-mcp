@@ -33,8 +33,8 @@ from octave_mcp.core.ast_nodes import (
 )
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.hydrator import resolve_hermetic_standard
-from octave_mcp.core.lexer import tokenize
-from octave_mcp.core.parser import parse, parse_with_warnings
+from octave_mcp.core.lexer import LexerError, tokenize
+from octave_mcp.core.parser import ParserError, parse, parse_with_warnings
 from octave_mcp.core.repair import repair
 from octave_mcp.core.repair_log import LiteralZoneRepairLog
 from octave_mcp.core.schema_extractor import SchemaDefinition
@@ -1170,13 +1170,19 @@ class WriteTool(BaseTool):
                         except Exception:
                             baseline_doc, _ = parse_with_warnings(baseline_content_for_diff)
                         original_metrics = extract_structural_metrics(baseline_doc)
-                    except Exception:
-                        # GH#266: Both parse() and parse_with_warnings() may fail on
-                        # pre-repair content (e.g. NAME{qualifier} curly braces).
-                        # Gracefully degrade: set original_metrics=None so the pipeline
-                        # continues to the curly brace repair step at line ~1216.
-                        # The metrics diff will simply be omitted from the response.
+                    except (LexerError, ParserError) as e:
+                        # GH#266: parse may fail on pre-repair content (e.g. NAME{qualifier}).
+                        # Narrow to parse exceptions; let unexpected errors (IOError,
+                        # MemoryError, etc.) propagate naturally.
                         original_metrics = None
+                        corrections.append(
+                            {
+                                "code": "W_BASELINE_METRICS_SKIPPED",
+                                "message": f"Baseline metrics skipped: {type(e).__name__}: {e}",
+                                "safe": True,
+                                "semantics_changed": False,
+                            }
+                        )
 
             # Check base_hash if provided AND file exists (CAS guard)
             if base_hash and file_exists:
