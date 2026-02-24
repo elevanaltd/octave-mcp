@@ -18,7 +18,7 @@ discards constructor arguments after identifiers in parse_value().
 """
 
 from octave_mcp.core.emitter import emit
-from octave_mcp.core.parser import parse
+from octave_mcp.core.parser import parse, parse_with_warnings
 
 
 class TestConstructorArgPreservation:
@@ -251,8 +251,9 @@ class TestConstructorCommentNewlineFiltering:
         output = emit(doc)
         assert "BAR" in output, f"BAR arg dropped. Output:\n{output}"
         assert "BAZ" in output, f"BAZ arg dropped. Output:\n{output}"
-        # Newline should not appear as literal data between args
-        assert "\\n" not in output.replace("\n", ""), f"Newline leaked as literal data. Output:\n{output}"
+        # GH#276 round 4: Verify the annotation line itself has no embedded newline
+        annotation_line = [line for line in output.splitlines() if "FOO<" in line][0]
+        assert "\n" not in annotation_line, f"Newline inside the annotation on a single line. Line:\n{annotation_line}"
 
     def test_constructor_comment_only_between_args(self):
         """FOO[A, //note\\nB, //note\\nC] must strip all comments, preserve all args."""
@@ -263,3 +264,60 @@ class TestConstructorCommentNewlineFiltering:
         assert "B" in output, f"B arg dropped. Output:\n{output}"
         assert "C" in output, f"C arg dropped. Output:\n{output}"
         assert "note" not in output, f"Comment text leaked into constructor data. Output:\n{output}"
+
+    def test_constructor_with_indent_inside(self):
+        """INDENT tokens inside constructor brackets should be filtered.
+
+        GH#276 round 4: When constructor args span lines with indentation,
+        the lexer generates INDENT tokens inside the brackets. These must be
+        filtered (not become part of the constructor payload), just like
+        COMMENT and NEWLINE tokens.
+
+        Token stream for FOO[BAR,\\n    BAZ]:
+        IDENTIFIER('FOO'), LIST_START, IDENTIFIER('BAR'), COMMA,
+        NEWLINE, INDENT(4), IDENTIFIER('BAZ'), LIST_END
+        """
+        content = "===T===\nX::FOO[BAR,\n    BAZ]\n===END==="
+        doc, warnings = parse_with_warnings(content)
+        output = emit(doc)
+        # Verify BAR and BAZ are preserved, no indent leakage
+        assert "BAR" in output, f"BAR arg dropped. Output:\n{output}"
+        assert "BAZ" in output, f"BAZ arg dropped. Output:\n{output}"
+        # The constructor annotation should be clean — no INDENT value leaking in
+        annotation_line = [line for line in output.splitlines() if "FOO<" in line][0]
+        assert "\n" not in annotation_line, f"Newline inside annotation. Line:\n{annotation_line}"
+
+
+class TestExpressionPathConstructor:
+    """GH#276 round 4: Constructor brackets in expression-path (parse_flow_expression)."""
+
+    def test_expression_constructor_boolean_arg(self):
+        """CONST[true] in expression must preserve boolean argument.
+
+        parse_flow_expression has its own bracket reconstruction logic that
+        must handle all token types, not just IDENTIFIER/STRING/NUMBER.
+        """
+        content = "===TEST===\nX::CONST[true]\u2227REQ\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "true" in output, f"Boolean arg dropped in expression constructor. Output:\n{output}"
+        assert "CONST" in output, f"CONST missing. Output:\n{output}"
+        assert "REQ" in output, f"REQ missing. Output:\n{output}"
+
+    def test_expression_constructor_variable_arg(self):
+        """CONST[$VAR] in expression must preserve variable argument."""
+        content = "===TEST===\nX::CONST[$VAR]\u2227REQ\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "$VAR" in output, f"Variable arg dropped in expression constructor. Output:\n{output}"
+        assert "CONST" in output, f"CONST missing. Output:\n{output}"
+        assert "REQ" in output, f"REQ missing. Output:\n{output}"
+
+    def test_expression_constructor_version_arg(self):
+        """CONST[1.2.3] in expression must preserve version argument."""
+        content = "===TEST===\nX::CONST[1.2.3]\u2227REQ\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "1.2.3" in output, f"Version arg dropped in expression constructor. Output:\n{output}"
+        assert "CONST" in output, f"CONST missing. Output:\n{output}"
+        assert "REQ" in output, f"REQ missing. Output:\n{output}"

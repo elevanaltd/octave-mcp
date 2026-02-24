@@ -2183,25 +2183,30 @@ class Parser:
                         TokenType.ENVELOPE_START,
                     ):
                         # Embedded bracket group: consume and include in expression string
+                        # GH#276 round 4: Use blacklist approach (matching
+                        # _consume_bracket_annotation) — capture ALL tokens
+                        # except LIST_END, COMMENT, NEWLINE, INDENT.  This
+                        # prevents silent data loss for BOOLEAN, VARIABLE,
+                        # VERSION and any future token types (I1).
+                        _EXPR_SKIP = {TokenType.COMMENT, TokenType.NEWLINE, TokenType.INDENT}
                         bracket_parts = ["["]
                         self.advance()  # Consume [
                         depth = 1
                         while depth > 0 and self.current().type != TokenType.EOF:
-                            if self.current().type == TokenType.LIST_START:
+                            tok = self.current()
+                            if tok.type == TokenType.LIST_START:
                                 depth += 1
                                 bracket_parts.append("[")
-                            elif self.current().type == TokenType.LIST_END:
+                            elif tok.type == TokenType.LIST_END:
                                 depth -= 1
                                 if depth > 0:
                                     bracket_parts.append("]")
-                            elif self.current().type == TokenType.COMMA:
+                            elif tok.type == TokenType.COMMA:
                                 bracket_parts.append(",")
-                            elif self.current().type == TokenType.IDENTIFIER:
-                                bracket_parts.append(self.current().value)
-                            elif self.current().type == TokenType.STRING:
-                                bracket_parts.append(f'"{self.current().value}"')
-                            elif self.current().type == TokenType.NUMBER:
-                                bracket_parts.append(_token_to_str(self.current()))
+                            elif tok.type in _EXPR_SKIP:
+                                pass  # Non-semantic tokens: skip silently
+                            else:
+                                bracket_parts.append(_token_to_str(tok))
                             self.advance()
                         bracket_parts.append("]")
                         parts.append("".join(bracket_parts))
