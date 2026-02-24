@@ -1167,7 +1167,7 @@ class WriteTool(BaseTool):
                     try:
                         try:
                             baseline_doc = parse(baseline_content_for_diff)
-                        except Exception:
+                        except (LexerError, ParserError):
                             baseline_doc, _ = parse_with_warnings(baseline_content_for_diff)
                         original_metrics = extract_structural_metrics(baseline_doc)
                     except (LexerError, ParserError) as e:

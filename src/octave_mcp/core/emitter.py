@@ -167,7 +167,12 @@ def _needs_multiline(value: ListValue) -> bool:
         if is_absent(item):
             continue
         if isinstance(item, InlineMap):
-            return True
+            # GH#267 rework: Only count InlineMaps with non-Absent pairs.
+            # All-Absent InlineMaps are filtered during emission, so they
+            # shouldn't trigger multi-line mode (I1 idempotency).
+            if any(not is_absent(v) for v in item.pairs.values()):
+                return True
+            continue
         if isinstance(item, ListValue):
             return True
     return False
@@ -276,6 +281,9 @@ def emit_value(value: Any, indent: int = 0) -> str:
         parts: list[str] = []
         for item in value.items:
             if is_absent(item):
+                continue
+            # GH#267: Skip all-Absent InlineMaps (same guard as multi-line path)
+            if isinstance(item, InlineMap) and not any(not is_absent(v) for v in item.pairs.values()):
                 continue
             parts.append(emit_value(item, indent))
         return f"[{','.join(parts)}]"
