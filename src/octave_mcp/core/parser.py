@@ -1563,8 +1563,10 @@ class Parser:
         # and must not trigger W_DUPLICATE_KEY warnings. The previous tracking
         # (Issue #179) incorrectly treated list items as map entries.
         while True:
-            # Skip whitespace/newlines/indents (valid anywhere between items)
-            while self.current().type in (TokenType.NEWLINE, TokenType.INDENT):
+            # Skip whitespace/newlines/indents/comments (valid anywhere between items)
+            # GH#272: COMMENT tokens inside bracket context must be stripped to prevent
+            # comment text from being promoted to data values (I3 Mirror Constraint).
+            while self.current().type in (TokenType.NEWLINE, TokenType.INDENT, TokenType.COMMENT):
                 self.advance()
 
             # Check for end of list
