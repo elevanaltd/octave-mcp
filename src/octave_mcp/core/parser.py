@@ -1302,6 +1302,15 @@ class Parser:
             parts = [token.value]
             self.advance()
 
+            # GH#276: Capture constructor bracket annotation NAME[args] -> NAME<args>
+            # Per OCTAVE spec §1b: NAME immediately followed by [args] is constructor
+            # syntax. The bracket contents are semantic arguments that must be preserved.
+            # Convert to canonical angle-bracket form NAME<args> for I1 syntactic fidelity.
+            if self.current().type == TokenType.LIST_START:
+                annotation = self._consume_bracket_annotation(capture=True)
+                if annotation is not None:
+                    parts[0] = f"{parts[0]}<{annotation}>"
+
             # Collect colon-separated path components (Issue #41 Phase 2)
             # Examples: HERMES:API_TIMEOUT, MODULE:SUBMODULE:COMPONENT
             while self.current().type == TokenType.BLOCK and self.peek().type == TokenType.IDENTIFIER:
@@ -1313,11 +1322,15 @@ class Parser:
 
             # If we consumed colons, return as colon-joined path
             if len(parts) > 1:
-                # GH#85: Consume bracket annotation if present after colon-path value
+                # GH#276: Capture bracket annotation if present after colon-path value
                 # Examples: HERMES:API_TIMEOUT[note], MODULE:SUB[annotation]
-                # Must consume before returning so indentation tracking sees NEWLINE
-                self._consume_bracket_annotation(capture=False)
-                return ":".join(parts)
+                # Preserves constructor args as angle-bracket form for I1 fidelity.
+                result_path = ":".join(parts)
+                if self.current().type == TokenType.LIST_START:
+                    annotation = self._consume_bracket_annotation(capture=True)
+                    if annotation is not None:
+                        result_path = f"{result_path}<{annotation}>"
+                return result_path
 
             # GH#66: Continue capturing consecutive identifiers as multi-word value
             # GH#63: Include NUMBER tokens in multi-word capture (convert to string)
@@ -1394,6 +1407,13 @@ class Parser:
                         return full_expr
 
                     cur_val = _token_to_str(self.current())
+                    self.advance()
+                    # GH#276: Check for constructor bracket annotation after this token
+                    # e.g., ALWAYS[SYSTEM_COHERENCE] -> ALWAYS<SYSTEM_COHERENCE>
+                    if self.current().type == TokenType.LIST_START:
+                        annotation = self._consume_bracket_annotation(capture=True)
+                        if annotation is not None:
+                            cur_val = f"{cur_val}<{annotation}>"
                     if _has_annotation(cur_val):
                         # Flush accumulated bare words before annotated token
                         if bare_words:
@@ -1402,7 +1422,6 @@ class Parser:
                         items.append(cur_val)
                     else:
                         bare_words.append(cur_val)
-                    self.advance()
 
                 # Flush any remaining bare words
                 if bare_words:
@@ -1455,8 +1474,14 @@ class Parser:
 
                 # Just another word/number in the multi-word value
                 # GH#66: Use _token_to_str to preserve NUMBER lexemes (e.g., 1e10)
-                word_parts.append(_token_to_str(self.current()))
+                cur_word = _token_to_str(self.current())
                 self.advance()
+                # GH#276: Check for constructor bracket annotation after this word
+                if self.current().type == TokenType.LIST_START:
+                    annotation = self._consume_bracket_annotation(capture=True)
+                    if annotation is not None:
+                        cur_word = f"{cur_word}<{annotation}>"
+                word_parts.append(cur_word)
 
             # Join words with spaces
             result = " ".join(word_parts)
