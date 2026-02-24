@@ -76,10 +76,11 @@ class TestCanonicalEmission:
         assert "EMPTY::[]" in result
 
     def test_list_with_items(self):
-        """Should emit list with comma-separated items."""
+        """Should emit list with comma-separated items (GH#273: 3+ items go multi-line)."""
         doc = Document(name="TEST", sections=[Assignment(key="TAGS", value=ListValue(items=["a", "b", "c"]))])
         result = emit(doc)
-        assert "TAGS::[a,b,c]" in result
+        # GH#273: 3+ items now emit multi-line
+        assert "TAGS::[\n  a,\n  b,\n  c\n]" in result
 
 
 class TestIdempotence:
@@ -516,9 +517,9 @@ class TestMultiLineArrayEmission:
     """
 
     def test_flat_short_array_stays_single_line(self):
-        """Simple flat arrays under 120 chars remain single-line."""
-        result = emit_value(ListValue(items=["a", "b", "c"]))
-        assert result == "[a,b,c]"
+        """Simple flat arrays with fewer than 3 items remain single-line (GH#273)."""
+        result = emit_value(ListValue(items=["a", "b"]))
+        assert result == "[a,b]"
 
     def test_array_with_kv_pairs_emits_multiline(self):
         """Arrays containing KEY::VALUE pairs (InlineMap items) emit multi-line."""
@@ -639,15 +640,16 @@ class TestMultiLineArrayEmission:
         result2 = emit_value(ListValue(items=items))
         assert result1 == result2
 
-    def test_long_flat_array_stays_single_line(self):
-        """Even long flat arrays without structure stay single-line.
+    def test_long_flat_array_emits_multiline(self):
+        """Flat arrays with 3+ items emit multi-line for readability (GH#273).
 
-        The threshold is about structure, not length. Flat arrays
-        (no :: pairs, no nested arrays) remain single-line.
+        The threshold is item count >= 3, regardless of content type.
+        This prevents 300+ character single lines.
         """
         items = [f"ITEM_{i}" for i in range(20)]
         result = emit_value(ListValue(items=items))
-        assert "\n" not in result
+        assert "[\n" in result
+        assert result.endswith("]")
 
     def test_array_with_kv_pair_string_values_emits_multiline(self):
         """Arrays where items contain :: (key-value syntax) should go multi-line."""
@@ -730,3 +732,83 @@ class TestMultiLineArrayEmission:
         parsed = parse(emitted1)
         emitted2 = emit(parsed)
         assert emitted1 == emitted2
+
+    def test_three_plus_string_items_emit_multiline(self):
+        """Arrays with 3+ string items should emit multi-line for readability (GH#273).
+
+        String-only arrays with many items produce 300+ char lines when collapsed.
+        The threshold of 3 items triggers multi-line emission regardless of
+        content type, improving readability while preserving semantics (I1).
+        """
+        items = [
+            "STRUCTURAL_THINKING_BEFORE_TACTICAL_ACTION",
+            "CROSS_BOUNDARY_COHERENCE_CHECKS",
+            "PROPHETIC_FAILURE_PREVENTION",
+            "DELEGATION_VIA_OA_ROUTER",
+        ]
+        result = emit_value(ListValue(items=items))
+        assert "[\n" in result
+        assert "  STRUCTURAL_THINKING_BEFORE_TACTICAL_ACTION,\n" in result
+        assert "  CROSS_BOUNDARY_COHERENCE_CHECKS,\n" in result
+        assert "  PROPHETIC_FAILURE_PREVENTION,\n" in result
+        assert "  DELEGATION_VIA_OA_ROUTER\n" in result
+        assert result.endswith("]")
+
+    def test_two_item_string_array_stays_single_line(self):
+        """Arrays with only 1-2 items should remain single-line for compactness (GH#273).
+
+        The 3-item threshold means short arrays stay compact.
+        """
+        result = emit_value(ListValue(items=["alpha", "beta"]))
+        assert "\n" not in result
+        assert result == "[alpha,beta]"
+
+    def test_three_plus_string_items_roundtrip(self):
+        """Emit-parse-emit roundtrip for 3+ item string arrays (GH#273, I1).
+
+        Multi-line emission must produce output that parses back to an
+        equivalent AST, proving I1 (syntactic fidelity).
+        """
+        doc = Document(
+            name="TEST",
+            sections=[
+                Assignment(
+                    key="SKILLS",
+                    value=ListValue(items=["build_execution", "build_philosophy", "clarification_gate"]),
+                ),
+            ],
+        )
+        emitted1 = emit(doc)
+        parsed = parse(emitted1)
+        emitted2 = emit(parsed)
+        assert emitted1 == emitted2
+
+    def test_three_plus_string_items_in_assignment_context(self):
+        """3+ item string arrays in nested assignments use correct indentation (GH#273)."""
+        doc = Document(
+            name="TEST",
+            sections=[
+                Block(
+                    key="SECTION",
+                    children=[
+                        Assignment(
+                            key="MUST_ALWAYS",
+                            value=ListValue(
+                                items=[
+                                    "Write tests first",
+                                    "Check coverage",
+                                    "Run quality gates",
+                                ]
+                            ),
+                        ),
+                    ],
+                )
+            ],
+        )
+        result = emit(doc)
+        # Assignment at indent 1, array items at indent 2
+        assert "  MUST_ALWAYS::[\n" in result
+        assert '    "Write tests first",\n' in result
+        assert '    "Check coverage",\n' in result
+        assert '    "Run quality gates"\n' in result
+        assert "  ]" in result
