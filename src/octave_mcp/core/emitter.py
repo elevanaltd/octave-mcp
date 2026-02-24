@@ -154,15 +154,18 @@ def is_absent(value: Any) -> bool:
 
 
 def _needs_multiline(value: ListValue) -> bool:
-    """Determine if a ListValue needs multi-line emission (GH#267).
+    """Determine if a ListValue needs multi-line emission (GH#267, GH#273).
 
-    Returns True when the array contains structured content:
-    - InlineMap items (KEY::VALUE pairs)
-    - Nested ListValue items (sub-arrays)
+    Returns True when:
+    - The array contains InlineMap items (KEY::VALUE pairs) (GH#267)
+    - The array contains nested ListValue items (sub-arrays) (GH#267)
+    - The array has 3 or more non-Absent items (GH#273)
 
-    Simple flat arrays (only plain values like identifiers, strings,
-    numbers, booleans) remain single-line regardless of length.
+    Arrays with 1-2 items remain single-line for compactness.
+    The 3-item threshold improves readability for string-only arrays
+    that would otherwise produce 300+ character lines.
     """
+    non_absent_count = 0
     for item in value.items:
         if is_absent(item):
             continue
@@ -175,7 +178,9 @@ def _needs_multiline(value: ListValue) -> bool:
             continue
         if isinstance(item, ListValue):
             return True
-    return False
+        non_absent_count += 1
+    # GH#273: Any array with 3+ non-Absent plain items goes multi-line
+    return non_absent_count >= 3
 
 
 def _emit_multiline_list(value: ListValue, indent: int = 0) -> str:
