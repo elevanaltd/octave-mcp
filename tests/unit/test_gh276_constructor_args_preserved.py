@@ -230,3 +230,36 @@ class TestConstructorEmptyBrackets:
         output = emit(doc)
         # FOO[] should emit as FOO<> (empty annotation preserved) not just FOO
         assert "FOO<>" in output, f"Empty brackets silently dropped — expected FOO<>. Output:\n{output}"
+
+
+class TestConstructorCommentNewlineFiltering:
+    """GH#276 round 3: COMMENT, NEWLINE, INDENT tokens must be filtered from constructor brackets."""
+
+    def test_constructor_with_inline_comment(self):
+        """FOO[BAR, //comment\\nBAZ] must strip comment, preserve args."""
+        content = "===TEST===\nX::FOO[BAR, //comment\nBAZ]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "BAR" in output, f"BAR arg dropped. Output:\n{output}"
+        assert "BAZ" in output, f"BAZ arg dropped. Output:\n{output}"
+        assert "comment" not in output, f"Comment text leaked into constructor data. Output:\n{output}"
+
+    def test_constructor_multiline(self):
+        """FOO[BAR,\\nBAZ] must strip newline, preserve args."""
+        content = "===TEST===\nX::FOO[BAR,\nBAZ]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "BAR" in output, f"BAR arg dropped. Output:\n{output}"
+        assert "BAZ" in output, f"BAZ arg dropped. Output:\n{output}"
+        # Newline should not appear as literal data between args
+        assert "\\n" not in output.replace("\n", ""), f"Newline leaked as literal data. Output:\n{output}"
+
+    def test_constructor_comment_only_between_args(self):
+        """FOO[A, //note\\nB, //note\\nC] must strip all comments, preserve all args."""
+        content = "===TEST===\nX::FOO[A, //note\nB, //note\nC]\n===END==="
+        doc = parse(content)
+        output = emit(doc)
+        assert "A" in output, f"A arg dropped. Output:\n{output}"
+        assert "B" in output, f"B arg dropped. Output:\n{output}"
+        assert "C" in output, f"C arg dropped. Output:\n{output}"
+        assert "note" not in output, f"Comment text leaked into constructor data. Output:\n{output}"

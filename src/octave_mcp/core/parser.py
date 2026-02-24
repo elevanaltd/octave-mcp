@@ -391,6 +391,12 @@ class Parser:
         # brackets except LIST_END (which terminates). This is future-proof:
         # any new token type will automatically be preserved instead of silently
         # dropped, satisfying I1 (syntactic fidelity).
+        #
+        # GH#276 round 3: Also skip COMMENT, NEWLINE, and INDENT tokens.
+        # These are non-semantic tokens that should not become constructor
+        # payload data, just as they are filtered in list parsing (I1/I4).
+        _SKIP_TYPES = {TokenType.COMMENT, TokenType.NEWLINE, TokenType.INDENT}
+
         annotation_tokens: list[str] = []
 
         while bracket_depth > 0 and self.current().type != TokenType.EOF:
@@ -404,6 +410,8 @@ class Parser:
                     annotation_tokens.append("]")
             elif tok.type == TokenType.COMMA:
                 annotation_tokens.append(",")
+            elif tok.type in _SKIP_TYPES:
+                pass  # Non-semantic tokens: skip silently
             else:
                 # Blacklist approach: capture any token between [ and ].
                 # Use _token_to_str for consistent stringification of all
