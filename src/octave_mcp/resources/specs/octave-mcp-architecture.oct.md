@@ -23,11 +23,14 @@ META:
     src/octave_mcp/core/grammar.py
   ]
   CRITICAL_GAPS::[
-    meta_contract_grammar_extraction,
-    jit_grammar_compilation,
-    schema_policy_unknown_fields,
+    grammar_hints_on_validation_failure,
     repair_tier_repair_completeness,
     projection_mode_field_filtering_completeness
+  ]
+  RESOLVED_GAPS::[
+    meta_contract_grammar_extraction[octave_compile_grammar_tool+octave_eject_gbnf],
+    jit_grammar_compilation[gbnf_compiler_735_LOC+compile_gbnf_from_meta],
+    schema_policy_unknown_fields[E007+STRICT_LENIENT_WARN_modes]
   ]
 
 ---
@@ -538,9 +541,10 @@ BENEFITS::[
   self_describing_documents
 ]
 
-CURRENT_STATE[v0.6.0]:
-  COMPILER::stub_only[compile_document_grammar]
-  TOOLING::validate_and_write_do_not_enforce_meta_contracts_yet
+CURRENT_STATE[v1.5.0]:
+  COMPILER::operational[gbnf_compiler_735_LOC+compile_gbnf_from_meta+octave_compile_grammar_tool]
+  TOOLING::grammar_compilation_exposed_via_MCP[octave_compile_grammar+octave_eject_gbnf]
+  REMAINING_GAP::grammar_hints_not_integrated_into_validate_write_failure_responses
   PARSING_LIMITATION::"Constructor payload for IDENTIFIER[...] in META (e.g., CONTRACT::HOLOGRAPHIC[...]) may not be preserved in AST; full holographic enforcement requires meta constructor preservation"
 
 §17::HERMETIC_ANCHORING

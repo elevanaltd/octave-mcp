@@ -7,9 +7,10 @@ META:
   TOKENS::"~130"
   REQUIRES::octave-core-spec
   PURPOSE::validation_and_error_handling
-  IMPLEMENTATION_NOTES::"Validator (134 LOC) handles META and basic structure validation. Parse errors caught. Constraint validation, error formatting, and retry protocol not implemented."
-  IMPLEMENTATION_REF::[src/octave_mcp/core/validator.py]
-  CRITICAL_GAPS::[constraint_validation,type_checking,regex_validation,error_message_formatting,retry_protocol]
+  IMPLEMENTATION_NOTES::"Validator handles META validation, structure validation, and schema-driven constraint validation (15+ constraint types including Type, Regex, Enum, Range, MinLength, MaxLength, Date, Iso8601). Unknown fields policy (E007) with STRICT/LENIENT/WARN modes implemented. Retry protocol not yet implemented as tool-level feature."
+  IMPLEMENTATION_REF::[src/octave_mcp/core/validator.py,src/octave_mcp/core/constraints.py]
+  CRITICAL_GAPS::[retry_protocol,grammar_hints_on_validation_failure]
+  RESOLVED_GAPS::[constraint_validation,type_checking,regex_validation,error_message_formatting]
 
 ---
 
