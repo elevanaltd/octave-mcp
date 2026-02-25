@@ -1456,8 +1456,11 @@ class WriteTool(BaseTool):
                                 "grammar": compiled,
                                 "usage_hints": USAGE_HINTS,
                             }
-                        except Exception as e:
-                            result["grammar_hint"] = {"error": str(e)}
+                        except Exception:
+                            result["grammar_hint"] = {
+                                "error": "E_GRAMMAR_COMPILE",
+                                "message": "Grammar compilation failed for this schema",
+                            }
                 else:
                     result["validation_status"] = "VALIDATED"
             # else: schema not found - remain UNVALIDATED (bypass is visible)

@@ -2530,3 +2530,37 @@ KEY::value
         schema = tool.get_input_schema()
         assert "grammar_hint" in schema["properties"]
         assert schema["properties"]["grammar_hint"]["type"] == "boolean"
+
+    @pytest.mark.asyncio
+    async def test_grammar_hint_compile_failure(self, monkeypatch):
+        """Grammar compilation failure returns error envelope, not raw exception."""
+        from octave_mcp.core.gbnf_compiler import GBNFCompiler
+        from octave_mcp.mcp.validate import ValidateTool
+
+        monkeypatch.setattr(
+            GBNFCompiler,
+            "compile_schema",
+            lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("test failure")),
+        )
+
+        tool = ValidateTool()
+
+        # Document missing required TYPE field -> INVALID against META schema
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+            grammar_hint=True,
+        )
+
+        assert result["validation_status"] == "INVALID"
+        assert "grammar_hint" in result, "grammar_hint should be present even on compile failure"
+
+        hint = result["grammar_hint"]
+        assert hint["error"] == "E_GRAMMAR_COMPILE"
+        assert isinstance(hint["message"], str)

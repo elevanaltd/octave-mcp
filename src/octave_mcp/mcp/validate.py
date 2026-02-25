@@ -602,8 +602,11 @@ class ValidateTool(BaseTool):
                                 "grammar": compiled,
                                 "usage_hints": USAGE_HINTS,
                             }
-                        except Exception as e:
-                            result["grammar_hint"] = {"error": str(e)}
+                        except Exception:
+                            result["grammar_hint"] = {
+                                "error": "E_GRAMMAR_COMPILE",
+                                "message": "Grammar compilation failed for this schema",
+                            }
             else:
                 # I5: Schema validation passed - mark as VALIDATED
                 result["validation_status"] = "VALIDATED"
