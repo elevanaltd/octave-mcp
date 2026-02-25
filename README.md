@@ -152,7 +152,7 @@ A document's `META.CONTRACT` block compiles to a GBNF grammar that can constrain
 
 This is the part where we lose some of you. We know how it sounds. Just look at it from an inquisitive perspective and consider it for a moment.
 
-OCTAVE is named **Olympian** Common Text And Vocabulary Engine. That's not branding — it's the hypothesis. Classical mythology is so deeply represented in LLM training data that mythological terms function as a pre-compressed semantic vocabulary that's already in the weights.
+OCTAVE is named **Olympian** Common Text And Vocabulary Engine. That's not branding — it's the hypothesis. Classical mythology seems to be so deeply represented in LLM training data that mythological terms function as a pre-compressed semantic vocabulary that's already in the weights.
 
 | Term | What it encodes |
 |------|----------------|
@@ -165,7 +165,7 @@ OCTAVE is named **Olympian** Common Text And Vocabulary Engine. That's not brand
 
 In informal cross-model testing (GPT-4, Claude, Gemini, Llama, Mistral), these terms were consistently interpreted as expected without few-shot priming. No fine-tuning, no examples, no definitions provided. Personally, we've seen zero-shot comprehension in every model we've tried, but that's bias. Like every good hypothesis, we want to prove it wrong until we can't.
 
-There's a paradox worth noting: when asked *theoretically* whether mythology works as compression, models hesitate and cite cultural concerns. When given `JOURNEY::ODYSSEAN` *practically*, they understand it instantly. We don't fully understand why that gap exists — but the practical result is consistent. This seems like a meta-evaluation vs execution gap, so the skills & primers used try open their eyes to this shortcoming.
+There's a paradox worth noting: when asked *theoretically* whether mythology works as compression, models hesitate and cite cultural concerns. When given `JOURNEY::ODYSSEAN` *practically*, they understand it instantly. We don't fully understand why that gap exists — but the practical result is consistent. So OCTAVE primers explicitly encourage operational use rather than meta-discussion.
 
 This is exploratory. We're not claiming a universal law. We are claiming it works reliably in practice, across every model we've tested, and that it's worth investigating why.
 
