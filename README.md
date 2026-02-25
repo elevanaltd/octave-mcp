@@ -27,35 +27,40 @@ This README serves three audiences. We know that's unusual, and we're being upfr
 
 OCTAVE is a structured document format with an MCP server and CLI. Documents normalise to a single canonical form, validate against their own schema, and log every transformation. It's infrastructure for AI documents that need to survive compression, multi-agent handoffs, and auditing.
 
-### Quick example
+### Quick example: what changes
 
-You write this (messy, lenient):
-```octave
-===CONFIG===
-META:
-  TYPE :: LOG
-status  ::  active
-flow :: A -> B -> C
-tags:: [  alpha,  beta , gamma ]
-===END===
+Without OCTAVE, an LLM asked to "summarise the deployment status" might produce this:
+
+```text
+The deployment is currently active. The pipeline flows from build
+to test to deploy. It's tagged as alpha, beta, and gamma release
+channels. Build status is critical — tests are failing repeatedly.
 ```
 
-Run `octave validate --stdin` and get back canonical form:
+That's ~40 tokens of prose. Useful once, but try passing it through three agents, compressing it, or validating it later. Structure gets lost. Meaning drifts.
+
+With OCTAVE, the same information looks like this:
+
 ```octave
-===CONFIG===
+===DEPLOY_STATUS===
 META:
-  TYPE::LOG
+  TYPE::STATUS
 status::active
-flow::"A→B→C"
-tags::[alpha,beta,gamma]
+pipeline::[build→test→deploy]
+channels::[alpha,beta,gamma]
+build::SISYPHEAN::FAILURES
 ===END===
 ```
-Whitespace normalised. `->` converted to `→`. List commas tightened. The warnings tell you exactly what changed:
+
+~20 tokens. Every fact preserved. `SISYPHEAN` carries "repetitive, frustrating, cyclical" in one term ([why that works](#mythological-compression)). And the format is deterministic — pass it through ten agents, you get the same canonical document back.
+
+If an LLM writes it slightly wrong (extra spaces, ASCII `->` instead of `→`), the normaliser autocorrects:
+
 ```
 normalization: '->' → '→' at line 5
-normalization: '->' → '→' at line 5
 ```
-Same input, same output, every time. That's the core promise.
+
+You get a receipt of what changed. Same input, same output, every time.
 
 ### What you get
 
