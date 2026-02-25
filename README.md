@@ -3,158 +3,88 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-2258%20passing-brightgreen.svg)]()
-[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)]()
+[![PyPI](https://img.shields.io/pypi/v/octave-mcp.svg)](https://pypi.org/project/octave-mcp/)
 
-Production-grade MCP server implementing the **OCTAVE v6** document protocol: **Generative Holographic Contracts**.
+**Deterministic document infrastructure for LLM pipelines.** Canonicalization, schema validation, grammar compilation, and MCP tools for durable AI artifacts.
 
-## Table of Contents
-
-- [For AI Agents](#for-ai-agents)
-- [What It Does](#what-it-does)
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-- [MCP Tools](#mcp-tools)
-- [When OCTAVE Helps](#when-octave-helps)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
-
----
-
-## For AI Agents
-
-**Reading this section makes you OCTAVE-literate.** The ~200-token primer below is all you need to write valid OCTAVE:
-
-```octave
-===OCTAVE_LITERACY_PRIMER===
-META:
-  TYPE::PRIMER
-  VERSION::"6.0.0"
-  TOKENS::~200
-
-§1::ESSENCE
-PURPOSE::"Write OCTAVE"
-OCTAVE::"Semantic DSL for LLMs"
-STRUCTURE::KEY::value,[list],indent_2
-
-§2::SYNTAX
-::→assign
-→→flow
-⊕→synthesis
-⇌→tension
-
-§3::ONE_SHOT
-IN::"flow from A to B"
-OUT::A→B
-
-§4::VALIDATE
-MUST::[valid_OCTAVE,preserve_§_names,"===END==="]
-===END===
-```
-
-**Project Context** (for working on this codebase):
-
-```octave
-===AGENT_BOOTSTRAP===
-QUALITY_GATES::[mypy,ruff,black,pytest]
-DEV_SETUP::docs/guides/development-setup.md
-SPECS::src/octave_mcp/resources/specs/
-PRIMERS::src/octave_mcp/resources/primers/
-
-IMMUTABLES::[
-  I1::SYNTACTIC_FIDELITY,     // Preserve semantic meaning exactly
-  I2::DETERMINISTIC_ABSENCE,  // Distinguish absent vs null vs default
-  I3::MIRROR_CONSTRAINT,      // Reflect only what exists, create nothing
-  I4::TRANSFORM_AUDITABILITY, // Log every transformation with IDs
-  I5::SCHEMA_SOVEREIGNTY      // Make validation status visible
-]
-===END===
-```
-
----
-
-## What It Does
-
-This repository ships the **OCTAVE MCP Server** (v1.5.0)—a Model Context Protocol implementation that transforms OCTAVE documents from passive text into **Generative Holographic Contracts**.
-
-OCTAVE (Olympian Common Text And Vocabulary Engine) is a deterministic document format and control plane for LLM systems. It keeps meaning durable when text is compressed, routed between agents, or projected into different views.
-
-**Core Philosophy: Validation Precedes Generation**
-OCTAVE v6 introduces the principle that schemas should constrain LLM output *during* generation, not just validate it afterward. The `META` block can compile to strict grammars (Regex/GBNF) for constrained generation.
-
-> **Implementation Status (v0.6.0):** Grammar compilation is implemented and available via `debug_grammar=True`. However, the MCP tools (`octave_validate`, `octave_write`) currently perform post-hoc validation rather than enforcing grammar constraints during generation. See the [architecture spec](src/octave_mcp/resources/specs/octave-mcp-architecture.oct.md) for details.
-
-- **Generative Constraints**: `META.CONTRACT` compiles to regex/GBNF grammar (use `debug_grammar=True` to inspect).
-- **Holographic Sovereignty**: The document defines its own schema laws inline.
-- **Hermetic Anchoring**: No network calls in the hot path. Standards are frozen or local.
-- **Auditable Loss**: Compression tiers declared in `META` (`LOSSLESS`, `AGGRESSIVE`).
-
-### Language, operators, and readability
-
-- **Syntax**: Unicode-first operators (`→`, `⊕`, `⧺`, `⇌`, `∨`, `∧`, `§`) with ASCII aliases.
-- **Vocabulary**: Mythological terms as semantic compression shorthands.
-- **Authoring**: Humans write in the lenient view; tools normalize to canonical Unicode.
-
-### Mythological compression
-
-OCTAVE's name -- **Olympian** Common Text And Vocabulary Engine -- reflects a foundational design insight: LLMs have deep training data saturation in classical mythology, making mythological terms function as **pre-trained compression already in the weights**. `SISYPHEAN::BUILD_FAILURES` encodes repetition, frustration, cyclicality, and futility in one word -- achieving 60-70% token reduction with 10x semantic density and 100% zero-shot comprehension across all tested models.
-
-LLMs exhibit a documented **paradigm blindness**: when asked theoretically whether mythology helps, they hesitate; when given `JOURNEY::ODYSSEAN` practically, they understand instantly. If you just parsed that term without needing a definition, you've proven the thesis. Use mythology freely -- start with Greek, extend across world traditions as semantics demand.
-
-See [The Mythological Compression Principle](docs/guides/mythological-compression.md) for evidence and guidance. See [research evidence](docs/research/mythology-evidence-synthesis.oct.md) for the full empirical basis.
-
-See the [protocol specs in `src/octave_mcp/resources/specs/`](src/octave_mcp/resources/specs/) for v6.0.0 rules.
-
-## What this server provides
-
-`octave-mcp` bundles the OCTAVE tooling as MCP tools and a CLI.
-
-- **4 MCP tools**: `octave_validate`, `octave_write`, `octave_eject`, `octave_compile_grammar`
-- **Grammar Compiler**: Compiles `META.CONTRACT` constraints to GBNF grammars (inspect via `debug_grammar=True`).
-- **Hermetic Hydrator**: Resolves standards without network dependency.
-
-## When OCTAVE Helps
-
-Use OCTAVE when documents must survive multiple agent/tool hops, repeated compression, or auditing:
-
-- **Self-Validating Agents**: Agents that define their own output grammar.
-- **Coordination Briefs**: Decision logs that circulate between agents.
-- **Compressed Context**: Reusable prompts needing stable structure (54–68% token reduction).
-
-## Installation
-
-**PyPI:**
 ```bash
 pip install octave-mcp
-# or
-uv pip install octave-mcp
 ```
 
-**From source:**
+---
+
+This README serves three audiences. We know that's unusual, and we're being upfront about it — because the project itself sits at the intersection of all three.
+
+| If you are... | Jump to |
+|---------------|---------|
+| An engineer evaluating this for production | [For Engineers](#for-engineers) |
+| A researcher interested in what's novel here | [For Researchers](#for-researchers) |
+| An AI agent that needs to read/write OCTAVE | [For AI Agents](#for-ai-agents) |
+
+---
+
+## For Engineers
+
+OCTAVE is a structured document format with an MCP server and CLI. Documents normalise to a single canonical form, validate against their own schema, and log every transformation. It's infrastructure for AI documents that need to survive compression, multi-agent handoffs, and auditing.
+
+### Quick example: what changes
+
+Without OCTAVE, an LLM asked to "summarise the deployment status" might produce this:
+
+```text
+The deployment is currently active. The pipeline flows from build
+to test to deploy. It's tagged as alpha, beta, and gamma release
+channels. Build status is critical — tests are failing repeatedly.
+```
+
+That's ~40 tokens of prose. Useful once, but try passing it through three agents, compressing it, or validating it later. Structure gets lost. Meaning drifts.
+
+With OCTAVE, the same information looks like this:
+
+```octave
+===DEPLOY_STATUS===
+META:
+  TYPE::STATUS
+status::active
+pipeline::[build→test→deploy]
+channels::[alpha,beta,gamma]
+build::SISYPHEAN::FAILURES
+===END===
+```
+
+~20 tokens. Every fact preserved. `SISYPHEAN` carries "repetitive, frustrating, cyclical" in one term ([why that works](#mythological-compression)). And the format is deterministic — pass it through ten agents, you get the same canonical document back.
+
+If an LLM writes it slightly wrong (extra spaces, ASCII `->` instead of `→`), the normaliser autocorrects:
+
+```
+normalization: '->' → '→' at line 5
+```
+
+You get a receipt of what changed. Same input, same output, every time.
+
+### What you get
+
+- **Canonical normalisation** — Same input, same output, always. Idempotent. Two agents independently producing the same document get a byte-for-byte match.
+
+- **Schema validation with receipts** — Documents carry their schema inline. Validation returns specific field errors. Every repair is logged with stable IDs — you know exactly what changed and why.
+
+- **Token compression (2–5x)** — Strips linguistic scaffolding, not content. Facts and relationships stay exactly as written.
+
+- **Grammar compilation** — Schema constraints compile to GBNF grammars for llama.cpp-compatible backends. Constrain LLM generation at decode time.
+
+- **YAML frontmatter + OCTAVE body in one pass** — Agent and skill files need YAML headers for tool discovery and structured bodies for behaviour. `octave_write` validates both in a single operation.
+
+- **Literal zones** — Fenced code blocks pass through with zero processing. No normalisation, no escaping.
+
+- **HTTP + stdio transport** — Stdio by default, Streamable HTTP with DNS rebinding protection and health checks for web deployments.
+
+### Install
+
 ```bash
-git clone https://github.com/elevanaltd/octave-mcp.git
-cd octave-mcp
-uv pip install -e ".[dev]"
+pip install octave-mcp
 ```
 
-## Quick Start
-
-### CLI
-
-```bash
-# Validate and normalize (v6 auto-detection)
-octave validate document.oct.md
-
-# Write with validation (from content)
-echo "===DOC===\nMETA:\n  TYPE::LOG\n  CONTRACT::GRAMMAR[...]\n..." | octave write output.oct.md --stdin
-
-# Project to a view/format
-octave eject document.oct.md --mode executive --format markdown
-```
-
-### MCP Setup
-
-Add to Claude Desktop (`claude_desktop_config.json`) or Claude Code (`~/.claude.json`):
-
+**Claude Code** (`~/.claude.json`) or **Claude Desktop** (`claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
@@ -165,56 +95,143 @@ Add to Claude Desktop (`claude_desktop_config.json`) or Claude Code (`~/.claude.
 }
 ```
 
-## MCP Tools
+**HTTP:**
+```bash
+octave-mcp-server --transport http --port 8080
+```
 
-| Tool | Purpose |
-|------|---------|
-| `octave_validate` | Schema validation + repair suggestions + grammar compilation |
-| `octave_write` | Unified file creation/modification with validation (includes `normalize` mode) |
-| `octave_eject` | Format projection and template generation |
-| `octave_compile_grammar` | Direct GBNF grammar compilation from META.CONTRACT constraints |
+### MCP Tools
 
-See [API Reference](docs/api.md) for full parameter documentation.
+| Tool | What it does |
+|------|-------------|
+| `octave_validate` | Validate against schema. Field errors, repair suggestions, zone coverage |
+| `octave_write` | Write files through the full validation pipeline. `mode: normalize` for dry-run |
+| `octave_eject` | Project to different views — canonical, executive summary, developer, template |
+| `octave_compile_grammar` | Compile schema constraints to GBNF grammar for constrained generation |
 
-### Generative Holographic Contracts (v6)
+### CLI
 
-OCTAVE v6 introduces the **Holographic Contract** concept:
-1.  **Read META**: The parser reads the `META` block first.
-2.  **Compile Grammar**: Constraints (`REQ`, `ENUM`, `REGEX`) compile into GBNF grammar (available via `debug_grammar=True`).
-3.  **Generate/Validate**: The body can be validated against this bespoke grammar.
+```bash
+octave validate document.oct.md
+octave write output.oct.md --stdin
+octave eject document.oct.md --mode executive --format markdown
+```
 
-> **Note:** In v0.6.0, grammar compilation is implemented but tools perform post-hoc validation. Grammar-constrained generation is a roadmap feature.
+### When to use it
 
-## Documentation
+- Documents passing through multiple agents, tools, or compression steps
+- Agent and skill files with YAML discovery headers + structured content
+- Decision logs, coordination briefs, audit trails
+- System prompts and reference docs where token cost matters
+
+**Not the right tool** for single-step prompts, freeform prose, or code output.
+
+### Docs
 
 | Doc | Content |
 |-----|---------|
 | [Usage Guide](docs/usage.md) | CLI, MCP, and API examples |
-| [API Reference](docs/api.md) | Python API documentation |
+| [API Reference](docs/api.md) | Python API |
 | [MCP Configuration](docs/mcp-configuration.md) | Client setup and integration |
-| [Protocol Specs](src/octave_mcp/resources/specs/) | v6.0.0 Generative Holographic Specs |
-| [EBNF Grammar](docs/grammar/octave-v1.0-grammar.ebnf) | Formal v1.0.0 grammar specification |
-| [Development Setup](docs/guides/development-setup.md) | Dev environment, testing, quality gates |
-| [Architecture Decisions](docs/adr/) | Architecture Decision Records (ADRs) |
-| [Research](docs/research/) | Benchmarks and validation studies |
+| [Development Setup](docs/guides/development-setup.md) | Testing, quality gates, contributing |
+| [EBNF Grammar](docs/grammar/octave-v1.0-grammar.ebnf) | Formal grammar spec |
+| [Architecture Decisions](docs/adr/) | ADRs |
+
+---
+
+## For Researchers
+
+Two architectural ideas and one that sounds like it shouldn't work but does.
+
+### Self-describing artifacts
+
+Most structured output validates at a single point and then becomes a plain object. OCTAVE documents are different — the schema, compression tier, and transformation log travel *with* the document. A downstream agent doesn't infer integrity; it reads it.
+
+This creates a property that JSON Schema or Pydantic don't give you: the validation receipt is part of the artifact, not external to it.
+
+### Grammar compilation from inline constraints
+
+A document's `META.CONTRACT` block compiles to a GBNF grammar that can constrain LLM generation at decode time. The schema doesn't just validate output after the fact — it can shape generation while it happens. This bridges the gap between "check if it's valid" and "make it valid by construction."
+
+### Mythological compression
+
+This is the part where we lose some of you. We know how it sounds. Just look at it from an inquisitive perspective and consider it for a moment.
+
+OCTAVE is named **Olympian** Common Text And Vocabulary Engine. That's not branding — it's the hypothesis. Classical mythology seems to be so deeply represented in LLM training data that mythological terms function as a pre-compressed semantic vocabulary that's already in the weights.
+
+| Term | What it encodes |
+|------|----------------|
+| `JOURNEY::ODYSSEAN` | Long, difficult, full of unforeseen obstacles |
+| `CHALLENGE::SISYPHEAN` | Repetitive, frustrating, cyclical, futile |
+| `CHOICE::SOLOMONIC` | Requires wisdom to divide fairly between competing claims |
+| `STRATEGY::ATHENA` | Find a clever solution balancing competing constraints |
+
+`SISYPHEAN::BUILD_FAILURES` — a single term that carries repetition, frustration, cyclicality, and futility. In prose, that's 10–15 tokens. Here, it's one.
+
+In informal cross-model testing (GPT-4, Claude, Gemini, Llama, Mistral), these terms were consistently interpreted as expected without few-shot priming. No fine-tuning, no examples, no definitions provided. Personally, we've seen zero-shot comprehension in every model we've tried, but that's bias. Like every good hypothesis, we want to prove it wrong until we can't.
+
+There's a paradox worth noting: when asked *theoretically* whether mythology works as compression, models hesitate and cite cultural concerns. When given `JOURNEY::ODYSSEAN` *practically*, they understand it instantly. We don't fully understand why that gap exists — but the practical result is consistent. So OCTAVE primers explicitly encourage operational use rather than meta-discussion.
+
+This is exploratory. We're not claiming a universal law. We are claiming it works reliably in practice, across every model we've tested, and that it's worth investigating why.
+
+If you're sceptical, fair enough. If you want to falsify this quickly, the guide includes a short replication protocol.
+
+Evidence and methodology: [The Mythological Compression Principle](docs/guides/mythological-compression.md)
+
+---
+
+## For AI Agents
+
+The ~200-token block below makes you OCTAVE-literate:
+
+```octave
+===OCTAVE_LITERACY_PRIMER===
+META:
+  TYPE::PRIMER
+  VERSION::"6.0.0"
+
+§1::ESSENCE
+OCTAVE::"Semantic DSL for LLMs"
+STRUCTURE::KEY::value,[list],indent_2
+
+§2::SYNTAX
+::::"assign"
+→::"flow"
+⊕::"synthesis"
+⇌::"tension"
+
+§3::ONE_SHOT
+IN::"flow from A to B"
+OUT::A→B
+
+§4::VALIDATE
+MUST::[valid_OCTAVE,preserve_§_names,"===END==="]
+===END===
+```
+
+**Working on this codebase:**
+```octave
+===AGENT_BOOTSTRAP===
+QUALITY_GATES::[mypy,ruff,black,pytest]
+SPECS::src/octave_mcp/resources/specs/
+PRIMERS::src/octave_mcp/resources/primers/
+===END===
+```
+
+---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and guidelines.
-
 ```bash
-# Quick dev setup
 git clone https://github.com/elevanaltd/octave-mcp.git
 cd octave-mcp
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
-
-# Run tests
 pytest
-
-# Quality checks
 ruff check src tests && mypy src && black --check src tests
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
