@@ -32,6 +32,7 @@ from octave_mcp.core.ast_nodes import (
     Section,
 )
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.gbnf_compiler import GBNFCompiler
 from octave_mcp.core.hydrator import resolve_hermetic_standard
 from octave_mcp.core.lexer import LexerError, tokenize
 from octave_mcp.core.parser import ParserError, parse, parse_with_warnings
@@ -40,6 +41,7 @@ from octave_mcp.core.repair_log import LiteralZoneRepairLog
 from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
+from octave_mcp.mcp.compile_grammar import USAGE_HINTS
 from octave_mcp.schemas.loader import get_builtin_schema, load_schema, load_schema_by_name
 
 # Sentinel for DELETE operation in tri-state changes
@@ -684,6 +686,13 @@ class WriteTool(BaseTool):
         )
 
         schema.add_parameter(
+            "grammar_hint",
+            "boolean",
+            required=False,
+            description="If True and validation returns INVALID, include compiled GBNF grammar in response to guide correction.",
+        )
+
+        schema.add_parameter(
             "lenient",
             "boolean",
             required=False,
@@ -1004,6 +1013,7 @@ class WriteTool(BaseTool):
         base_hash = params.get("base_hash")
         schema_name = params.get("schema")
         debug_grammar = params.get("debug_grammar", False)
+        grammar_hint = params.get("grammar_hint", False)
         lenient = params.get("lenient", False)
         corrections_only = params.get("corrections_only", False)
         parse_error_policy = params.get("parse_error_policy", "error")
@@ -1436,6 +1446,18 @@ class WriteTool(BaseTool):
                     result["validation_errors"] = [
                         {"code": err.code, "message": err.message, "field": err.field_path} for err in validation_errors
                     ]
+
+                    # GH#278: Include compiled grammar hint on INVALID when requested
+                    if grammar_hint and schema_definition is not None:
+                        try:
+                            compiled = GBNFCompiler().compile_schema(schema_definition, include_envelope=True)
+                            result["grammar_hint"] = {
+                                "format": "gbnf",
+                                "grammar": compiled,
+                                "usage_hints": USAGE_HINTS,
+                            }
+                        except Exception as e:
+                            result["grammar_hint"] = {"error": str(e)}
                 else:
                     result["validation_status"] = "VALIDATED"
             # else: schema not found - remain UNVALIDATED (bypass is visible)

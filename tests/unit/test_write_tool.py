@@ -2932,3 +2932,151 @@ class TestNormalizeMode:
             assert "corrections" in result
             assert "diff" in result
             assert "diff_unified" in result
+
+
+class TestWriteGrammarHint:
+    """GH#278: Tests for grammar_hint parameter on octave_write."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_with_grammar_hint_true_returns_grammar(self):
+        """INVALID + grammar_hint=True should include grammar_hint dict in response."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Document missing required TYPE field -> INVALID against META schema
+            content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                schema="META",
+                grammar_hint=True,
+            )
+
+            assert result["status"] == "success"
+            assert result["validation_status"] == "INVALID"
+            assert "grammar_hint" in result, "grammar_hint should be present when INVALID and grammar_hint=True"
+
+            hint = result["grammar_hint"]
+            assert hint["format"] == "gbnf"
+            assert isinstance(hint["grammar"], str)
+            assert len(hint["grammar"]) > 0, "compiled grammar should be non-empty"
+            assert "usage_hints" in hint
+            assert isinstance(hint["usage_hints"], dict)
+            assert "llama_cpp" in hint["usage_hints"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_with_grammar_hint_false_no_grammar(self):
+        """INVALID + grammar_hint=False (default) should NOT include grammar_hint."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                schema="META",
+                grammar_hint=False,
+            )
+
+            assert result["validation_status"] == "INVALID"
+            assert "grammar_hint" not in result
+
+    @pytest.mark.asyncio
+    async def test_invalid_default_no_grammar_hint(self):
+        """INVALID + grammar_hint omitted (default False) should NOT include grammar_hint."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                schema="META",
+            )
+
+            assert result["validation_status"] == "INVALID"
+            assert "grammar_hint" not in result
+
+    @pytest.mark.asyncio
+    async def test_valid_with_grammar_hint_true_no_grammar(self):
+        """VALID + grammar_hint=True should NOT include grammar_hint (only on INVALID)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = """===TEST===
+META:
+  TYPE::"META"
+  VERSION::"1.0"
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                schema="META",
+                grammar_hint=True,
+            )
+
+            assert result["validation_status"] == "VALIDATED"
+            assert "grammar_hint" not in result
+
+    @pytest.mark.asyncio
+    async def test_no_schema_with_grammar_hint_true_no_grammar(self):
+        """No schema provided + grammar_hint=True should NOT include grammar_hint."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            content = """===TEST===
+KEY::value
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                grammar_hint=True,
+            )
+
+            # No schema -> UNVALIDATED
+            assert result["validation_status"] == "UNVALIDATED"
+            assert "grammar_hint" not in result
+
+    @pytest.mark.asyncio
+    async def test_grammar_hint_parameter_in_schema(self):
+        """grammar_hint parameter should be declared in tool input schema."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        schema = tool.get_input_schema()
+        assert "grammar_hint" in schema["properties"]
+        assert schema["properties"]["grammar_hint"]["type"] == "boolean"

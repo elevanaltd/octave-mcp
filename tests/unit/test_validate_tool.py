@@ -2391,3 +2391,142 @@ META:
         result = await tool.execute(content=content, schema="META", profile="STANDARD")
         assert result["validation_status"] == "VALIDATED"
         assert result["has_warnings"] is False
+
+
+class TestValidateGrammarHint:
+    """GH#278: Tests for grammar_hint parameter on octave_validate."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_with_grammar_hint_true_returns_grammar(self):
+        """INVALID + grammar_hint=True should include grammar_hint dict in response."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Document missing required TYPE field -> INVALID against META schema
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+            grammar_hint=True,
+        )
+
+        assert result["status"] == "success"
+        assert result["validation_status"] == "INVALID"
+        assert "grammar_hint" in result, "grammar_hint should be present when INVALID and grammar_hint=True"
+
+        hint = result["grammar_hint"]
+        assert hint["format"] == "gbnf"
+        assert isinstance(hint["grammar"], str)
+        assert len(hint["grammar"]) > 0, "compiled grammar should be non-empty"
+        assert "usage_hints" in hint
+        assert isinstance(hint["usage_hints"], dict)
+        assert "llama_cpp" in hint["usage_hints"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_with_grammar_hint_false_no_grammar(self):
+        """INVALID + grammar_hint=False (default) should NOT include grammar_hint."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+            grammar_hint=False,
+        )
+
+        assert result["validation_status"] == "INVALID"
+        assert "grammar_hint" not in result
+
+    @pytest.mark.asyncio
+    async def test_invalid_default_no_grammar_hint(self):
+        """INVALID + grammar_hint omitted (default False) should NOT include grammar_hint."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        content = """===TEST===
+META:
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+        )
+
+        assert result["validation_status"] == "INVALID"
+        assert "grammar_hint" not in result
+
+    @pytest.mark.asyncio
+    async def test_valid_with_grammar_hint_true_no_grammar(self):
+        """VALID + grammar_hint=True should NOT include grammar_hint (only on INVALID)."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        content = """===TEST===
+META:
+  TYPE::"META"
+  VERSION::"1.0"
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="META",
+            fix=False,
+            grammar_hint=True,
+        )
+
+        assert result["validation_status"] == "VALIDATED"
+        assert "grammar_hint" not in result
+
+    @pytest.mark.asyncio
+    async def test_invalid_no_schema_definition_no_grammar(self):
+        """INVALID + no SchemaDefinition loaded + grammar_hint=True should NOT include grammar_hint."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+
+        # Use a schema name that has a builtin dict schema but no SchemaDefinition file
+        # META has both, so we use content that triggers INVALID via dict schema only
+        # Actually, META does have a SchemaDefinition. Let's use UNVALIDATED path instead:
+        # A document validated against a non-existent schema stays UNVALIDATED, not INVALID.
+        # The grammar_hint is only injected when INVALID, so UNVALIDATED should not have it.
+        content = """===TEST===
+KEY::value
+===END==="""
+
+        result = await tool.execute(
+            content=content,
+            schema="NONEXISTENT_SCHEMA",
+            fix=False,
+            grammar_hint=True,
+        )
+
+        # No schema found -> UNVALIDATED (not INVALID)
+        assert result["validation_status"] == "UNVALIDATED"
+        assert "grammar_hint" not in result
+
+    @pytest.mark.asyncio
+    async def test_grammar_hint_parameter_in_schema(self):
+        """grammar_hint parameter should be declared in tool input schema."""
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        schema = tool.get_input_schema()
+        assert "grammar_hint" in schema["properties"]
+        assert schema["properties"]["grammar_hint"]["type"] == "boolean"
