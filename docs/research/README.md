@@ -139,18 +139,20 @@ Architectural assessment proposing MCP Prompts as the mechanism for universal LL
 
 ## 11. Compression Fidelity Round-Trip Study
 
-Empirical comparison of information preservation across OCTAVE compression tiers versus prose-to-prose paraphrasing:
+Empirical comparison of information preservation across OCTAVE compression tiers, mythology-enhanced variants, and prose-to-prose paraphrasing:
 
-- **Test**: 189-token prose compressed to LOSSLESS/CONSERVATIVE/AGGRESSIVE OCTAVE, and independently paraphrased as prose summary and TL;DR
+- **Test**: 189-token prose compressed to LOSSLESS/CONSERVATIVE/AGGRESSIVE OCTAVE, a CONSERVATIVE-MYTH variant, and independently paraphrased as prose summary and TL;DR
 - **Reconstruction**: Base LLM agent (no OCTAVE knowledge) asked to "provide this in english"
 - **Evaluation**: 11 decision-relevant facts traced through all outputs
-- **Key Finding**: Prose paraphrasing loses information silently; OCTAVE makes loss explicit and controllable
-- **LOSSLESS**: 11/11 facts preserved (perfect round-trip)
-- **CONSERVATIVE**: 8/11 at 29% fewer tokens
-- **AGGRESSIVE**: 6/11 at 58% fewer tokens
-- **Prose summary**: 9/11 at 7% fewer tokens (silent loss)
-- **Prose TL;DR**: 4/11 at 79% fewer tokens (silent loss)
-- **Insight**: OCTAVE's primary value is loss accounting, not raw token compression
+- **Key Finding 1**: Prose paraphrasing loses information silently — even restating prose "in english" causes the agent to summarise and drift
+- **Key Finding 2**: CONSERVATIVE-MYTH (161 tokens) achieved 11/11 fidelity at 15% fewer tokens than the original prose (189 tokens) — mythology domain labels function as reconstruction anchors that prevent fact-merging
+- **LOSSLESS**: 11/11 facts preserved (perfect round-trip, +13% tokens)
+- **CONSERVATIVE-MYTH**: 11/11 at -15% tokens (LOSSLESS fidelity at CONSERVATIVE cost)
+- **CONSERVATIVE**: 8/11 at -29% tokens
+- **AGGRESSIVE**: 6/11 at -58% tokens
+- **Prose summary**: ~9/11 at -7% tokens (silent loss)
+- **Prose TL;DR**: ~4/11 at -79% tokens (silent loss)
+- **Insight**: Mythology is a fidelity mechanism, not just a compression mechanism
 
 *Source: `compression-fidelity-round-trip-study.md`*
 
