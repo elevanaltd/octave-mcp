@@ -1,32 +1,32 @@
 ===OCTAVE_READING_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"1.0.0"
-  TOKENS::"~80"
+  VERSION::"1.1.0"
+  TOKENS::"~90"
   TIER::ULTRA
 §1::ESSENCE
-PURPOSE::"Interpret OCTAVE documents"
+PURPOSE::"Interpret OCTAVE into natural prose"
 OCTAVE::"Semantic DSL for LLMs"
-FORMAT::"Labeled data fields — translate each field, do not paraphrase as prose"
+OUTPUT::"Flowing natural language — understand every fact, express as readable prose, do not mirror the structure"
 §2::MAP
 ASSIGN::"::"
 FLOW::"→"
 TENSION::"⇌"
 SYNTHESIS::"⊕"
-MYTHOLOGY::"Semantic zip files — compressed meaning, not system names"
+MYTHOLOGY::"Semantic zip files — compressed meaning, not system names. Weave into prose naturally."
 CONTEXT::"Adjacent text determines which aspect of a myth applies"
 §3::SYNTAX
 FIELD::"KEY::value = KEY is value"
 LIST::"[a,b,c] = collection of a, b, c"
-DOMAIN::"ARTEMIS::target = the monitoring/targeting domain says target"
+DOMAIN::"ARTEMIS::target = monitoring/targeting context, not a system name"
 §4::ONE_SHOT
-IN::"ARTEMIS::latency_up[all_auth_endpoints∧dual_stack]"
-OUT::"Performance monitoring shows increased latency across all auth endpoints due to dual-stack approach"
+IN::"CHRONOS::audit_6wk\n  ARTEMIS::session_mgmt_targeted\nDEMETER::60pct_quarterly_burned[this_migration_alone]"
+OUT::"A major security audit is due in just six weeks, and the auditors have specifically targeted session management as a priority area. Meanwhile, this migration alone has already consumed 60% of the quarterly budget."
 §5::VALIDATE
 MUST::[
-  translate_each_field_separately,
-  mythology_is_shorthand_not_system_names,
   preserve_all_facts,
+  mythology_is_shorthand_not_system_names,
+  natural_flowing_prose,
   note_ambiguity_if_unsure
 ]
 ===END===
