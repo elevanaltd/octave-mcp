@@ -137,6 +137,23 @@ Architectural assessment proposing MCP Prompts as the mechanism for universal LL
 
 *Source: `universal-llm-onboarding-architecture.oct.md`*
 
+## 11. Compression Fidelity Round-Trip Study
+
+Empirical comparison of information preservation across OCTAVE compression tiers versus prose-to-prose paraphrasing:
+
+- **Test**: 189-token prose compressed to LOSSLESS/CONSERVATIVE/AGGRESSIVE OCTAVE, and independently paraphrased as prose summary and TL;DR
+- **Reconstruction**: Base LLM agent (no OCTAVE knowledge) asked to "provide this in english"
+- **Evaluation**: 11 decision-relevant facts traced through all outputs
+- **Key Finding**: Prose paraphrasing loses information silently; OCTAVE makes loss explicit and controllable
+- **LOSSLESS**: 11/11 facts preserved (perfect round-trip)
+- **CONSERVATIVE**: 8/11 at 29% fewer tokens
+- **AGGRESSIVE**: 6/11 at 58% fewer tokens
+- **Prose summary**: 9/11 at 7% fewer tokens (silent loss)
+- **Prose TL;DR**: 4/11 at 79% fewer tokens (silent loss)
+- **Insight**: OCTAVE's primary value is loss accounting, not raw token compression
+
+*Source: `compression-fidelity-round-trip-study.md`*
+
 ## Conclusion
 
 The empirical data strongly supports the claims of the OCTAVE protocol. It is a highly effective method for compressing complex information for LLM communication, achieving significant token reduction while simultaneously increasing semantic clarity and analytical depth. Recent studies further demonstrate that properly calibrated OCTAVE compression can actually enhance agent performance beyond verbose baselines.
