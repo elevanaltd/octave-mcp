@@ -14,7 +14,7 @@ META:
   PURPOSE::"Workflow for transforming prose into semantic density"
   REQUIRES::octave-literacy
   TIER::LOSSLESS
-  SPEC_REFERENCE::octave-data-spec.oct.md[§1b::COMPRESSION_TIERS]
+  SPEC_REFERENCE::octave-data-spec.oct.md
   V6_FEATURES::"Loss accounting system, tier metadata tracking, fidelity guarantees"
 
 §1::COMPRESSION_MANDATE
@@ -23,7 +23,7 @@ META:
   TRUTH::"Dense ≠ Obscure. Preserve the causal chain."
 
   §1b::COMPRESSION_TIER_SELECTION
-    // Full tier definitions in octave-data-spec.oct.md §1b
+    // Full tier definitions in octave-data-spec.oct.md
     LOSSLESS::[target:100%_fidelity,preserve:everything,drop:none]
       USE::[critical_reasoning,legal_documents,safety_analysis,audit_trails]
     CONSERVATIVE::[target:85-90%_compression,preserve:explanatory_depth,drop:redundancy]
