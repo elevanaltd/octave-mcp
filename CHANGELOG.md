@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-02-26 - "Validation Loop" Release
+
+This release closes the Validation Precedes Generation loop: agents now receive INVALID status plus compiled GBNF grammar in a single round-trip, eliminating the need for a separate `octave_compile_grammar` call.
+
+### Added
+- **`grammar_hint` parameter for `octave_validate` and `octave_write`** (GH#278) — When `grammar_hint=true` and validation returns INVALID, the compiled GBNF grammar is included directly in the response. Closes the "Validation Precedes Generation" loop so agents can regenerate immediately without a second round-trip.
+
+### Fixed
+- **Stable `E_GRAMMAR_COMPILE` error code** (GH#278) — Grammar compilation failures now return a structured error code instead of leaking raw exceptions into tool responses.
+
+### Documentation
+- **README rewrite** — Three-audience structure (Engineers, Researchers, AI Agents) with prose-to-OCTAVE before/after example; removed stale v0.6.0 claims and unexplained jargon
+- **Updated stale CRITICAL_GAPS** (GH#279) — Architecture and execution specs now reflect v1.5.0 reality; resolved gaps (grammar compilation, JIT grammar, unknown-fields policy) moved to `RESOLVED_GAPS` sections
+
+### Quality Gates
+- 2282 tests passing, 0 failures
+- Constitutional compliance verified: I1, I2, I3, I4, I5
+
 ## [1.5.0] - 2026-02-24 - "Parser Resilience" Release
 
 This release introduces the `octave_compile_grammar` MCP tool, Zone 2 frontmatter validation, multi-line array emission, and resolves a broad set of parser and emitter robustness issues surfaced through systematic GitHub issue review.
@@ -480,7 +498,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.3.0...v1.4.0
