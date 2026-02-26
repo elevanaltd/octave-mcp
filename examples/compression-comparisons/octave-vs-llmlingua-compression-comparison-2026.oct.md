@@ -1,7 +1,7 @@
 ===OCTAVE_VS_LLMLINGUA_2026===
 META:
-  TYPE::"empirical-analysis"
-  VERSION::"3.0.0"
+  TYPE::EMPIRICAL_ANALYSIS
+  VERSION::"3.1.0"
   COMPRESSION_TIER::CONSERVATIVE
   LOSS_DROPPED::"verbose_phrasing∧redundant_transitions∧some_supporting_detail"
   LOSS_PRESERVED::"all_decision_logic∧comparison_example∧causal_chains∧mythology_demonstration"
@@ -14,7 +14,7 @@ META:
     ARES::"war_of_attention[1M_to_2M_context_windows∧space_virtually_infinite]"
     ACHILLEAN::"Lost_in_the_Middle[models_ignore_instructions_buried_in_massive_prompts]"
     CONSEQUENCE::"primary_driver_of_hallucination∧logic_failure"
-  GORDIAN::"reframe[space_infinite→attention_scarce]"
+  REFRAME::"space_infinite→attention_scarce"
   LLMLINGUA::HERMES<apex_of_algorithmic_token_distillation>
   OCTAVE::ATHENA<high_density_semantic_control_plane>
   FRAMING::"no_longer_competing[distinct_solutions_for_different_halves_of_AI_workflow]"
@@ -38,7 +38,9 @@ META:
     HERMES::"auth serv migr 3 sprint fix 1 break 2. JWT mismtch choose 2 day downtm or paral stack. burn 60pct qtr bdgt 6 wk audt."
     FLAW::"destroys_structural_relationships∧strips_emotional_weight∧flattens_causality"
   OCTAVE_OUTPUT:
-    ATHENA::"migration::ODYSSEAN[auth_service∧3_sprints] failure::fix_one→two_break cause::sessions⇌JWT team::cutover[2d]⇌parallel[coverage] CHRONOS::audit_6wk DEMETER::60pct_quarterly_burned"
+    ATHENA::"migration::ODYSSEAN[auth_service∧3_sprints] failure::fix_one→two_break cause::sessions⇌JWT team::cutover[2d]⇌parallel[coverage]"
+    CHRONOS::audit_6wk
+    DEMETER::"60pct_quarterly_burned"
     STRENGTH::"ODYSSEAN_loads_journey_context∧⇌_maps_decision_space∧CHRONOS_labels_time_pressure∧DEMETER_labels_resource_drain"
   VERDICT::"OCTAVE_preserves_the_WHY[causal_graph]⇌LLMLINGUA_preserves_only_the_WHAT"
 §4::RAG_DYNAMICS
@@ -51,7 +53,7 @@ META:
     PATTERN::"SISYPHEAN<cheap_compression→degraded_retrieval→reprocess_cycle>"
   OCTAVE_AS_SECOND_BRAIN:
     APOLLO::write_once_read_many_knowledge_artifact
-    TIERS::"CONSERVATIVE⇌AGGRESSIVE→extract_pure_causal_graph"
+    TIERS::"CONSERVATIVE∨AGGRESSIVE→extract_pure_causal_graph"
     EFFECT::signal_to_noise_ratio_nearly_100pct
     PROOF::"LLM_reads_legacy_sessions⇌new_JWT→instantly_understands_architectural_friction"
 §5::ARCHITECTURAL_INTEGRATION
