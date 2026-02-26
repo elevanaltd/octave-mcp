@@ -29,38 +29,37 @@ OCTAVE is a structured document format with an MCP server and CLI. Documents nor
 
 ### Quick example: what changes
 
-Without OCTAVE, an LLM asked to "summarise the deployment status" might produce this:
+Ask an LLM to summarise a project status and you get prose:
 
 ```text
-The deployment is currently active. The pipeline flows from build
-to test to deploy. It's tagged as alpha, beta, and gamma release
-channels. Build status is critical — tests are failing repeatedly.
+The auth migration has been running for three sprints and keeps hitting
+the same problems. There's a security audit in six weeks — the auditors
+specifically flagged session management as a priority area. We've burned
+through 60% of the quarterly budget on this migration alone.
 ```
 
-That's ~40 tokens of prose. Useful once, but try passing it through three agents, compressing it, or validating it later. Structure gets lost. Meaning drifts.
+Ask another LLM to restate that in English and it will paraphrase — silently dropping facts, merging details, escalating "priority area" to "vulnerability." That's not a bug in the LLM. It's what prose invites: retelling.
 
-With OCTAVE, the same information looks like this:
+OCTAVE structures the same information as labelled fields:
 
 ```octave
-===DEPLOY_STATUS===
-META:
-  TYPE::STATUS
-status::active
-pipeline::[build→test→deploy]
-channels::[alpha,beta,gamma]
-build::SISYPHEAN::FAILURES
-===END===
+migration::auth_service[3_sprints∧SISYPHEAN_FAILURES]
+CHRONOS::audit_6wk
+  ARTEMIS::session_mgmt_targeted
+DEMETER::"60%_quarterly_burned[this_migration_alone]"
 ```
 
-~20 tokens. Every fact preserved. `SISYPHEAN` carries "repetitive, frustrating, cyclical" in one term ([why that works](#mythological-compression)). And the format is deterministic — pass it through ten agents, you get the same canonical document back.
+Pass that to any LLM — even one that has never seen OCTAVE — and it translates each field separately. `ARTEMIS` (monitoring/targeting domain) reconstructs as "specifically targeted," not "vulnerability." `CHRONOS` (time pressure) stays distinct from `DEMETER` (budget). Facts don't merge because the structure tells the agent "these are labelled data points," not "this is a narrative to retell."
 
-If an LLM writes it slightly wrong (extra spaces, ASCII `->` instead of `→`), the normaliser autocorrects:
+The mythology terms (`SISYPHEAN`, `ARTEMIS`, `CHRONOS`, `DEMETER`) work like semantic zip files — compressed meaning that's already in the model weights. No training needed. [Why that works](#mythological-compression).
+
+If an LLM writes it slightly wrong (extra spaces, ASCII `->` instead of `→`), the normaliser autocorrects and gives you a receipt:
 
 ```
-normalization: '->' → '→' at line 5
+normalization: '->' → '→' at line 3
 ```
 
-You get a receipt of what changed. Same input, same output, every time.
+Same input, same output, every time. That's what deterministic means.
 
 ### What you get
 
@@ -68,7 +67,7 @@ You get a receipt of what changed. Same input, same output, every time.
 
 - **Schema validation with receipts** — Documents carry their schema inline. Validation returns specific field errors. Every repair is logged with stable IDs — you know exactly what changed and why.
 
-- **Token compression (2–5x)** — Strips linguistic scaffolding, not content. Facts and relationships stay exactly as written.
+- **Controlled compression with loss accounting** — Choose a tier (LOSSLESS, CONSERVATIVE, AGGRESSIVE) and the system declares what's preserved and what's dropped. Prose paraphrasing loses facts silently; OCTAVE makes every trade-off explicit. [Evidence](docs/research/compression-fidelity-round-trip-study.md).
 
 - **Grammar compilation** — Schema constraints compile to GBNF grammars for llama.cpp-compatible backends. Constrain LLM generation at decode time.
 
@@ -166,7 +165,9 @@ OCTAVE is named **Olympian** Common Text And Vocabulary Engine. That's not brand
 | `CHOICE::SOLOMONIC` | Requires wisdom to divide fairly between competing claims |
 | `STRATEGY::ATHENA` | Find a clever solution balancing competing constraints |
 
-`SISYPHEAN::BUILD_FAILURES` — a single term that carries repetition, frustration, cyclicality, and futility. In prose, that's 10–15 tokens. Here, it's one.
+`SISYPHEAN_FAILURES` — a single term that carries repetition, frustration, cyclicality, and futility. In prose, that's 10–15 tokens. Here, it's one.
+
+But mythology isn't just compression. In round-trip testing, mythology terms used as **domain labels** (`ARTEMIS::session_mgmt_targeted` instead of bare `session_mgmt_flagged`) consistently prevented downstream agents from misinterpreting facts. `ARTEMIS` (precision targeting) reconstructed as "specifically targeted" — never "vulnerability." The domain label anchored the agent to the right semantic register. [Evidence](docs/research/compression-fidelity-round-trip-study.md).
 
 In informal cross-model testing (GPT-4, Claude, Gemini, Llama, Mistral), these terms were consistently interpreted as expected without few-shot priming. No fine-tuning, no examples, no definitions provided. Personally, we've seen zero-shot comprehension in every model we've tried, but that's bias. Like every good hypothesis, we want to prove it wrong until we can't.
 
@@ -176,7 +177,7 @@ This is exploratory. We're not claiming a universal law. We are claiming it work
 
 If you're sceptical, fair enough. If you want to falsify this quickly, the guide includes a short replication protocol.
 
-Evidence and methodology: [The Mythological Compression Principle](docs/guides/mythological-compression.md)
+Evidence and methodology: [The Mythological Compression Principle](docs/guides/mythological-compression.md) | [Compression Fidelity Study](docs/research/compression-fidelity-round-trip-study.md)
 
 ---
 
