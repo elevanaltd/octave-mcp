@@ -23,11 +23,14 @@ META:
     src/octave_mcp/core/grammar.py
   ]
   CRITICAL_GAPS::[
-    meta_contract_grammar_extraction,
-    jit_grammar_compilation,
-    schema_policy_unknown_fields,
     repair_tier_repair_completeness,
     projection_mode_field_filtering_completeness
+  ]
+  RESOLVED_GAPS::[
+    meta_contract_grammar_extraction[octave_compile_grammar_tool+octave_eject_gbnf],
+    jit_grammar_compilation[gbnf_compiler_735_LOC+compile_gbnf_from_meta],
+    schema_policy_unknown_fields[E007+STRICT_LENIENT_WARN_modes],
+    grammar_hints_on_validation_failure[grammar_hint_param_on_validate+write_tools]
   ]
 
 ---
@@ -219,6 +222,7 @@ TOOL_VALIDATE:
     SCHEMA::["TEST_HOLOGRAPHIC"∧REQ∧validates_against_schema_repo]
     FIX::[false∧OPT∧BOOLEAN→apply_repairs_to_canonical_output]
     DEBUG_GRAMMAR::[false∧OPT∧BOOLEAN→include_compiled_constraint_debug_info]
+    GRAMMAR_HINT::[false∧OPT∧BOOLEAN→include_grammar_on_INVALID]
 
   RETURNS:
     STATUS::["success"∧REQ∧ENUM[success,error]]
@@ -236,6 +240,7 @@ TOOL_VALIDATE:
     SCHEMA_VERSION::["1.0.0"∧OPT→present_when_schema_loaded]
     ROUTING_LOG::[[...]∧OPT→audit_surface_for_targets]
     DEBUG_INFO::["..."∧OPT→present_when_DEBUG_GRAMMAR_true]
+    GRAMMAR_HINT::["..."∧OPT→present_when_INVALID_and_grammar_hint_true]
 
   PIPELINE::[PARSE_WITH_WARNINGS→NORMALIZE→VALIDATE→REPAIR_if_fix→VALIDATE→EMIT]
 
@@ -262,6 +267,7 @@ TOOL_WRITE:
     MUTATIONS::["META field overrides"∧OPT∧applies_to_both_modes]
     BASE_HASH::["SHA-256 hash for consistency check (CAS)"∧OPT]
     DEBUG_GRAMMAR::[false∧OPT∧BOOLEAN→include_compiled_constraint_debug_info]
+    GRAMMAR_HINT::[false∧OPT∧BOOLEAN→include_grammar_on_INVALID]
 
   RETURNS:
     STATUS::["success"∧REQ∧ENUM[success,error]]
@@ -276,6 +282,7 @@ TOOL_WRITE:
     SCHEMA_VERSION::["1.0.0"∧OPT→present_when_schema_loaded]
     VALIDATION_ERRORS::[[...]∧OPT→present_when_INVALID]
     DEBUG_INFO::["..."∧OPT→present_when_DEBUG_GRAMMAR_true]
+    GRAMMAR_HINT::["..."∧OPT→present_when_INVALID_and_grammar_hint_true]
 
   NOTES:
     CANONICAL_CONTENT_RETURN::"Current implementation returns canonical_hash, not canonical content; returning content may be added later behind an explicit flag"
@@ -538,9 +545,10 @@ BENEFITS::[
   self_describing_documents
 ]
 
-CURRENT_STATE[v0.6.0]:
-  COMPILER::stub_only[compile_document_grammar]
-  TOOLING::validate_and_write_do_not_enforce_meta_contracts_yet
+CURRENT_STATE[v1.5.0]:
+  COMPILER::operational[gbnf_compiler_735_LOC+compile_gbnf_from_meta+octave_compile_grammar_tool]
+  TOOLING::grammar_compilation_exposed_via_MCP[octave_compile_grammar+octave_eject_gbnf]
+  GRAMMAR_HINTS::integrated_into_validate_write_INVALID_responses[grammar_hint_param]
   PARSING_LIMITATION::"Constructor payload for IDENTIFIER[...] in META (e.g., CONTRACT::HOLOGRAPHIC[...]) may not be preserved in AST; full holographic enforcement requires meta constructor preservation"
 
 §17::HERMETIC_ANCHORING

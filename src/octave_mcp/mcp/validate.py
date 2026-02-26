@@ -16,12 +16,14 @@ from pathlib import Path
 from typing import Any
 
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.gbnf_compiler import GBNFCompiler
 from octave_mcp.core.parser import parse_with_warnings
 from octave_mcp.core.repair import repair
 from octave_mcp.core.repair_log import LiteralZoneRepairLog
 from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
+from octave_mcp.mcp.compile_grammar import USAGE_HINTS
 from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
 
 # Gap_6: Regex pattern to extract spec error codes (E001-E007) from error messages
@@ -217,6 +219,13 @@ class ValidateTool(BaseTool):
         )
 
         schema.add_parameter(
+            "grammar_hint",
+            "boolean",
+            required=False,
+            description="If True and validation returns INVALID, include compiled GBNF grammar in response to guide correction.",
+        )
+
+        schema.add_parameter(
             "diff_only",
             "boolean",
             required=False,
@@ -323,6 +332,7 @@ class ValidateTool(BaseTool):
         schema_name = params["schema"]
         fix = params.get("fix", False)
         debug_grammar = params.get("debug_grammar", False)
+        grammar_hint = params.get("grammar_hint", False)
         diff_only = params.get("diff_only", False)
         compact = params.get("compact", False)
 
@@ -582,6 +592,21 @@ class ValidateTool(BaseTool):
                     result["validation_errors"] = error_dicts
                     # Also add to warnings for backward compatibility
                     result["warnings"].extend(result["validation_errors"])
+
+                    # GH#278: Include compiled grammar hint on INVALID when requested
+                    if grammar_hint and schema_definition is not None:
+                        try:
+                            compiled = GBNFCompiler().compile_schema(schema_definition, include_envelope=True)
+                            result["grammar_hint"] = {
+                                "format": "gbnf",
+                                "grammar": compiled,
+                                "usage_hints": USAGE_HINTS,
+                            }
+                        except Exception:
+                            result["grammar_hint"] = {
+                                "error": "E_GRAMMAR_COMPILE",
+                                "message": "Grammar compilation failed for this schema",
+                            }
             else:
                 # I5: Schema validation passed - mark as VALIDATED
                 result["validation_status"] = "VALIDATED"
