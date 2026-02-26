@@ -40,6 +40,8 @@ CLAUDE.md
 
 # HestAI working state (Tier 3: symlinked to .hestai-state/, shared across worktrees)
 .hestai/state
+.hestai/state/
+.hestai/state/sessions/**/*.jsonl
 
 # HestAI shared working state directory (context, reports, sessions, research)
 .hestai-state/
@@ -51,6 +53,9 @@ worktrees/
 # Existing committed debates remain as historical decision records
 # Future debates are ephemeral by default
 debates/
+debates/*.json
+debates/*.jsonl
+*.jsonl
 
 # HestAI system governance (auto-added, not committed)
 .hestai-sys/
