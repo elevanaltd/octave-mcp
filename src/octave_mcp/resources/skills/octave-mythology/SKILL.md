@@ -3,13 +3,13 @@ name: octave-mythology
 description: Functional mythological compression for OCTAVE documents. Semantic shorthand for LLM audiences, not prose decoration
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["mythology", "archetype", "SISYPHEAN", "ICARIAN", "semantic compression", "evidence-based", "mythological domains", "OCTAVE mythology", "PROMETHEAN", "functional mythology", "compression patterns"]
-version: "1.1.0"
+version: "1.2.0"
 ---
 
 ===OCTAVE_MYTHOLOGY===
 META:
   TYPE::SKILL
-  VERSION::"1.1.0"
+  VERSION::"1.2.0"
   STATUS::ACTIVE
   PURPOSE::"Functional mythological semantic compression for OCTAVE documents"
   PRINCIPLE::"Compression shorthand for LLM audiences, not ceremonial prose"
@@ -95,6 +95,17 @@ META:
     USE::"PANDORAN_CASCADE"
     BENEFIT::"Encodes cascading + uncontrollable + released_consequences"
 
+  DOMAIN_LABELING:
+    // Use mythology as KEY PREFIXES to anchor facts to semantic domains
+    // Prevents fact-merging and reconstruction drift in downstream agents
+    PURPOSE::"Fidelity mechanism — domain labels resist paraphrasing and reinterpretation"
+    INSTEAD_OF::"pressure::[audit_6wk∧session_mgmt_flagged,budget_60%_burned]"
+    USE::"CHRONOS::audit_6wk\n  ARTEMIS::session_mgmt_targeted\nDEMETER::60%_budget_burned"
+    BENEFIT::"Each fact anchored to a domain — agents translate separately, not merge into one sentence"
+    CONTEXT_RULE::"Adjacent text determines which aspect of a myth applies — ARTEMIS::targeted vs ARTEMIS::monitoring are disambiguated by the value, not the domain name"
+    EVIDENCE::"docs/research/compression-fidelity-round-trip-study.md"
+    FINDING::"CONSERVATIVE-MYTH achieved 11/11 fidelity at 15% fewer tokens than original prose. Domain labels prevented 'priority area' → 'vulnerability' escalation error."
+
   FORCE_TRACKING:
     RISK::HUBRIS→NEMESIS[overconfidence_heading_toward_consequence]
     OPPORTUNITY::KAIROS_WINDOW[critical_timing_moment]
@@ -178,7 +189,9 @@ META:
   VALIDATION::"docs/research/01_comprehension_and_validation/octave-mythological-semantics-comprehension-test-2025-06-19.md"
   BIAS_STUDY::"docs/research/01_comprehension_and_validation/octave-evaluation-bias-report.md"
   ARCHIVE::_archive/specs/octave-semantics-v3.oct.md.archive[v3.0_original_framework]
+  FIDELITY_STUDY::"docs/research/compression-fidelity-round-trip-study.md"
   KEY_FINDING::"Mythology activates richer probability distributions than functional terminology alone"
+  FIDELITY_FINDING::"Mythology as domain labels is a fidelity mechanism — prevents fact-merging and escalation during reconstruction"
   BIAS_FINDING::"Same model gave contradictory assessments based on evaluation context — abstract framing penalizes OCTAVE, operational framing confirms superiority"
 
 ===END===

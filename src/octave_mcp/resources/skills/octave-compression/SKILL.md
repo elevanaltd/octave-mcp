@@ -3,18 +3,18 @@ name: octave-compression
 description: Specialized workflow for transforming verbose natural language into semantic OCTAVE structures. REQUIRES octave-literacy to be loaded first
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["compress to octave", "semantic compression", "documentation refactoring", "octave compression", "compress documentation", "knowledge artifact", "semantic density", "OCTAVE format conversion"]
-version: "2.4.0"
+version: "2.5.0"
 ---
 
 ===OCTAVE_COMPRESSION===
 META:
   TYPE::SKILL
-  VERSION::"2.4.0"
+  VERSION::"2.5.0"
   STATUS::ACTIVE
   PURPOSE::"Workflow for transforming prose into semantic density"
   REQUIRES::octave-literacy
   TIER::LOSSLESS
-  SPEC_REFERENCE::octave-data-spec.oct.md[§1b::COMPRESSION_TIERS]
+  SPEC_REFERENCE::octave-data-spec.oct.md
   V6_FEATURES::"Loss accounting system, tier metadata tracking, fidelity guarantees"
 
 §1::COMPRESSION_MANDATE
@@ -23,7 +23,7 @@ META:
   TRUTH::"Dense ≠ Obscure. Preserve the causal chain."
 
   §1b::COMPRESSION_TIER_SELECTION
-    // Full tier definitions in octave-data-spec.oct.md §1b
+    // Full tier definitions in octave-data-spec.oct.md
     LOSSLESS::[target:100%_fidelity,preserve:everything,drop:none]
       USE::[critical_reasoning,legal_documents,safety_analysis,audit_trails]
     CONSERVATIVE::[target:85-90%_compression,preserve:explanatory_depth,drop:redundancy]
@@ -68,7 +68,7 @@ META:
     APPLICATION::"Apply operators defined in octave-literacy",
     HIERARCHY::"Group related concepts under parent keys",
     ARRAYS::"Convert repetitive lists to [item1, item2]",
-    MYTHOLOGY::"For 60% compression, load octave-ultra-mythic for mythological atoms"
+    MYTHOLOGY::"For fidelity, use domain labels (§3b). For 60% compression, load octave-ultra-mythic for mythological atoms"
   ]
 
   PHASE_4_VALIDATE::[
@@ -82,7 +82,18 @@ META:
   RULE_2::"Drop stopwords (the, is, a, of)"
   RULE_3::"One example per 200 tokens of abstraction"
   RULE_4::"Explicit Tradeoffs (GAIN⇌LOSS or GAIN vs LOSS)"
-  RULE_5::"Use Mythological Encoding if complexity demands it"
+  RULE_5::"Preserve CONDITIONAL QUALIFIERS (when X, if Y, unless Z) — they carry material risk info, not hedging"
+  RULE_6::"Use mythology as DOMAIN LABELS (ARTEMIS::, CHRONOS::, DEMETER:: as key prefixes) when fidelity matters — domain labels anchor facts and prevent reconstruction drift"
+  RULE_7::"Use mythology as PATTERN DESCRIPTORS (SISYPHEAN, ODYSSEAN) when semantic density matters — encodes trajectories and states in single terms"
+
+  §3b::CONSERVATIVE_MYTH_TECHNIQUE
+    // Combine CONSERVATIVE compression with mythology domain labels for maximum fidelity
+    WHEN::"Decision-relevant content where reconstruction accuracy matters more than minimum tokens"
+    METHOD::"Use mythology terms as KEY prefixes (CHRONOS::audit_6wk) not embedded values (pressure::audit_6wk∧CHRONOS)"
+    WHY::"Domain labels are reconstruction anchors — agents translate each labeled field separately instead of merging into compound sentences"
+    RESULT::"11/11 decision-relevant facts preserved at 15% fewer tokens than original prose"
+    EVIDENCE::"docs/research/compression-fidelity-round-trip-study.md"
+    LOSSLESS_FIDELITY_AT_CONSERVATIVE_COST::true
 
 §4::ANTI_PATTERNS
   AVOID::[

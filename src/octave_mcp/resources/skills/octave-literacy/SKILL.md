@@ -3,13 +3,13 @@ name: octave-literacy
 description: Fundamental reading and writing capability for the OCTAVE format. Basic structural competence without full architectural specifications
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave format", "write octave", "octave syntax", "structured output", "OCTAVE basics", "OCTAVE literacy", "OCTAVE structure", "semantic format", "key::value", "OCTAVE notation"]
-version: "1.3.0"
+version: "1.4.0"
 ---
 
 ===OCTAVE_LITERACY===
 META:
   TYPE::SKILL
-  VERSION::"1.3.0"
+  VERSION::"1.4.0"
   STATUS::ACTIVE
   PURPOSE::"Essential syntax and operators for basic OCTAVE competence"
   TIER::LOSSLESS
@@ -28,10 +28,18 @@ META:
   NULL::null               // Lowercase only
   COMMENT:://              // Standard comment syntax
 
-  §1b::BRACKET_FORMS
-    CONTAINER::[a,b,c]              // Bare brackets = list
-    CONSTRUCTOR::NAME[args]         // NAME[...] = constructor (REGEX[pattern], ENUM[a,b])
-    INLINE_MAP::[key::val,key2::val2]  // Dense key-value pairs (values must be atoms)
+  §1b::LITERAL_ZONES
+    // Fenced code blocks pass through with ZERO processing — no normalization, no escaping
+    SYNTAX::KEY_then_newline_then_fence[3_or_more_backticks]
+    RULES::[zero_processing_between_fences,tabs_allowed,NFC_bypass,info_tag_preserved]
+    USE_CASES::[embedded_code,teaching_examples,verbatim_content,OCTAVE_about_OCTAVE]
+    FENCE_SCALING::use_N_plus_1_backticks_to_wrap_content_containing_N_backtick_fences
+    // Example: KEY::\n```python\nprint("hello")\n``` — content preserved byte-for-byte
+
+  §1c::BRACKET_FORMS
+    CONTAINER::[a,b,c]                         // Bare brackets = list
+    CONSTRUCTOR::NAME[args]                    // NAME[...] = constructor (REGEX[pattern], ENUM[a,b])
+    INLINE_MAP::[key::val,key2::val2]          // Dense key-value pairs (values must be atoms)
     HOLOGRAPHIC::[\"value\"∧CONSTRAINT→§TARGET]  // Schema mode only
 
 §2::OPERATORS
