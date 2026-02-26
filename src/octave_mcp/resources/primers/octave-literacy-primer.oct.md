@@ -1,7 +1,7 @@
 ===OCTAVE_LITERACY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.1.0"
+  VERSION::"6.2.0"
   TOKENS::"~240"
   TIER::ULTRA
 §1::ESSENCE
@@ -14,14 +14,21 @@ CONTEXT::"Adjacent text determines which aspect of a myth applies"
 FORMAT_SIGNAL::"Distinct syntax (::, →, ⇌) signals structured data — parse, not paraphrase"
 FALLBACK::"If a term is unclear, translate literally and note the ambiguity"
 §2::MAP
-ASSIGNMENT::"KEY::value"
-LIST::"[a,b,c]"
-BLOCK::"KEY:[newline+indent_2]"
+EXAMPLES::
+```
+KEY::value        → assignment
+[a,b,c]           → list
+KEY:              → block (indent 2 spaces)
+  child::value
+```
 §3::SYNTAX
-ASSIGN::"::"
-FLOW::"→"
-SYNTHESIS::"⊕"
-TENSION::"⇌"
+OPERATORS::
+```
+::    assign (no spaces around)
+→     flow / sequence
+⊕     synthesis / combine
+⇌     tension / opposition
+```
 §4::ONE_SHOT
 IN::"flow from A to B"
 OUT::"A→B"
