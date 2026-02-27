@@ -1076,6 +1076,11 @@ class TestPercentKeyContextRegression:
         assert "RATE" in values
         assert "60%" in values
 
+    def test_percent_before_assign_with_whitespace_raises_e005(self):
+        """KEY% ::1 (whitespace between % and ::) must raise E005."""
+        with pytest.raises(LexerError, match="E005"):
+            tokenize("KEY% ::1")
+
     def test_percent_in_value_with_suffix_still_valid(self):
         """100%_complete in value position must still work."""
         tokens, _ = tokenize("STATUS::100%_complete")
