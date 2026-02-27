@@ -1053,3 +1053,32 @@ class TestLexerPercentInValues:
         assert "60%" in values
         assert "80%" in values
         assert "100%" in values
+
+
+class TestPercentKeyContextRegression:
+    """Regression: % must not merge into keys (ADR-0005 / CE #292)."""
+
+    def test_percent_before_assign_raises_e005(self):
+        """KEY%::1 must raise E005 because % is in key position."""
+        with pytest.raises(LexerError, match="E005"):
+            tokenize("KEY%::1")
+
+    def test_percent_before_assign_no_identifier_leak(self):
+        """Ensure KEY% is never produced as an IDENTIFIER token."""
+        with pytest.raises(LexerError):
+            tokenize("KEY%::1")
+
+    def test_percent_in_value_still_valid(self):
+        """% in value position (after ::) must still be accepted."""
+        tokens, _ = tokenize("RATE::60%")
+        ident_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        values = [t.value for t in ident_tokens]
+        assert "RATE" in values
+        assert "60%" in values
+
+    def test_percent_in_value_with_suffix_still_valid(self):
+        """100%_complete in value position must still work."""
+        tokens, _ = tokenize("STATUS::100%_complete")
+        ident_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        values = [t.value for t in ident_tokens]
+        assert "100%_complete" in values

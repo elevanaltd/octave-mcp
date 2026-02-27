@@ -1123,6 +1123,9 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
 
             # GH#287 P1: Accept % in values when immediately preceded by alphanumeric
             # e.g. 60%, 100%_complete — but standalone % or prefix %foo still E005
+            # ADR-0005 Decision 3: % is only valid in VALUE contexts, not in keys.
+            # If % is immediately followed by :: the previous token is a key and
+            # merging would produce a grammar-boundary bypass (CE #292 Finding 2).
             if (
                 content[pos] == "%"
                 and tokens
@@ -1131,6 +1134,7 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                     TokenType.NUMBER,
                     TokenType.IDENTIFIER,
                 )
+                and not content[pos + 1 : pos + 3] == "::"
             ):
                 prev_val = str(tokens[-1].value if tokens[-1].raw is None else tokens[-1].raw)
                 if prev_val and prev_val[-1:].isalnum():
