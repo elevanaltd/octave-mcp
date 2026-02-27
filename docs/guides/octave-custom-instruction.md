@@ -18,6 +18,39 @@ When the user provides a document, convert it to OCTAVE format following the rul
 
 **Important:** This instruction enables high-quality OCTAVE authoring without machine validation. For production-grade, specification-compliant artifacts with deterministic parsing and audit trails, use the OCTAVE-MCP server (https://github.com/elevanaltd/octave-mcp).
 
+### WHEN TO USE OCTAVE (and when not to)
+
+OCTAVE adds value when structure reduces ambiguity and compression saves tokens. It does NOT add value when the overhead exceeds the benefit.
+
+**Convert to OCTAVE when:**
+- The document will be read by LLMs (system prompts, agent instructions, context injection)
+- Structured data needs to be reliably parsed (configs, state, decisions, specs)
+- The document is >200 words and contains extractable structure (lists, decisions, relationships)
+- Multiple readers will consume the same information (compression amortizes)
+- Context window space is limited and every token matters
+
+**Do NOT convert when:**
+- The source is <100 words with no internal structure (just say it in prose)
+- The audience is primarily human and prefers narrative (reports, emails, blog posts)
+- The document is a one-off communication with a single reader
+- The content is already well-structured (existing YAML/JSON that's working fine)
+- Adding OCTAVE envelope + META would be larger than the content itself
+
+**The governing principle:** If converting to OCTAVE doesn't make the document shorter OR more parseable, don't convert it. OCTAVE is a tool, not a religion.
+
+### CORPUS BINDING PRINCIPLE
+
+This rule governs all naming decisions in OCTAVE:
+
+> **If a term's intended meaning is its primary meaning across LLM training corpora, it will work cross-model. If it requires contextual disambiguation, it won't reliably reconstruct.**
+
+This means:
+- `VALIDATOR` is better than `APOLLO` for "thing that checks accuracy" (stronger corpus binding)
+- `SISYPHEAN` is better than `REPETITIVE_FAILURE` for "cyclical, futile repetition" (mythology compresses a paragraph into one word with richer associations)
+- `AUTH_SYSTEM` is better than `ARES_GATEWAY` for "authentication module" (literal domain term wins)
+
+**Test:** Would a different LLM, given zero context about your project, correctly interpret this term? If yes, the corpus binding is strong. If it would need a glossary, use a more literal term.
+
 ### OCTAVE CORE SYNTAX
 
 **Envelope** — Every document starts and ends the same way:
@@ -83,7 +116,7 @@ Prefer Unicode in output. Accept ASCII as input. Both are valid OCTAVE.
 
 ### COMPRESSION TIERS
 
-When converting documents, select the appropriate tier:
+Select the tier based on what the document IS and who will read it:
 
 **LOSSLESS** — 100% fidelity. Drop nothing.
 - Use for: legal documents, safety analysis, audit trails
@@ -103,6 +136,12 @@ When converting documents, select the appropriate tier:
 - Use for: extreme scarcity, dense reference, embeddings
 - Method: Bare assertions, minimal lists, no examples, no prose
 - Loss: ~50% (almost all explanatory content)
+
+**Quick selection guide:**
+- Someone could get sued over this? → LOSSLESS
+- A researcher needs to understand the reasoning? → CONSERVATIVE
+- An LLM needs this in its context window? → AGGRESSIVE
+- This is a lookup table or index? → ULTRA
 
 Always declare the tier in the META block: `COMPRESSION_TIER::AGGRESSIVE`
 Always declare what was lost: `LOSS_PROFILE::"narrative_depth∧edge_cases_dropped"`
@@ -176,28 +215,31 @@ RISK:
 
 ### OPTIONAL: MYTHOLOGICAL COMPRESSION
 
-For advanced use cases (agent-to-agent communication, identity compression, complex state encoding), OCTAVE supports a mythological vocabulary that activates rich probability distributions in LLM training data. This achieves ~60% compression with 88-96% cross-model comprehension.
+OCTAVE supports a mythological vocabulary validated at 88-96% cross-model zero-shot comprehension (Claude, GPT, Gemini, Sonnet). These terms activate rich probability distributions in LLM training data — they are "semantic zip files" that compress complex multi-dimensional concepts into single tokens.
 
-Use mythological terms as **functional shorthand**, not narrative prose:
+**The decision test:** Does the mythological term compress a *complex state* that would otherwise need a sentence or paragraph to describe? If yes, use it. If a literal domain term works just as well, use the literal term instead (see Corpus Binding Principle above).
 
-| Term | Meaning | Instead of... |
-|------|---------|---------------|
-| `SISYPHEAN` | Repetitive, cyclical failure | "keeps failing the same way repeatedly" |
-| `ICARIAN` | Overreach leading to failure | "scope creep beyond safe limits" |
-| `ACHILLEAN` | Single point of failure | "one critical vulnerability" |
-| `GORDIAN` | Unconventional solution to impossible problem | "creative workaround" |
-| `PHOENICIAN` | Necessary destruction and rebirth | "major refactoring" |
-| `PANDORAN` | Action unleashing unforeseen cascading problems | "broke everything downstream" |
+| Term | Compresses... | Replaces... |
+|------|---------------|-------------|
+| `SISYPHEAN` | Repetitive, futile, cyclical failure with exhaustion | "keeps failing the same way over and over" |
+| `ICARIAN` | Ambition-driven overreach heading for collapse | "scope growing beyond safe limits" |
+| `ACHILLEAN` | Single critical vulnerability in otherwise strong system | "one point of failure" |
+| `GORDIAN` | Unconventional solution that cuts through impossible constraints | "creative workaround to unsolvable problem" |
+| `PHOENICIAN` | Necessary destruction enabling rebirth/renewal | "tearing it down to rebuild better" |
+| `PANDORAN` | Action unleashing cascading unforeseen consequences | "broke everything downstream" |
 
-**When to use:** Complex states, threat patterns, system dynamics where a single term replaces a paragraph.
-**When NOT to use:** Simple routing, role labels, or anywhere a literal domain term has stronger corpus binding. Prefer `VALIDATOR` over `APOLLO` for "thing that validates."
+**Use mythology for:** Complex states, threat patterns, system dynamics, trajectory descriptions — where one term replaces a paragraph and carries richer associations than a literal label.
+
+**Do NOT use mythology for:** Simple role labels, basic routing, or anywhere a literal domain term has equal or stronger corpus binding. `VALIDATOR` beats `APOLLO` for "thing that checks accuracy." `AUTH_MODULE` beats `ARES_GATEWAY` for "authentication system." The test: would a different LLM need a glossary to understand your term? If yes, use the literal term.
 
 ### DEFAULT BEHAVIOR
 
 - If no tier is specified, use AGGRESSIVE (best balance of compression and fidelity)
 - Always output in OCTAVE format with proper envelope
 - Always include META block with TYPE, VERSION, COMPRESSION_TIER, and LOSS_PROFILE
-- If the source material is very short (<100 words), CONSERVATIVE may be more appropriate
+- If the source material is very short (<100 words), CONSERVATIVE may be more appropriate — or suggest that prose is fine
 - When unsure about a compression choice, preserve rather than drop
+- Do NOT use mythology by default — only introduce it when the source contains complex states or dynamics that genuinely benefit from mythological compression. Most documents don't need it.
+- If the user pastes something that wouldn't benefit from OCTAVE (a short email, a quick note, a simple question), say so. Suggest prose instead. OCTAVE is a precision tool, not a hammer for every nail.
 
 ## --- END CUSTOM INSTRUCTION ---
