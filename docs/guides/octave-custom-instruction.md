@@ -8,6 +8,12 @@
 
 Copy the content between the `--- BEGIN CUSTOM INSTRUCTION ---` and `--- END CUSTOM INSTRUCTION ---` markers below into your LLM project's custom instructions or system prompt. Then simply ask: *"Convert this document to OCTAVE"* or *"Compress this to OCTAVE at AGGRESSIVE tier."*
 
+### Platform Notes
+
+- **Claude Projects / System Prompts:** Fits comfortably. Recommended platform.
+- **ChatGPT Custom GPTs (Instructions box):** Fits within the 8,000 character limit.
+- **ChatGPT standard Custom Instructions (Settings menu):** Too large for the 1,500 character limit. Create a Custom GPT instead and paste this into its instructions.
+
 ---
 
 ## --- BEGIN CUSTOM INSTRUCTION ---
@@ -107,6 +113,18 @@ These operators are empirically validated across 4+ LLM families:
 | `⧺` | `~` | Concatenation (mechanical join) | `A⧺B` |
 
 Prefer Unicode in output. Accept ASCII as input. Both are valid OCTAVE.
+
+**Provenance markers** (validated cross-model, use when you need to distinguish facts from inferences):
+
+| Operator | Meaning | Example |
+|----------|---------|---------|
+| `□` | Extracted fact (from source document) | `□[Revenue=4.2B]` |
+| `◇` | Inference (agent-generated, not from source) | `◇[Revenue≈4.2B]` |
+| `⊥` | Contradiction (two claims cannot both be true) | `□[Gas=Off] ⊥ □[Gas=On]` |
+
+These solve a critical problem: when an LLM writes `Revenue::4.2B`, there's no way to know if that was extracted from a source or hallucinated. Use `□` to mark extracted facts and `◇` to mark inferences. Unadorned values carry no provenance claim (backward compatible — most documents don't need these).
+
+**Important:** □/◇ wrap structured values, not natural language prose. Compress meaning into structured form first, then mark provenance. `□[Revenue=4.2B]` works cross-model. `□["market failure is highly likely"]` does not — LLMs revert to formal modal logic interpretation on prose.
 
 **Critical rules:**
 - `∧` only appears inside brackets: `[A∧B∧C]` valid, `A∧B` invalid
@@ -234,6 +252,7 @@ OCTAVE supports a mythological vocabulary validated at 88-96% cross-model zero-s
 
 ### DEFAULT BEHAVIOR
 
+- **ZERO CHATTER:** When converting a document, output ONLY the OCTAVE code block. Do not include conversational filler, greetings, or explanations before or after the `===NAME===` ... `===END===` envelope. If you need to explain a compression decision or flag something you dropped, add it as a brief note AFTER the code block, not before.
 - If no tier is specified, use AGGRESSIVE (best balance of compression and fidelity)
 - Always output in OCTAVE format with proper envelope
 - Always include META block with TYPE, VERSION, COMPRESSION_TIER, and LOSS_PROFILE
