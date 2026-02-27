@@ -1121,6 +1121,48 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                         "E005",
                     )
 
+            # GH#287 P1: Accept % in values when immediately preceded by alphanumeric
+            # e.g. 60%, 100%_complete — but standalone % or prefix %foo still E005
+            if (
+                content[pos] == "%"
+                and tokens
+                and tokens[-1].type
+                in (
+                    TokenType.NUMBER,
+                    TokenType.IDENTIFIER,
+                )
+            ):
+                prev_val = str(tokens[-1].value if tokens[-1].raw is None else tokens[-1].raw)
+                if prev_val and prev_val[-1:].isalnum():
+                    # Merge % into previous token, consuming any trailing identifier chars
+                    suffix = "%"
+                    suffix_pos = pos + 1
+                    while suffix_pos < len(content) and _is_valid_identifier_char(content[suffix_pos]):
+                        # Terminate on operator chars (GH#287: 60%→ = two tokens)
+                        if content[suffix_pos] in OPERATOR_CHARS:
+                            break
+                        suffix += content[suffix_pos]
+                        suffix_pos += 1
+                    # Strip trailing hyphens (per identifier rule)
+                    while len(suffix) > 1 and suffix[-1] == "-":
+                        suffix = suffix[:-1]
+                        suffix_pos -= 1
+                    # Merge into previous token as IDENTIFIER
+                    merged_value = prev_val + suffix
+                    prev_token = tokens[-1]
+                    tokens[-1] = Token(
+                        TokenType.IDENTIFIER,
+                        merged_value,
+                        prev_token.line,
+                        prev_token.column,
+                        prev_token.normalized_from,
+                        None,
+                    )
+                    advance = suffix_pos - pos
+                    column += advance
+                    pos = suffix_pos
+                    continue
+
             # Unrecognized character
             raise LexerError(f"Unexpected character: '{content[pos]}'", line, column, "E005")
 

@@ -996,3 +996,60 @@ class TestAngleBracketAnnotation:
         # A<-x> — '-' is not a valid identifier start
         with pytest.raises(LexerError):
             tokenize("A<-x>")
+
+
+class TestLexerPercentInValues:
+    """GH#287 P1: Lexer must accept % in values when preceded by alphanumeric."""
+
+    def test_percent_after_number(self):
+        """60% should lex as a single IDENTIFIER token '60%'."""
+        tokens, _ = tokenize("KEY::60%")
+        # KEY :: 60% EOF
+        value_tokens = [t for t in tokens if t.type not in (TokenType.ASSIGN, TokenType.EOF, TokenType.NEWLINE)]
+        assert len(value_tokens) == 2
+        assert value_tokens[0].value == "KEY"
+        assert value_tokens[1].value == "60%"
+
+    def test_percent_with_suffix(self):
+        """60%_burned should lex as a single IDENTIFIER token."""
+        tokens, _ = tokenize("KEY::60%_burned")
+        value_tokens = [t for t in tokens if t.type not in (TokenType.ASSIGN, TokenType.EOF, TokenType.NEWLINE)]
+        assert len(value_tokens) == 2
+        assert value_tokens[1].value == "60%_burned"
+
+    def test_percent_100(self):
+        """100%_complete should lex correctly."""
+        tokens, _ = tokenize("KEY::100%_complete")
+        value_tokens = [t for t in tokens if t.type not in (TokenType.ASSIGN, TokenType.EOF, TokenType.NEWLINE)]
+        assert value_tokens[1].value == "100%_complete"
+
+    def test_standalone_percent_raises_e005(self):
+        """Standalone % must still raise E005."""
+        with pytest.raises(LexerError, match="E005"):
+            tokenize("KEY::% foo")
+
+    def test_prefix_percent_raises_e005(self):
+        """Prefix %foo must still raise E005."""
+        with pytest.raises(LexerError, match="E005"):
+            tokenize("KEY::%foo")
+
+    def test_percent_terminates_on_operator(self):
+        """60%->next should lex as 60% FLOW next (% terminates at operator)."""
+        tokens, _ = tokenize("KEY::60%→next")
+        types = [t.type for t in tokens if t.type != TokenType.EOF]
+        assert TokenType.FLOW in types
+        # Find the token containing 60%
+        value_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER or t.type == TokenType.NUMBER]
+        values = [t.value for t in value_tokens]
+        assert "60%" in values
+        assert "next" in values
+
+    def test_percent_in_list(self):
+        """Percent values in lists should parse correctly."""
+        tokens, _ = tokenize("METRICS::[60%,80%,100%]")
+        ident_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        values = [t.value for t in ident_tokens]
+        assert "METRICS" in values
+        assert "60%" in values
+        assert "80%" in values
+        assert "100%" in values
