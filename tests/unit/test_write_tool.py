@@ -3115,3 +3115,94 @@ META:
         hint = result["grammar_hint"]
         assert hint["error"] == "E_GRAMMAR_COMPILE"
         assert isinstance(hint["message"], str)
+
+
+class TestConfirmationEcho:
+    """GH#287 Decision 6: Confirmation echo for SOURCE->STRICT compilations."""
+
+    @pytest.mark.asyncio
+    async def test_compilations_field_present_when_lenient(self):
+        """When lenient parsing normalizes content, compilations field should be in response."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        # Content with ASCII arrow that will be normalized to unicode (a SOURCE->STRICT compilation)
+        content = """===TEST===
+FLOW::A -> B
+===END==="""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            assert result["status"] == "success"
+            assert "compilations" in result
+            compilations = result["compilations"]
+            assert isinstance(compilations, list)
+            # Should have at least one compilation entry for the ASCII->Unicode normalization
+            assert len(compilations) >= 1
+            # Each entry should have source, strict, rule
+            for entry in compilations:
+                assert "source" in entry
+                assert "strict" in entry
+                assert "rule" in entry
+
+    @pytest.mark.asyncio
+    async def test_compilations_empty_when_no_changes(self):
+        """When content is already canonical, compilations should be empty."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = """===TEST===
+FLOW::A→B
+===END===
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            assert result["status"] == "success"
+            assert "compilations" in result
+            assert result["compilations"] == []
+
+    @pytest.mark.asyncio
+    async def test_compilations_capped_at_5(self):
+        """Compilations list should be capped at 5 entries with summary."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        # Content with many normalizations (6+ ASCII arrows)
+        lines = ["===TEST==="]
+        for i in range(8):
+            lines.append(f"FLOW_{i}::A{i} -> B{i}")
+        lines.append("===END===")
+        content = "\n".join(lines)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            assert result["status"] == "success"
+            compilations = result["compilations"]
+            # Max 5 structured entries + 1 summary string
+            structured = [c for c in compilations if isinstance(c, dict)]
+            assert len(structured) <= 5
+            if len(result.get("corrections", [])) > 5:
+                # Should have a summary string
+                summaries = [c for c in compilations if isinstance(c, str)]
+                assert len(summaries) >= 1
+                assert "other" in summaries[0].lower() or "normalization" in summaries[0].lower()
+
+    @pytest.mark.asyncio
+    async def test_compilations_not_present_in_strict_mode(self):
+        """Compilations field should not be present when lenient=False."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = """===TEST===
+KEY::value
+===END===
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            assert result["status"] == "success"
+            # In strict mode, no compilations field (or empty)
+            if "compilations" in result:
+                assert result["compilations"] == []

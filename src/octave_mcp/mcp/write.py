@@ -1297,6 +1297,48 @@ class WriteTool(BaseTool):
 
         result["corrections"] = corrections
 
+        # GH#287 Decision 6: Confirmation echo — show SOURCE→STRICT compilations
+        # When lenient parsing produces corrections, build a compilations list
+        # showing the delta in structured format. Cap at 5 entries + summary.
+        if lenient:
+            compilations: list[dict[str, str] | str] = []
+            _compilation_rule_map = {
+                "W002": "ascii_to_unicode",
+                "W_LENIENT_MULTI_WORD_COALESCE": "multi_word_coalesce",
+                "W_LENIENT_SOURCE_COMPILE_VALUE": "operator_rich_value",
+                "W_LENIENT_DUPLICATE_KEY": "duplicate_key",
+                "W_MARKDOWN_UNWRAP": "markdown_unwrap",
+                "W_SALVAGE_LOCALIZED": "salvage",
+            }
+            for c in corrections:
+                code = c.get("code", "")
+                before = c.get("before", "")
+                after = c.get("after", "")
+                if not before and not after:
+                    continue
+                rule = _compilation_rule_map.get(code, "normalization")
+                # Format source and strict in KEY::value style where applicable
+                source_str = str(before) if before else ""
+                strict_str = str(after) if after else source_str
+                if source_str or strict_str:
+                    compilations.append(
+                        {
+                            "source": source_str,
+                            "strict": strict_str,
+                            "rule": rule,
+                        }
+                    )
+
+            # Cap at 5 entries + summary per ADR-0005
+            if len(compilations) > 5:
+                total = len(compilations)
+                compilations = compilations[:5]
+                compilations.append(f"...and {total - 5} other normalizations applied.")
+
+            result["compilations"] = compilations
+        else:
+            result["compilations"] = []
+
         # Issue #235 T14: Literal zone reporting (§8.2, §8.4)
         # After emit, populate zone_report when literal zones are present.
         zones = _count_literal_zones(doc)
