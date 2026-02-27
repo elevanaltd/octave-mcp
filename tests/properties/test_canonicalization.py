@@ -218,7 +218,7 @@ FLAT::simple_value
 
         # Output must have explicit envelope
         assert output.startswith("===")
-        assert output.endswith("===")
+        assert output.rstrip("\n").endswith("===")
 
     def test_quote_normalization(self):
         """Strings requiring quotes are quoted in canonical form."""

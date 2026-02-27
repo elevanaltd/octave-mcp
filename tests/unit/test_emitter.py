@@ -812,3 +812,27 @@ class TestMultiLineArrayEmission:
         assert '    "Check coverage",\n' in result
         assert '    "Run quality gates"\n' in result
         assert "  ]" in result
+
+
+class TestTrailingNewline:
+    """GH#284: emit() must always return content ending with a newline."""
+
+    def test_emit_ends_with_newline(self):
+        """emit() output must end with exactly one newline (POSIX text file)."""
+        doc = Document(name="TEST", sections=[Assignment(key="KEY", value="value")])
+        result = emit(doc)
+        assert result.endswith("\n"), "emit() must end with trailing newline"
+        assert not result.endswith("\n\n"), "emit() must not end with double newline"
+
+    def test_emit_ends_with_newline_empty_doc(self):
+        """Even an empty document should end with a newline."""
+        doc = Document(name="EMPTY", sections=[])
+        result = emit(doc)
+        assert result.endswith("\n"), "emit() must end with trailing newline for empty doc"
+
+    def test_emit_trailing_newline_with_format_options(self):
+        """Trailing newline must survive format_options application."""
+        doc = Document(name="TEST", sections=[Assignment(key="KEY", value="value")])
+        opts = FormatOptions(strip_comments=True)
+        result = emit(doc, format_options=opts)
+        assert result.endswith("\n"), "emit() with format_options must end with trailing newline"

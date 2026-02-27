@@ -555,8 +555,22 @@ def emit_meta(meta: dict[str, Any], format_options: FormatOptions | None = None)
         # I2: Skip Absent values
         if is_absent(value):
             continue
-        value_str = emit_value(value, indent=1)
-        content_lines.append(f"  {key}::{value_str}")
+        # GH#287 P3: Handle nested dict values as OCTAVE block structures
+        if isinstance(value, dict):
+            content_lines.append(f"  {key}:")
+            # Optionally sort nested keys
+            nested_keys = list(value.keys())
+            if format_options and format_options.key_sorting:
+                nested_keys = sorted(nested_keys)
+            for nested_key in nested_keys:
+                nested_value = value[nested_key]
+                if is_absent(nested_value):
+                    continue
+                nested_value_str = emit_value(nested_value, indent=2)
+                content_lines.append(f"    {nested_key}::{nested_value_str}")
+        else:
+            value_str = emit_value(value, indent=1)
+            content_lines.append(f"  {key}::{value_str}")
 
     # I2: If all fields were absent, return empty string (no header)
     if not content_lines:
@@ -687,5 +701,9 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     # Issue #193: Apply format options if provided
     if format_options:
         output = _apply_format_options(output, format_options)
+
+    # GH#284: Ensure POSIX trailing newline for pre-commit compatibility
+    if not output.endswith("\n"):
+        output += "\n"
 
     return output

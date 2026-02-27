@@ -1860,11 +1860,13 @@ META:
         # Content that is already canonical (won't change)
         # Note: Must use already-canonical format (e.g., TYPE::META not TYPE::"META")
         # because the emitter normalizes quoted bare strings to unquoted
+        # GH#284: Canonical output now always ends with trailing newline
         content = """===TEST===
 META:
   TYPE::META
   VERSION::"1.0"
-===END==="""
+===END===
+"""
         result = await tool.execute(content=content, schema="META", diff_only=True)
         assert result["status"] == "success"
         assert result["changed"] is False
