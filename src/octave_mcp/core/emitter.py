@@ -688,4 +688,8 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     if format_options:
         output = _apply_format_options(output, format_options)
 
+    # GH#284: Ensure POSIX trailing newline for pre-commit compatibility
+    if not output.endswith("\n"):
+        output += "\n"
+
     return output
