@@ -952,3 +952,48 @@ META:
         lp = doc2.meta["LOSS_PROFILE"]
         assert isinstance(lp, dict)
         assert lp.get("drop_narrative") is True
+
+
+class TestMetaNestedBlockAbsorptionRegression:
+    """Regression: nested META blocks must not absorb root-level keys (CE #292)."""
+
+    def test_root_key_after_nested_meta_block_not_absorbed(self):
+        """A root-level key following a META nested block must NOT be in meta.
+
+        After parsing a nested block like LOSS_PROFILE: with indented children,
+        a subsequent identifier at column 0 must be recognized as a root-level
+        key, not absorbed into doc.meta.
+        """
+        content = """===TEST===
+META:
+  LOSS_PROFILE:
+    drop::all
+KEY::value
+===END===
+"""
+        doc, _ = parse_with_warnings(content)
+        # LOSS_PROFILE should be in meta as a nested dict
+        assert "LOSS_PROFILE" in doc.meta
+        lp = doc.meta["LOSS_PROFILE"]
+        assert isinstance(lp, dict)
+        assert lp.get("drop") == "all"
+        # KEY must NOT be absorbed into meta
+        assert "KEY" not in doc.meta, f"Root-level KEY was absorbed into META: {doc.meta}"
+
+    def test_multiple_root_keys_after_nested_meta_block(self):
+        """Multiple root-level keys after nested META block stay at root."""
+        content = """===TEST===
+META:
+  TYPE::AGENT
+  LOSS_PROFILE:
+    drop_narrative::true
+    preserve_protocol::true
+A::1
+B::2
+===END===
+"""
+        doc, _ = parse_with_warnings(content)
+        assert "TYPE" in doc.meta
+        assert "LOSS_PROFILE" in doc.meta
+        assert "A" not in doc.meta
+        assert "B" not in doc.meta

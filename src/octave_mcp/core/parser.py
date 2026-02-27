@@ -689,6 +689,13 @@ class Parser:
 
                     key_positions[key] = key_line
                     meta[key] = nested_meta
+                    # GH#287: Reset indentation tracking after nested block.
+                    # The nested block consumed tokens across lines; the next
+                    # token may sit at column 0 (no INDENT emitted).  Without
+                    # this reset has_indented would remain True from the
+                    # parent key's indent, causing the outer loop to absorb
+                    # root-level identifiers into META.
+                    has_indented = False
                 else:
                     # Skip malformed field
                     continue
