@@ -1220,6 +1220,60 @@ class Parser:
 
                 return result
 
+            # GH#287 P2: Check for NUMBER[bracket]OPERATOR pattern (e.g., 2024[x] → 2026[y]).
+            # When a number is followed by brackets and then an operator, capture the
+            # entire expression as a string to prevent data loss in operator-rich values.
+            if next_token.type == TokenType.LIST_START:
+                token_after_bracket = self._peek_past_brackets_at(self.pos + 1)
+                if token_after_bracket in EXPRESSION_OPERATORS:
+                    # Capture as operator-rich expression string
+                    start_line = token.line
+                    start_column = token.column
+                    num_str = _token_to_str(token)
+                    self.advance()  # Consume NUMBER
+
+                    # Consume all remaining tokens on this value line:
+                    # brackets, operators, identifiers, numbers
+                    expr_parts = [num_str]
+                    while self.current().type not in (
+                        TokenType.NEWLINE,
+                        TokenType.EOF,
+                        TokenType.ENVELOPE_END,
+                    ):
+                        cur = self.current()
+                        if cur.type == TokenType.LIST_START:
+                            expr_parts.append("[")
+                            self.advance()
+                        elif cur.type == TokenType.LIST_END:
+                            expr_parts.append("]")
+                            self.advance()
+                        elif cur.type in EXPRESSION_OPERATORS:
+                            expr_parts.append(f" {cur.value} ")
+                            self.advance()
+                        elif cur.type in VALUE_TOKENS:
+                            expr_parts.append(_token_to_str(cur))
+                            self.advance()
+                        elif cur.type == TokenType.COMMA:
+                            expr_parts.append(",")
+                            self.advance()
+                        else:
+                            break
+
+                    result = "".join(expr_parts)
+                    # I4 Audit: Emit W_SOURCE_COMPILE warning for operator-rich value capture
+                    self.warnings.append(
+                        {
+                            "type": "lenient_parse",
+                            "subtype": "source_compile_value",
+                            "original": result,
+                            "result": result,
+                            "context": "operator_rich_value",
+                            "line": start_line,
+                            "column": start_column,
+                        }
+                    )
+                    return result
+
             # Standalone NUMBER - return numeric value as before
             self.advance()
             return token.value

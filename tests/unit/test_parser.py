@@ -814,3 +814,65 @@ CORE:
         # Invalid chars — MUST need quotes
         assert needs_quotes("A<x->")
         assert needs_quotes("A<x y>")
+
+
+class TestOperatorRichValuePreservation:
+    """GH#287 P2: Parser preserves operator-rich values in lenient mode."""
+
+    def test_number_bracket_operator_bracket_preserved(self):
+        """CHRONOS::2024[x] -> 2026[y] should preserve full value."""
+        content = """===TEST===
+CHRONOS::2024[x] → 2026[y]
+===END===
+"""
+        doc, warnings = parse_with_warnings(content)
+        assignments = [s for s in doc.sections if isinstance(s, Assignment)]
+        assert len(assignments) == 1
+        val = str(assignments[0].value)
+        # The value must contain all parts - no data loss
+        assert "2024" in val
+        assert "2026" in val
+        # Either brackets or angle-bracket canonical form
+        assert "x" in val
+        assert "y" in val
+        assert "→" in val or "->" in val
+
+    def test_identifier_operator_identifier_preserved(self):
+        """FLOW::START → END should preserve as expression."""
+        content = """===TEST===
+FLOW::START → END
+===END===
+"""
+        doc, warnings = parse_with_warnings(content)
+        assignments = [s for s in doc.sections if isinstance(s, Assignment)]
+        assert len(assignments) == 1
+        val = str(assignments[0].value)
+        assert "START" in val
+        assert "END" in val
+
+    def test_complex_operator_rich_value(self):
+        """Complex operator-rich value with multiple operators."""
+        content = """===TEST===
+TRANSITION::phase_1<alpha> → phase_2<beta> ⊕ phase_3<gamma>
+===END===
+"""
+        doc, warnings = parse_with_warnings(content)
+        assignments = [s for s in doc.sections if isinstance(s, Assignment)]
+        assert len(assignments) == 1
+        val = str(assignments[0].value)
+        # All parts must be preserved
+        assert "phase_1" in val
+        assert "phase_2" in val
+        assert "phase_3" in val
+
+    def test_source_compile_warning_emitted(self):
+        """When operator-rich value is captured, a W_SOURCE_COMPILE warning is emitted."""
+        content = """===TEST===
+CHRONOS::2024[x] → 2026[y]
+===END===
+"""
+        doc, warnings = parse_with_warnings(content)
+        # Check that at least one warning relates to this value capture
+        # The warning type should indicate lenient parsing occurred
+        has_warning = any(w.get("type") == "lenient_parse" for w in warnings)
+        assert has_warning, f"Expected lenient_parse warning, got: {warnings}"
