@@ -640,6 +640,55 @@ class Parser:
                         key_positions[key] = key_line
 
                     meta[key] = value
+                elif self.current().type == TokenType.BLOCK:
+                    # GH#287 P3: Handle nested block key (e.g., LOSS_PROFILE:)
+                    # Parse children as a nested dict to preserve parent-child association
+                    self.advance()  # Consume BLOCK (:)
+                    self.skip_whitespace()
+
+                    nested_meta: dict[str, Any] = {}
+                    if self.current().type == TokenType.INDENT:
+                        nested_indent = self.current().value
+                        self.advance()
+                        nested_has_indented = True
+
+                        while True:
+                            if self.current().type in (TokenType.EOF, TokenType.ENVELOPE_END):
+                                break
+
+                            if self.current().type == TokenType.INDENT:
+                                if self.current().value < nested_indent:
+                                    break  # Dedent, end of nested block
+                                self.advance()
+                                nested_has_indented = True
+                                continue
+
+                            if self.current().type == TokenType.NEWLINE:
+                                self.advance()
+                                nested_has_indented = False
+                                continue
+
+                            if self.current().type == TokenType.COMMENT:
+                                self.advance()
+                                continue
+
+                            if self.current().type == TokenType.IDENTIFIER:
+                                if nested_indent > 0 and not nested_has_indented:
+                                    break
+
+                                nested_key = self.current().value
+                                self.advance()
+                                if self.current().type == TokenType.ASSIGN:
+                                    self.advance()
+                                    nested_value = self.parse_value()
+                                    nested_meta[nested_key] = nested_value
+                                else:
+                                    continue
+                            else:
+                                break
+
+                    key_positions[key] = key_line
+                    meta[key] = nested_meta
                 else:
                     # Skip malformed field
                     continue

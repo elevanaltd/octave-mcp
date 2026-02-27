@@ -865,6 +865,24 @@ TRANSITION::phase_1<alpha> → phase_2<beta> ⊕ phase_3<gamma>
         assert "phase_2" in val
         assert "phase_3" in val
 
+    def test_round_trip_operator_rich_value(self):
+        """Round-trip test: write operator-rich value, read back, verify no data loss."""
+        from octave_mcp.core.emitter import emit
+
+        content = """===TEST===
+CHRONOS::2024[x] → 2026[y]
+===END===
+"""
+        doc, _ = parse_with_warnings(content)
+        emitted = emit(doc)
+        # Re-parse the emitted content
+        doc2, _ = parse_with_warnings(emitted)
+        assignments = [s for s in doc2.sections if isinstance(s, Assignment)]
+        assert len(assignments) == 1
+        val = str(assignments[0].value)
+        assert "2024" in val
+        assert "2026" in val
+
     def test_source_compile_warning_emitted(self):
         """When operator-rich value is captured, a W_SOURCE_COMPILE warning is emitted."""
         content = """===TEST===
@@ -876,3 +894,61 @@ CHRONOS::2024[x] → 2026[y]
         # The warning type should indicate lenient parsing occurred
         has_warning = any(w.get("type") == "lenient_parse" for w in warnings)
         assert has_warning, f"Expected lenient_parse warning, got: {warnings}"
+
+
+class TestBlockParentPreservation:
+    """GH#287 P3: Block parent preservation - children stay with parent in META."""
+
+    def test_meta_block_with_nested_children(self):
+        """LOSS_PROFILE: with children should be preserved in META as dict."""
+        content = """===TEST===
+META:
+  TYPE::AGENT
+  LOSS_PROFILE:
+    drop_narrative::true
+    preserve_protocol::true
+===END===
+"""
+        doc, _ = parse_with_warnings(content)
+        # META should contain LOSS_PROFILE as a nested dict
+        assert "TYPE" in doc.meta
+        assert doc.meta["TYPE"] == "AGENT"
+        assert "LOSS_PROFILE" in doc.meta
+        lp = doc.meta["LOSS_PROFILE"]
+        assert isinstance(lp, dict)
+        assert lp.get("drop_narrative") is True
+        assert lp.get("preserve_protocol") is True
+
+    def test_meta_nested_block_not_promoted_to_root(self):
+        """Children of nested META blocks should NOT appear as root sections."""
+        content = """===TEST===
+META:
+  TYPE::AGENT
+  LOSS_PROFILE:
+    drop_narrative::true
+===END===
+"""
+        doc, _ = parse_with_warnings(content)
+        # Root sections should be empty (everything is in META)
+        root_assignments = [s for s in doc.sections if isinstance(s, Assignment)]
+        assert len(root_assignments) == 0, f"Found promoted root assignments: {[a.key for a in root_assignments]}"
+
+    def test_meta_nested_block_round_trip(self):
+        """Round trip: nested META block survives emit -> parse."""
+        from octave_mcp.core.emitter import emit
+
+        content = """===TEST===
+META:
+  TYPE::AGENT
+  LOSS_PROFILE:
+    drop_narrative::true
+    preserve_protocol::true
+===END===
+"""
+        doc, _ = parse_with_warnings(content)
+        emitted = emit(doc)
+        doc2, _ = parse_with_warnings(emitted)
+        assert "LOSS_PROFILE" in doc2.meta
+        lp = doc2.meta["LOSS_PROFILE"]
+        assert isinstance(lp, dict)
+        assert lp.get("drop_narrative") is True
