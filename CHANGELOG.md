@@ -7,18 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-02-28 - "Parser Resilience" Release
+
+This release hardens the parser and lexer against real-world OCTAVE documents containing operator-rich values, `%` characters, and deeply nested META blocks. It also introduces a reading primer for comprehension-only workflows and documents the OCTAVE vs LLMLingua-2 comparison study.
+
 ### Added
 - **Reading Primer** (#289) — New `octave-reading-primer.oct.md` for pure comprehension of OCTAVE documents without requiring output generation
 - **Literal zones in literacy primer** (#289) — Teaching examples in the literacy primer now use literal zone fencing for clarity
 - **OCTAVE vs LLMLingua-2 comparison** (#289) — Example documents and round-trip fidelity analysis comparing OCTAVE semantic compression against LLMLingua-2 extractive compression
 - **Compression fidelity round-trip study** (#289) — Research documentation covering CONSERVATIVE-MYTH findings and prose-to-prose baseline measurements
-- **Confirmation echo for SOURCE→STRICT compilations** (GH#287) — `octave_write` now returns a confirmation echo when compiling from SOURCE to STRICT mode
+- **Confirmation echo for SOURCE→STRICT compilations** (#287) — `octave_write` now returns a confirmation echo when compiling from SOURCE to STRICT mode
 
 ### Fixed
-- **POSIX trailing newline in `emit()`** (GH#284) — `emit()` now ensures output ends with a trailing newline per POSIX text file convention
-- **`%` character handling in values** (GH#287) — Lexer now accepts `%` in values when preceded by alphanumeric characters; restricted `%` handling to value context only; whitespace around `%` in key context correctly detected
-- **Operator-rich value preservation in lenient mode** (GH#287) — Parser now preserves values containing multiple operators (e.g., `⊕`, `∧`, `→`) without splitting or reinterpreting them
-- **META block parent-child association** (GH#287) — META blocks no longer absorb root-level keys that follow them; block parent-child association correctly preserved
+- **POSIX trailing newline in `emit()`** (#284) — `emit()` now ensures output ends with a trailing newline per POSIX text file convention
+- **`%` character handling in values** (#287) — Lexer now accepts `%` in values when preceded by alphanumeric characters; restricted `%` handling to value context only; whitespace around `%` in key context correctly detected
+- **Operator-rich value preservation in lenient mode** (#287) — Parser now preserves values containing multiple operators (e.g., `⊕`, `∧`, `→`) without splitting or reinterpreting them
+- **META block parent-child association** (#287) — META blocks no longer absorb root-level keys that follow them; block parent-child association correctly preserved
 - **Reading primer output format** (#289) — Reading primer now produces natural prose comprehension, not field-by-field translation
 
 ### Changed
@@ -27,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **README quick-start rewritten** (#289) — Honest compression claims replacing overstated token savings
 
 ### Documentation
-- **ADR-0005** (#290) — OCTAVE v1.5 Compiler Shift + Operator Evolution decision record, with cross-model validation study
+- **ADR-0005** (#290, #292) — OCTAVE v1.5 Compiler Shift + Operator Evolution decision record, with cross-model validation study
 - **Repo structure realigned** (#290) — Documentation structure aligned with visibility-rules v1.6
 
 ### Quality Gates
@@ -525,7 +529,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.0...v1.4.1
