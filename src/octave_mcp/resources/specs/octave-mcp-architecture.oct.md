@@ -283,6 +283,7 @@ TOOL_WRITE:
     VALIDATION_ERRORS::[[...]∧OPT→present_when_INVALID]
     DEBUG_INFO::["..."∧OPT→present_when_DEBUG_GRAMMAR_true]
     GRAMMAR_HINT::["..."∧OPT→present_when_INVALID_and_grammar_hint_true]
+    COMPILATIONS::[[]∧REQ→SOURCE_to_STRICT_compilation_echo∧list_of[source,strict,rule]_dicts∧capped_at_5_plus_summary]
 
   NOTES:
     CANONICAL_CONTENT_RETURN::"Current implementation returns canonical_hash, not canonical content; returning content may be added later behind an explicit flag"
@@ -545,10 +546,11 @@ BENEFITS::[
   self_describing_documents
 ]
 
-CURRENT_STATE[v1.5.0]:
+CURRENT_STATE[v1.7.0]:
   COMPILER::operational[gbnf_compiler_735_LOC+compile_gbnf_from_meta+octave_compile_grammar_tool]
   TOOLING::grammar_compilation_exposed_via_MCP[octave_compile_grammar+octave_eject_gbnf]
   GRAMMAR_HINTS::integrated_into_validate_write_INVALID_responses[grammar_hint_param]
+  CONFIRMATION_ECHO::SOURCE_to_STRICT_compilations_returned_in_write_responses[compilations_field]
   PARSING_LIMITATION::"Constructor payload for IDENTIFIER[...] in META (e.g., CONTRACT::HOLOGRAPHIC[...]) may not be preserved in AST; full holographic enforcement requires meta constructor preservation"
 
 §17::HERMETIC_ANCHORING
