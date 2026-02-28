@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Reading Primer** (#289) — New `octave-reading-primer.oct.md` for pure comprehension of OCTAVE documents without requiring output generation
+- **Literal zones in literacy primer** (#289) — Teaching examples in the literacy primer now use literal zone fencing for clarity
+- **OCTAVE vs LLMLingua-2 comparison** (#289) — Example documents and round-trip fidelity analysis comparing OCTAVE semantic compression against LLMLingua-2 extractive compression
+- **Compression fidelity round-trip study** (#289) — Research documentation covering CONSERVATIVE-MYTH findings and prose-to-prose baseline measurements
+- **Confirmation echo for SOURCE→STRICT compilations** (GH#287) — `octave_write` now returns a confirmation echo when compiling from SOURCE to STRICT mode
+
+### Fixed
+- **POSIX trailing newline in `emit()`** (GH#284) — `emit()` now ensures output ends with a trailing newline per POSIX text file convention
+- **`%` character handling in values** (GH#287) — Lexer now accepts `%` in values when preceded by alphanumeric characters; restricted `%` handling to value context only; whitespace around `%` in key context correctly detected
+- **Operator-rich value preservation in lenient mode** (GH#287) — Parser now preserves values containing multiple operators (e.g., `⊕`, `∧`, `→`) without splitting or reinterpreting them
+- **META block parent-child association** (GH#287) — META blocks no longer absorb root-level keys that follow them; block parent-child association correctly preserved
+- **Reading primer output format** (#289) — Reading primer now produces natural prose comprehension, not field-by-field translation
+
+### Changed
+- **Literacy primer updated** (#289) — Added reading context section for bidirectional OCTAVE literacy (read + write)
+- **Skills simplified** (#289) — `SPEC_REFERENCE` in skills reduced to file-level references only
+- **README quick-start rewritten** (#289) — Honest compression claims replacing overstated token savings
+
+### Documentation
+- **ADR-0005** (#290) — OCTAVE v1.5 Compiler Shift + Operator Evolution decision record, with cross-model validation study
+- **Repo structure realigned** (#290) — Documentation structure aligned with visibility-rules v1.6
+
+### Quality Gates
+- 2301 tests passing (10 skipped), 0 failures
+- Constitutional compliance verified: I1, I2, I3, I4, I5
+
 ## [1.6.0] - 2026-02-26 - "Validation Loop" Release
 
 This release closes the Validation Precedes Generation loop: agents now receive INVALID status plus compiled GBNF grammar in a single round-trip, eliminating the need for a separate `octave_compile_grammar` call.
