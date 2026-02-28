@@ -12,7 +12,7 @@ Tests AST → canonical OCTAVE string emission with:
 import pytest
 
 from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue
-from octave_mcp.core.emitter import FormatOptions, emit, emit_meta, emit_value
+from octave_mcp.core.emitter import FormatOptions, emit, emit_meta, emit_value, needs_quotes
 from octave_mcp.core.parser import parse
 
 
@@ -590,8 +590,11 @@ class TestMultiLineArrayEmission:
         assert "  CORE::[\n" in result
         assert "    ROLE::HOLISTIC_ORCHESTRATOR,\n" in result
         assert "    COGNITION::LOGOS,\n" in result
-        # Inner flat array stays single-line (no k::v pairs inside)
-        assert "    ARCHETYPE::[ATLAS<ultimate_accountability>,ODYSSEUS<cross_boundary_navigation>],\n" in result
+        # GH#304: Inner array with annotation items now goes multi-line
+        assert "    ARCHETYPE::[\n" in result
+        assert "      ATLAS<ultimate_accountability>,\n" in result
+        assert "      ODYSSEUS<cross_boundary_navigation>\n" in result
+        assert "    ],\n" in result
         assert "    MODEL_TIER::PREMIUM\n" in result
         assert "  ]" in result
 
@@ -836,3 +839,222 @@ class TestTrailingNewline:
         opts = FormatOptions(strip_comments=True)
         result = emit(doc, format_options=opts)
         assert result.endswith("\n"), "emit() with format_options must end with trailing newline"
+
+
+class TestBug299HyphenatedIdentifiers:
+    """GH#299: Hyphenated identifiers must NOT be quoted.
+
+    The lexer (_is_valid_identifier_char) explicitly allows hyphens in identifiers,
+    but the emitter's IDENTIFIER_PATTERN excludes hyphens, causing parser-emitter
+    asymmetry. Values like 'ho-mode' and 'prophetic-intelligence' get spuriously quoted.
+    """
+
+    def test_hyphenated_identifier_not_quoted(self):
+        """Simple hyphenated identifier should not be quoted."""
+        assert not needs_quotes("ho-mode"), "ho-mode should not need quotes"
+
+    def test_hyphenated_identifier_in_list_not_quoted(self):
+        """Hyphenated identifiers in a list should emit unquoted."""
+        result = emit_value(ListValue(items=["ho-mode", "prophetic-intelligence"]))
+        assert result == "[ho-mode,prophetic-intelligence]"
+        assert '"' not in result
+
+    def test_multi_segment_hyphenated_not_quoted(self):
+        """Multi-segment hyphenated identifiers should not be quoted."""
+        assert not needs_quotes("build-anti-patterns")
+
+    def test_trailing_hyphen_still_quoted(self):
+        """Trailing hyphen is not a valid identifier -- should be quoted."""
+        assert needs_quotes("bad-"), "Trailing hyphen should need quotes"
+
+    def test_leading_hyphen_still_quoted(self):
+        """Leading hyphen is not a valid identifier start -- should be quoted."""
+        assert needs_quotes("-bad"), "Leading hyphen should need quotes"
+
+    def test_hyphenated_round_trip(self):
+        """Parse -> emit -> parse -> emit must be idempotent for hyphenated identifiers."""
+        original = "===TEST===\nSKILLS::[ho-mode,prophetic-intelligence]\n===END==="
+        doc1 = parse(original)
+        emitted1 = emit(doc1)
+        doc2 = parse(emitted1)
+        emitted2 = emit(doc2)
+        assert emitted1 == emitted2
+        assert '"ho-mode"' not in emitted1
+        assert '"prophetic-intelligence"' not in emitted1
+
+    def test_dotted_hyphenated_not_quoted(self):
+        """Identifiers with both dots and hyphens should not be quoted."""
+        assert not needs_quotes("module.sub-component")
+
+
+class TestBug300MultiArgAnnotation:
+    """GH#300: Multi-arg constructor annotations must NOT be quoted.
+
+    The emitter's ANNOTATION_PATTERN only accepts a single qualifier.
+    Multi-arg qualifiers like NEVER<PEDANTIC,DISMISSIVE,VAGUE> fail the
+    pattern and get quoted.
+    """
+
+    def test_multi_arg_annotation_not_quoted(self):
+        """Multi-arg annotation NEVER<A,B,C> should not need quotes."""
+        assert not needs_quotes("NEVER<PEDANTIC,DISMISSIVE,VAGUE>")
+
+    def test_single_arg_annotation_still_works(self):
+        """Single-arg annotation should still work."""
+        assert not needs_quotes("ATHENA<strategic_wisdom>")
+
+    def test_multi_arg_annotation_in_list(self):
+        """Multi-arg annotations in a list should emit unquoted."""
+        result = emit_value(
+            ListValue(
+                items=[
+                    "NEVER<PEDANTIC,DISMISSIVE,VAGUE>",
+                    "ALWAYS<CONSTRUCTIVE,EDUCATIONAL,SPECIFIC>",
+                ]
+            )
+        )
+        assert '"NEVER<PEDANTIC,DISMISSIVE,VAGUE>"' not in result
+        assert '"ALWAYS<CONSTRUCTIVE,EDUCATIONAL,SPECIFIC>"' not in result
+
+    def test_multi_arg_annotation_first_emit_unquoted(self):
+        """Parse constructor -> emit must produce unquoted multi-arg annotations.
+
+        Note: full round-trip (emit -> re-parse -> emit) requires lexer support for
+        commas inside <> which is a separate lexer issue. This test verifies the
+        emitter side: the first emission must not quote multi-arg annotations.
+        """
+        original = (
+            "===TEST===\nGATES::NEVER[PEDANTIC,DISMISSIVE,VAGUE] ALWAYS[CONSTRUCTIVE,EDUCATIONAL,SPECIFIC]\n===END==="
+        )
+        doc1 = parse(original)
+        emitted1 = emit(doc1)
+        assert "NEVER<PEDANTIC,DISMISSIVE,VAGUE>" in emitted1
+        assert "ALWAYS<CONSTRUCTIVE,EDUCATIONAL,SPECIFIC>" in emitted1
+        assert '"NEVER<' not in emitted1
+
+    def test_two_arg_annotation_not_quoted(self):
+        """Two-arg annotation should also not be quoted."""
+        assert not needs_quotes("NEVER<X,Y>")
+
+    def test_empty_annotation_not_quoted(self):
+        """Empty annotation FOO<> should not be quoted."""
+        assert not needs_quotes("FOO<>")
+
+
+class TestBug301UnicodeOperators:
+    """GH#301: Values with Unicode semantic operators must NOT be quoted.
+
+    The spec (section 3b::QUOTING_RULES) exempts defined operators in expressions.
+    Unicode operators like A->B, X|Y, P&Q normalize to their Unicode forms
+    and should NOT be quoted. The emitter's needs_quotes() is ASCII-only.
+    """
+
+    def test_synthesis_operator_not_quoted(self):
+        """Value with synthesis operator should not be quoted."""
+        assert not needs_quotes("PREVENT_CHAOS\u2295ELEVATE_EXCELLENCE")
+
+    def test_flow_operator_not_quoted(self):
+        """Value with flow arrow should not be quoted."""
+        assert not needs_quotes("A\u2192B\u2192C")
+
+    def test_constraint_operator_not_quoted(self):
+        """Value with constraint operator should not be quoted."""
+        assert not needs_quotes("P\u2227Q")
+
+    def test_alternative_operator_not_quoted(self):
+        """Value with alternative operator should not be quoted."""
+        assert not needs_quotes("X\u2228Y")
+
+    def test_tension_operator_not_quoted(self):
+        """Value with tension operator should not be quoted."""
+        assert not needs_quotes("Speed\u21ccQuality")
+
+    def test_concat_operator_not_quoted(self):
+        """Value with concat operator should not be quoted."""
+        assert not needs_quotes("A\u29faB")
+
+    def test_complex_expression_not_quoted(self):
+        """Complex expression with multiple operators should not be quoted."""
+        assert not needs_quotes("I1\u2295I4\u2227I5")
+
+    def test_unicode_operator_round_trip(self):
+        """Parse -> emit -> parse -> emit for expressions with Unicode operators."""
+        original = "===TEST===\nMISSION::PREVENT_CHAOS\u2295ELEVATE_EXCELLENCE\n===END==="
+        doc1 = parse(original)
+        emitted1 = emit(doc1)
+        assert '"PREVENT_CHAOS' not in emitted1
+        doc2 = parse(emitted1)
+        emitted2 = emit(doc2)
+        assert emitted1 == emitted2
+
+    def test_unicode_operator_in_emit_value(self):
+        """emit_value should not quote expression values with Unicode operators."""
+        result = emit_value("PREVENT_CHAOS\u2295ELEVATE_EXCELLENCE")
+        assert result == "PREVENT_CHAOS\u2295ELEVATE_EXCELLENCE"
+        assert '"' not in result
+
+
+class TestBug304AnnotationMultiline:
+    """GH#304: 2-item annotation lists should go multi-line.
+
+    The hard-coded threshold `non_absent_count >= 3` means 2-item annotation
+    lists stay single-line while 3-item ones go multi-line. Annotation items
+    (NAME<qualifier>) are structured content that should always trigger
+    multi-line emission regardless of count.
+    """
+
+    def test_two_annotation_items_go_multiline(self):
+        """A list of 2 annotation items should emit multi-line."""
+        items = ["MNEMOSYNE<pattern_recall>", "HERMES<elegant_translation>"]
+        result = emit_value(ListValue(items=items))
+        assert "[\n" in result, f"Expected multi-line for 2 annotation items, got: {result}"
+
+    def test_three_annotation_items_still_multiline(self):
+        """A list of 3 annotation items should also emit multi-line (regression guard)."""
+        items = [
+            "ATHENA<strategic_wisdom>",
+            "PROMETHEUS<creative_fire>",
+            "HEPHAESTUS<implementation_craft>",
+        ]
+        result = emit_value(ListValue(items=items))
+        assert "[\n" in result
+
+    def test_two_plain_items_stay_single_line(self):
+        """Plain 2-item lists should still stay single-line (GH#273 behavior preserved)."""
+        result = emit_value(ListValue(items=["alpha", "beta"]))
+        assert "\n" not in result
+        assert result == "[alpha,beta]"
+
+    def test_annotation_multiline_format(self):
+        """Verify exact multi-line format for 2-item annotation list."""
+        items = ["MNEMOSYNE<pattern_recall>", "HERMES<elegant_translation>"]
+        result = emit_value(ListValue(items=items))
+        assert "  MNEMOSYNE<pattern_recall>,\n" in result
+        assert "  HERMES<elegant_translation>\n" in result
+
+    def test_mixed_annotation_and_plain_multiline(self):
+        """A list mixing annotation and plain items should go multi-line if any annotation present."""
+        items = ["plain_item", "ATHENA<strategic_wisdom>"]
+        result = emit_value(ListValue(items=items))
+        assert "[\n" in result
+
+    def test_annotation_multiline_round_trip(self):
+        """Parse -> emit -> parse -> emit for 2-item annotation lists must be idempotent."""
+        doc = Document(
+            name="TEST",
+            sections=[
+                Assignment(
+                    key="ARCHETYPE",
+                    value=ListValue(
+                        items=[
+                            "MNEMOSYNE<pattern_recall>",
+                            "HERMES<elegant_translation>",
+                        ]
+                    ),
+                ),
+            ],
+        )
+        emitted1 = emit(doc)
+        doc2 = parse(emitted1)
+        emitted2 = emit(doc2)
+        assert emitted1 == emitted2
