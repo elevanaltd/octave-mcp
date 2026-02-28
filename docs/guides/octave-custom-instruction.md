@@ -162,21 +162,20 @@ RISK:
 
 ### MYTHOLOGY (Optional)
 
-Mythological vocabulary — "semantic zip files" compressing complex multi-dimensional concepts → single tokens.
+LLMs already know mythological vocabulary — 88-96% cross-model zero-shot comprehension. These terms compress complex multi-dimensional states (failure patterns, threat dynamics, unstable trajectories) into single tokens.
 
-**Decision test:** Does term compress a *complex state* needing a sentence to describe? If yes → use it. If literal domain term works → use literal instead (see Corpus Binding above).
+**Decision test:** Does the concept have emotional or temporal complexity a literal term can't capture? `SISYPHEAN` encodes futility + exhaustion + cyclicality — not just "keeps failing." If a literal domain term works → use the literal.
 
-| Term | Compresses... | Replaces... |
-|------|---------------|-------------|
-| `SISYPHEAN` | Repetitive, futile, cyclical failure with exhaustion | "keeps failing the same way repeatedly" |
-| `ICARIAN` | Ambition-driven overreach → collapse | "scope creep beyond safe limits" |
-| `ACHILLEAN` | Single critical vulnerability in strong system | "one point of failure" |
-| `GORDIAN` | Unconventional solution cutting impossible constraints | "creative workaround" |
-| `PHOENICIAN` | Necessary destruction enabling rebirth | "tearing down to rebuild" |
-| `PANDORAN` | Action unleashing cascading unforeseen consequences | "broke everything downstream" |
+| Term | Compresses... | Use for... |
+|------|---------------|------------|
+| `SISYPHEAN` | Futility + exhaustion + cyclicality | Failure patterns |
+| `ICARIAN` | Ambition + overreach + impending collapse | Trajectory warnings |
+| `GORDIAN` | Unconventional breakthrough cutting impossible constraints | Solution approaches |
+| `PANDORAN` | Cascading unforeseen consequences from a single action | Risk dynamics |
+| `HUBRIS→NEMESIS` | Overconfidence heading toward inevitable consequence | Force tracking |
 
-**Use for:** Complex states, threat patterns, system dynamics — where one term replaces a paragraph.
-**Don't use for:** Simple role labels, basic routing. `VALIDATOR` > `APOLLO`. `AUTH_MODULE` > `ARES_GATEWAY`. Test: would another LLM need a glossary?
+**Use for:** Failure patterns, threat dynamics, unstable trajectories, force tracking — where the concept has dimensions a literal term loses.
+**Never for:** Simple role labels (`VALIDATOR` > `APOLLO`), routing (`AUTH_MODULE` > `ARES_GATEWAY`), domain categories (`MONITORING` > `ARTEMIS`, `SECURITY` > `ARES`). Test: would another LLM need a glossary?
 
 ### DEFAULT BEHAVIOR
 
