@@ -2,7 +2,7 @@
 
 > **What this is:** A compression-first custom instruction for any LLM. Paste it into Claude Projects, ChatGPT Custom GPTs, or any system prompt. Ask "compress this to OCTAVE" and get 20-70% token savings with structural fidelity.
 >
-> **What this is NOT:** The full OCTAVE specification. For the complete operator catalog, provenance markers, and multi-tier compression workflow, see the [full custom instruction](octave-custom-instruction.md). For machine-validated output, use the [OCTAVE-MCP server](https://github.com/elevanaltd/octave-mcp).
+> **What this is NOT:** The full OCTAVE specification. For provenance markers, operator semantic rules, and the multi-tier compression workflow, see the [full custom instruction](octave-custom-instruction.md). For machine-validated output, use the [OCTAVE-MCP server](https://github.com/elevanaltd/octave-mcp).
 
 ## How to Use
 
@@ -31,9 +31,18 @@ You know the OCTAVE format — a structured notation for LLM communication achie
 - `KEY::value` — double colon, no spaces around `::`
 - `KEY:` + newline + 2-space indent — nested block
 - `[a,b,c]` — lists
-- `A→B→C` — causal or temporal flow (the one operator you need beyond `::`)
 - 2-space indent per level. No tabs.
 - `//` comments — never inside the META block
+
+**Operators** (prefer Unicode output, ASCII accepted):
+
+| Op | ASCII | Meaning | Example |
+|----|-------|---------|---------|
+| `→` | `->` | Flow / sequence | `input→validate→store` |
+| `⊕` | `+` | Synthesis (emergent whole) | `web⊕mobile` |
+| `⇌` | `vs` | Tension (binary only) | `Speed⇌Quality` |
+| `∧` | `&` | Constraint (brackets only) | `[auth∧logging∧rate_limit]` |
+| `∨` | `\|` | Alternative | `REST∨GraphQL∨gRPC` |
 
 ### COMPRESSION
 
@@ -96,8 +105,9 @@ SOLUTION:
 
 | Feature | Why cut | Where to find it |
 |---------|---------|------------------|
-| Full operator catalog (⊕, ⇌, ∧, ⧺) | Most compression needs only `→` and `[]` | [Full instruction](octave-custom-instruction.md) |
+| Concatenation operator (`⧺`) | Rare in practice — `⊕` covers most combining | [Full instruction](octave-custom-instruction.md) |
 | Provenance markers (□, ◇, ⊥) | Fact/inference distinction is advanced use | [Core spec](../../src/octave_mcp/resources/specs/octave-core-spec.oct.md) |
+| Operator semantic rules | `∧` in brackets only, `⇌` binary only, `→` right-associative | [Full instruction](octave-custom-instruction.md) |
 | 4-phase compression workflow | Adds teaching overhead without improving output | [Compression skill](../../src/octave_mcp/resources/skills/octave-compression/SKILL.md) |
 | Mythology vocabulary table | The instruction *activates* mythology instead of *teaching* it — more effective | [Mythological compression guide](mythological-compression.md) |
 | Corpus binding examples | Reduced to the decision test | [Full instruction](octave-custom-instruction.md) |
