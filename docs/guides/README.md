@@ -12,6 +12,14 @@ Claude Code skills provide OCTAVE capabilities directly:
 | **octave-compression** | Transform prose to OCTAVE | `compress to octave`, `semantic compression` |
 | **octave-mastery** | Semantic Pantheon and advanced patterns | `octave architecture`, `agent design` |
 
+## Custom Instructions
+
+| File | Audience | Purpose |
+|------|----------|---------|
+| [octave-custom-instruction.md](octave-custom-instruction.md) | Any LLM (no tooling) | Drop-in system prompt for Claude Projects, ChatGPT, or any LLM — enables OCTAVE conversion without the MCP toolchain |
+| [octave-custom-instruction.oct.md](octave-custom-instruction.oct.md) | Any LLM (no tooling) | Same as above, in OCTAVE format for direct context injection |
+| [octave-expert-mcp-aware.oct.md](octave-expert-mcp-aware.oct.md) | MCP-equipped agents | Expert layer for agents WITH the MCP toolchain — tools handle syntax, instruction handles editorial judgment (compression craft, naming, operator semantics) |
+
 ## Philosophy (Dual Format)
 
 The philosophy document exists in two formats for different audiences:
