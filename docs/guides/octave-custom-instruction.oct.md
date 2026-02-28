@@ -80,7 +80,7 @@ CONTENT:
     INLINE_MAP::"[key::val,key2::val2] (values must be atoms, no nesting)"
   §4d::STRUCTURE
     INDENT::"2 spaces per level, no tabs ever"
-    COMMENTS::"// text (line start or after value)"
+    COMMENTS::"// text (line start or after value). NEVER inside META block — comments break META nesting. Place after --- separator."
 §5::OPERATORS
   §5a::EXPRESSION_OPERATORS
     ASSIGN::":: (KEY::value, double colon for data binding)"

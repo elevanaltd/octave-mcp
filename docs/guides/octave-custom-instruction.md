@@ -69,7 +69,7 @@ CONTENT:
 - `KEY::value` — double colon, no spaces around `::`
 - `KEY:` + newline + indent — nested block
 - 2-space indent per level. No tabs.
-- `//` comments (line start or after value)
+- `//` comments (line start or after value). **Never inside the META block** — comments break META nesting. Place after the `---` separator instead.
 
 **Types:** `bare_word` | `"quoted when spaces/special"` | `42` `3.14` `-1e10` (no quotes) | `true`/`false`/`null` (lowercase) | `[a,b,c]` `[]` | `[key::val,key2::val2]` (atoms only, no nesting)
 
