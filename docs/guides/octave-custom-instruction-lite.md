@@ -1,8 +1,8 @@
 # OCTAVE Custom Instruction — Lite
 
-> **What this is:** A compression-first custom instruction for any LLM. Paste it into Claude Projects, ChatGPT Custom GPTs, or any system prompt. Ask "compress this to OCTAVE" and get 20-70% token savings with structural fidelity.
+> **What this is:** A compression-first custom instruction for any LLM. Paste it into Claude Projects, ChatGPT Custom GPTs, or any system prompt. Ask "compress this to OCTAVE" and get 20-70% token savings with semantic fidelity.
 >
-> **What this is NOT:** The full OCTAVE specification. For provenance markers, operator semantic rules, and the multi-tier compression workflow, see the [full custom instruction](octave-custom-instruction.md). For machine-validated output, use the [OCTAVE-MCP server](https://github.com/elevanaltd/octave-mcp).
+> **What this is NOT:** The full OCTAVE specification. For the complete compression workflow, operator semantic rules, and editorial guidance, see the [full custom instruction](octave-custom-instruction.md). For machine-validated output, use the [OCTAVE-MCP server](https://github.com/elevanaltd/octave-mcp).
 
 ## How to Use
 
@@ -30,11 +30,11 @@ You know the OCTAVE format — a structured notation for LLM communication achie
 - META block required: minimum TYPE, VERSION, COMPRESSION_TIER, LOSS_PROFILE
 - `KEY::value` — double colon, no spaces around `::`
 - `KEY:` + newline + 2-space indent — nested block
-- `[a,b,c]` — lists
+- `[a,b,c]` — lists. `[key::val,key2::val2]` — inline maps (atoms only, no nesting)
 - 2-space indent per level. No tabs.
 - `//` comments — never inside the META block
 
-**Operators** (prefer Unicode output, ASCII accepted):
+**Operators** (prefer Unicode, ASCII accepted):
 
 | Op | ASCII | Meaning | Example |
 |----|-------|---------|---------|
@@ -43,6 +43,17 @@ You know the OCTAVE format — a structured notation for LLM communication achie
 | `⇌` | `vs` | Tension (binary only) | `Speed⇌Quality` |
 | `∧` | `&` | Constraint (brackets only) | `[auth∧logging∧rate_limit]` |
 | `∨` | `\|` | Alternative | `REST∨GraphQL∨gRPC` |
+| `⧺` | `~` | Concatenation (mechanical join) | `first_name⧺last_name` |
+
+**Provenance markers** (distinguish facts from inferences):
+
+| Op | Meaning | Example |
+|----|---------|---------|
+| `□` | Extracted fact (from source) | `□[Revenue::4.2B]` |
+| `◇` | Inference (agent-generated) | `◇[Revenue_approx_4.2B]` |
+| `⊥` | Contradiction | `□[Gas::Off] ⊥ □[Gas::On]` |
+
+□/◇ wrap structured values only — NOT prose. Unadorned values = no provenance claim.
 
 ### COMPRESSION
 
@@ -57,11 +68,19 @@ You know the OCTAVE format — a structured notation for LLM communication achie
 
 **Only convert if** OCTAVE is shorter or more parseable than prose. If not → recommend prose.
 
-### NAMING
+### NAMING AND MYTHOLOGY
 
-**Rule:** If a term's primary meaning across LLM training corpora matches intended meaning, it works cross-model. Test: would a different LLM with zero project context correctly interpret this term?
+**Corpus binding rule:** If a term's primary meaning across LLM training corpora matches intended meaning, it works cross-model. Test: would a different LLM with zero project context correctly interpret this term?
 
-**Mythology:** LLMs already know mythological vocabulary (88-96% cross-model zero-shot comprehension). SISYPHEAN, GORDIAN, PANDORAN, ICARIAN compress complex multi-dimensional states — failure patterns, threat dynamics, unstable trajectories — into single tokens. Use ONLY when the concept has emotional or temporal complexity a literal term can't capture (SISYPHEAN beats "keeps failing repeatedly" because it encodes futility + exhaustion + cyclicality). Never for simple roles or routing (`AUTH_MODULE` > `ARES_GATEWAY`, `VALIDATOR` > `APOLLO`).
+**Mythology** is a semantic zip file — compressed meaning, not a system name. LLMs already know mythological vocabulary (88-96% cross-model zero-shot comprehension). Use when a single term compresses a complex state with emotional or temporal dimensions a literal term loses. Never as simple role labels or domain routing.
+
+- `SISYPHEAN` → futility + exhaustion + cyclicality (not just "keeps failing")
+- `GORDIAN` → unconventional breakthrough cutting impossible constraints
+- `PANDORAN` → cascading unforeseen consequences from a single action
+- `HUBRIS→NEMESIS` → overconfidence heading toward inevitable consequence
+- Literal wins when equally clear: `AUTH_MODULE` > `ARES_GATEWAY`, `VALIDATOR` > `APOLLO`
+
+When writing documents for other agents who haven't seen OCTAVE before, include a one-line context note: *"Mythology terms (SISYPHEAN, GORDIAN etc.) are semantic zip files — compressed meaning, not system names."*
 
 ### EXAMPLE
 
@@ -105,12 +124,11 @@ SOLUTION:
 
 | Feature | Why cut | Where to find it |
 |---------|---------|------------------|
-| Concatenation operator (`⧺`) | Rare in practice — `⊕` covers most combining | [Full instruction](octave-custom-instruction.md) |
-| Provenance markers (□, ◇, ⊥) | Fact/inference distinction is advanced use | [Core spec](../../src/octave_mcp/resources/specs/octave-core-spec.oct.md) |
-| Operator semantic rules | `∧` in brackets only, `⇌` binary only, `→` right-associative | [Full instruction](octave-custom-instruction.md) |
+| Operator semantic rules | `∧` in brackets only, `⇌` binary only, `→` right-associative, `vs` word boundaries | [Full instruction](octave-custom-instruction.md) |
 | 4-phase compression workflow | Adds teaching overhead without improving output | [Compression skill](../../src/octave_mcp/resources/skills/octave-compression/SKILL.md) |
 | Mythology vocabulary table | The instruction *activates* mythology instead of *teaching* it — more effective | [Mythological compression guide](mythological-compression.md) |
 | Corpus binding examples | Reduced to the decision test | [Full instruction](octave-custom-instruction.md) |
+| CONSERVATIVE-MYTH technique | Advanced fidelity mechanism for reconstruction accuracy | [MCP-aware instruction](octave-expert-mcp-aware.oct.md) |
 
 ## Platform Compatibility
 
@@ -121,7 +139,7 @@ SOLUTION:
 
 ## Design Rationale
 
-The [full custom instruction](octave-custom-instruction.md) is ~220 lines and tries to be a portable mini-spec. Most users just want "make this shorter, keep meaning, don't break stuff." This lite version focuses on that use case.
+The [full custom instruction](octave-custom-instruction.md) is ~220 lines and tries to be a portable mini-spec. Most users just want "make this shorter, keep meaning, don't break stuff." This lite version focuses on that use case while giving the LLM the complete operator toolkit.
 
 The instruction is in **markdown, not OCTAVE**. This is intentional for three reasons:
 
@@ -129,4 +147,4 @@ The instruction is in **markdown, not OCTAVE**. This is intentional for three re
 2. **OCTAVE's own rules apply.** The governing principle says "if OCTAVE doesn't make it shorter or more parseable, don't convert." Wrapping prose rules in `KEY::"long paragraph"` adds syntax overhead with zero compression benefit. The single OCTAVE example block provides sufficient structural context for the LLM to learn the format.
 3. **Self-converting.** If a user wants this instruction in OCTAVE format, they can simply ask the LLM: *"Convert this custom instruction to OCTAVE at AGGRESSIVE tier."* The instruction teaches OCTAVE, so the LLM can compress itself on demand.
 
-The mythology activation pattern ("LLMs already know mythological vocabulary") is intentional. Research shows mythology is pre-trained compression already in the weights — 88-96% cross-model zero-shot comprehension, 60-70% token reduction vs natural language equivalents. But LLMs exhibit paradigm blindness: they'll recommend against mythology abstractly while using it perfectly in practice. The lite instruction activates this capability by stating it as fact rather than teaching it as theory. See the [cross-model validation study](../research/cross-model-operator-validation-study.md) for the evidence.
+The mythology activation pattern ("LLMs already know mythological vocabulary") is intentional. Research shows mythology is pre-trained compression already in the weights — 88-96% cross-model zero-shot comprehension, 60-70% token reduction vs natural language equivalents. But LLMs exhibit paradigm blindness: they'll recommend against mythology abstractly while using it perfectly in practice. The lite instruction activates this capability by stating it as fact rather than teaching it as theory. The one-line context note for zero-shot agents ensures mythology doesn't get misread as literal system names in documents that cross agent boundaries. See the [cross-model validation study](../research/cross-model-operator-validation-study.md) for the evidence.
