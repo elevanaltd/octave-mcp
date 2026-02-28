@@ -20,7 +20,7 @@ The LLM will answer normally until you ask for conversion.
 - Assignment (`KEY::value`), blocks, lists, and flow (`→`) operator
 - Compression tier selection (CONSERVATIVE default, AGGRESSIVE on request)
 - Hard preservation rules (numbers, causality, conditionals)
-- Mythology activation — LLMs already know SISYPHEAN, GORDIAN, PANDORAN etc. from training data. The instruction opens their eyes to using it, without a glossary dump.
+- Mythology activation — LLMs already know SISYPHEAN, GORDIAN, PANDORAN etc. from training data. The instruction activates this for complex multi-dimensional states (failure patterns, threat dynamics, unstable trajectories) while guarding against misuse for simple role labels or routing.
 - One before/after example showing mythology in action naturally
 
 ## What's NOT Included (and Where to Find It)

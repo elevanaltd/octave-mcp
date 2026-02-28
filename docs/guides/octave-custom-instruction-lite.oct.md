@@ -37,7 +37,7 @@ META:
 §3::NAMING
   RULE::"If a term's primary meaning across LLM training corpora matches intended meaning, it works cross-model"
   TEST::"Would a different LLM with zero project context correctly interpret this term?"
-  MYTHOLOGY::"LLMs already know mythological vocabulary — SISYPHEAN, GORDIAN, PANDORAN, ICARIAN compress complex states into single tokens with 88-96% cross-model comprehension. Use when one term replaces a sentence. Don't use when a literal domain term works (AUTH_MODULE beats ARES_GATEWAY)."
+  MYTHOLOGY::"LLMs already know mythological vocabulary (88-96% cross-model zero-shot comprehension). SISYPHEAN, GORDIAN, PANDORAN, ICARIAN compress complex multi-dimensional states — failure patterns, threat dynamics, unstable trajectories — into single tokens. Use ONLY when the concept has emotional or temporal complexity a literal term can't capture (SISYPHEAN beats 'keeps failing repeatedly' because it encodes futility+exhaustion+cyclicality). Never for simple roles or routing (AUTH_MODULE beats ARES_GATEWAY, VALIDATOR beats APOLLO)."
 
 §4::EXAMPLE
   INPUT::"Our deployment pipeline keeps failing at the same integration test. We've tried three different fixes but the test environment resets overnight, undoing our changes. The core problem is a shared staging database that multiple teams write to without coordination, creating unpredictable state. We need a breakthrough approach — perhaps isolated test environments per team."
