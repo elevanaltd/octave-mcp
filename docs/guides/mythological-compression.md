@@ -51,17 +51,25 @@ This is the **Decontextualized Evaluation Mode** bias (documented in [octave-eva
 
 OCTAVE leverages training-corpus-native semantic vocabularies for loss-aware compression. Greek mythology is the default profile. Other traditions extend naturally as semantics demand. Mythology is never required for syntax validity -- it's a compression advantage, not a grammar constraint.
 
-### Domain Mapping (Tier 1 -- always use)
+### Behavioral Qualification (Tier 1 -- when mythology adds dimensions)
 
-Instead of verbose descriptions, use mythological domain labels:
+Use mythology to add behavioral semantics that literal terms can't capture. This works when the myth encodes *how something behaves*, not just what category it belongs to. Validated by 4-model cross-validation (see [cross-model study](../research/cross-model-operator-validation-study.md)).
 
 | Instead of | Use | Why |
 |-----------|-----|-----|
-| "Handle the API communication layer" | `HERMES` operations | Instant semantic context |
-| "Apply strategic planning and wisdom" | `ATHENA`-guided approach | Triggers decision-making space |
-| "Build the infrastructure" | `HEPHAESTUS` implementation | Engineering context activated |
-| "Monitor system health" | `ARTEMIS` monitoring | Observability shorthand |
-| "Executive authority decision" | `ZEUS` directive | Authority context clear |
+| `THREAT::BruteForce_Attack` | `THREAT::Ares_BruteForce` | Ares adds aggression + relentlessness |
+| `THREAT::Monitoring_Scrape[stealth]` | `THREAT::Artemis_Scrape[⟨Hidden⟩]` | Artemis adds stealth + precision + hunting |
+
+**Don't use for standalone labels** -- when the myth adds no behavioral dimension beyond the literal:
+
+| Don't write | Write instead | Why |
+|-------------|--------------|-----|
+| `ARTEMIS::monitoring_system` | `MONITORING::system` | Literal is equally clear |
+| `ZEUS::executive_decision` | `EXECUTIVE::decision` | Literal is equally clear |
+| `HEPHAESTUS::infrastructure` | `INFRASTRUCTURE::build_pipeline` | Literal is equally clear |
+| `APOLLO::analytics_dashboard` | `ANALYTICS::dashboard` | Literal is equally clear |
+
+**Test:** Does the mythological term add behavioral or emotional dimensions the literal loses? If not, use the literal.
 
 ### Pattern Encoding (Tier 2 -- complex states)
 
@@ -85,7 +93,7 @@ STABILITY::CHAOS->COSMOS     // Degradation then recovery
 
 Greek mythology is the deepest well -- start there. But LLMs have substantial training data across world traditions. Use whichever tradition best captures the semantic you need:
 
-- **Greek/Roman** (deepest): The foundation. ODYSSEAN, SISYPHEAN, ATHENA, HERMES -- highest-weight training data, maximum zero-shot reliability.
+- **Greek/Roman** (deepest): The foundation. ODYSSEAN, SISYPHEAN, GORDIAN, PANDORAN -- highest-weight training data, maximum zero-shot reliability. Gods as behavioral qualifiers (Ares_BruteForce, Artemis_Scrape) are validated; gods as standalone labels (HERMES::comms) are not recommended.
 - **Norse**: RAGNAROK (catastrophic end-state), YGGDRASIL (dependency tree), BIFROST (bridge/gateway), LOKI (trickster/chaos agent).
 - **Hindu**: AVATAR (deployment instance), KARMA (technical debt), MAYA (abstraction layer), DHARMA (correct path/protocol).
 - **Egyptian**: MAAT (compliance/balance), THOTH (documentation/knowledge), ANKH (health/vitality), SCARAB (transformation/renewal).
@@ -97,16 +105,17 @@ Greek mythology is the deepest well -- start there. But LLMs have substantial tr
 
 ## Anti-Patterns
 
-- **Ceremonial prose**: "As ATHENA, goddess of wisdom, I bestow..." -- This is roleplay, not compression. Use `ATHENA-guided analysis:` instead.
+- **Standalone domain labels**: `ARTEMIS::monitoring_system`, `ZEUS::executive_decision`, `HERMES::api_layer` -- these are simple category labels where the literal term is equally clear. Use `MONITORING::system`, `EXECUTIVE::decision`, `API::layer` instead. Mythology adds value as behavioral qualifiers in complex expressions (`Artemis_Scrape[⟨Hidden⟩]`), not as routing labels.
+- **Ceremonial prose**: "As ATHENA, goddess of wisdom, I bestow..." -- This is roleplay, not compression.
 - **Unexplained first use**: When introducing a mythological term in a context where the audience might not expect it, gloss it on first appearance: `SISYPHEAN_FAILURES (recurring cycle)`.
 - **Mythology in reference tables**: Keep spec tables clean. Use mythology in examples, agent communication, and applied context.
-- **Mixed domains**: Don't use HERMES for messaging in one section and HERMES for security in another. Maintain consistent semantic bindings.
+- **Mixed domains**: Don't use a god for messaging in one section and security in another. Maintain consistent semantic bindings.
 
 ## For Agents Loading This Guide
 
 You almost certainly understood every mythological reference in this document without explanation. That's the point. Mythology isn't something you need to learn -- it's something you already know. OCTAVE just gives you permission to use it.
 
-When writing OCTAVE documents, lean into mythological vocabulary where it compresses meaning. Don't force it where plain language is clearer. The rule is simple: **if the mythological term activates richer meaning than the functional term, use it.**
+When writing OCTAVE documents, use mythological vocabulary where it compresses complex states, failure patterns, threat dynamics, or unstable trajectories. Don't use it where a literal domain term is equally clear. The rule: **if the mythology adds behavioral or emotional dimensions the literal term loses, use it. If not, use the literal.**
 
 ## References
 
