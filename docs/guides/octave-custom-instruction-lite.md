@@ -113,6 +113,10 @@ SOLUTION:
 
 The [full custom instruction](octave-custom-instruction.md) is ~220 lines and tries to be a portable mini-spec. Most users just want "make this shorter, keep meaning, don't break stuff." This lite version focuses on that use case.
 
-The instruction is in **markdown, not OCTAVE**. This is intentional — the lite instruction's own governing principle ("if OCTAVE doesn't make it shorter or more parseable, don't convert") applies to itself. Wrapping prose rules in `KEY::"long paragraph"` adds OCTAVE syntax overhead with zero compression benefit. The single OCTAVE example block provides sufficient structural context for the LLM to learn the format.
+The instruction is in **markdown, not OCTAVE**. This is intentional for three reasons:
+
+1. **Readable by both audiences.** Markdown is native to both humans and LLMs — users can read and edit it, and every model's system prompt parser handles it natively.
+2. **OCTAVE's own rules apply.** The governing principle says "if OCTAVE doesn't make it shorter or more parseable, don't convert." Wrapping prose rules in `KEY::"long paragraph"` adds syntax overhead with zero compression benefit. The single OCTAVE example block provides sufficient structural context for the LLM to learn the format.
+3. **Self-converting.** If a user wants this instruction in OCTAVE format, they can simply ask the LLM: *"Convert this custom instruction to OCTAVE at AGGRESSIVE tier."* The instruction teaches OCTAVE, so the LLM can compress itself on demand.
 
 The mythology activation pattern ("LLMs already know mythological vocabulary") is intentional. Research shows mythology is pre-trained compression already in the weights — 88-96% cross-model zero-shot comprehension, 60-70% token reduction vs natural language equivalents. But LLMs exhibit paradigm blindness: they'll recommend against mythology abstractly while using it perfectly in practice. The lite instruction activates this capability by stating it as fact rather than teaching it as theory. See the [cross-model validation study](../research/cross-model-operator-validation-study.md) for the evidence.
