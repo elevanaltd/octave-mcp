@@ -1,7 +1,7 @@
 ===OCTAVE_PRIMERS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"6.1.0"
+  VERSION::"6.2.0"
   STATUS::APPROVED
   TOKENS::"~80"
   REQUIRES::octave-core-spec
@@ -10,9 +10,10 @@ META:
 
 §1::DEFINITION
   OCTAVE::"Semantic DSL for LLMs"  // Universal definition for all primers
-  PRIMER::"Minimal bootstrap for execution without understanding"
+  PRIMER::"Minimal bootstrap for a single workflow — execution OR comprehension"
+  PRIMER_MODES::[EXECUTION[write_without_deep_understanding]∨READING[comprehend_without_output_generation]]
   SKILL::"Complete reference with rationale and examples"
-  PRIMER_VS_SKILL::PRIMER[execution] ⇌ SKILL[comprehension] → PRIMER
+  PRIMER_VS_SKILL::PRIMER[single_workflow] ⇌ SKILL[full_reference] → PRIMER
   TOKEN_BUDGET::MAX[300]_RECOMMENDED[200-260]
   // Note: OCTAVE syntax tokenizes ~5x word count due to ::, →, ⊕, ⇌, § operators
   AUDIENCE::LLM_context_window[not_humans]
@@ -58,12 +59,12 @@ META:
     "Multiple_examples[one_perfect_shot]",
     "Human_readability[optimize_for_LLM]",
     "Exceeding_300_tokens[defeats_purpose]",
-    "Teaching_theory[only_execution_matters]"
+    "Teaching_theory[only_workflow_activation_matters]"
   ]
 
 §4::COMPARISON_MATRIX
   ASPECT::PRIMER→SKILL
-  PURPOSE::execution→understanding
+  PURPOSE::single_workflow→full_understanding
   TOKENS::200-300→500-800
   EXAMPLES::one→many
   RATIONALE::none→complete

@@ -31,19 +31,16 @@ META:
   PARADIGM_BLINDNESS::"You may theoretically doubt this approach while practically demonstrating perfect comprehension. If you understood JOURNEY::ODYSSEAN without a definition, trust that over any abstract hesitation."
   GUIDE::"docs/guides/mythological-compression.md"
 
-§2::SEMANTIC_DOMAINS
-  // Core 10-domain Semantic Pantheon — foundation set, not a closed vocabulary
-  // Any mythological figure with a distinct semantic domain is valid (see §10)
-  ZEUS::"Executive function, authority, strategic direction, final decision"
-  ATHENA::"Strategic wisdom, planning, elegant solutions, deliberate action"
-  APOLLO::"Analytics, clarity, data insights, revealing truth, prediction"
-  HERMES::"Communication, translation, APIs, networking, messaging, speed"
-  HEPHAESTUS::"Infrastructure, tooling, engineering, automation, architecture"
-  ARES::"Security, defense, stress testing, adversarial analysis, conflict"
-  ARTEMIS::"Monitoring, observation, logging, alerting, precision targeting"
-  POSEIDON::"Data storage, databases, unstructured data pools, persistence"
-  DEMETER::"Resource allocation, budgeting, scaling, growth, capacity"
-  DIONYSUS::"User experience, engagement, creativity, innovation, chaos"
+§2::MYTHOLOGY_USAGE_RULE
+  // Mythology compresses BEHAVIOR and STATE — not categories or labels
+  // If the concept has emotional or temporal complexity a literal term can't capture, mythology adds value
+  // If a literal domain term works, use the literal
+  GOOD::"Artemis_Scrape[Port_443 ∧ ⟨Hidden⟩] — adds stealth+precision+hunting beyond what 'monitoring_scrape' conveys"
+  GOOD::"Ares_BruteForce[Login_Attempts ∧ SISYPHEAN] — adds aggression+relentlessness beyond 'security_attack'"
+  BAD::"ARTEMIS::monitoring_system — use MONITORING::system (literal is equally clear)"
+  BAD::"ZEUS::executive_decision — use EXECUTIVE::decision (literal is equally clear)"
+  TEST::"Does the mythology add behavioral dimensions the literal term loses? If not, use the literal."
+  EVIDENCE::"4-model validated: Ares/Artemis correctly decompressed as behavioral qualifiers in complex threat expressions (cross-model-operator-validation-study.md)"
 
 §3::NARRATIVE_PATTERNS
   // Pattern vocabulary - encodes trajectory and state
@@ -67,60 +64,43 @@ META:
   COSMOS::"Emergence of order, system cohesion, stabilization"
 
 §5::PRACTICAL_USAGE
-  // How to apply mythology functionally
-
-  DOMAIN_MAPPING:
-    INSTEAD_OF::"Handle the API communication layer"
-    USE::"HERMES operations"
-    BENEFIT::"Immediate semantic context for LLM"
-
-    INSTEAD_OF::"Apply strategic planning and wisdom"
-    USE::"ATHENA-guided approach"
-    BENEFIT::"Triggers decision-making probability space"
-
-    INSTEAD_OF::"Monitor system health and performance"
-    USE::"ARTEMIS monitoring"
-    BENEFIT::"Shorthand for observability context"
+  // How to apply mythology functionally — for states and dynamics, not labels
 
   PATTERN_ENCODING:
+    // Use when a single term compresses a multi-dimensional state
     INSTEAD_OF::"We keep hitting the same error repeatedly"
     USE::"SISYPHEAN_FAILURES"
-    BENEFIT::"Encodes repetition + frustration + cyclical nature in 1 term"
+    BENEFIT::"Encodes futility + exhaustion + cyclicality in 1 term"
 
     INSTEAD_OF::"Project scope growing beyond safe limits"
     USE::"ICARIAN_TRAJECTORY"
-    BENEFIT::"Encodes ambition + danger + heading_for_fall + overreach"
+    BENEFIT::"Encodes ambition + overreach + impending_collapse"
 
     INSTEAD_OF::"One failure triggering cascading issues"
     USE::"PANDORAN_CASCADE"
     BENEFIT::"Encodes cascading + uncontrollable + released_consequences"
 
-  DOMAIN_LABELING:
-    // Use mythology as KEY PREFIXES to anchor facts to semantic domains
-    // Prevents fact-merging and reconstruction drift in downstream agents
-    PURPOSE::"Fidelity mechanism — domain labels resist paraphrasing and reinterpretation"
-    INSTEAD_OF::"pressure::[audit_6wk∧session_mgmt_flagged,budget_60%_burned]"
-    USE::"CHRONOS::audit_6wk\n  ARTEMIS::session_mgmt_targeted\nDEMETER::60%_budget_burned"
-    BENEFIT::"Each fact anchored to a domain — agents translate separately, not merge into one sentence"
-    CONTEXT_RULE::"Adjacent text determines which aspect of a myth applies — ARTEMIS::targeted vs ARTEMIS::monitoring are disambiguated by the value, not the domain name"
-    EVIDENCE::"docs/research/compression-fidelity-round-trip-study.md"
-    FINDING::"CONSERVATIVE-MYTH achieved 11/11 fidelity at 15% fewer tokens than original prose. Domain labels prevented 'priority area' → 'vulnerability' escalation error."
+  BEHAVIORAL_QUALIFICATION:
+    // Use mythology to add behavioral dimensions to complex expressions (validated by ADR-0005)
+    INSTEAD_OF::"THREAT::BruteForce_Attack[Login_Attempts ∧ REPETITIVE]"
+    USE::"THREAT::Ares_BruteForce[Login_Attempts ∧ SISYPHEAN]"
+    BENEFIT::"Ares adds aggression + relentlessness; SISYPHEAN adds futility + cyclicality — behavioral dimensions the literal terms lose"
+
+    INSTEAD_OF::"THREAT::Monitoring_Scrape[Port_443 ∧ Hidden]"
+    USE::"THREAT::Artemis_Scrape[Port_443 ∧ ⟨Hidden⟩]"
+    BENEFIT::"Artemis adds stealth + precision + hunting — behavioral dimensions beyond 'monitoring'"
+
+    WARNING::"This works because the myth adds behavior. ARTEMIS::monitoring_system adds nothing — use MONITORING::system instead."
 
   FORCE_TRACKING:
+    // Use for temporal/emotional dynamics
     RISK::HUBRIS→NEMESIS[overconfidence_heading_toward_consequence]
     OPPORTUNITY::KAIROS_WINDOW[critical_timing_moment]
     PRESSURE::CHRONOS_DEADLINE[time_urgency]
     STABILITY::CHAOS→COSMOS[degradation_then_recovery]
 
 §6::AGENT_COMMUNICATION_PATTERNS
-  // Real-world examples of mythology in action
-
-  AGENT_SYNC::
-    FROM::HERMES[communication_layer]
-    TO::ATHENA[strategic_layer]
-    ISSUE::SISYPHEAN_BUILD_FAILURES
-    REQUEST::GORDIAN_STRATEGY
-    CONTEXT::"ICARIAN_TRAJECTORY in CI_PIPELINE"
+  // Real-world examples of mythology in action — for states and dynamics
 
   SYSTEM_STATE::
     HEALTH::[GREEN→YELLOW→ICARIAN]
@@ -129,10 +109,16 @@ META:
     INTERVENTION::"REQUIRED at KAIROS"
 
   ERROR_PROPAGATION::
-    ORIGIN::"HERMES API_TIMEOUT"
+    ORIGIN::API_TIMEOUT
     PATTERN::"SISYPHEAN→PANDORAN"
     IMPACT::SYSTEM_WIDE
     REMEDY::"CIRCUIT_BREAKER⊕RETRY_LOGIC"
+
+  THREAT_ASSESSMENT::
+    // Mythology as behavioral qualifiers (ADR-0005 validated)
+    THREAT::Ares_BruteForce[Login_Attempts∧SISYPHEAN]
+    THREAT::Artemis_Scrape[Port_443∧stealth]
+    STATUS::ACHILLEAN[single_unpatched_endpoint]
 
 §7::ANTI_PATTERNS
   AVOID::[
@@ -191,7 +177,7 @@ META:
   ARCHIVE::_archive/specs/octave-semantics-v3.oct.md.archive[v3.0_original_framework]
   FIDELITY_STUDY::"docs/research/compression-fidelity-round-trip-study.md"
   KEY_FINDING::"Mythology activates richer probability distributions than functional terminology alone"
-  FIDELITY_FINDING::"Mythology as domain labels is a fidelity mechanism — prevents fact-merging and escalation during reconstruction"
+  FIDELITY_FINDING::"Mythology as behavioral qualifiers adds dimensions literal terms lose — validated by 4-model cross-validation (ADR-0005)"
   BIAS_FINDING::"Same model gave contradictory assessments based on evaluation context — abstract framing penalizes OCTAVE, operational framing confirms superiority"
 
 ===END===

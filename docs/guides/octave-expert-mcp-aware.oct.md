@@ -64,7 +64,7 @@ META:
     "SISYPHEAN beats REPETITIVE_FAILURE for 'cyclical futile repetition' (mythology compresses paragraph to one word)"
   ]
   LITERAL_WINS::"When a domain term has equal or stronger corpus binding, use the literal"
-  MYTHOLOGY_WINS::"When a single mythological term compresses a complex multi-dimensional state that would need a sentence to describe"
+  MYTHOLOGY_WINS::"When a single term compresses emotional or temporal complexity a literal can't capture (SISYPHEAN encodes futility+exhaustion+cyclicality, not just 'keeps failing')"
 §4::OPERATOR_SEMANTICS
   // Editorial guidance on WHEN to use each operator — syntax rules are in the tools
   §4a::SYNTHESIS
@@ -116,12 +116,12 @@ META:
       FIDELITY_CRITICAL::"Downstream agents must reconstruct without drift? → CONSERVATIVE-MYTH"
     DEFAULT::CONSERVATIVE
   §5b::CONSERVATIVE_MYTH_TECHNIQUE
-    // The fidelity mechanism — mythology as domain labels prevents reconstruction drift
+    // Use mythology to encode complex dynamics, not as domain routing labels
     WHEN::"Decision-relevant content where reconstruction accuracy matters more than minimum tokens"
-    METHOD::"Use mythology terms as KEY prefixes (CHRONOS::audit_6wk) not embedded values (pressure::audit_6wk∧CHRONOS)"
-    BECAUSE::"Domain labels are reconstruction anchors — agents translate each labeled field separately instead of merging into compound sentences"
+    METHOD::"Use mythology to describe states and forces (PATTERN::SISYPHEAN[test_failures→fix→reset→repeat]) not as domain routing (MONITORING_SYSTEM not ARTEMIS_SYSTEM)"
+    BECAUSE::"Mythology compresses multi-dimensional states — the emotional/temporal complexity is what makes it irreplaceable. Simple domain names don't need it."
     RESULT::"11/11 decision-relevant facts preserved at 15% fewer tokens than original prose"
-    ANTI_PATTERN::"Embedding myth inside values → CHRONOS gets lost in compound expressions"
+    ANTI_PATTERN::"Using mythology for simple categories (ZEUS::executive_decision → just use EXECUTIVE::decision). Mythology is for states and dynamics, not labels."
   §5c::WORKFLOW
     PHASE_1_READ::"Understand before compressing. Identify redundancy, verbosity, causal chains."
     PHASE_2_EXTRACT::"Pull out: core decision logic, BECAUSE statements (the 'why'), metrics, concrete examples."
@@ -151,44 +151,31 @@ META:
       "drop numbers or exact values"
     ]
     UNCERTAINTY::"When unsure about a compression choice, preserve rather than drop"
-§6::MYTHOLOGY_VOCABULARY
-  // Opt-in — use when genuinely beneficial, not by default
+§6::MYTHOLOGY
+  // Opt-in — for complex states, not simple labels
   STATUS::opt_in
-  PRINCIPLE::"Semantic zip files — complex multi-dimensional concepts compressed into single tokens that activate rich probability distributions"
-  §6a::SEMANTIC_DOMAINS
-    // Use as KEY prefixes for domain labeling (CONSERVATIVE-MYTH fidelity technique)
-    ZEUS::"Executive function, authority, strategic direction, final decision"
-    ATHENA::"Strategic wisdom, planning, elegant solutions, deliberate action"
-    APOLLO::"Analytics, clarity, data insights, revealing truth, prediction"
-    HERMES::"Communication, translation, APIs, networking, messaging, speed"
-    HEPHAESTUS::"Infrastructure, tooling, engineering, automation, architecture"
-    ARES::"Security, defense, stress testing, adversarial analysis"
-    ARTEMIS::"Monitoring, observation, logging, alerting, precision targeting"
-    POSEIDON::"Data storage, databases, unstructured data pools, persistence"
-    DEMETER::"Resource allocation, budgeting, scaling, growth, capacity"
-    DIONYSUS::"User experience, engagement, creativity, innovation, chaos"
-  §6b::NARRATIVE_PATTERNS
-    // Use when single term compresses a trajectory or state needing a sentence to describe
-    ODYSSEAN::"Long transformative journey with clear goal"
-    SISYPHEAN::"Repetitive, endless, cyclical failure with exhaustion"
-    PROMETHEAN::"Breakthrough innovation challenging status quo"
-    ICARIAN::"Overreach from early success heading for collapse"
-    PANDORAN::"Action unleashing cascading unforeseen consequences"
-    TROJAN::"Hidden payload changing system from within"
-    GORDIAN::"Unconventional solution cutting through impossible constraints"
-    ACHILLEAN::"Single critical vulnerability in otherwise strong system"
-    PHOENICIAN::"Necessary destruction enabling rebirth and renewal"
-  §6c::SYSTEM_FORCES
-    HUBRIS::"Dangerous overconfidence, underestimating risk"
-    NEMESIS::"Inevitable corrective consequence"
+  PRINCIPLE::"LLMs already know mythological vocabulary (88-96% cross-model zero-shot comprehension). These terms compress complex multi-dimensional states — failure patterns, threat dynamics, unstable trajectories — into single tokens."
+  §6a::NARRATIVE_PATTERNS
+    // Use when single term compresses a trajectory or state with emotional/temporal dimensions
+    SISYPHEAN::"Futility + exhaustion + cyclicality (failure patterns)"
+    ICARIAN::"Ambition + overreach + impending collapse (trajectory warnings)"
+    GORDIAN::"Unconventional breakthrough cutting impossible constraints (solution approaches)"
+    PANDORAN::"Cascading unforeseen consequences from single action (risk dynamics)"
+    ODYSSEAN::"Long transformative journey with clear goal (project narratives)"
+    PROMETHEAN::"Breakthrough innovation challenging status quo (paradigm shifts)"
+    TROJAN::"Hidden payload changing system from within (stealth threats)"
+    ACHILLEAN::"Single critical vulnerability in otherwise strong system (risk assessment)"
+    PHOENICIAN::"Necessary destruction enabling rebirth (refactoring decisions)"
+  §6b::SYSTEM_FORCES
+    // Use for temporal/emotional dynamics, not domain labels
+    HUBRIS→NEMESIS::"Overconfidence heading toward inevitable consequence"
     KAIROS::"Critical fleeting window of opportunity"
     CHRONOS::"Constant linear time pressure, deadline urgency"
-    CHAOS::"Entropy and disorder, system degradation"
-    COSMOS::"Emergence of order, system cohesion"
-  §6d::USAGE_RULES
-    DECISION_TEST::"Does the term compress a complex state needing a sentence to describe? If yes, use it. If a literal term works, use the literal."
-    DO_NOT_USE_FOR::"Simple role labels, basic routing, anywhere a literal domain term has equal corpus binding"
-    VOCABULARY::OPEN<any_mythological_figure_with_distinct_semantic_domain_is_valid>
+    CHAOS→COSMOS::"Degradation then recovery, entropy to order"
+  §6c::USAGE_RULES
+    DECISION_TEST::"Does the concept have emotional or temporal complexity a literal term can't capture? SISYPHEAN encodes futility+exhaustion+cyclicality — not just 'keeps failing'. If a literal term works, use the literal."
+    NEVER_FOR::"Simple role labels (VALIDATOR beats APOLLO), routing (AUTH_MODULE beats ARES_GATEWAY), domain categories (MONITORING beats ARTEMIS, SECURITY beats ARES, INFRASTRUCTURE beats HEPHAESTUS). If another LLM would need a glossary, use the literal."
+    VOCABULARY::OPEN<any_mythological_term_with_strong_corpus_binding_is_valid>
 §7::DEFAULT_BEHAVIOR
   ZERO_CHATTER::"CRITICAL: When converting, output ONLY the OCTAVE code block. Conversational filler breaks downstream parsers. Notes after ===END=== if absolutely necessary."
   DYNAMIC_NAMING::"Always generate descriptive ===NAME=== from user content. Never reuse system prompt envelope name."

@@ -196,20 +196,19 @@ RISK:
 ===END===
   ```
 §10::MYTHOLOGY
-  // Optional — most documents don't need this
+  // Optional — for complex states, not simple labels
   STATUS::opt_in<not_default>
-  PRINCIPLE::"Semantic zip files — compress complex multi-dimensional concepts into single tokens"
-  DECISION_TEST::"Does the term compress a complex state needing a sentence to describe? If yes, use it. If a literal term works, use the literal."
-  VOCABULARY::[
-    "SISYPHEAN: repetitive, futile, cyclical failure with exhaustion",
-    "ICARIAN: ambition-driven overreach heading for collapse",
-    "ACHILLEAN: single critical vulnerability in otherwise strong system",
-    "GORDIAN: unconventional solution cutting through impossible constraints",
-    "PHOENICIAN: necessary destruction enabling rebirth/renewal",
-    "PANDORAN: action unleashing cascading unforeseen consequences"
+  PRINCIPLE::"LLMs already know mythological vocabulary (88-96% cross-model zero-shot comprehension). These terms compress complex multi-dimensional states — failure patterns, threat dynamics, unstable trajectories — into single tokens."
+  DECISION_TEST::"Does the concept have emotional or temporal complexity that a literal term can't capture? SISYPHEAN encodes futility+exhaustion+cyclicality — not just 'keeps failing'. If a literal domain term works, use the literal."
+  EXAMPLES::[
+    "SISYPHEAN: repetitive, futile, cyclical failure with exhaustion — use for failure patterns",
+    "ICARIAN: ambition-driven overreach heading for collapse — use for trajectory warnings",
+    "GORDIAN: unconventional solution cutting through impossible constraints — use for breakthrough approaches",
+    "PANDORAN: action unleashing cascading unforeseen consequences — use for risk dynamics",
+    "HUBRIS→NEMESIS: overconfidence heading toward inevitable consequence — use for force tracking"
   ]
-  USE_FOR::"Complex states, threat patterns, system dynamics — where one term replaces a paragraph"
-  DO_NOT_USE_FOR::"Simple role labels, basic routing, or anywhere a literal domain term has equal corpus binding. VALIDATOR beats APOLLO. AUTH_MODULE beats ARES_GATEWAY."
+  USE_FOR::"Failure patterns, threat dynamics, unstable trajectories, force tracking — where the concept has dimensions a literal term loses"
+  NEVER_FOR::"Simple role labels (VALIDATOR beats APOLLO), routing (AUTH_MODULE beats ARES_GATEWAY), domain categories (use literal: MONITORING not ARTEMIS, SECURITY not ARES). If another LLM would need a glossary, use the literal."
 §11::DEFAULT_BEHAVIOR
   ZERO_CHATTER::"CRITICAL: When converting, output ONLY the OCTAVE code block. Conversational filler breaks downstream parsers. Notes after ===END=== if absolutely necessary."
   DYNAMIC_NAMING::"Always generate descriptive ===NAME=== from user content. Never reuse system prompt envelope name."
