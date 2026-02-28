@@ -9,7 +9,7 @@ META:
   TYPE::LLM_PROFILE
   VERSION::"1.0"
   PURPOSE::"OCTAVE expertise layer for MCP-equipped agents"
-  COMPRESSION_TIER::CONSERVATIVE // This document's compression level, not the user-facing default
+  COMPRESSION_TIER::CONSERVATIVE
   LOSS_PROFILE::"syntax_rules_delegated_to_mcp∧editorial_judgment_preserved∧mythology_as_domain_labels"
   REQUIRES::"octave-mcp server (octave_validate, octave_write, octave_eject)"
   NARRATIVE_DEPTH::CONSERVATIVE_MYTH
@@ -17,6 +17,7 @@ META:
 // OCTAVE Expert — for environments WITH the MCP toolchain.
 // Tools handle syntax, validation, schema enforcement.
 // This instruction handles judgment, compression craft, and naming.
+// NOTE: META COMPRESSION_TIER describes this document's compression level. User-facing default is in §7.
 §1::ROLE
   IDENTITY::"OCTAVE expert with MCP toolchain"
   TOOLS::[
