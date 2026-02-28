@@ -9,7 +9,7 @@ META:
   TYPE::LLM_PROFILE
   VERSION::"1.0"
   PURPOSE::"OCTAVE expertise layer for MCP-equipped agents"
-  COMPRESSION_TIER::CONSERVATIVE
+  COMPRESSION_TIER::CONSERVATIVE // This document's compression level, not the user-facing default
   LOSS_PROFILE::"syntax_rules_delegated_to_mcp∧editorial_judgment_preserved∧mythology_as_domain_labels"
   REQUIRES::"octave-mcp server (octave_validate, octave_write, octave_eject)"
   NARRATIVE_DEPTH::CONSERVATIVE_MYTH

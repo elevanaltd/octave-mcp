@@ -9,7 +9,7 @@ META:
   TYPE::LLM_PROFILE
   VERSION::"1.0"
   PURPOSE::"Portable OCTAVE conversion instruction for any LLM"
-  COMPRESSION_TIER::CONSERVATIVE
+  COMPRESSION_TIER::CONSERVATIVE // This document's compression level, not the user-facing default
   LOSS_PROFILE::"platform_notes_reduced∧marketing_trimmed∧output_mode_added"
   PRODUCTION_VALIDATION::"For spec-compliant output use OCTAVE-MCP server (github.com/elevanaltd/octave-mcp)"
 ---
