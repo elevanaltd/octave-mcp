@@ -601,6 +601,25 @@ class WriteTool(BaseTool):
                             "semantics_changed": False,
                         }
                     )
+                # GH#310: PATTERN/REGEX auto-quoting is advisory + safe
+                # Value was bare, emitter will auto-quote for I1 fidelity
+                elif subtype == "pattern_autoquote":
+                    corrections.append(
+                        {
+                            "code": "W_PATTERN_AUTOQUOTE",
+                            "tier": "LENIENT_PARSE",
+                            "message": w.get(
+                                "message",
+                                f"PATTERN/REGEX value auto-quoted: {w.get('key', '?')}",
+                            ),
+                            "line": w.get("line", 0),
+                            "column": w.get("column", 0),
+                            "key": w.get("key", ""),
+                            "value": w.get("value", ""),
+                            "safe": True,
+                            "semantics_changed": False,
+                        }
+                    )
                 # GH#294: Duplicate key warnings get special treatment
                 # Data loss = safe:false, semantics_changed:true
                 elif subtype == "duplicate_key":

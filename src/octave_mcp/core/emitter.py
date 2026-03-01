@@ -79,6 +79,12 @@ IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)\Z")
 # and empty qualifiers like FOO<> (produced by parser for empty constructor brackets).
 ANNOTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)<([A-Za-z_]([A-Za-z0-9_,]*[A-Za-z0-9_])?)?>\Z")
 
+# GH#310: Keys whose values must always be quoted (string literals for lexical matching).
+# PATTERN and REGEX values are match targets in §4::INTERACTION_RULES GRAMMAR context.
+# Emitting them bare violates I1 (SYNTACTIC_FIDELITY) because the quotes carry semantic
+# meaning (they denote string literals, not identifiers).
+_ALWAYS_QUOTE_KEYS: frozenset[str] = frozenset({"PATTERN", "REGEX"})
+
 # Issue #181: Variable pattern for $VAR, $1:name placeholders
 # Variables start with $ and contain alphanumeric, underscore, or colon
 VARIABLE_PATTERN = re.compile(r"^\$[A-Za-z0-9_:]+\Z")
@@ -206,6 +212,27 @@ def _needs_multiline(value: ListValue) -> bool:
     return non_absent_count >= 3
 
 
+def _force_quote_inline_map_value(key: str, value_str: str, raw_value: Any) -> str:
+    """Force-quote inline-map values for PATTERN/REGEX keys (GH#310).
+
+    Applies the same _ALWAYS_QUOTE_KEYS logic used in emit_assignment() to
+    inline-map emission paths, ensuring PATTERN/REGEX values are always quoted
+    regardless of whether needs_quotes() would normally leave them bare.
+
+    Args:
+        key: The inline-map key (e.g., "PATTERN", "REGEX").
+        value_str: The already-emitted value string.
+        raw_value: The original AST value (to check type and escape).
+
+    Returns:
+        The value string, force-quoted if key is in _ALWAYS_QUOTE_KEYS.
+    """
+    if key in _ALWAYS_QUOTE_KEYS and isinstance(raw_value, str) and not value_str.startswith('"'):
+        escaped = raw_value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
+        return f'"{escaped}"'
+    return value_str
+
+
 def _emit_multiline_list(value: ListValue, indent: int = 0) -> str:
     """Emit a ListValue in multi-line format with 2-space indentation (GH#267).
 
@@ -240,7 +267,10 @@ def _emit_multiline_list(value: ListValue, indent: int = 0) -> str:
             for k, v in item.pairs.items():
                 if is_absent(v):
                     continue
-                inline_pairs.append(f"{k}::{emit_value(v, indent + 1)}")
+                v_str = emit_value(v, indent + 1)
+                # GH#310: Force-quote PATTERN/REGEX values in inline-map (I1)
+                v_str = _force_quote_inline_map_value(k, v_str, v)
+                inline_pairs.append(f"{k}::{v_str}")
             # GH#267 fix: skip InlineMap items where all pairs are Absent.
             # An empty inline_pairs list would produce an empty string in
             # parts, emitting a blank line that breaks emit-parse idempotency.
@@ -318,7 +348,14 @@ def emit_value(value: Any, indent: int = 0) -> str:
     elif isinstance(value, InlineMap):
         # I2: Filter out pairs with Absent values before emission
         # Standalone InlineMap (not inside a list) keeps its brackets
-        pairs = [f"{k}::{emit_value(v, indent)}" for k, v in value.pairs.items() if not is_absent(v)]
+        pairs = []
+        for k, v in value.pairs.items():
+            if is_absent(v):
+                continue
+            v_str = emit_value(v, indent)
+            # GH#310: Force-quote PATTERN/REGEX values in inline-map (I1)
+            v_str = _force_quote_inline_map_value(k, v_str, v)
+            pairs.append(f"{k}::{v_str}")
         return f"[{','.join(pairs)}]"
     elif isinstance(value, HolographicValue):
         # M3: Emit holographic pattern using raw_pattern for I1 fidelity
@@ -425,6 +462,13 @@ def emit_assignment(assignment: Assignment, indent: int = 0, format_options: For
         return "\n".join(lines)
 
     value_str = emit_value(assignment.value, indent)
+
+    # GH#310: PATTERN/REGEX values must always be quoted for lexical matching fidelity (I1).
+    # The needs_quotes() heuristic returns False for single bare-word identifiers, but
+    # PATTERN and REGEX values are string literals that must preserve their quoted form.
+    if assignment.key in _ALWAYS_QUOTE_KEYS and isinstance(assignment.value, str) and not value_str.startswith('"'):
+        escaped = assignment.value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
+        value_str = f'"{escaped}"'
 
     # Emit the assignment line with optional trailing comment
     assignment_line = f"{indent_str}{assignment.key}::{value_str}"
