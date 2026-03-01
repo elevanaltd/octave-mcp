@@ -79,6 +79,12 @@ IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)\Z")
 # and empty qualifiers like FOO<> (produced by parser for empty constructor brackets).
 ANNOTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)<([A-Za-z_]([A-Za-z0-9_,]*[A-Za-z0-9_])?)?>\Z")
 
+# GH#310: Keys whose values must always be quoted (string literals for lexical matching).
+# PATTERN and REGEX values are match targets in §4::INTERACTION_RULES GRAMMAR context.
+# Emitting them bare violates I1 (SYNTACTIC_FIDELITY) because the quotes carry semantic
+# meaning (they denote string literals, not identifiers).
+_ALWAYS_QUOTE_KEYS: frozenset[str] = frozenset({"PATTERN", "REGEX"})
+
 # Issue #181: Variable pattern for $VAR, $1:name placeholders
 # Variables start with $ and contain alphanumeric, underscore, or colon
 VARIABLE_PATTERN = re.compile(r"^\$[A-Za-z0-9_:]+\Z")
@@ -425,6 +431,13 @@ def emit_assignment(assignment: Assignment, indent: int = 0, format_options: For
         return "\n".join(lines)
 
     value_str = emit_value(assignment.value, indent)
+
+    # GH#310: PATTERN/REGEX values must always be quoted for lexical matching fidelity (I1).
+    # The needs_quotes() heuristic returns False for single bare-word identifiers, but
+    # PATTERN and REGEX values are string literals that must preserve their quoted form.
+    if assignment.key in _ALWAYS_QUOTE_KEYS and isinstance(assignment.value, str) and not value_str.startswith('"'):
+        escaped = assignment.value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
+        value_str = f'"{escaped}"'
 
     # Emit the assignment line with optional trailing comment
     assignment_line = f"{indent_str}{assignment.key}::{value_str}"

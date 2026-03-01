@@ -12,7 +12,7 @@ TDD: RED phase - these tests define the expected behavior before implementation.
 
 from octave_mcp.core.ast_nodes import Assignment
 from octave_mcp.core.emitter import emit, emit_assignment
-from octave_mcp.core.parser import parse
+from octave_mcp.core.parser import parse, parse_with_warnings
 
 
 class TestPatternRegexQuotePreservation:
@@ -122,3 +122,38 @@ class TestPatternRegexEmitAssignment:
         result = emit_assignment(assignment, indent=0)
         assert "STATUS::active" in result
         assert '"active"' not in result
+
+
+class TestPatternAutoquoteWarning:
+    """GH#310 I4: W_PATTERN_AUTOQUOTE warning for bare PATTERN/REGEX values."""
+
+    def test_bare_pattern_emits_warning(self):
+        """Bare PATTERN::Workaround should emit W_PATTERN_AUTOQUOTE warning."""
+        source = "===TEST===\nGRAMMAR:\n  PATTERN::Workaround\n===END===\n"
+        doc, warnings = parse_with_warnings(source)
+        autoquote_warnings = [w for w in warnings if w.get("subtype") == "pattern_autoquote"]
+        assert len(autoquote_warnings) == 1
+        assert autoquote_warnings[0]["key"] == "PATTERN"
+        assert autoquote_warnings[0]["value"] == "Workaround"
+
+    def test_quoted_pattern_no_warning(self):
+        """Quoted PATTERN::"Workaround" should NOT emit W_PATTERN_AUTOQUOTE warning."""
+        source = '===TEST===\nGRAMMAR:\n  PATTERN::"Workaround"\n===END===\n'
+        doc, warnings = parse_with_warnings(source)
+        autoquote_warnings = [w for w in warnings if w.get("subtype") == "pattern_autoquote"]
+        assert len(autoquote_warnings) == 0
+
+    def test_bare_regex_emits_warning(self):
+        """Bare REGEX::identifier should emit W_PATTERN_AUTOQUOTE warning."""
+        source = "===TEST===\nGRAMMAR:\n  REGEX::identifier\n===END===\n"
+        doc, warnings = parse_with_warnings(source)
+        autoquote_warnings = [w for w in warnings if w.get("subtype") == "pattern_autoquote"]
+        assert len(autoquote_warnings) == 1
+        assert autoquote_warnings[0]["key"] == "REGEX"
+
+    def test_non_pattern_key_no_warning(self):
+        """Non-PATTERN/REGEX bare values should NOT emit W_PATTERN_AUTOQUOTE."""
+        source = "===TEST===\nSTATUS::active\n===END===\n"
+        doc, warnings = parse_with_warnings(source)
+        autoquote_warnings = [w for w in warnings if w.get("subtype") == "pattern_autoquote"]
+        assert len(autoquote_warnings) == 0

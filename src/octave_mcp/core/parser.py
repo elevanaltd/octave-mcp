@@ -1011,7 +1011,35 @@ class Parser:
                     }
                 )
             self.advance()
+            # GH#310: Capture whether value is quoted BEFORE parse_value() strips quotes.
+            # Used to emit W_PATTERN_AUTOQUOTE when PATTERN/REGEX values are bare.
+            value_is_quoted = self.current().type == TokenType.STRING
             value = self.parse_value()
+
+            # GH#310: PATTERN/REGEX keys with bare (unquoted) values get auto-quoted
+            # by the emitter. Emit I4 audit warning so the correction is traceable.
+            if (
+                key in KNOWN_CONSTRUCTORS
+                and key in ("PATTERN", "REGEX")
+                and not value_is_quoted
+                and isinstance(value, str)
+            ):
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "pattern_autoquote",
+                        "key": key,
+                        "value": value,
+                        "line": identifier_token.line,
+                        "column": identifier_token.column,
+                        "message": (
+                            f"W_PATTERN_AUTOQUOTE at line {identifier_token.line}: "
+                            f"'{key}' value '{value}' was bare (unquoted). "
+                            f"Auto-quoted for lexical matching fidelity (I1)."
+                        ),
+                    }
+                )
+
             # Issue #182: Collect trailing comment after value
             trailing_comment = self.collect_trailing_comment()
             assignment = Assignment(
