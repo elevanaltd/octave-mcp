@@ -216,6 +216,33 @@ class Parser:
         self.bracket_depth = 0  # GH#184: Track bracket nesting for NEVER rule validation
         self._deep_nesting_warned_at: set[int] = set()  # Track lines where warning was emitted
 
+    def _emit_duplicate_key_warning(self, key: str, key_line: int, key_positions: dict[str, list[int]]) -> None:
+        """Emit W_DUPLICATE_KEY warning with all occurrence line numbers.
+
+        GH#294: When a duplicate key is detected at the same level, emit a warning
+        that includes ALL line numbers where the key appears, not just the first
+        and current occurrence.
+
+        Args:
+            key: The duplicate key name
+            key_line: Line number of the current (duplicate) occurrence
+            key_positions: Dict mapping key names to lists of ALL line numbers
+        """
+        all_lines = key_positions[key]
+        count = len(all_lines)
+        lines_str = ", ".join(str(ln) for ln in all_lines)
+        self.warnings.append(
+            {
+                "type": "lenient_parse",
+                "subtype": "duplicate_key",
+                "key": key,
+                "first_line": all_lines[0],
+                "duplicate_line": key_line,
+                "all_lines": list(all_lines),
+                "message": (f"Key '{key}' appears {count} times at lines " f"{lines_str} \u2014 only last value kept"),
+            }
+        )
+
     def current(self) -> Token:
         """Get current token."""
         if self.pos >= len(self.tokens):
@@ -516,6 +543,8 @@ class Parser:
         # Parse document body
         # Issue #182: Track pending comments for next section
         pending_comments: list[str] = []
+        # GH#294: Track key positions for duplicate detection at document level
+        doc_key_positions: dict[str, list[int]] = {}
 
         while self.current().type != TokenType.ENVELOPE_END and self.current().type != TokenType.EOF:
             # Skip indentation at document level
@@ -538,6 +567,15 @@ class Parser:
             section = self.parse_section(0, pending_comments)
             pending_comments = []  # Reset after passing to section
             if section:
+                # GH#294: Track duplicate keys at document level
+                if isinstance(section, Assignment):
+                    sec_key = section.key
+                    sec_line = section.line
+                    if sec_key in doc_key_positions:
+                        doc_key_positions[sec_key].append(sec_line)
+                        self._emit_duplicate_key_warning(sec_key, sec_line, doc_key_positions)
+                    else:
+                        doc_key_positions[sec_key] = [sec_line]
                 doc.sections.append(section)
             elif self.current().type not in (TokenType.ENVELOPE_END, TokenType.EOF):
                 # Consume unexpected token to prevent infinite loop
@@ -563,11 +601,12 @@ class Parser:
         """Parse META block into dictionary.
 
         Issue #179: Detects duplicate keys and emits warnings per I4 auditability.
+        GH#294: Enhanced to track all occurrence lines and use consolidated warning format.
         Per spec: DUPLICATES::keys_must_be_unique_per_block
         """
         meta: dict[str, Any] = {}
-        # Issue #179: Track key positions for duplicate detection
-        key_positions: dict[str, int] = {}  # key -> first occurrence line number
+        # GH#294: Track ALL key positions for duplicate detection (key -> list of line numbers)
+        key_positions: dict[str, list[int]] = {}
 
         # Consume META identifier
         self.expect(TokenType.IDENTIFIER)
@@ -627,26 +666,12 @@ class Parser:
                     self.advance()
                     value = self.parse_value()
 
-                    # Issue #179: Check for duplicate key
+                    # GH#294: Track ALL occurrences and emit warning on duplicates
                     if key in key_positions:
-                        # I4 Audit: Emit warning for duplicate key
-                        # Per I4: "If bits lost must have receipt"
-                        self.warnings.append(
-                            {
-                                "type": "lenient_parse",
-                                "subtype": "duplicate_key",
-                                "key": key,
-                                "first_line": key_positions[key],
-                                "duplicate_line": key_line,
-                                "message": (
-                                    f"W_DUPLICATE_KEY::{key} at line {key_line} "
-                                    f"overwrites previous definition at line {key_positions[key]}"
-                                ),
-                            }
-                        )
+                        key_positions[key].append(key_line)
+                        self._emit_duplicate_key_warning(key, key_line, key_positions)
                     else:
-                        # Track first occurrence
-                        key_positions[key] = key_line
+                        key_positions[key] = [key_line]
 
                     meta[key] = value
                 elif self.current().type == TokenType.BLOCK:
@@ -794,6 +819,8 @@ class Parser:
 
         # Parse section children (similar to block parsing)
         children: list[ASTNode] = []
+        # GH#294: Track key positions for duplicate detection in section children
+        section_key_positions: dict[str, list[int]] = {}
 
         # Issue #217: Collect any comments at column 0 before first indented child
         # These are orphan comments that appear between section header and children
@@ -862,6 +889,15 @@ class Parser:
                 child = self.parse_section(child_indent, pending_comments)
                 pending_comments = []  # Reset after passing to child
                 if child:
+                    # GH#294: Track duplicate keys in section children
+                    if isinstance(child, Assignment):
+                        child_key = child.key
+                        child_line = child.line
+                        if child_key in section_key_positions:
+                            section_key_positions[child_key].append(child_line)
+                            self._emit_duplicate_key_warning(child_key, child_line, section_key_positions)
+                        else:
+                            section_key_positions[child_key] = [child_line]
                     children.append(child)
                     # GH#81: After parsing a child (especially nested blocks),
                     # the recursive call may have consumed NEWLINEs. Reset indent
@@ -976,6 +1012,8 @@ class Parser:
 
             # Parse block children
             children: list[ASTNode] = []
+            # GH#294: Track key positions for duplicate detection in block children
+            block_key_positions: dict[str, list[int]] = {}
 
             # Issue #259: Literal zone directly after block colon (no indented children).
             # Token stream: IDENTIFIER -> BLOCK ':' -> NEWLINE -> FENCE_OPEN ...
@@ -1063,6 +1101,15 @@ class Parser:
                     child = self.parse_section(child_indent, pending_comments)
                     pending_comments = []  # Reset after passing to child
                     if child:
+                        # GH#294: Track duplicate keys in block children
+                        if isinstance(child, Assignment):
+                            child_key = child.key
+                            child_line = child.line
+                            if child_key in block_key_positions:
+                                block_key_positions[child_key].append(child_line)
+                                self._emit_duplicate_key_warning(child_key, child_line, block_key_positions)
+                            else:
+                                block_key_positions[child_key] = [child_line]
                         children.append(child)
                         # GH#81: After parsing a child (especially nested blocks),
                         # the recursive call may have consumed NEWLINEs. Reset indent
