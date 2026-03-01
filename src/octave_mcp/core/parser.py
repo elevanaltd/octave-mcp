@@ -685,6 +685,8 @@ class Parser:
                     self.skip_whitespace()
 
                     nested_meta: dict[str, Any] = {}
+                    # PR#307 Finding 1: Track duplicate keys within nested blocks
+                    nested_key_positions: dict[str, list[int]] = {}
                     if self.current().type == TokenType.INDENT:
                         nested_indent = self.current().value
                         self.advance()
@@ -706,7 +708,11 @@ class Parser:
                                 nested_has_indented = False
                                 continue
 
+                            # PR#307 Finding 3: Guard nested comment handler
+                            # against consuming root-level comments
                             if self.current().type == TokenType.COMMENT:
+                                if nested_indent > 0 and not nested_has_indented:
+                                    break  # Root-level comment — nested block is done
                                 self.advance()
                                 continue
 
@@ -715,17 +721,34 @@ class Parser:
                                     break
 
                                 nested_key = self.current().value
+                                nested_key_line = self.current().line
                                 self.advance()
                                 if self.current().type == TokenType.ASSIGN:
                                     self.advance()
                                     nested_value = self.parse_value()
+
+                                    # PR#307 Finding 1: Emit W_DUPLICATE_KEY
+                                    # for duplicate keys in nested blocks
+                                    if nested_key in nested_key_positions:
+                                        nested_key_positions[nested_key].append(nested_key_line)
+                                        self._emit_duplicate_key_warning(
+                                            nested_key, nested_key_line, nested_key_positions
+                                        )
+                                    else:
+                                        nested_key_positions[nested_key] = [nested_key_line]
+
                                     nested_meta[nested_key] = nested_value
                                 else:
                                     continue
                             else:
                                 break
 
-                    key_positions[key] = [key_line]
+                    # PR#307 Finding 2: Check for duplicate block-form keys
+                    if key in key_positions:
+                        key_positions[key].append(key_line)
+                        self._emit_duplicate_key_warning(key, key_line, key_positions)
+                    else:
+                        key_positions[key] = [key_line]
                     meta[key] = nested_meta
                     # GH#287: Reset indentation tracking after nested block.
                     # The nested block consumed tokens across lines; the next

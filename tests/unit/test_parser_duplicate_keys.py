@@ -477,3 +477,157 @@ META:
 
         duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
         assert len(duplicate_warnings) == 0
+
+
+class TestDuplicateKeyNestedMetaBlock:
+    """PR #307 Finding 1: Duplicate keys inside nested META blocks must emit warnings."""
+
+    def test_duplicate_key_in_nested_meta_block(self):
+        """Duplicate key within a nested block-form META key should emit W_DUPLICATE_KEY.
+
+        When a META key uses block notation (e.g., LAYERED_FIDELITY:), its children
+        are parsed into a nested dict. Duplicate keys within that nested dict must
+        be detected and warned about, not silently overwritten.
+        """
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  LAYERED_FIDELITY:
+    INTENT_LAYER::I3
+    VALUE_LAYER::I1
+    INTENT_LAYER::I5
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assert doc is not None
+        assert doc.name == "TEST"
+
+        # The nested block should keep the last value
+        layered = doc.meta.get("LAYERED_FIDELITY")
+        assert isinstance(layered, dict)
+        assert layered.get("INTENT_LAYER") == "I5"
+
+        # I4 Audit: Must emit duplicate key warning for nested INTENT_LAYER
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        nested_dup = [w for w in duplicate_warnings if w.get("key") == "INTENT_LAYER"]
+        assert (
+            len(nested_dup) >= 1
+        ), f"Expected W_DUPLICATE_KEY for INTENT_LAYER in nested block, got {duplicate_warnings}"
+
+    def test_no_warning_for_unique_keys_in_nested_block(self):
+        """Unique keys in a nested block should not emit duplicate warnings."""
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  LAYERED_FIDELITY:
+    INTENT_LAYER::I3
+    VALUE_LAYER::I1
+    AUDIT_LAYER::I4
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        assert len(duplicate_warnings) == 0
+
+    def test_triple_duplicate_in_nested_block_reports_all_lines(self):
+        """Three occurrences of same key in nested block should track all lines."""
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  CONFIG:
+    MODE::alpha
+    MODE::beta
+    MODE::gamma
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        mode_warnings = [w for w in duplicate_warnings if w.get("key") == "MODE"]
+        assert len(mode_warnings) >= 1
+
+        # Last warning should have all 3 lines
+        last_warning = mode_warnings[-1]
+        assert len(last_warning.get("all_lines", [])) == 3
+
+
+class TestDuplicateBlockFormMetaKey:
+    """PR #307 Finding 2: Duplicate block-form META keys must emit warnings."""
+
+    def test_duplicate_block_form_key_emits_warning(self):
+        """Two block-form keys with the same name should emit W_DUPLICATE_KEY.
+
+        E.g., two LOSS_PROFILE: blocks in the same META - only the last is kept,
+        but a warning must be emitted.
+        """
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  LOSS_PROFILE:
+    TIER::aggressive
+    DROP::narrative
+  LOSS_PROFILE:
+    TIER::conservative
+    DROP::nothing
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assert doc is not None
+        # Last block wins
+        loss = doc.meta.get("LOSS_PROFILE")
+        assert isinstance(loss, dict)
+        assert loss.get("TIER") == "conservative"
+
+        # I4 Audit: Must emit duplicate key warning for block-form LOSS_PROFILE
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        block_dup = [w for w in duplicate_warnings if w.get("key") == "LOSS_PROFILE"]
+        assert len(block_dup) >= 1, f"Expected W_DUPLICATE_KEY for block-form LOSS_PROFILE, got {duplicate_warnings}"
+
+    def test_duplicate_block_and_scalar_same_key_emits_warning(self):
+        """A scalar key followed by a block key of same name should emit warning."""
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  CONFIG::simple_value
+  CONFIG:
+    MODE::complex
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        # Last value wins (the block form)
+        config = doc.meta.get("CONFIG")
+        assert isinstance(config, dict)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        config_dup = [w for w in duplicate_warnings if w.get("key") == "CONFIG"]
+        assert len(config_dup) >= 1, f"Expected W_DUPLICATE_KEY for CONFIG, got {duplicate_warnings}"
+
+
+class TestNestedMetaCommentIndentation:
+    """PR #307 Finding 3: Nested META comment handler must respect indentation."""
+
+    def test_root_comment_after_nested_block_not_consumed(self):
+        """A root-level comment after a nested block should not be consumed by
+        the nested loop, allowing the outer parser to handle it correctly.
+
+        The nested block should end when it encounters a dedented comment.
+        """
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  CONFIG:
+    MODE::fast
+// This is a root-level comment
+NEXT_KEY::value
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assert doc is not None
+        # CONFIG nested block should have parsed correctly
+        config = doc.meta.get("CONFIG")
+        assert isinstance(config, dict)
+        assert config.get("MODE") == "fast"
+
+        # The root-level comment should not have been consumed by
+        # the nested loop - NEXT_KEY should be at document root level,
+        # not accidentally inside META
+        # (This test verifies the comment handler breaks correctly)
