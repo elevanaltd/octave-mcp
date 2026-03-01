@@ -725,7 +725,7 @@ class Parser:
                             else:
                                 break
 
-                    key_positions[key] = key_line
+                    key_positions[key] = [key_line]
                     meta[key] = nested_meta
                     # GH#287: Reset indentation tracking after nested block.
                     # The nested block consumed tokens across lines; the next
