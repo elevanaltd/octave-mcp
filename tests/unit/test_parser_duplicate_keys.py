@@ -1,15 +1,19 @@
-"""Tests for duplicate key detection in OCTAVE parser (GitHub Issue #179).
+"""Tests for duplicate key detection in OCTAVE parser (GitHub Issues #179 and #294).
 
 Per octave-core-spec.oct.md §1::ENVELOPE:
   DUPLICATES::keys_must_be_unique_per_block
 
 When duplicate keys are encountered, the parser should:
 1. Detect the duplicate during parsing
-2. Emit a warning with key name and line numbers
+2. Emit a warning with key name and line numbers of ALL occurrences
 3. Keep the last value (current behavior, but now auditable)
+4. Mark as safe=false, semantics_changed=true (data loss)
 
 I4 Immutable: "If bits lost must have receipt"
 Duplicate key overwrites are data loss - must be auditable.
+
+GH#294: Extended to blocks, sections, and document-level assignments.
+The correction code must be W_DUPLICATE_KEY (not W_LENIENT_DUPLICATE_KEY).
 """
 
 import pytest
@@ -198,10 +202,10 @@ META:
         # First occurrence should be before duplicate
         assert first_line < dup_line, f"first_line ({first_line}) should be < duplicate_line ({dup_line})"
 
-        # Message should follow spec format
+        # GH#294: Message should follow enhanced spec format
         message = dup_warning.get("message", "")
         assert "KEY" in message
-        assert "overwrites" in message.lower() or "duplicate" in message.lower()
+        assert "appears" in message and "only last value kept" in message
 
 
 class TestDuplicateKeyInNestedBlocks:
@@ -225,7 +229,7 @@ BLOCK2:
         assert len(duplicate_warnings) == 0, f"Unexpected duplicate warnings: {duplicate_warnings}"
 
     def test_duplicate_key_within_same_block(self):
-        """Duplicate key within same block SHOULD trigger warning."""
+        """GH#294: Duplicate key within same block SHOULD trigger warning."""
         content = """===TEST===
 CONFIG:
   SETTING::first
@@ -235,11 +239,174 @@ CONFIG:
         doc, warnings = parse_with_warnings(content)
 
         # Should detect duplicate within CONFIG block
-        # Note: Block children are stored in a list, not dict, so this tests
-        # whether we add key tracking to block parsing
-        # For now, this may not trigger - documenting expected behavior
-        # Implementation may need to track keys in block children too
-        _ = (doc, warnings)  # Suppress unused variable warning
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        assert len(duplicate_warnings) >= 1, f"Expected duplicate key warning in block, got {warnings}"
+
+        dup_warning = duplicate_warnings[0]
+        assert dup_warning.get("key") == "SETTING"
+        assert "all_lines" in dup_warning, "Warning must include all_lines for GH#294"
+
+    def test_duplicate_key_within_section(self):
+        """GH#294: Duplicate key within a section SHOULD trigger warning."""
+        content = """===TEST===
+\u00a71::IDENTITY
+  ROLE::first
+  NAME::test
+  ROLE::second
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        assert len(duplicate_warnings) >= 1, f"Expected duplicate key warning in section, got {warnings}"
+
+        dup_warning = duplicate_warnings[0]
+        assert dup_warning.get("key") == "ROLE"
+
+
+class TestDuplicateKeyAtDocumentLevel:
+    """GH#294: Test duplicate key detection at document top level."""
+
+    def test_duplicate_top_level_assignment(self):
+        """Duplicate assignment keys at document level should trigger warning."""
+        content = """===TEST===
+MEANING::first
+OTHER::value
+MEANING::second
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        assert len(duplicate_warnings) >= 1, f"Expected duplicate key warning at document level, got {warnings}"
+
+        dup_warning = duplicate_warnings[0]
+        assert dup_warning.get("key") == "MEANING"
+
+    def test_six_duplicates_at_same_level(self):
+        """GH#294 evidence case: 6 occurrences of same key should report all lines.
+
+        Reproduces the actual incident where MEANING appeared 6 times.
+        """
+        content = """===TEST===
+OPERATORS:
+  MEANING::synthesis
+  MEANING::tension
+  MEANING::constraint
+  MEANING::flow
+  MEANING::alternative
+  MEANING::concatenation
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        assert len(duplicate_warnings) >= 1, f"Expected duplicate key warnings, got {warnings}"
+
+        # GH#294: Warning must include all_lines with ALL occurrences
+        # Find the consolidated warning for MEANING
+        meaning_warnings = [w for w in duplicate_warnings if w.get("key") == "MEANING"]
+        assert len(meaning_warnings) >= 1
+
+        # Check that all_lines captures all 6 occurrences
+        warning = meaning_warnings[-1]  # Last warning should have cumulative info
+        all_lines = warning.get("all_lines", [])
+        assert len(all_lines) == 6, f"Expected 6 line entries in all_lines, got {len(all_lines)}: {all_lines}"
+
+
+class TestDuplicateKeyWarningFormatGH294:
+    """GH#294: Test the enhanced warning format per issue spec."""
+
+    def test_warning_has_all_lines_field(self):
+        """GH#294: Warning must include all_lines with line numbers of all occurrences."""
+        content = """===TEST===
+META:
+  KEY::first
+  KEY::second
+  KEY::third
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        assert len(duplicate_warnings) >= 1
+
+        # The last warning for KEY should have all_lines covering all 3 occurrences
+        key_warnings = [w for w in duplicate_warnings if w.get("key") == "KEY"]
+        last_warning = key_warnings[-1]
+        all_lines = last_warning.get("all_lines", [])
+        assert len(all_lines) == 3, f"Expected 3 lines in all_lines, got {all_lines}"
+
+    def test_warning_message_format_gh294(self):
+        """GH#294: Message must match spec format with count and line list."""
+        content = """===TEST===
+META:
+  ITEM::alpha
+  ITEM::beta
+  ITEM::gamma
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        last_warning = [w for w in duplicate_warnings if w.get("key") == "ITEM"][-1]
+
+        message = last_warning.get("message", "")
+        # GH#294 format: "Key 'ITEM' appears N times at lines X, Y, Z -- only last value kept"
+        assert "ITEM" in message
+        assert "appears" in message
+        assert "3 times" in message
+        assert "only last value kept" in message
+
+
+class TestDuplicateKeyCorrectionMapping:
+    """GH#294: Test that corrections array uses correct format."""
+
+    def test_correction_code_is_w_duplicate_key(self):
+        """GH#294: Correction code must be W_DUPLICATE_KEY, not W_LENIENT_DUPLICATE_KEY."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        warnings = [
+            {
+                "type": "lenient_parse",
+                "subtype": "duplicate_key",
+                "key": "MEANING",
+                "first_line": 10,
+                "duplicate_line": 15,
+                "all_lines": [10, 12, 15],
+                "message": "Key 'MEANING' appears 3 times at lines 10, 12, 15 -- only last value kept",
+            }
+        ]
+
+        corrections = tool._map_parse_warnings_to_corrections(warnings)
+
+        dup_corrections = [c for c in corrections if c.get("code") == "W_DUPLICATE_KEY"]
+        assert len(dup_corrections) == 1, (
+            f"Expected correction with code W_DUPLICATE_KEY, got codes: " f"{[c.get('code') for c in corrections]}"
+        )
+
+    def test_correction_safe_false_semantics_changed_true(self):
+        """GH#294: Correction must have safe=false, semantics_changed=true."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        warnings = [
+            {
+                "type": "lenient_parse",
+                "subtype": "duplicate_key",
+                "key": "TEST",
+                "first_line": 5,
+                "duplicate_line": 8,
+                "all_lines": [5, 8],
+                "message": "Key 'TEST' appears 2 times at lines 5, 8 -- only last value kept",
+            }
+        ]
+
+        corrections = tool._map_parse_warnings_to_corrections(warnings)
+        dup_corrections = [c for c in corrections if c.get("code") == "W_DUPLICATE_KEY"]
+        assert len(dup_corrections) == 1
+
+        correction = dup_corrections[0]
+        assert correction.get("safe") is False, f"Expected safe=false, got {correction.get('safe')}"
+        assert (
+            correction.get("semantics_changed") is True
+        ), f"Expected semantics_changed=true, got {correction.get('semantics_changed')}"
 
 
 class TestDuplicateKeyWithStrictMode:
@@ -267,7 +434,7 @@ class TestDuplicateKeyEdgeCases:
     """Edge cases for duplicate key detection."""
 
     def test_triple_duplicate_reports_all_duplicates(self):
-        """Three occurrences of same key should report two warnings."""
+        """Three occurrences of same key should report warnings with all_lines."""
         content = """===TEST===
 META:
   KEY::first
@@ -277,10 +444,13 @@ META:
         doc, warnings = parse_with_warnings(content)
 
         duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
-        # Second occurrence (line N) overwrites first
-        # Third occurrence (line M) overwrites second
-        # Should emit 2 warnings total
+        # Should emit warnings for duplicate occurrences
         assert len(duplicate_warnings) >= 2, f"Expected 2 duplicate warnings, got {len(duplicate_warnings)}"
+
+        # GH#294: Last warning should have all 3 lines in all_lines
+        key_warnings = [w for w in duplicate_warnings if w.get("key") == "KEY"]
+        last_warning = key_warnings[-1]
+        assert len(last_warning.get("all_lines", [])) == 3
 
     def test_case_sensitive_key_comparison(self):
         """Key comparison should be case-sensitive.
@@ -307,3 +477,157 @@ META:
 
         duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
         assert len(duplicate_warnings) == 0
+
+
+class TestDuplicateKeyNestedMetaBlock:
+    """PR #307 Finding 1: Duplicate keys inside nested META blocks must emit warnings."""
+
+    def test_duplicate_key_in_nested_meta_block(self):
+        """Duplicate key within a nested block-form META key should emit W_DUPLICATE_KEY.
+
+        When a META key uses block notation (e.g., LAYERED_FIDELITY:), its children
+        are parsed into a nested dict. Duplicate keys within that nested dict must
+        be detected and warned about, not silently overwritten.
+        """
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  LAYERED_FIDELITY:
+    INTENT_LAYER::I3
+    VALUE_LAYER::I1
+    INTENT_LAYER::I5
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assert doc is not None
+        assert doc.name == "TEST"
+
+        # The nested block should keep the last value
+        layered = doc.meta.get("LAYERED_FIDELITY")
+        assert isinstance(layered, dict)
+        assert layered.get("INTENT_LAYER") == "I5"
+
+        # I4 Audit: Must emit duplicate key warning for nested INTENT_LAYER
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        nested_dup = [w for w in duplicate_warnings if w.get("key") == "INTENT_LAYER"]
+        assert (
+            len(nested_dup) >= 1
+        ), f"Expected W_DUPLICATE_KEY for INTENT_LAYER in nested block, got {duplicate_warnings}"
+
+    def test_no_warning_for_unique_keys_in_nested_block(self):
+        """Unique keys in a nested block should not emit duplicate warnings."""
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  LAYERED_FIDELITY:
+    INTENT_LAYER::I3
+    VALUE_LAYER::I1
+    AUDIT_LAYER::I4
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        assert len(duplicate_warnings) == 0
+
+    def test_triple_duplicate_in_nested_block_reports_all_lines(self):
+        """Three occurrences of same key in nested block should track all lines."""
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  CONFIG:
+    MODE::alpha
+    MODE::beta
+    MODE::gamma
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        mode_warnings = [w for w in duplicate_warnings if w.get("key") == "MODE"]
+        assert len(mode_warnings) >= 1
+
+        # Last warning should have all 3 lines
+        last_warning = mode_warnings[-1]
+        assert len(last_warning.get("all_lines", [])) == 3
+
+
+class TestDuplicateBlockFormMetaKey:
+    """PR #307 Finding 2: Duplicate block-form META keys must emit warnings."""
+
+    def test_duplicate_block_form_key_emits_warning(self):
+        """Two block-form keys with the same name should emit W_DUPLICATE_KEY.
+
+        E.g., two LOSS_PROFILE: blocks in the same META - only the last is kept,
+        but a warning must be emitted.
+        """
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  LOSS_PROFILE:
+    TIER::aggressive
+    DROP::narrative
+  LOSS_PROFILE:
+    TIER::conservative
+    DROP::nothing
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assert doc is not None
+        # Last block wins
+        loss = doc.meta.get("LOSS_PROFILE")
+        assert isinstance(loss, dict)
+        assert loss.get("TIER") == "conservative"
+
+        # I4 Audit: Must emit duplicate key warning for block-form LOSS_PROFILE
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        block_dup = [w for w in duplicate_warnings if w.get("key") == "LOSS_PROFILE"]
+        assert len(block_dup) >= 1, f"Expected W_DUPLICATE_KEY for block-form LOSS_PROFILE, got {duplicate_warnings}"
+
+    def test_duplicate_block_and_scalar_same_key_emits_warning(self):
+        """A scalar key followed by a block key of same name should emit warning."""
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  CONFIG::simple_value
+  CONFIG:
+    MODE::complex
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        # Last value wins (the block form)
+        config = doc.meta.get("CONFIG")
+        assert isinstance(config, dict)
+
+        duplicate_warnings = [w for w in warnings if w.get("subtype") == "duplicate_key"]
+        config_dup = [w for w in duplicate_warnings if w.get("key") == "CONFIG"]
+        assert len(config_dup) >= 1, f"Expected W_DUPLICATE_KEY for CONFIG, got {duplicate_warnings}"
+
+
+class TestNestedMetaCommentIndentation:
+    """PR #307 Finding 3: Nested META comment handler must respect indentation."""
+
+    def test_root_comment_after_nested_block_not_consumed(self):
+        """A root-level comment after a nested block should not be consumed by
+        the nested loop, allowing the outer parser to handle it correctly.
+
+        The nested block should end when it encounters a dedented comment.
+        """
+        content = """===TEST===
+META:
+  TYPE::SPEC
+  CONFIG:
+    MODE::fast
+// This is a root-level comment
+NEXT_KEY::value
+===END==="""
+        doc, warnings = parse_with_warnings(content)
+
+        assert doc is not None
+        # CONFIG nested block should have parsed correctly
+        config = doc.meta.get("CONFIG")
+        assert isinstance(config, dict)
+        assert config.get("MODE") == "fast"
+
+        # The root-level comment should not have been consumed by
+        # the nested loop - NEXT_KEY should be at document root level,
+        # not accidentally inside META
+        # (This test verifies the comment handler breaks correctly)

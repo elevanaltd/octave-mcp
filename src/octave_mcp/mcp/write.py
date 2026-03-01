@@ -584,19 +584,37 @@ class WriteTool(BaseTool):
 
             if w_type == "lenient_parse":
                 subtype = w.get("subtype", "unknown")
-                corrections.append(
-                    {
-                        "code": f"W_LENIENT_{subtype}".upper(),
-                        "tier": "LENIENT_PARSE",
-                        "message": f"Lenient parse: {subtype}",
-                        "line": w.get("line", 0),
-                        "column": w.get("column", 0),
-                        "before": w.get("original", ""),
-                        "after": w.get("result", ""),
-                        "safe": True,
-                        "semantics_changed": False,
-                    }
-                )
+
+                # GH#294: Duplicate key warnings get special treatment
+                # Data loss = safe:false, semantics_changed:true
+                if subtype == "duplicate_key":
+                    corrections.append(
+                        {
+                            "code": "W_DUPLICATE_KEY",
+                            "tier": "LENIENT_PARSE",
+                            "message": w.get("message", f"Duplicate key: {w.get('key', '?')}"),
+                            "line": w.get("duplicate_line", w.get("line", 0)),
+                            "column": w.get("column", 0),
+                            "key": w.get("key", ""),
+                            "all_lines": w.get("all_lines", []),
+                            "safe": False,
+                            "semantics_changed": True,
+                        }
+                    )
+                else:
+                    corrections.append(
+                        {
+                            "code": f"W_LENIENT_{subtype}".upper(),
+                            "tier": "LENIENT_PARSE",
+                            "message": f"Lenient parse: {subtype}",
+                            "line": w.get("line", 0),
+                            "column": w.get("column", 0),
+                            "before": w.get("original", ""),
+                            "after": w.get("result", ""),
+                            "safe": True,
+                            "semantics_changed": False,
+                        }
+                    )
         return corrections
 
     def _error_envelope(
