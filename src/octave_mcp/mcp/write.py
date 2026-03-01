@@ -585,9 +585,25 @@ class WriteTool(BaseTool):
             if w_type == "lenient_parse":
                 subtype = w.get("subtype", "unknown")
 
+                # GH#305: Constructor misuse warnings are advisory
+                # No data loss, no auto-fix — just advisory per I1
+                if subtype == "constructor_misuse":
+                    corrections.append(
+                        {
+                            "code": "W_CONSTRUCTOR_MISUSE",
+                            "tier": "LENIENT_PARSE",
+                            "message": w.get("message", f"Constructor misuse: {w.get('key', '?')}"),
+                            "line": w.get("line", 0),
+                            "column": w.get("column", 0),
+                            "key": w.get("key", ""),
+                            "value": w.get("value", ""),
+                            "safe": True,
+                            "semantics_changed": False,
+                        }
+                    )
                 # GH#294: Duplicate key warnings get special treatment
                 # Data loss = safe:false, semantics_changed:true
-                if subtype == "duplicate_key":
+                elif subtype == "duplicate_key":
                     corrections.append(
                         {
                             "code": "W_DUPLICATE_KEY",
