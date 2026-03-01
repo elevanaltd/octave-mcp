@@ -130,9 +130,11 @@ OPERATOR_CHARS = frozenset(
     }
 )
 
-# Matches 3+ backticks at line start (with optional 0-3 spaces indent)
+# Matches 3+ backticks at line start (with optional leading spaces).
+# GH#296: Changed from {0,3} to * — the emitter can produce fences at any
+# indent depth (``"  " * indent``), so the lexer must accept them all.
 # Captures: (1) indent, (2) full fence+info, (3) the backtick sequence, (4) info tag
-FENCE_PATTERN = re.compile(r"^( {0,3})((`{3,})([^\n`]*)?)$")
+FENCE_PATTERN = re.compile(r"^( *)((`{3,})([^\n`]*)?)$")
 
 # Detects inline fence syntax: KEY::```info_tag (fence on same line as key)
 # This is invalid OCTAVE -- the fence must start on the line AFTER the key

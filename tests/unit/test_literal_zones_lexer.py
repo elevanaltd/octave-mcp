@@ -98,11 +98,14 @@ class TestFencePattern:
         assert m is not None
         assert m.group(1) == "   "
 
-    def test_four_spaces_indent_rejected(self) -> None:
+    def test_four_spaces_indent_accepted(self) -> None:
+        """GH#296: 4-space indent is now accepted (emitter produces deeper indents)."""
         from octave_mcp.core.lexer import FENCE_PATTERN
 
         m = FENCE_PATTERN.match("    ```")
-        assert m is None
+        assert m is not None
+        assert m.group(1) == "    "
+        assert m.group(3) == "```"
 
     def test_two_backticks_rejected(self) -> None:
         from octave_mcp.core.lexer import FENCE_PATTERN
