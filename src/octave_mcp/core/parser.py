@@ -604,6 +604,15 @@ class Parser:
                 has_indented = False
                 continue
 
+            # GH#297: Handle comments inside META block.
+            # Comments (inline after value or standalone lines) must be
+            # consumed without breaking out of the META parsing loop.
+            # Without this, a COMMENT token causes the else-break below
+            # to fire, ejecting all subsequent keys to document root.
+            if self.current().type == TokenType.COMMENT:
+                self.advance()
+                continue
+
             # Parse META field (must be assignment)
             if self.current().type == TokenType.IDENTIFIER:
                 # Check if we have valid indentation for this field
