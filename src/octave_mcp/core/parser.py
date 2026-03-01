@@ -120,6 +120,11 @@ EXPRESSION_OPERATORS: frozenset[TokenType] = frozenset(
     }
 )
 
+# Issue #305: Known constructor names from §2c::BRACKET_FORMS
+# These names should use constructor form NAME[args] not assignment form NAME::"value"
+# When used as inline map keys with string values, emit W_CONSTRUCTOR_MISUSE warning
+KNOWN_CONSTRUCTORS: frozenset[str] = frozenset({"REGEX", "ENUM", "TYPE", "PATTERN", "NEVER", "ALWAYS"})
+
 # Semantic classification of tokens that can appear in values (#140/#141)
 # This prevents data loss when VERSION, BOOLEAN, NULL, or STRING tokens
 # appear in multi-word values like "Release 1.2.3 is ready"
@@ -2014,12 +2019,39 @@ class Parser:
             key = str(self.current().value) if is_number_key else self.current().value
             self.advance()
             self.expect(TokenType.ASSIGN)
+            # Issue #305: Capture whether the value token is a quoted string
+            # before parse_value() consumes it. Bare identifiers are also str
+            # after parsing, so we need the token type to distinguish.
+            value_is_quoted_string = self.current().type == TokenType.STRING
             value = self.parse_value()
 
             # Issue #185: Validate inline map values are atoms (no nested inline maps)
             # Per spec: INLINE_MAP_NESTING::forbidden[values_must_be_atoms]
             # Only error in strict mode; lenient mode emits warning per I4
             self._validate_inline_map_value_is_atom(key, value, key_token)
+
+            # Issue #305: Detect known constructor names used as assignment keys
+            # Per §2c::BRACKET_FORMS, names like REGEX, ENUM, TYPE should use
+            # constructor form REGEX["pattern"] not assignment form REGEX::"pattern"
+            # Only warn when value is a quoted string (strongly suggests constructor intent)
+            if is_identifier_key and key in KNOWN_CONSTRUCTORS and value_is_quoted_string:
+                suggested = f'{key}["{value}"]'
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "constructor_misuse",
+                        "key": key,
+                        "value": value,
+                        "line": key_token.line,
+                        "column": key_token.column,
+                        "message": (
+                            f"W_CONSTRUCTOR_MISUSE at line {key_token.line}: "
+                            f"'{key}' is a known constructor name (§2c) but used "
+                            f"as an assignment key. Did you mean {suggested} "
+                            f"(constructor form)?"
+                        ),
+                    }
+                )
 
             pairs[key] = value
             return InlineMap(pairs=pairs)

@@ -585,9 +585,25 @@ class WriteTool(BaseTool):
             if w_type == "lenient_parse":
                 subtype = w.get("subtype", "unknown")
 
+                # GH#305: Constructor misuse warnings are advisory
+                # No data loss, no auto-fix — just advisory per I1
+                if subtype == "constructor_misuse":
+                    corrections.append(
+                        {
+                            "code": "W_CONSTRUCTOR_MISUSE",
+                            "tier": "LENIENT_PARSE",
+                            "message": w.get("message", f"Constructor misuse: {w.get('key', '?')}"),
+                            "line": w.get("line", 0),
+                            "column": w.get("column", 0),
+                            "key": w.get("key", ""),
+                            "value": w.get("value", ""),
+                            "safe": True,
+                            "semantics_changed": False,
+                        }
+                    )
                 # GH#294: Duplicate key warnings get special treatment
                 # Data loss = safe:false, semantics_changed:true
-                if subtype == "duplicate_key":
+                elif subtype == "duplicate_key":
                     corrections.append(
                         {
                             "code": "W_DUPLICATE_KEY",
@@ -865,7 +881,8 @@ class WriteTool(BaseTool):
                 - "META.STATUS": "ACTIVE" -> updates doc.meta["STATUS"]
                 - "META.NEW_FIELD": "value" -> adds field to doc.meta
                 - "META.FIELD": {"$op": "DELETE"} -> removes field from doc.meta
-                - "META": {...} -> replaces entire doc.meta block
+                - "META": {...} -> merges into existing doc.meta (unmentioned fields preserved)
+                  Use {"$op": "DELETE"} on individual keys within the dict to remove them.
 
         Returns:
             Modified document
@@ -885,14 +902,22 @@ class WriteTool(BaseTool):
                     # Without this, Python lists emit as "['a', 'b']" instead of "[a,b]"
                     doc.meta[field_name] = _normalize_value_for_ast(new_value)
             elif key == "META" and isinstance(new_value, dict):
-                # Replace entire META block with new dict
-                if not _is_delete_sentinel(new_value):
-                    # I1 (Syntactic Fidelity): Normalize all values in META block
-                    # Without this, Python lists emit as "['a', 'b']" instead of "[a,b]"
-                    doc.meta = {k: _normalize_value_for_ast(v) for k, v in new_value.items()}
-                else:
+                if _is_delete_sentinel(new_value):
                     # DELETE sentinel on META clears the entire block
                     doc.meta = {}
+                else:
+                    # GH#302: MERGE into existing META, not replace.
+                    # Previous behavior replaced the entire META dict, silently
+                    # dropping fields like CONTRACT::HOLOGRAPHIC that were not
+                    # included in the changes dict.  Merge preserves unmentioned
+                    # fields (I3 Mirror Constraint: reflect only present, create
+                    # nothing -- and do not destroy what is already present).
+                    for mk, mv in new_value.items():
+                        if _is_delete_sentinel(mv):
+                            doc.meta.pop(mk, None)
+                        else:
+                            # I1 (Syntactic Fidelity): Normalize values for AST
+                            doc.meta[mk] = _normalize_value_for_ast(mv)
             elif _is_delete_sentinel(new_value):
                 # I2: DELETE sentinel - remove field entirely from sections
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
@@ -1301,6 +1326,35 @@ class WriteTool(BaseTool):
 
             # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)
+
+            # GH#302: Inherit frontmatter from existing file when new content lacks it.
+            # When an agent rewrites a file via content mode but omits YAML frontmatter,
+            # the original frontmatter (required for skill/agent discovery) would be lost.
+            # I3 (Mirror Constraint): preserve what exists; do not silently destroy.
+            if not normalize_mode and doc.raw_frontmatter is None and file_exists and baseline_content_for_diff:
+                try:
+                    baseline_doc = parse(baseline_content_for_diff)
+                    if baseline_doc.raw_frontmatter is not None:
+                        doc.raw_frontmatter = baseline_doc.raw_frontmatter
+                        corrections.append(
+                            {
+                                "code": "W_FRONTMATTER_INHERITED",
+                                "message": "YAML frontmatter inherited from existing file (new content lacked frontmatter).",
+                                "safe": True,
+                                "semantics_changed": False,
+                            }
+                        )
+                except (LexerError, ParserError) as exc:
+                    corrections.append(
+                        {
+                            "code": "W_FRONTMATTER_INHERITANCE_SKIPPED",
+                            "message": (
+                                f"Frontmatter inheritance skipped: baseline file could not be parsed ({type(exc).__name__}: {exc})"
+                            ),
+                            "safe": True,
+                            "semantics_changed": False,
+                        }
+                    )
 
         # Emit canonical form (may be re-emitted after schema repair)
         try:
