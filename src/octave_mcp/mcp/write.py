@@ -885,14 +885,22 @@ class WriteTool(BaseTool):
                     # Without this, Python lists emit as "['a', 'b']" instead of "[a,b]"
                     doc.meta[field_name] = _normalize_value_for_ast(new_value)
             elif key == "META" and isinstance(new_value, dict):
-                # Replace entire META block with new dict
-                if not _is_delete_sentinel(new_value):
-                    # I1 (Syntactic Fidelity): Normalize all values in META block
-                    # Without this, Python lists emit as "['a', 'b']" instead of "[a,b]"
-                    doc.meta = {k: _normalize_value_for_ast(v) for k, v in new_value.items()}
-                else:
+                if _is_delete_sentinel(new_value):
                     # DELETE sentinel on META clears the entire block
                     doc.meta = {}
+                else:
+                    # GH#302: MERGE into existing META, not replace.
+                    # Previous behavior replaced the entire META dict, silently
+                    # dropping fields like CONTRACT::HOLOGRAPHIC that were not
+                    # included in the changes dict.  Merge preserves unmentioned
+                    # fields (I3 Mirror Constraint: reflect only present, create
+                    # nothing -- and do not destroy what is already present).
+                    for mk, mv in new_value.items():
+                        if _is_delete_sentinel(mv):
+                            doc.meta.pop(mk, None)
+                        else:
+                            # I1 (Syntactic Fidelity): Normalize values for AST
+                            doc.meta[mk] = _normalize_value_for_ast(mv)
             elif _is_delete_sentinel(new_value):
                 # I2: DELETE sentinel - remove field entirely from sections
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
@@ -1301,6 +1309,26 @@ class WriteTool(BaseTool):
 
             # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)
+
+            # GH#302: Inherit frontmatter from existing file when new content lacks it.
+            # When an agent rewrites a file via content mode but omits YAML frontmatter,
+            # the original frontmatter (required for skill/agent discovery) would be lost.
+            # I3 (Mirror Constraint): preserve what exists; do not silently destroy.
+            if not normalize_mode and doc.raw_frontmatter is None and file_exists and baseline_content_for_diff:
+                try:
+                    baseline_doc = parse(baseline_content_for_diff)
+                    if baseline_doc.raw_frontmatter is not None:
+                        doc.raw_frontmatter = baseline_doc.raw_frontmatter
+                        corrections.append(
+                            {
+                                "code": "W_FRONTMATTER_INHERITED",
+                                "message": "YAML frontmatter inherited from existing file (new content lacked frontmatter).",
+                                "safe": True,
+                                "semantics_changed": False,
+                            }
+                        )
+                except (LexerError, ParserError):
+                    pass  # Baseline unparseable; skip inheritance
 
         # Emit canonical form (may be re-emitted after schema repair)
         try:

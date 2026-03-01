@@ -1363,7 +1363,9 @@ KEY::value
             with open(target_path, "w") as f:
                 f.write(initial)
 
-            # Replace entire META block
+            # GH#302: changes={"META": {partial}} now MERGES into existing META
+            # instead of replacing it, to avoid silently dropping fields like CONTRACT.
+            # To remove a field, use {"META.FIELD": {"$op": "DELETE"}} or dot-notation.
             result = await tool.execute(
                 target_path=target_path,
                 changes={"META": {"TYPE": "NEW_DOC", "VERSION": "2.0"}},
@@ -1371,14 +1373,14 @@ KEY::value
 
             assert result["status"] == "success"
 
-            # Verify META was replaced
+            # Verify META was merged (GH#302: merge, not replace)
             with open(target_path) as f:
                 content = f.read()
                 # New fields should be present
                 assert "NEW_DOC" in content or "TYPE" in content
                 assert "2.0" in content or "VERSION" in content
-                # Old field should be gone (replaced)
-                assert "OLD_FIELD" not in content
+                # GH#302: Old field is preserved (merge semantics)
+                assert "OLD_FIELD" in content
                 # Should NOT have malformed dict syntax
                 assert "{'TYPE'" not in content
 
