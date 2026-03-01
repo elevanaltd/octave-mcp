@@ -69,16 +69,29 @@ class FormatOptions:
     strip_comments: bool = False
 
 
-IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*\Z")
+# GH#299: Include hyphens to match lexer's _is_valid_identifier_char which allows '-'.
+# Negative lookbehind (?<!-) prevents trailing hyphen (mirrors lexer's trailing-hyphen strip).
+IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)\Z")
 
-# Issue #248: Pattern for NAME<qualifier> annotation syntax (§2c)
+# Issue #248, GH#300: Pattern for NAME<qualifier> annotation syntax (§2c)
 # Must match lexer rules: qualifier starts with letter/underscore, body is identifier chars.
-# No hyphens or digits as start char — mirrors _is_valid_identifier_start in lexer.
-ANNOTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*<[A-Za-z_][A-Za-z0-9_]*>\Z")
+# GH#300: Extended to support multi-arg qualifiers (comma-separated) like NEVER<A,B,C>
+# and empty qualifiers like FOO<> (produced by parser for empty constructor brackets).
+ANNOTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)<([A-Za-z_]([A-Za-z0-9_,]*[A-Za-z0-9_])?)?>\Z")
 
 # Issue #181: Variable pattern for $VAR, $1:name placeholders
 # Variables start with $ and contain alphanumeric, underscore, or colon
 VARIABLE_PATTERN = re.compile(r"^\$[A-Za-z0-9_:]+\Z")
+
+# GH#301: Pattern for expression values containing spec-defined Unicode operators.
+# Per §3b::QUOTING_RULES, defined operators in expressions (A->B, X|Y, P&Q) are exempt
+# from quoting. Unicode operators: ⊕ (U+2295), ⧺ (U+29FA), ⇌ (U+21CC), ∧ (U+2227),
+# ∨ (U+2228), → (U+2192), and @ for location context.
+# Matches: identifier segments connected by one or more Unicode operators.
+_UNICODE_OPS = "\u2295\u29fa\u21cc\u2227\u2228\u2192@"
+EXPRESSION_PATTERN = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)([" + _UNICODE_OPS + r"][A-Za-z_][A-Za-z0-9_.\-]*(?<!-))+\Z"
+)
 
 
 def _sort_children_by_key(children: list[Any]) -> list[Any]:
@@ -133,6 +146,10 @@ def needs_quotes(value: Any) -> bool:
     if ANNOTATION_PATTERN.match(value):
         return False
 
+    # GH#301: Expression values with Unicode operators don't need quotes (§3b)
+    if EXPRESSION_PATTERN.match(value):
+        return False
+
     # If it's not a valid identifier, it needs quotes
     # This covers:
     # - Numbers (start with digit)
@@ -177,6 +194,12 @@ def _needs_multiline(value: ListValue) -> bool:
                 return True
             continue
         if isinstance(item, ListValue):
+            return True
+        # GH#304: Annotation items (NAME<qualifier>) are structured content
+        # that should always trigger multi-line emission, regardless of count.
+        # This fixes inconsistency where 2-item annotation lists stayed single-line
+        # while 3-item ones went multi-line.
+        if isinstance(item, str) and ANNOTATION_PATTERN.match(item):
             return True
         non_absent_count += 1
     # GH#273: Any array with 3+ non-Absent plain items goes multi-line
