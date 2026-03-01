@@ -199,6 +199,12 @@ DATA:
   LEVELS::L1∨L2
   BRACKETS::lists[a,b,c]∨inline_maps[k::v,k2::v2]
   INLINE_MAP_NESTING::forbidden[values_must_be_atoms]
+  // BLOCK NOTATION GUIDANCE (Issue #303):
+  // When a structure requires nesting (maps containing maps), use block
+  // notation with single-colon (:) and indented children instead.
+  // Primary use case: agent §2::BEHAVIOR definitions (CONDUCT, PROTOCOL).
+  // See §7::CANONICAL_EXAMPLES for before/after examples.
+  NESTING_RULE::hierarchical_content_MUST_use_block_notation[single_colon_with_indent]
   USE::instances[sessions,configs,runtime_state]
 
 SCHEMA:
@@ -280,7 +286,33 @@ TRADE_OFF::[Latency⇌Accuracy,Cost⇌Quality]
 // SYNTHESIS PATTERN (emergent combination)
 APPROACH::Architecture⊕Implementation⊕Testing
 
-// INLINE_MAP_NESTING (Forbidden pattern)
+// INLINE_MAP_NESTING (Forbidden pattern — Issue #303)
+// Inline maps (::[] brackets) cannot contain nested maps or lists-of-maps.
+// Enforced by E_NESTED_INLINE_MAP. Hierarchical content MUST use block
+// notation (single-colon : with indented children).
+//
+// PRIMARY USE CASE: Agent §2::BEHAVIOR definitions.
+// Agent CONDUCT/PROTOCOL blocks require nested structures. These MUST
+// use block notation, never inline map nesting.
+//
+// WRONG (triggers E_NESTED_INLINE_MAP):
+//   CONDUCT::[
+//     MODE::CONVERGENT,
+//     PROTOCOL::[
+//       MUST_ALWAYS::[...],
+//       MUST_NEVER::[...]
+//     ]
+//   ]
+//
+// CORRECT (block notation with single-colon):
+//   CONDUCT:
+//     MODE::CONVERGENT
+//     PROTOCOL:
+//       MUST_ALWAYS::[...]
+//       MUST_NEVER::[...]
+//
+// RULE: If a value contains KEY::VALUE pairs (a map), it is not an atom.
+// Non-atom values cannot appear inside inline maps. Use block notation.
 BAD::[config::[nested::value]]
 GOOD:
   CONFIG:
