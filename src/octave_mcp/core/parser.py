@@ -2058,6 +2058,32 @@ class Parser:
             # Only error in strict mode; lenient mode emits warning per I4
             self._validate_inline_map_value_is_atom(key, value, key_token)
 
+            # GH#310: PATTERN/REGEX keys with bare (unquoted) values in inline-map
+            # get auto-quoted by the emitter. Emit I4 audit warning so the
+            # correction is traceable (mirrors assignment path logic).
+            if (
+                is_identifier_key
+                and key in KNOWN_CONSTRUCTORS
+                and key in ("PATTERN", "REGEX")
+                and not value_is_quoted_string
+                and isinstance(value, str)
+            ):
+                self.warnings.append(
+                    {
+                        "type": "lenient_parse",
+                        "subtype": "pattern_autoquote",
+                        "key": key,
+                        "value": value,
+                        "line": key_token.line,
+                        "column": key_token.column,
+                        "message": (
+                            f"W_PATTERN_AUTOQUOTE at line {key_token.line}: "
+                            f"'{key}' value '{value}' was bare (unquoted) in inline-map. "
+                            f"Auto-quoted for lexical matching fidelity (I1)."
+                        ),
+                    }
+                )
+
             # Issue #305: Detect known constructor names used as assignment keys
             # Per §2c::BRACKET_FORMS, names like REGEX, ENUM, TYPE should use
             # constructor form REGEX["pattern"] not assignment form REGEX::"pattern"

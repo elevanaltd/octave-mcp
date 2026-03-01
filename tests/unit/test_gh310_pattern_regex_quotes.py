@@ -157,3 +157,97 @@ class TestPatternAutoquoteWarning:
         doc, warnings = parse_with_warnings(source)
         autoquote_warnings = [w for w in warnings if w.get("subtype") == "pattern_autoquote"]
         assert len(autoquote_warnings) == 0
+
+
+class TestInlineMapPatternRegexQuotePreservation:
+    """GH#310 rework: PATTERN/REGEX quote preservation in inline-map emission path."""
+
+    def test_inline_map_pattern_quoted_roundtrip(self):
+        """GRAMMAR::[PATTERN::"Workaround"] must round-trip with quotes preserved."""
+        source = '===TEST===\nGRAMMAR::[PATTERN::"Workaround"]\n===END===\n'
+        doc = parse(source)
+        result = emit(doc)
+        assert 'PATTERN::"Workaround"' in result
+
+    def test_inline_map_pattern_bare_gets_auto_quoted(self):
+        """GRAMMAR::[PATTERN::Workaround] (bare) must be auto-quoted to PATTERN::"Workaround"."""
+        source = "===TEST===\nGRAMMAR::[PATTERN::Workaround]\n===END===\n"
+        doc = parse(source)
+        result = emit(doc)
+        assert 'PATTERN::"Workaround"' in result
+
+    def test_inline_map_regex_quoted_roundtrip(self):
+        """GRAMMAR::[REGEX::"^pattern"] must round-trip with quotes preserved in inline-map."""
+        source = '===TEST===\nGRAMMAR::[REGEX::"^pattern"]\n===END===\n'
+        doc = parse(source)
+        result = emit(doc)
+        assert 'REGEX::"^pattern"' in result
+
+    def test_inline_map_pattern_idempotency(self):
+        """Normalizing inline-map PATTERN twice produces same output (I1)."""
+        source = '===TEST===\nGRAMMAR::[PATTERN::"Workaround"]\n===END===\n'
+        doc1 = parse(source)
+        emitted1 = emit(doc1)
+        doc2 = parse(emitted1)
+        emitted2 = emit(doc2)
+        assert emitted1 == emitted2
+
+    def test_inline_map_bare_pattern_idempotency(self):
+        """Normalizing bare inline-map PATTERN twice produces same output (I1)."""
+        source = "===TEST===\nGRAMMAR::[PATTERN::Workaround]\n===END===\n"
+        doc1 = parse(source)
+        emitted1 = emit(doc1)
+        doc2 = parse(emitted1)
+        emitted2 = emit(doc2)
+        assert emitted1 == emitted2
+
+    def test_multiline_list_pattern_quoted_roundtrip(self):
+        """PATTERN in multi-line list (MUST_NOT block with inline-maps) preserves quotes."""
+        source = (
+            "===TEST===\n"
+            "GRAMMAR:\n"
+            "  MUST_NOT:[\n"
+            '    PATTERN::"I will just fix it",\n'
+            '    PATTERN::"Skipping tests"\n'
+            "  ]\n"
+            "===END===\n"
+        )
+        doc = parse(source)
+        result = emit(doc)
+        assert 'PATTERN::"I will just fix it"' in result
+        assert 'PATTERN::"Skipping tests"' in result
+
+    def test_inline_map_non_pattern_key_stays_bare(self):
+        """Non-PATTERN/REGEX keys in inline-maps keep bare values bare."""
+        source = "===TEST===\nDATA::[STATUS::active]\n===END===\n"
+        doc = parse(source)
+        result = emit(doc)
+        assert "STATUS::active" in result
+        assert 'STATUS::"active"' not in result
+
+
+class TestInlineMapPatternAutoquoteWarning:
+    """GH#310 rework: W_PATTERN_AUTOQUOTE warning for bare PATTERN/REGEX in inline-map context."""
+
+    def test_bare_pattern_in_inline_map_emits_warning(self):
+        """Bare PATTERN::Workaround in inline-map should emit W_PATTERN_AUTOQUOTE warning."""
+        source = "===TEST===\nGRAMMAR::[PATTERN::Workaround]\n===END===\n"
+        doc, warnings = parse_with_warnings(source)
+        autoquote_warnings = [w for w in warnings if w.get("subtype") == "pattern_autoquote"]
+        assert len(autoquote_warnings) >= 1
+        assert any(w["key"] == "PATTERN" and w["value"] == "Workaround" for w in autoquote_warnings)
+
+    def test_quoted_pattern_in_inline_map_no_autoquote_warning(self):
+        """Quoted PATTERN::"Workaround" in inline-map should NOT emit W_PATTERN_AUTOQUOTE."""
+        source = '===TEST===\nGRAMMAR::[PATTERN::"Workaround"]\n===END===\n'
+        doc, warnings = parse_with_warnings(source)
+        autoquote_warnings = [w for w in warnings if w.get("subtype") == "pattern_autoquote"]
+        assert len(autoquote_warnings) == 0
+
+    def test_bare_regex_in_inline_map_emits_warning(self):
+        """Bare REGEX::identifier in inline-map should emit W_PATTERN_AUTOQUOTE warning."""
+        source = "===TEST===\nGRAMMAR::[REGEX::identifier]\n===END===\n"
+        doc, warnings = parse_with_warnings(source)
+        autoquote_warnings = [w for w in warnings if w.get("subtype") == "pattern_autoquote"]
+        assert len(autoquote_warnings) >= 1
+        assert any(w["key"] == "REGEX" for w in autoquote_warnings)
