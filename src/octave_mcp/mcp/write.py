@@ -881,7 +881,8 @@ class WriteTool(BaseTool):
                 - "META.STATUS": "ACTIVE" -> updates doc.meta["STATUS"]
                 - "META.NEW_FIELD": "value" -> adds field to doc.meta
                 - "META.FIELD": {"$op": "DELETE"} -> removes field from doc.meta
-                - "META": {...} -> replaces entire doc.meta block
+                - "META": {...} -> merges into existing doc.meta (unmentioned fields preserved)
+                  Use {"$op": "DELETE"} on individual keys within the dict to remove them.
 
         Returns:
             Modified document
@@ -1343,8 +1344,17 @@ class WriteTool(BaseTool):
                                 "semantics_changed": False,
                             }
                         )
-                except (LexerError, ParserError):
-                    pass  # Baseline unparseable; skip inheritance
+                except (LexerError, ParserError) as exc:
+                    corrections.append(
+                        {
+                            "code": "W_FRONTMATTER_INHERITANCE_SKIPPED",
+                            "message": (
+                                f"Frontmatter inheritance skipped: baseline file could not be parsed ({type(exc).__name__}: {exc})"
+                            ),
+                            "safe": True,
+                            "semantics_changed": False,
+                        }
+                    )
 
         # Emit canonical form (may be re-emitted after schema repair)
         try:
