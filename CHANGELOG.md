@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`W_CONSTRUCTOR_MISUSE` lint warning** (#305) — Known constructor names (`PATTERN`, `REGEX`, `ENUM`, `TYPE`, `NEVER`, `ALWAYS`) used as inline-map assignment keys now emit an advisory warning suggesting constructor form
+- **`W_DUPLICATE_KEY` warning for silent key deduplication** (#306) — Parser now warns when duplicate keys appear in the same block, preventing silent last-value-wins data loss
+- **`W_PATTERN_AUTOQUOTE` warning** (#310) — Bare `PATTERN`/`REGEX` values are flagged with an I4-compliant audit trail when auto-quoted for lexical matching fidelity
+
+### Fixed
+- **PATTERN/REGEX quote preservation** (#310, #311) — Normalizer now always quotes `PATTERN::` and `REGEX::` values, even single bare words, across both assignment and inline-map emission paths. Previously `PATTERN::"Workaround"` was silently stripped to `PATTERN::Workaround`, violating I1 (SYNTACTIC_FIDELITY)
+- **Emitter quoting and multiline bugs** (#306) — Resolved 4 issues in `needs_quotes()` and `_needs_multiline()`: expression patterns, annotation patterns, and edge cases in value emission
+- **META block comment nesting** (#306) — Keys inside META blocks no longer escape to root level when comments are present
+- **META nested block duplicate key tracking** (#306, #307) — Duplicate key detection now works correctly inside nested META blocks
+- **Literal zones in `octave_validate`** (#306) — Validation tool now matches `octave_write` parser path for literal zone support
+- **YAML frontmatter and CONTRACT field preservation** (#308) — `octave_write` round-trips now preserve YAML frontmatter and META CONTRACT fields
+- **Frontmatter inheritance audit trail** (#309) — Skipped frontmatter inheritance now logged for I4 compliance
+
+### Changed
+- **Agents spec GATES syntax** (#312) — Updated `octave-agents-spec` line 85 from `GATES::NEVER[prohibited] ALWAYS[required]` to `GATES::[NEVER<prohibited>, ALWAYS<required>]` to match normalizer canonical output and improve LLM comprehension
+- **Agents spec block notation** (#309) — Clarified nested structure guidance in agent definition documentation
+
+### Quality Gates
+- 26 new tests for PATTERN/REGEX quote preservation (assignment + inline-map paths)
+- Constitutional compliance verified: I1, I2, I3, I4, I5
+
 ## [1.7.0] - 2026-02-28 - "Parser Resilience" Release
 
 This release hardens the parser and lexer against real-world OCTAVE documents containing operator-rich values, `%` characters, and deeply nested META blocks. It also introduces a reading primer for comprehension-only workflows and documents the OCTAVE vs LLMLingua-2 comparison study.
