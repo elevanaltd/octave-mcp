@@ -21,9 +21,9 @@ import yaml
 
 from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue
 from octave_mcp.core.gbnf_compiler import GBNFCompiler, compile_gbnf_from_meta
+from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.parser import parse
 from octave_mcp.core.projector import project
-from octave_mcp.core.repair_log import LiteralZoneRepairLog
 from octave_mcp.core.schema_extractor import extract_schema_from_document
 from octave_mcp.core.validator import _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
@@ -313,7 +313,9 @@ META:
                     "zones": zones,
                 },
             }
-            zone_extras["literal_zone_repair_log"] = LiteralZoneRepairLog(entries=[]).to_dict()
+            zone_extras["literal_zone_repair_log"] = build_literal_zone_repair_log(
+                zones, result.filtered_doc, "octave_eject"
+            ).to_dict()
 
         # Convert to requested output format
         # IL-PLACEHOLDER-FIX-002-REWORK: Use filtered AST from projection for all formats

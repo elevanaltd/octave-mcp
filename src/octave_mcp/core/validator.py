@@ -178,6 +178,38 @@ class Validator:
             if field_name in fields_schema:
                 self._validate_type(field_name, value, fields_schema[field_name])
 
+        # Loss accounting consistency warnings (I4: Transform Auditability)
+        # These fire based on META content regardless of schema.
+        compression_tier = meta.get("COMPRESSION_TIER")
+        loss_profile = meta.get("LOSS_PROFILE")
+
+        if compression_tier and not loss_profile:
+            self.errors.append(
+                ValidationError(
+                    code="W_META_001",
+                    message="COMPRESSION_TIER declared but LOSS_PROFILE absent — loss accounting incomplete",
+                    field_path="META.LOSS_PROFILE",
+                    severity="warning",
+                )
+            )
+
+        if (
+            loss_profile is not None
+            and str(loss_profile).lower() == "none"
+            and compression_tier
+            and str(compression_tier).upper() != "LOSSLESS"
+        ):
+            self.errors.append(
+                ValidationError(
+                    code="W_META_002",
+                    message=(
+                        f"LOSS_PROFILE is 'none' but COMPRESSION_TIER is " f"{compression_tier} — verify accuracy"
+                    ),
+                    field_path="META.LOSS_PROFILE",
+                    severity="warning",
+                )
+            )
+
     def _validate_unknown_fields(
         self,
         document_fields: set[str],
