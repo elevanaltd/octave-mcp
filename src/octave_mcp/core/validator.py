@@ -122,6 +122,12 @@ class Validator:
         if "META" in self.schema and doc.meta:
             self._validate_meta(doc.meta, strict)
 
+        # Loss accounting warnings fire on document content, not schema presence.
+        # PR#315 fix: moved outside the "META" in self.schema guard so that
+        # W_META_001/W_META_002 fire regardless of whether a schema is provided.
+        if doc.meta:
+            self._check_meta_warnings(doc.meta)
+
         # Validate sections
         for section in doc.sections:
             # Look up schema for this section by key (if section has a key attribute)
@@ -178,8 +184,15 @@ class Validator:
             if field_name in fields_schema:
                 self._validate_type(field_name, value, fields_schema[field_name])
 
-        # Loss accounting consistency warnings (I4: Transform Auditability)
-        # These fire based on META content regardless of schema.
+    def _check_meta_warnings(self, meta: dict[str, Any]) -> None:
+        """Emit loss accounting consistency warnings based on META content.
+
+        PR#315 fix: These warnings are based on document content, not schema
+        presence.  Runs unconditionally when doc.meta exists.
+
+        I4 (Transform Auditability): COMPRESSION_TIER without LOSS_PROFILE
+        means loss accounting is incomplete.
+        """
         compression_tier = meta.get("COMPRESSION_TIER")
         loss_profile = meta.get("LOSS_PROFILE")
 

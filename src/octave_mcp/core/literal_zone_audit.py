@@ -25,57 +25,50 @@ from octave_mcp.core.repair_log import (
 )
 
 
-def _get_literal_zone_content(
-    doc: Any,
-    key: str,
-    line: int,
-) -> str | None:
-    """Find the LiteralZoneValue content matching a given key and line.
+def _collect_all_literal_zone_contents(doc: Any) -> list[str]:
+    """Collect content strings for ALL LiteralZoneValue instances in document order.
 
-    Walks the document AST to locate the Assignment node with the
-    matching key and line number, then extracts the LiteralZoneValue
-    content from its value.
+    Walks the AST in the same traversal order as ``_count_literal_zones()``
+    (depth-first over sections, recursing into Block/container children,
+    descending into ListValue and InlineMap values).  This guarantees that
+    the returned list aligns positionally with the zone metadata list from
+    ``_count_literal_zones()``.
+
+    PR#315 fix: The previous ``_get_literal_zone_content(key, line)`` used
+    first-match lookup, which returned the same content for every zone that
+    shared a (key, line) pair.  Walking once in document order and zipping
+    by ordinal index eliminates the duplicate-hash bug.
 
     Args:
         doc: Parsed Document AST.
-        key: Assignment key to match.
-        line: Source line number of the assignment.
 
     Returns:
-        The raw content string of the literal zone, or None if not found.
+        List of raw content strings, one per literal zone, in document order.
     """
+    contents: list[str] = []
 
-    def _extract_from_value(value: Any) -> str | None:
-        """Extract content from a value that may be or contain a LiteralZoneValue."""
+    def _collect_from_value(value: Any) -> None:
+        """Recursively collect LiteralZoneValue content from a value."""
         if isinstance(value, LiteralZoneValue):
-            return value.content
-        if isinstance(value, ListValue):
+            contents.append(value.content)
+        elif isinstance(value, ListValue):
             for item in value.items:
-                result = _extract_from_value(item)
-                if result is not None:
-                    return result
-        if isinstance(value, InlineMap):
+                _collect_from_value(item)
+        elif isinstance(value, InlineMap):
             for v in value.pairs.values():
-                result = _extract_from_value(v)
-                if result is not None:
-                    return result
-        return None
+                _collect_from_value(v)
 
-    def _search(nodes: list[ASTNode]) -> str | None:
+    def _traverse(nodes: list[ASTNode]) -> None:
         for node in nodes:
-            if isinstance(node, Assignment) and node.key == key and node.line == line:
-                return _extract_from_value(node.value)
-            if isinstance(node, Block):
-                result = _search(node.children)
-                if result is not None:
-                    return result
+            if isinstance(node, Assignment):
+                _collect_from_value(node.value)
+            elif isinstance(node, Block):
+                _traverse(node.children)
             elif hasattr(node, "children"):
-                result = _search(node.children)
-                if result is not None:
-                    return result
-        return None
+                _traverse(node.children)
 
-    return _search(doc.sections)
+    _traverse(doc.sections)
+    return contents
 
 
 def build_literal_zone_repair_log(
@@ -91,6 +84,10 @@ def build_literal_zone_repair_log(
     I4: Every transformation logged with stable IDs -- if bits lost, must
     have receipt.
 
+    PR#315 fix: Collects ALL literal zone contents in document order and
+    zips with zone metadata by ordinal index, ensuring each zone gets its
+    own distinct hash even when multiple zones share the same assignment key.
+
     Args:
         zones: Zone metadata from _count_literal_zones (key, info_tag, line).
         doc: Parsed Document AST containing the literal zone values.
@@ -102,20 +99,33 @@ def build_literal_zone_repair_log(
     entries: list[RepairLogEntry] = []
     now = datetime.now(UTC).isoformat()
 
-    for zone_meta in zones:
-        content = _get_literal_zone_content(doc, zone_meta["key"], zone_meta["line"])
-        if content is not None:
-            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
-            entries.append(
-                RepairLogEntry(
-                    zone_key=zone_meta["key"],
-                    line=zone_meta["line"],
-                    action="preserved",
-                    pre_hash=content_hash,
-                    post_hash=content_hash,  # D3: zero processing guarantees equality
-                    timestamp=now,
-                    source_stage=source_stage,
-                )
+    # Walk AST once in document order — same traversal as _count_literal_zones
+    contents = _collect_all_literal_zone_contents(doc)
+
+    # Invariant: content count must match zone count
+    if len(contents) != len(zones):
+        import warnings
+
+        warnings.warn(
+            f"Literal zone count mismatch: {len(zones)} zones from metadata "
+            f"but {len(contents)} contents extracted from AST. "
+            "Some audit receipts may be missing.",
+            stacklevel=2,
+        )
+
+    # Zip by ordinal position — both walks use identical traversal order
+    for zone_meta, content in zip(zones, contents, strict=False):
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        entries.append(
+            RepairLogEntry(
+                zone_key=zone_meta["key"],
+                line=zone_meta["line"],
+                action="preserved",
+                pre_hash=content_hash,
+                post_hash=content_hash,  # D3: zero processing guarantees equality
+                timestamp=now,
+                source_stage=source_stage,
             )
+        )
 
     return LiteralZoneRepairLog(entries=entries)

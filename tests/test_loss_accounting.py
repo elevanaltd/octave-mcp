@@ -246,7 +246,7 @@ class TestLossProfileWarnings:
         """W_META_001: COMPRESSION_TIER declared but LOSS_PROFILE absent."""
         doc = parse(OCTAVE_TIER_NO_PROFILE)
         validator = Validator()
-        validator._validate_meta(doc.meta, strict=False)
+        validator.validate(doc)
 
         warnings = [e for e in validator.errors if e.severity == "warning"]
         codes = [w.code for w in warnings]
@@ -259,7 +259,7 @@ class TestLossProfileWarnings:
         """W_META_002: LOSS_PROFILE is 'none' but COMPRESSION_TIER is not LOSSLESS."""
         doc = parse(OCTAVE_NONE_PROFILE_NON_LOSSLESS)
         validator = Validator()
-        validator._validate_meta(doc.meta, strict=False)
+        validator.validate(doc)
 
         warnings = [e for e in validator.errors if e.severity == "warning"]
         codes = [w.code for w in warnings]
@@ -271,7 +271,7 @@ class TestLossProfileWarnings:
         """No warning when COMPRESSION_TIER is LOSSLESS and LOSS_PROFILE is 'none'."""
         doc = parse(OCTAVE_LOSSLESS_WITH_NONE)
         validator = Validator()
-        validator._validate_meta(doc.meta, strict=False)
+        validator.validate(doc)
 
         warnings = [e for e in validator.errors if e.severity == "warning"]
         meta_warnings = [w for w in warnings if w.code.startswith("W_META")]
@@ -281,7 +281,7 @@ class TestLossProfileWarnings:
         """No warning when both COMPRESSION_TIER and non-none LOSS_PROFILE present."""
         doc = parse(OCTAVE_TIER_WITH_PROFILE)
         validator = Validator()
-        validator._validate_meta(doc.meta, strict=False)
+        validator.validate(doc)
 
         warnings = [e for e in validator.errors if e.severity == "warning"]
         meta_warnings = [w for w in warnings if w.code.startswith("W_META")]
@@ -291,7 +291,7 @@ class TestLossProfileWarnings:
         """No warning when no COMPRESSION_TIER in META."""
         doc = parse(OCTAVE_NO_TIER)
         validator = Validator()
-        validator._validate_meta(doc.meta, strict=False)
+        validator.validate(doc)
 
         warnings = [e for e in validator.errors if e.severity == "warning"]
         meta_warnings = [w for w in warnings if w.code.startswith("W_META")]
@@ -301,7 +301,7 @@ class TestLossProfileWarnings:
         """W_META warnings have severity='warning', not 'error'."""
         doc = parse(OCTAVE_TIER_NO_PROFILE)
         validator = Validator()
-        validator._validate_meta(doc.meta, strict=False)
+        validator.validate(doc)
 
         meta_items = [e for e in validator.errors if e.code.startswith("W_META")]
         for item in meta_items:
