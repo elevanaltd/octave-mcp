@@ -17,9 +17,9 @@ from typing import Any
 
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.gbnf_compiler import GBNFCompiler
+from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.parser import parse_with_warnings
 from octave_mcp.core.repair import repair
-from octave_mcp.core.repair_log import LiteralZoneRepairLog
 from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
@@ -464,7 +464,9 @@ class ValidateTool(BaseTool):
                         "zones": zones,
                     },
                 }
-                result["literal_zone_repair_log"] = LiteralZoneRepairLog(entries=[]).to_dict()
+                result["literal_zone_repair_log"] = build_literal_zone_repair_log(
+                    zones, doc, "octave_validate"
+                ).to_dict()
 
         except Exception as e:
             result["status"] = "error"

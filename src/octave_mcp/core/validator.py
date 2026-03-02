@@ -122,6 +122,12 @@ class Validator:
         if "META" in self.schema and doc.meta:
             self._validate_meta(doc.meta, strict)
 
+        # Loss accounting warnings fire on document content, not schema presence.
+        # PR#315 fix: moved outside the "META" in self.schema guard so that
+        # W_META_001/W_META_002 fire regardless of whether a schema is provided.
+        if doc.meta:
+            self._check_meta_warnings(doc.meta)
+
         # Validate sections
         for section in doc.sections:
             # Look up schema for this section by key (if section has a key attribute)
@@ -177,6 +183,45 @@ class Validator:
         for field_name, value in meta.items():
             if field_name in fields_schema:
                 self._validate_type(field_name, value, fields_schema[field_name])
+
+    def _check_meta_warnings(self, meta: dict[str, Any]) -> None:
+        """Emit loss accounting consistency warnings based on META content.
+
+        PR#315 fix: These warnings are based on document content, not schema
+        presence.  Runs unconditionally when doc.meta exists.
+
+        I4 (Transform Auditability): COMPRESSION_TIER without LOSS_PROFILE
+        means loss accounting is incomplete.
+        """
+        compression_tier = meta.get("COMPRESSION_TIER")
+        loss_profile = meta.get("LOSS_PROFILE")
+
+        if compression_tier and not loss_profile:
+            self.errors.append(
+                ValidationError(
+                    code="W_META_001",
+                    message="COMPRESSION_TIER declared but LOSS_PROFILE absent — loss accounting incomplete",
+                    field_path="META.LOSS_PROFILE",
+                    severity="warning",
+                )
+            )
+
+        if (
+            loss_profile is not None
+            and str(loss_profile).lower() == "none"
+            and compression_tier
+            and str(compression_tier).upper() != "LOSSLESS"
+        ):
+            self.errors.append(
+                ValidationError(
+                    code="W_META_002",
+                    message=(
+                        f"LOSS_PROFILE is 'none' but COMPRESSION_TIER is " f"{compression_tier} — verify accuracy"
+                    ),
+                    field_path="META.LOSS_PROFILE",
+                    severity="warning",
+                )
+            )
 
     def _validate_unknown_fields(
         self,
