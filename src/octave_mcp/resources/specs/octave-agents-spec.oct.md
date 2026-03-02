@@ -82,7 +82,7 @@ META:
       REQUIREMENTS::[required_output_artifacts]
     VERIFICATION:                           // OPTIONAL
       EVIDENCE::[required_evidence_types]
-      GATES::NEVER[prohibited] ALWAYS[required]
+      GATES::[NEVER<prohibited>, ALWAYS<required>]
     INTEGRATION:                            // OPTIONAL
       HANDOFF::"Input/output contract with other agents"
       ESCALATION::"When and where to escalate"
