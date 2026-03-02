@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-03-02 - "Lexical Fidelity" Release
+
+This release enforces quote preservation for PATTERN and REGEX values across all emission paths, adds three new lint warnings for better authoring feedback, and fixes multiple parser/emitter edge cases discovered during agent definition audits.
+
 ### Added
 - **`W_CONSTRUCTOR_MISUSE` lint warning** (#305) — Known constructor names (`PATTERN`, `REGEX`, `ENUM`, `TYPE`, `NEVER`, `ALWAYS`) used as inline-map assignment keys now emit an advisory warning suggesting constructor form
 - **`W_DUPLICATE_KEY` warning for silent key deduplication** (#306) — Parser now warns when duplicate keys appear in the same block, preventing silent last-value-wins data loss
@@ -551,7 +555,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.4.1...v1.5.0
