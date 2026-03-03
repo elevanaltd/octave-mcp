@@ -546,7 +546,7 @@ BENEFITS::[
   self_describing_documents
 ]
 
-CURRENT_STATE[v1.7.0]:
+CURRENT_STATE[v1.8.0]:
   COMPILER::operational[gbnf_compiler_735_LOC+compile_gbnf_from_meta+octave_compile_grammar_tool]
   TOOLING::grammar_compilation_exposed_via_MCP[octave_compile_grammar+octave_eject_gbnf]
   GRAMMAR_HINTS::integrated_into_validate_write_INVALID_responses[grammar_hint_param]
