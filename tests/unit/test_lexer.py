@@ -997,6 +997,40 @@ class TestAngleBracketAnnotation:
         with pytest.raises(LexerError):
             tokenize("A<-x>")
 
+    def test_comma_separated_qualifiers_standalone(self):
+        """GH#320: NEVER<PEDANTIC,DISMISSIVE,VAGUE> should tokenize as single IDENTIFIER."""
+        tokens, _ = tokenize("NEVER<PEDANTIC,DISMISSIVE,VAGUE>")
+        identifiers = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        assert len(identifiers) == 1
+        assert identifiers[0].value == "NEVER<PEDANTIC,DISMISSIVE,VAGUE>"
+
+    def test_comma_separated_qualifiers_in_array(self):
+        """GH#320: Comma-separated qualifiers inside array context."""
+        tokens, _ = tokenize("[NEVER<PEDANTIC,DISMISSIVE,VAGUE>,ALWAYS<CONSTRUCTIVE,EDUCATIONAL,SPECIFIC>]")
+        identifiers = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        assert len(identifiers) == 2
+        assert identifiers[0].value == "NEVER<PEDANTIC,DISMISSIVE,VAGUE>"
+        assert identifiers[1].value == "ALWAYS<CONSTRUCTIVE,EDUCATIONAL,SPECIFIC>"
+
+    def test_comma_separated_qualifiers_in_gates_syntax(self):
+        """GH#320: Exact spec syntax GATES::[NEVER<prohibited>,ALWAYS<required>]."""
+        tokens, _ = tokenize("GATES::[NEVER<prohibited>,ALWAYS<required>]")
+        identifiers = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        assert len(identifiers) == 3
+        assert identifiers[0].value == "GATES"
+        assert identifiers[1].value == "NEVER<prohibited>"
+        assert identifiers[2].value == "ALWAYS<required>"
+
+    def test_comma_separated_qualifiers_no_leading_comma(self):
+        """GH#320: Leading comma in qualifier should NOT form annotation."""
+        with pytest.raises(LexerError):
+            tokenize("NEVER<,PEDANTIC>")
+
+    def test_comma_separated_qualifiers_no_trailing_comma(self):
+        """GH#320: Trailing comma in qualifier should NOT form annotation."""
+        with pytest.raises(LexerError):
+            tokenize("NEVER<PEDANTIC,>")
+
 
 class TestLexerPercentInValues:
     """GH#287 P1: Lexer must accept % in values when preceded by alphanumeric."""

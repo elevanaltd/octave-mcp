@@ -497,8 +497,21 @@ def _match_unicode_identifier(
         if qualifier_start < len(content) and _is_valid_identifier_start(content[qualifier_start]):
             qualifier_end = qualifier_start + 1
             # Consume remaining qualifier characters (identifier body chars)
+            # GH#320: Support comma-separated qualifier lists like NEVER<PEDANTIC,DISMISSIVE,VAGUE>
+            # Commas are allowed ONLY between valid identifier segments (no leading/trailing commas)
             while qualifier_end < len(content) and _is_valid_identifier_char(content[qualifier_end]):
                 qualifier_end += 1
+            # After consuming first qualifier segment, check for comma + next segment
+            while (
+                qualifier_end < len(content)
+                and content[qualifier_end] == ","
+                and qualifier_end + 1 < len(content)
+                and _is_valid_identifier_start(content[qualifier_end + 1])
+            ):
+                qualifier_end += 1  # consume the comma
+                # consume the next identifier segment
+                while qualifier_end < len(content) and _is_valid_identifier_char(content[qualifier_end]):
+                    qualifier_end += 1
             # Strip trailing hyphens from qualifier (same as identifier rule)
             while qualifier_end > qualifier_start + 1 and content[qualifier_end - 1] == "-":
                 qualifier_end -= 1
