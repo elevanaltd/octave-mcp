@@ -16,14 +16,16 @@ META:
 // - §2 renamed from BEHAVIOR to OPERATIONAL_BEHAVIOR
 // - §1 CORE:: wrapper removed — properties are direct children of §1
 // - AUTHORITY flattened to AUTHORITY_BLOCKING, AUTHORITY_MANDATE, etc.
-// - COGNITION::TYPE in §1 serves as link key to cognition master file
+// - COGNITION field in §1 serves as link key to cognition master file
 // - Cognition masters: library/cognitions/logos.oct.md, ethos.oct.md, pathos.oct.md
 //
 // MIGRATION NOTE:
 // Cognition-derived properties (FORCE, ESSENCE, ELEMENT, MODE, THINK, THINK_NEVER)
 // live in standalone cognition files loaded before the anchor ceremony.
-// Agent files reference their cognition type via COGNITION::TYPE in §1.
-// No §0 section — cognition is a pre-ceremony load, not an in-file section.
+// Agent files reference their cognition type via COGNITION field in §1.
+// No §0::COGNITIVE_FOUNDATION section in agent files — cognition is a
+// pre-ceremony load, not an in-file section. §0::META below defines
+// the spec's own contract metadata (unchanged from v6).
 §0::META
   PURPOSE::"Contract definition and versioning"
   REQUIRED::[TYPE,VERSION]
