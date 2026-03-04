@@ -20,6 +20,14 @@ Claude Code skills provide OCTAVE capabilities directly:
 | [octave-custom-instruction.oct.md](octave-custom-instruction.oct.md) | Any LLM (no tooling) | Same as above, in OCTAVE format for direct context injection |
 | [octave-expert-mcp-aware.oct.md](octave-expert-mcp-aware.oct.md) | MCP-equipped agents | Expert layer for agents WITH the MCP toolchain — tools handle syntax, instruction handles editorial judgment (compression craft, naming, operator semantics) |
 
+## Cognitive Type System
+
+The triadic cognitive architecture (LOGOS/ETHOS/PATHOS) that governs how agents think:
+
+| File | Audience | Purpose |
+|------|----------|---------|
+| [cognitive-type-system.md](cognitive-type-system.md) | Humans | Wind/Wall/Door metaphor, separation of concerns, evidence basis |
+
 ## Philosophy (Dual Format)
 
 The philosophy document exists in two formats for different audiences:
@@ -48,6 +56,7 @@ For the authoritative OCTAVE specification, see [`src/octave_mcp/resources/specs
 
 - `octave-core-spec.oct.md` - Core syntax and operators
 - `octave-agents-spec.oct.md` - Agent architecture
+- `octave-cognition-spec.oct.md` - Cognition type definitions
 - `octave-skills-spec.oct.md` - Skills specification
 - `octave-patterns-spec.oct.md` - Patterns specification
 
