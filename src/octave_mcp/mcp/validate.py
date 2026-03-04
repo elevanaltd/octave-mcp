@@ -15,13 +15,14 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import Any
 
+from octave_mcp.core.ast_nodes import Assignment, ASTNode
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.gbnf_compiler import GBNFCompiler
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.parser import parse_with_warnings
 from octave_mcp.core.repair import repair
 from octave_mcp.core.schema_extractor import SchemaDefinition
-from octave_mcp.core.validator import Validator, _count_literal_zones
+from octave_mcp.core.validator import ValidationError, Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 from octave_mcp.mcp.compile_grammar import USAGE_HINTS
 from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
@@ -38,6 +39,128 @@ DIFF_SIZE_THRESHOLD = 100_000
 # Each profile defines strictness level for validation
 VALID_PROFILES = {"STRICT", "STANDARD", "LENIENT", "ULTRA"}
 DEFAULT_PROFILE = "STANDARD"
+
+
+def _build_deep_section_schemas(
+    doc: Any,
+    schema_definition: SchemaDefinition,
+) -> dict[str, SchemaDefinition]:
+    """Build per-section schemas from a document-type schema definition.
+
+    Issue #325: For document-type schemas where META.TYPE matches the schema name
+    (e.g., COGNITION_DEFINITION), fields are distributed across sections and nested
+    blocks. This function walks the document tree, identifies which schema fields
+    are present in each block/section, and creates a targeted SchemaDefinition per
+    section containing only the relevant fields.
+
+    This avoids false "required but missing" errors when a flat schema's REQ fields
+    are checked against every section -- fields belonging to §2 won't be flagged
+    as missing from §1.
+
+    Args:
+        doc: Parsed Document AST
+        schema_definition: The loaded SchemaDefinition with all fields
+
+    Returns:
+        Dict mapping section/block keys to per-section SchemaDefinition objects
+    """
+    from dataclasses import replace
+
+    all_fields = schema_definition.fields
+    schemas: dict[str, SchemaDefinition] = {}
+
+    def _collect_child_keys(node: ASTNode) -> set[str]:
+        """Collect assignment keys from a node's direct children."""
+        keys: set[str] = set()
+        children = getattr(node, "children", None)
+        if children:
+            for child in children:
+                if isinstance(child, Assignment):
+                    keys.add(child.key)
+        return keys
+
+    # Issue #326: Collect envelope-level assignments — fields at the document
+    # root that are not inside blocks or sections. These are direct Assignment
+    # nodes in doc.sections (e.g., THREAD_ID::..., TOPIC::... in DEBATE_TRANSCRIPT).
+    # Without this, envelope-style documents produce empty section_schemas and
+    # _check_required_field_coverage falsely flags all required fields as missing.
+    envelope_keys: set[str] = set()
+    for node in doc.sections:
+        if isinstance(node, Assignment) and node.key != "META":
+            envelope_keys.add(node.key)
+
+    if envelope_keys:
+        matching_fields = {fname: fdef for fname, fdef in all_fields.items() if fname in envelope_keys}
+        if matching_fields:
+            envelope_schema = replace(schema_definition, fields=matching_fields)
+            schemas["__envelope__"] = envelope_schema
+
+    def _walk(nodes: list[ASTNode]) -> None:
+        for node in nodes:
+            key = getattr(node, "key", None)
+            if key is not None and key != "META":
+                # Find which schema fields are present in this node's children
+                child_keys = _collect_child_keys(node)
+                matching_fields = {fname: fdef for fname, fdef in all_fields.items() if fname in child_keys}
+                if matching_fields:
+                    # Create a per-section schema with only the relevant fields
+                    section_schema = replace(schema_definition, fields=matching_fields)
+                    schemas[key] = section_schema
+
+            # Recurse into children
+            children = getattr(node, "children", None)
+            if children:
+                _walk(children)
+
+    _walk(doc.sections)
+    return schemas
+
+
+def _check_required_field_coverage(
+    full_schema: SchemaDefinition,
+    section_schemas: dict[str, SchemaDefinition],
+) -> list[ValidationError]:
+    """Check that all required schema fields appear in at least one section.
+
+    Issue #325: When fields are distributed across sections (e.g., FORCE in §1,
+    MODE in §2), the per-section validator correctly checks each section's fields.
+    But if a required field is entirely absent from the document, no section schema
+    is created for it, so it silently passes. This function catches those gaps.
+
+    Args:
+        full_schema: The complete schema with all fields
+        section_schemas: Per-section schemas built by _build_deep_section_schemas
+
+    Returns:
+        List of ValidationError for required fields not covered by any section
+    """
+    from octave_mcp.core.constraints import RequiredConstraint
+
+    errors: list[ValidationError] = []
+
+    # Collect all fields covered across all section schemas
+    covered_fields: set[str] = set()
+    for section_schema in section_schemas.values():
+        covered_fields.update(section_schema.fields.keys())
+
+    # Check each required field in the full schema
+    for field_name, field_def in full_schema.fields.items():
+        if field_name in covered_fields:
+            continue  # Field is present in at least one section
+
+        # Check if this field is required
+        if field_def.pattern and field_def.pattern.constraints:
+            has_req = any(isinstance(c, RequiredConstraint) for c in field_def.pattern.constraints.constraints)
+            if has_req:
+                errors.append(
+                    ValidationError(
+                        code="E003",
+                        message=f"Field '{field_name}' is required but missing from document",
+                        field_path=field_name,
+                    )
+                )
+
+    return errors
 
 
 def _extract_spec_code(error_message: str) -> str | None:
@@ -512,12 +635,16 @@ class ValidateTool(BaseTool):
         try:
             schema_definition = load_schema_by_name(schema_name)
             if schema_definition is not None and schema_definition.fields:
-                # Build section_schemas dict for constraint validation
-                # CORRECTNESS FIX: Map only the schema's name to its definition
-                # NOT every section in the document (that was a bug)
-                # The validator will look up sections by key and only validate
-                # those that have a matching entry in section_schemas
+                # Build section_schemas dict for constraint validation.
+                # Map schema name to schema (handles envelope-level fields like DEBATE_TRANSCRIPT).
                 section_schemas = {schema_definition.name: schema_definition}
+
+                # Issue #325: For document-type schemas (e.g., COGNITION_DEFINITION), the
+                # document's sections and nested blocks have different keys than the schema name.
+                # Map all document sections AND their nested blocks to the schema so the
+                # validator can check field constraints at every level of the document tree.
+                if doc.meta.get("TYPE") == schema_name:
+                    section_schemas = _build_deep_section_schemas(doc, schema_definition)
         except Exception:
             # Schema loading may fail - continue with old-style dict validation
             pass
@@ -561,6 +688,16 @@ class ValidateTool(BaseTool):
             strict_mode = profile == "STRICT"
             validator = Validator(schema=schema_def)
             validation_errors = validator.validate(doc, strict=strict_mode, section_schemas=section_schemas)
+
+            # Issue #325: Document-level required field coverage check.
+            # When using deep section_schemas (per-section schemas), required fields
+            # that are entirely absent from the document won't be caught by the
+            # per-section validator (because no section schema is created for them).
+            # Check that every REQ field from the full schema appears in at least
+            # one section's schema.
+            if section_schemas is not None and schema_definition is not None and doc.meta.get("TYPE") == schema_name:
+                coverage_errors = _check_required_field_coverage(schema_definition, section_schemas)
+                validation_errors.extend(coverage_errors)
 
             if validation_errors:
                 # Convert errors to dicts for reporting

@@ -16,7 +16,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, InlineMap, ListValue, LiteralZoneValue
+from octave_mcp.core.ast_nodes import (
+    Assignment,
+    ASTNode,
+    Block,
+    Document,
+    InlineMap,
+    ListValue,
+    LiteralZoneValue,
+    Section,
+)
 from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
 from octave_mcp.core.routing import InvalidTargetError, RoutingLog, TargetRegistry, TargetRouter
 from octave_mcp.core.schema_extractor import (
@@ -129,14 +138,9 @@ class Validator:
             self._check_meta_warnings(doc.meta)
 
         # Validate sections
-        for section in doc.sections:
-            # Look up schema for this section by key (if section has a key attribute)
-            section_schema = None
-            if section_schemas is not None:
-                section_key = getattr(section, "key", None)
-                if section_key is not None:
-                    section_schema = section_schemas.get(section_key)
-            self._validate_section(section, strict, section_schema)
+        # Issue #325: Walk document tree recursively so nested blocks (e.g., NATURE:
+        # inside §1::COGNITIVE_IDENTITY) are also validated against section_schemas.
+        self._validate_sections_recursive(doc.sections, strict, section_schemas)
 
         # Issue #244: Validate Zone 2 (YAML frontmatter) when schema defines frontmatter
         # This is opt-in: only schemas with frontmatter defs trigger validation.
@@ -273,6 +277,39 @@ class Validator:
 
         return errors
 
+    def _validate_sections_recursive(
+        self,
+        nodes: list[ASTNode],
+        strict: bool,
+        section_schemas: dict[str, SchemaDefinition] | None,
+    ) -> None:
+        """Walk document tree and validate each section/block against section_schemas.
+
+        Issue #325: For document-type schemas (e.g., COGNITION_DEFINITION), fields
+        may be nested inside sections and sub-blocks. This method recursively walks
+        the AST so that nested blocks (e.g., NATURE: inside §1::COGNITIVE_IDENTITY)
+        are also matched against section_schemas and validated.
+
+        Args:
+            nodes: List of AST nodes to walk
+            strict: Whether strict mode is enabled
+            section_schemas: Optional dict mapping section/block names to SchemaDefinition
+        """
+        for node in nodes:
+            # Look up schema for this node by key
+            section_schema = None
+            if section_schemas is not None:
+                section_key = getattr(node, "key", None)
+                if section_key is not None:
+                    section_schema = section_schemas.get(section_key)
+            self._validate_section(node, strict, section_schema)
+
+            # Recurse into children if section_schemas is provided and node has children
+            if section_schemas is not None:
+                children = getattr(node, "children", None)
+                if children:
+                    self._validate_sections_recursive(children, strict, section_schemas)
+
     def _validate_section(self, section: ASTNode, strict: bool, section_schema: SchemaDefinition | None = None) -> None:
         """Validate a section against its schema definition.
 
@@ -293,8 +330,11 @@ class Validator:
         if section_schema is None:
             return
 
-        # Only Block nodes have children to validate
-        if not isinstance(section, Block):
+        # Only Block and Section nodes have children to validate
+        # Issue #325: Section nodes (§N::NAME) also need validation for
+        # document-type schemas like COGNITION_DEFINITION where fields are
+        # inside numbered sections, not at the envelope level.
+        if not isinstance(section, Block | Section):
             return
 
         # Build map of present fields for REQ constraint checking
