@@ -50,9 +50,8 @@ CLAUDE.md
 worktrees/
 
 # Debates (local development - per tiered lifecycle decision)
-# Existing committed debates remain as historical decision records
-# Future debates are ephemeral by default
-debates/
+# .oct.md debate records are committed (semantic density, audit trail)
+# Raw JSON/JSONL are ephemeral and gitignored (machine format, reconstructible)
 debates/*.json
 debates/*.jsonl
 *.jsonl
