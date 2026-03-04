@@ -45,7 +45,7 @@ Each cognition master file (`library/cognitions/TYPE.oct.md`) provides these fie
 
 ### Output Chains
 
-Each type enforces a specific Chain-of-Thought reasoning sequence via its first THINK rule:
+Each type enforces a specific Chain-of-Thought reasoning sequence via its THINK rules:
 
 - **LOGOS**: `[TENSION] → [INSIGHT] → [SYNTHESIS]`
 - **ETHOS**: `[VERDICT] → [EVIDENCE] → [CONSTRAINT_CATALOG]`
