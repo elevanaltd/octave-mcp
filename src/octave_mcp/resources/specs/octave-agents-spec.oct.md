@@ -20,7 +20,7 @@ META:
 // - Cognition masters: library/cognitions/logos.oct.md, ethos.oct.md, pathos.oct.md
 //
 // MIGRATION NOTE:
-// Cognition-derived properties (FORCE, ESSENCE, ELEMENT, MODE, THINK, THINK_NEVER)
+// Cognition-derived properties (NATURE block, MODE, PRIME_DIRECTIVE, THINK, THINK_NEVER)
 // live in standalone cognition files loaded before the anchor ceremony.
 // Agent files reference their cognition type via COGNITION field in §1.
 // No §0::COGNITIVE_FOUNDATION section in agent files — cognition is a
@@ -40,7 +40,7 @@ META:
   ROLE::AGENT_NAME
   COGNITION::[LOGOS∨ETHOS∨PATHOS]
   // Link key to cognition master file at library/cognitions/TYPE.oct.md
-  // The cognition file provides NATURE, MODE, PRIME_DIRECTIVE, THINK, THINK_NEVER.
+  // The cognition file provides NATURE (FORCE/ESSENCE/ELEMENT), MODE, PRIME_DIRECTIVE, THINK, THINK_NEVER.
   // Agent files do NOT duplicate these properties.
   ARCHETYPE::[
     NAME<qualifier>
