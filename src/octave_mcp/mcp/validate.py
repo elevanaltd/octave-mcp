@@ -79,6 +79,22 @@ def _build_deep_section_schemas(
                     keys.add(child.key)
         return keys
 
+    # Issue #326: Collect envelope-level assignments — fields at the document
+    # root that are not inside blocks or sections. These are direct Assignment
+    # nodes in doc.sections (e.g., THREAD_ID::..., TOPIC::... in DEBATE_TRANSCRIPT).
+    # Without this, envelope-style documents produce empty section_schemas and
+    # _check_required_field_coverage falsely flags all required fields as missing.
+    envelope_keys: set[str] = set()
+    for node in doc.sections:
+        if isinstance(node, Assignment) and node.key != "META":
+            envelope_keys.add(node.key)
+
+    if envelope_keys:
+        matching_fields = {fname: fdef for fname, fdef in all_fields.items() if fname in envelope_keys}
+        if matching_fields:
+            envelope_schema = replace(schema_definition, fields=matching_fields)
+            schemas["__envelope__"] = envelope_schema
+
     def _walk(nodes: list[ASTNode]) -> None:
         for node in nodes:
             key = getattr(node, "key", None)

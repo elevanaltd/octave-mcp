@@ -53,7 +53,7 @@ class TestCognitionSchemaValidation:
         from octave_mcp.mcp.validate import ValidateTool
 
         tool = ValidateTool()
-        return asyncio.get_event_loop().run_until_complete(tool.execute(content=content, schema="COGNITION_DEFINITION"))
+        return asyncio.run(tool.execute(content=content, schema="COGNITION_DEFINITION"))
 
     def test_valid_logos_file_validates(self):
         """LOGOS cognition file should pass COGNITION_DEFINITION validation."""
@@ -221,3 +221,95 @@ META:
             result["validation_status"] == "INVALID"
         ), f"Missing COGNITIVE_RULES should be INVALID. Got: {result.get('validation_status')}"
         assert result["valid"] is False
+
+
+class TestDebateTranscriptEnvelopeValidation:
+    """Regression tests for DEBATE_TRANSCRIPT envelope-level validation (Issue #326).
+
+    DEBATE_TRANSCRIPT documents have fields at the envelope level (document root),
+    not nested inside blocks or sections. Prior to the fix, _build_deep_section_schemas
+    only mapped nodes with child assignments, causing envelope-level fields to be
+    missed. This produced false E003 errors for all required fields.
+    """
+
+    def _validate_content(self, content: str, schema: str = "DEBATE_TRANSCRIPT") -> dict:
+        """Helper to validate content through the MCP validate tool."""
+        import asyncio
+
+        from octave_mcp.mcp.validate import ValidateTool
+
+        tool = ValidateTool()
+        return asyncio.run(tool.execute(content=content, schema=schema))
+
+    def test_valid_debate_transcript_validates(self):
+        """Valid DEBATE_TRANSCRIPT with envelope-level fields should pass validation.
+
+        Regression test for Issue #326: When META.TYPE == schema_name triggers deep
+        section schema path, envelope-level assignments (THREAD_ID, TOPIC, etc.) must
+        be captured by _build_deep_section_schemas to avoid false E003 errors.
+        """
+        content = """===MY_DEBATE===
+META:
+  TYPE::DEBATE_TRANSCRIPT
+  VERSION::"1.0"
+THREAD_ID::"test-debate-001"
+TOPIC::"Should we use envelope-level fields?"
+MODE::fixed
+STATUS::active
+PARTICIPANTS::[Wind,Wall,Door]
+TURNS::[turn1,turn2]
+===END==="""
+
+        result = self._validate_content(content)
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"Valid DEBATE_TRANSCRIPT should validate. Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
+
+    def test_debate_transcript_missing_required_field_is_invalid(self):
+        """DEBATE_TRANSCRIPT missing a required field should fail validation."""
+        content = """===MY_DEBATE===
+META:
+  TYPE::DEBATE_TRANSCRIPT
+  VERSION::"1.0"
+THREAD_ID::"test-debate-002"
+TOPIC::"Missing required fields"
+MODE::fixed
+STATUS::active
+===END==="""
+        # Missing PARTICIPANTS and TURNS (both REQ)
+
+        result = self._validate_content(content)
+
+        assert (
+            result["validation_status"] == "INVALID"
+        ), f"Missing required fields should be INVALID. Got: {result.get('validation_status')}"
+        assert result["valid"] is False
+
+    def test_debate_transcript_with_optional_fields_validates(self):
+        """DEBATE_TRANSCRIPT with optional fields should also pass validation."""
+        content = """===MY_DEBATE===
+META:
+  TYPE::DEBATE_TRANSCRIPT
+  VERSION::"1.0"
+THREAD_ID::"test-debate-003"
+TOPIC::"Testing optional fields"
+MODE::mediated
+STATUS::closed
+PARTICIPANTS::[Wind,Wall,Door]
+TURNS::[turn1]
+SYNTHESIS::"Final resolution reached"
+MAX_ROUNDS::4
+MAX_TURNS::12
+===END==="""
+
+        result = self._validate_content(content)
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"DEBATE_TRANSCRIPT with optional fields should validate. "
+            f"Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
