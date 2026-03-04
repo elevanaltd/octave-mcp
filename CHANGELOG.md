@@ -35,6 +35,17 @@ This release introduces the cognitive type system — three cognition master fil
 - **Envelope-level assignments in deep section schemas** (#326) — Valid envelope-style documents (e.g., DEBATE_TRANSCRIPT with root-level fields) no longer falsely marked INVALID when `META.TYPE` triggers deep section schema path. Added pre-walk pass collecting envelope-level assignments
 - **Lite instruction cross-model feedback** (#316) — Tightened guide from zero-shot reviews by Gemini, ChatGPT, Claude Sonnet, and Claude Haiku: defined `NAME[args]` constructor and `---` separator in FORMAT, added quote usage rule, replaced subjective conversion gate with deterministic threshold, added provenance marker to example
 
+### Spec Evolution
+- **Skills Spec v9.0.0 — Structural Cleanup** — Evolved from v8.0.0 based on cross-model assessment
+  - Fixed META TYPE from `LLM_PROFILE` (copy-paste error) to `SKILL_DEFINITION`
+  - Standardized `§5::ANCHOR_KERNEL` as strict section header (replaces inconsistent `ANCHOR_KERNEL::start` syntax)
+  - Integrated §2b canonical sections into §3 document template — LLMs now see exact headers to emit
+  - Consolidated V5/V6/V7/V8 legacy compatibility into §11::LEGACY_COMPATIBILITY
+  - Added SIGNALS and TEMPLATE to kernel field contract; marked NEVER/MUST as required
+  - Explicit v8→v9 transition window with grace period through v9.x, hard removal at v10
+  - Examples wrapped in literal zones for safe `===END===` inclusion
+  - Cascading fallback reworded as extraction priority sequence (resolved logical contradiction)
+
 ### Documentation
 - Cognitive type system guide with Wind/Wall/Door metaphor, separation of concerns diagram, evidence basis (#324)
 - Repository structure realigned with visibility-rules v1.6 and v1.7 (#323) — debate synthesis files relocated from `.hestai/decisions/` to `debates/`
