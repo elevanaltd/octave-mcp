@@ -4,6 +4,7 @@ META:
   VERSION::"1.0.0"
   STATUS::APPROVED
   PURPOSE::"ETHOS cognitive kernel — validation, constraint enforcement, and boundary guardianship"
+// ⚠️ Single cognition only. Do not load alongside logos.oct.md or pathos.oct.md.
 // ETHOS: The Wall — Guardian and Validator
 // Probability activation: 60% higher probability of validation language (research evidence)
 // Domain affinity: Security, Compliance, Testing, Quality
