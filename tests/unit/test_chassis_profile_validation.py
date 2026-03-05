@@ -378,3 +378,151 @@ META:
         errors = validate_chassis_profiles(doc)
         warnings = _warnings_only(errors)
         assert not any(e.code == "W_CHASSIS_PROFILE_COUNT" for e in warnings)
+
+
+# ---------------------------------------------------------------------------
+# Invalid cases — missing required fields (Fix 2)
+# ---------------------------------------------------------------------------
+
+
+class TestChassisProfileMissingFields:
+    """Profile blocks missing required fields should produce errors."""
+
+    def test_profile_missing_match_field(self):
+        """Profile without match field -> E_CHASSIS_MISSING_FIELD error."""
+        doc = parse("""===TEST_AGENT===
+META:
+  TYPE::AGENT_DEFINITION
+  VERSION::"8.0.0"
+§3::CAPABILITIES
+  CHASSIS::[ho-mode]
+  PROFILES:
+    BAD_PROFILE:
+      skills::[ho-orchestrate]
+===END===""")
+        errors = validate_chassis_profiles(doc)
+        err = _errors_only(errors)
+        assert len(err) >= 1
+        assert any(e.code == "E_CHASSIS_MISSING_FIELD" for e in err)
+        assert any("match" in e.message for e in err)
+
+    def test_profile_missing_skills_field(self):
+        """Profile without skills field -> E_CHASSIS_MISSING_FIELD error."""
+        doc = parse("""===TEST_AGENT===
+META:
+  TYPE::AGENT_DEFINITION
+  VERSION::"8.0.0"
+§3::CAPABILITIES
+  CHASSIS::[ho-mode]
+  PROFILES:
+    BAD_PROFILE:
+      match::[default]
+===END===""")
+        errors = validate_chassis_profiles(doc)
+        err = _errors_only(errors)
+        assert len(err) >= 1
+        assert any(e.code == "E_CHASSIS_MISSING_FIELD" for e in err)
+        assert any("skills" in e.message for e in err)
+
+    def test_profile_missing_both_match_and_skills(self):
+        """Profile with only kernel_only (missing match and skills) -> two errors."""
+        doc = parse("""===TEST_AGENT===
+META:
+  TYPE::AGENT_DEFINITION
+  VERSION::"8.0.0"
+§3::CAPABILITIES
+  CHASSIS::[ho-mode]
+  PROFILES:
+    BAD_PROFILE:
+      kernel_only::[system-orchestration]
+===END===""")
+        errors = validate_chassis_profiles(doc)
+        err = _errors_only(errors)
+        missing_field_errors = [e for e in err if e.code == "E_CHASSIS_MISSING_FIELD"]
+        assert len(missing_field_errors) >= 2
+        messages = " ".join(e.message for e in missing_field_errors)
+        assert "match" in messages
+        assert "skills" in messages
+
+    def test_one_valid_one_invalid_profile(self):
+        """Mixed profiles: valid profile passes, invalid one still errors."""
+        doc = parse("""===TEST_AGENT===
+META:
+  TYPE::AGENT_DEFINITION
+  VERSION::"8.0.0"
+§3::CAPABILITIES
+  CHASSIS::[ho-mode]
+  PROFILES:
+    GOOD:
+      match::[default]
+      skills::[ho-orchestrate]
+    BAD:
+      kernel_only::[system-orchestration]
+===END===""")
+        errors = validate_chassis_profiles(doc)
+        err = _errors_only(errors)
+        missing_field_errors = [e for e in err if e.code == "E_CHASSIS_MISSING_FIELD"]
+        assert len(missing_field_errors) >= 2  # match + skills missing from BAD
+        # All errors should reference BAD profile
+        assert all("BAD" in e.field_path for e in missing_field_errors)
+
+
+# ---------------------------------------------------------------------------
+# Integration test — chassis errors surface through Validator.validate() (Fix 3)
+# ---------------------------------------------------------------------------
+
+
+class TestChassisProfileIntegration:
+    """Chassis-profile errors must surface through the public Validator interface."""
+
+    def test_chassis_errors_surface_through_validator(self):
+        """Validator.validate() should include chassis-profile errors for AGENT_DEFINITION docs."""
+        from octave_mcp.core.validator import Validator
+
+        doc = parse("""===TEST_AGENT===
+META:
+  TYPE::AGENT_DEFINITION
+  VERSION::"8.0.0"
+§3::CAPABILITIES
+  CHASSIS::[ho-mode]
+  PROFILES:
+    STANDARD:
+      match::[default]
+      skills::[ho-mode]
+    BAD:
+      kernel_only::[system-orchestration]
+===END===""")
+        validator = Validator(schema=None)
+        errors = validator.validate(doc)
+        # Should contain chassis-profile errors (overlap + missing fields)
+        codes = [e.code for e in errors]
+        assert "E_CHASSIS_OVERLAP" in codes, "Overlap error should surface through Validator.validate()"
+        assert "E_CHASSIS_MISSING_FIELD" in codes, "Missing field error should surface through Validator.validate()"
+
+    def test_chassis_errors_surface_through_mcp_validate(self):
+        """octave_validate MCP tool should report chassis-profile errors."""
+        import asyncio
+
+        from octave_mcp.mcp.validate import ValidateTool
+
+        content = """===TEST_AGENT===
+META:
+  TYPE::AGENT_DEFINITION
+  VERSION::"8.0.0"
+§3::CAPABILITIES
+  CHASSIS::[ho-mode]
+  PROFILES:
+    BAD:
+      kernel_only::[system-orchestration]
+===END==="""
+        tool = ValidateTool()
+        result = asyncio.run(tool.execute(content=content, schema="META"))
+        # Chassis errors should appear in warnings or validation_errors
+        all_messages = []
+        for w in result.get("warnings", []):
+            all_messages.append(w.get("code", ""))
+        for e in result.get("validation_errors", []):
+            all_messages.append(e.get("code", ""))
+        assert any(
+            "E_CHASSIS" in code for code in all_messages
+        ), f"Chassis errors should surface through MCP validate tool. Got: {all_messages}"

@@ -151,6 +151,13 @@ class Validator:
                     fm_errors = validate_frontmatter(doc.raw_frontmatter, schema_def)
                     self.errors.extend(fm_errors)
 
+        # ADR-0283: Chassis-profile validation for AGENT_DEFINITION documents.
+        # Runs after all other validation passes. Documents without
+        # §3::CAPABILITIES or using flat SKILLS::[]/PATTERNS::[] skip
+        # automatically (backward compatible).
+        chassis_errors = validate_chassis_profiles(doc)
+        self.errors.extend(chassis_errors)
+
         return self.errors
 
     def _validate_meta(self, meta: dict[str, Any], strict: bool) -> None:
@@ -713,11 +720,14 @@ def validate_chassis_profiles(doc: Document) -> list[ValidationError]:
             profile_skills: set[str] = set()
             profile_kernel_only: set[str] = set()
             match_items: list[Any] = []
+            has_match = False
+            has_skills = False
 
             for field_node in child.children:
                 if not isinstance(field_node, Assignment):
                     continue
                 if field_node.key == "skills" and isinstance(field_node.value, ListValue):
+                    has_skills = True
                     for item in field_node.value.items:
                         if isinstance(item, str):
                             profile_skills.add(item)
@@ -726,7 +736,28 @@ def validate_chassis_profiles(doc: Document) -> list[ValidationError]:
                         if isinstance(item, str):
                             profile_kernel_only.add(item)
                 elif field_node.key == "match" and isinstance(field_node.value, ListValue):
+                    has_match = True
                     match_items = list(field_node.value.items)
+
+            # Check required fields (ADR-0283: match and skills are mandatory)
+            if not has_match:
+                errors.append(
+                    ValidationError(
+                        code="E_CHASSIS_MISSING_FIELD",
+                        message=f"Profile '{profile_name}' is missing required field 'match'",
+                        field_path=f"CAPABILITIES.PROFILES.{profile_name}.match",
+                        severity="error",
+                    )
+                )
+            if not has_skills:
+                errors.append(
+                    ValidationError(
+                        code="E_CHASSIS_MISSING_FIELD",
+                        message=f"Profile '{profile_name}' is missing required field 'skills'",
+                        field_path=f"CAPABILITIES.PROFILES.{profile_name}.skills",
+                        severity="error",
+                    )
+                )
 
             # Check CHASSIS overlap with profile skills
             for skill in sorted(profile_skills & chassis_skills):
