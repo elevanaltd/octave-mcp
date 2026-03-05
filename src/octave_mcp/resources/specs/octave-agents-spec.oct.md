@@ -1,14 +1,20 @@
 ===OCTAVE_AGENTS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"7.0.0"
+  VERSION::"8.0.0"
   STATUS::APPROVED
-  PURPOSE::"Agent architecture schema with cognitive separation and operational clarity."
+  PURPOSE::"Agent architecture schema with cognitive separation, operational clarity, and capability tiering."
   CONTRACT::HOLOGRAPHIC<JIT_GRAMMAR_COMPILATION>
-// OCTAVE AGENTS v7: The "Cognitive Separation" Schema
-// Ratified by Issue #314 review and HO assessment
-// Builds on v6 Dual-Lock by separating cognitive properties into external cognition files,
-// flattening §1 structure, and renaming §2 to OPERATIONAL_BEHAVIOR.
+// OCTAVE AGENTS v8: The "Chassis-Profile" Schema
+// Extends v7 Cognitive Separation with capability tiering (ADR-0283).
+// Introduces CHASSIS/PROFILES structure in §3 for context-aware skill loading.
+//
+// v8.0.0 CHANGES (ADR-0283):
+// - §3::CAPABILITIES extended with CHASSIS (invariant skills) and PROFILES (context-specific)
+// - Each profile declares: match (documentation-as-schema), skills, patterns, kernel_only
+// - Flat SKILLS::[]/PATTERNS::[] remains valid (backward compatible, treated as single DEFAULT profile)
+// - Version detection: presence of CHASSIS or PROFILES keys → structured mode
+// - Overlap rules enforced by validator (not grammar): CHASSIS∩profile.skills → error, etc.
 //
 // v7.0.0 CHANGES (Issue #314):
 // - ACTIVATION (FORCE/ESSENCE/ELEMENT) removed from §1 — now in cognition master files
@@ -69,7 +75,7 @@ META:
       MUST_NEVER::["Prohibited operational behaviors","Each rule is a hard boundary on domain actions"]
     OUTPUT:
       FORMAT::"Response structure pattern"
-      // e.g. "SYSTEM_STATE → COHERENCE_PATTERN → ORCHESTRATION_DIRECTIVE"
+      // e.g. "ANALYSIS → PLAN → IMPLEMENTATION → VERIFICATION"
       REQUIREMENTS::[required_output_artifacts]
     VERIFICATION:
       EVIDENCE::[required_evidence_types]
@@ -83,6 +89,54 @@ META:
 §3::CAPABILITIES
   // DYNAMIC LOADING (FLUKE)
   // WHAT I CAN USE
+  //
+  // v8 FORMAT (Chassis-Profile — ADR-0283):
+  // CHASSIS: Invariant skills loaded every ceremony, regardless of profile.
+  // PROFILES: Named blocks declaring context-specific skill sets.
+  // Each profile has: match (documentation-as-schema), skills, patterns, kernel_only.
+  // - match::[default] designates the fallback profile (sole condition only)
+  // - match::[context::X] documents intended context (not runtime logic)
+  // - skills: Full body loading when profile is active
+  // - patterns: Full body loading when profile is active
+  // - kernel_only: §5::ANCHOR_KERNEL extraction only when profile is active
+  //
+  // OVERLAP RULES (validator-enforced):
+  // - CHASSIS skill in profile skills → error (redundant)
+  // - CHASSIS skill in profile kernel_only → error (contradictory)
+  // - default mixed with context:: in same match → error
+  // - Duplicate profile names → error
+  // - 4+ profiles → warning
+  //
+  // BACKWARD COMPATIBILITY:
+  // Flat SKILLS::[]/PATTERNS::[] remains valid (v7 format).
+  // Treated as equivalent to a single DEFAULT profile with all skills as full-body.
+  // Version detection: presence of CHASSIS or PROFILES keys → structured mode.
+  //
+  // EXAMPLE (v8 structured):
+  // CHASSIS::[ho-mode, prophetic-intelligence, gap-ownership]
+  // PROFILES:
+  // STANDARD:
+  // match::[default]
+  // skills::[ho-orchestrate, subagent-rules, constitutional-enforcement]
+  // patterns::[mip-orchestration]
+  // kernel_only::[system-orchestration, decision-record-authoring]
+  // ECOSYSTEM:
+  // match::[context::p15, context::ecosystem]
+  // skills::[ho-ecosystem]
+  // patterns::[dependency-graph-map]
+  // kernel_only::[constitutional-enforcement]
+  //
+  // EXAMPLE (v7 flat — still valid):
+  // SKILLS::["skill-a","skill-b"]
+  // PATTERNS::["pattern-a","pattern-b"]
+  CHASSIS::["Invariant skills loaded every ceremony"]
+  PROFILES:
+    PROFILE_NAME:
+      match::["documentation-as-schema context conditions"]
+      skills::["Full body skills for this profile"]
+      patterns::["Full body patterns for this profile"]
+      kernel_only::["Kernel-only skills for this profile"]
+  // OR flat format (v7 backward compat):
   SKILLS::["List of loaded skill files","Domain expertise modules"]
   PATTERNS::["List of behavioral patterns","Reusable constraint sets"]
 §4::INTERACTION_RULES
