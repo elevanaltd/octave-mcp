@@ -89,22 +89,28 @@ The FLUKES stage skill loader follows deterministic rules:
 
 Profile selection is deterministic, not LLM-reasoned:
 
-1. **Explicit selection** (primary): The `capability_mode` parameter in `anchor_request` maps directly to a profile name. `capability_mode="ECOSYSTEM"` loads the ECOSYSTEM profile.
-2. **Match fallback** (secondary): If no `capability_mode` is specified, the `match` field provides declarative rules. The `default` keyword designates the fallback profile.
-3. **No match**: If no profile matches and no `default` exists, only CHASSIS skills load. The agent operates in a minimal but safe mode.
+1. **Explicit selection** (primary and only runtime mechanism): The `capability_mode` parameter in `anchor_request` maps directly to a profile name. `capability_mode="ECOSYSTEM"` loads the ECOSYSTEM profile. The caller (human or orchestrating agent) is responsible for choosing the correct mode.
+2. **Default fallback**: If no `capability_mode` is specified, the profile with `match::[default]` is selected.
+3. **No default**: If no `capability_mode` is specified and no profile has `match::[default]`, only CHASSIS skills load. The agent operates in a minimal but safe mode.
 4. **Unknown profile error**: If `capability_mode` specifies a profile name that doesn't exist in the agent definition, the ceremony MUST emit a warning in the permit metadata and fall back to `default` or chassis-only. Silent degradation to a different capability set than intended is a debuggability trap.
 
-#### `context::` Match Source Resolution
+#### The `match` Field: Declared Intent, Not Runtime Logic
 
-The `context::` prefix in match conditions refers to values resolved from the anchor ceremony's environment. Valid sources (evaluated in order):
+The `match` field in a profile declaration serves as **documentation-as-schema** — it declares the contexts a profile is *designed for*, not a runtime matching engine. The `context::` values are human-readable descriptors:
 
-1. **`capability_mode` tags**: The caller may pass structured tags alongside `capability_mode` (e.g., `context_tags=["p15", "ecosystem"]`)
-2. **Working directory signals**: The anchor ceremony can inspect the working directory for structural markers (e.g., presence of `pnpm-workspace.yaml` → `monorepo`, presence of `.p15-config` → `p15`). These signals must be defined in the anchor's profile resolver configuration, not hardcoded.
-3. **Branch name patterns**: The current git branch can provide context signals (e.g., `ecosystem-*` branches → `ecosystem` context)
+```octave
+ECOSYSTEM::{
+  match::[context::p15, context::ecosystem],  // "This profile is for P15 and ecosystem work"
+  skills::[ho-ecosystem],
+  ...
+}
+```
 
-The set of valid context values is open — new values can be added to match conditions without schema changes. The anchor's profile resolver is responsible for mapping environment state to context values. This mapping is deterministic and auditable (logged in the permit).
+**The Anchor does not do filesystem analysis.** It does not inspect `pnpm-workspace.yaml`, parse `package.json`, or scan git branches to determine context. The Anchor is a text compiler, not a filesystem analyzer. Profile selection is always explicit via `capability_mode`.
 
-**Design constraint**: `default` is a reserved keyword that may only appear as the sole condition in a match list: `match::[default]`. It may not be mixed with `context::` conditions. A profile with `match::[context::monorepo, default]` is a validator error — `default` absorbs everything, making the `context::monorepo` condition meaningless.
+**Future consideration**: A higher-level orchestrator (Workbench, HO, or a dedicated context resolver) could eventually do environment detection and pass the result as `capability_mode`. This keeps the Anchor simple and pushes context intelligence to the layer that has the right information. But this is not in scope for this ADR.
+
+**Design constraint**: `default` is a reserved keyword that may only appear as the sole condition in a match list: `match::[default]`. It may not be mixed with `context::` conditions.
 
 ### Design Properties
 
@@ -195,11 +201,10 @@ Cognition files (`logos.oct.md`, `ethos.oct.md`, `pathos.oct.md`) are explicitly
 ### odyssean-anchor-mcp (downstream — HestAI-MCP#284)
 
 1. **FLUKES loader**: Read `§3::CAPABILITIES`, detect flat vs. structured format
-2. **Profile resolver**: Match `capability_mode` parameter to profile name, fall back to `match` rules via context resolution
-3. **Context resolver**: New component — maps working directory state, branch name, and caller-provided tags to `context::` values. Must be configurable and deterministic, with resolution logged in the permit
-4. **Differentiated loading**: Full body for chassis + profile `skills`, kernel extraction for `kernel_only` via the Safety-Invariant Loader Contract (see below)
-5. **Permit metadata**: Include active profile name, resolved context values, and loading manifest (which skills loaded at what fidelity) in the permit for auditability
-6. **Error handling**: Unknown `capability_mode` → warn + fallback; no match and no default → chassis-only with warning
+2. **Profile resolver**: Match `capability_mode` parameter to profile name, fall back to `default` profile if no `capability_mode` specified. No filesystem analysis — profile selection is purely based on the explicit parameter
+3. **Differentiated loading**: Full body for chassis + profile `skills`, kernel extraction for `kernel_only` via the Safety-Invariant Loader Contract (see below)
+4. **Permit metadata**: Include active profile name and loading manifest (which skills loaded at what fidelity) in the permit for auditability
+5. **Error handling**: Unknown `capability_mode` → warn + fallback to default or chassis-only; no `capability_mode` and no default profile → chassis-only with warning
 
 ### hestai-mcp (downstream — agent definitions)
 
@@ -234,7 +239,7 @@ This contract ensures that `kernel_only` never produces a silent empty result. T
 | R2: Profile proliferation / capability drift | Mutual exclusivity + no inheritance + validator warning at 4+ profiles | Controlled |
 | R3: Operational friction (kernel_only irrevocability) | Accepted tradeoff — restart cost buys auditability. Future JIT inflation path preserved | Accepted tradeoff |
 | R4: Ambiguous overlap resolution | Holographic Overlap Matrix (static + runtime rules above) | Resolved by spec |
-| R5: Context resolver adds filesystem dependency | Isolated resolver component with configurable signal mapping, logged in permit | Gated by tests |
+| R5: Scope creep into filesystem analysis | Anchor constrained to text compilation; `capability_mode` is explicit parameter only; filesystem detection deferred to future orchestrator layer | Eliminated by design |
 
 ## Consequences
 
@@ -255,12 +260,12 @@ This contract ensures that `kernel_only` never produces a silent empty result. T
 - **R2: Match ambiguity**: Multiple profiles could match the same context. Mitigation: profiles are evaluated in declaration order; first match wins. `default` must be the last profile and may only appear as a sole match condition.
 - **R3: Kernel insufficiency**: `kernel_only` is a ceremony-time commitment — the agent cannot access full procedural content mid-session. Mitigation: the `§5::ANCHOR_KERNEL` spec requires `NEVER` and `MUST` fields, covering safety. Profile designers should default to `skills` and only demote to `kernel_only` when they are confident the procedural content is not needed in that context. When in doubt, use `skills`.
 - **R4: Schema version fragmentation**: The agents-spec v8 introduces a new structure while v7 flat lists must remain valid. Mitigation: version detection is structural (presence of CHASSIS/PROFILES keys), not META-based. The FLUKES loader handles both formats during the v8.x transition window. See "Agents-Spec Versioning" above.
-- **R5: Context resolver adds filesystem dependency to anchor**: The `match` mechanism requires the anchor ceremony to inspect working directory state, which is a new responsibility. Mitigation: context resolution is isolated to a dedicated resolver component with clear interface boundaries. The resolver is configurable and its output is logged in the permit.
+- **R5: Scope creep into filesystem analysis**: The `match` field could tempt future implementations to make the Anchor inspect the filesystem for context signals. Mitigation: this ADR explicitly constrains the Anchor to text compilation — profile selection is via explicit `capability_mode` parameter only. Filesystem-based context detection is deferred to a future higher-level orchestrator layer.
 
 ## Future Considerations
 
-### On-Demand Inflation (Not in This ADR)
-The debate explored "Vector B" — an agent seeing a kernel and requesting full body loading mid-session via `Skill(inflate::"skill-id")`. This is architecturally compatible with the chassis-profile model but adds runtime complexity. It can be added later as an enhancement without changing the schema.
+### On-Demand Inflation (Not in This ADR — tracked as separate issue)
+The debate explored "Vector B" — an agent seeing a kernel and requesting full body loading mid-session via `Skill(inflate::"skill-id")` or a dedicated `inflate_skill` MCP tool. This is the natural escape hatch for the kernel_only irrevocability trap (Dragon 1): an agent hits a capability gap, realizes it only has the kernel, and calls the tool to fetch the full body. This is architecturally compatible with the chassis-profile model and should be prioritized early in the v9 roadmap. See HestAI-MCP issue (to be created) for tracking.
 
 ### INFLATE_ON Triggers (Not in This ADR)
 The debate proposed file-pattern and tag-based triggers for automatic skill inflation. This overlaps with the `match` field but operates at the individual skill level rather than the profile level. Deferred until there's a concrete use case that profiles don't satisfy.
