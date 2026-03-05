@@ -71,7 +71,8 @@ META:
   5::Use lowercase for true, false, null (NOT True, False, NULL)
   6::∧ only appears inside brackets, never bare: [A∧B∧C] is valid, A∧B is not
   7::⇌ is binary only (A⇌B), not chained (A⇌B⇌C is invalid)
-  8::File extension .oct.md is canonical (v6), .octave.txt deprecated
+  8::Quote values containing § when used as content, not section markers ("§2_BEHAVIOR" not §2_BEHAVIOR)
+  9::File extension .oct.md is canonical (v6), .octave.txt deprecated
 
   §3b::V6_ENVELOPE_STRUCTURE
     FILE_STRUCTURE::[===NAME===,META_BLOCK,SEPARATOR_OPTIONAL,BODY,===END===]
@@ -87,6 +88,11 @@ META:
     V6_PATTERN::multiple_profiles_one_document[no_intermediate_terminators]
 
 §4::EXAMPLE_BLOCK
+  // WRONG: §2 parsed as section anchor, value splits
+  // REFERENCE::§2_BEHAVIOR_SECTION
+  // RIGHT: quoted, § is literal
+  // REFERENCE::"§2_BEHAVIOR_SECTION"
+
   ===EXAMPLE===
   STATUS::ACTIVE
   PHASES:
