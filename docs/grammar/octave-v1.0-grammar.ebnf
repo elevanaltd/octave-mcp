@@ -430,9 +430,13 @@ capabilities_flat = [ "SKILLS", assign_operator, list_value, newline ],
                     [ "PATTERNS", assign_operator, list_value, newline ] ;
 
 (* v8 structured format - chassis-profile *)
-capabilities_structured = "CHASSIS", assign_operator, list_value, newline,
-                          [ "PROFILES", block_operator, newline,
-                            { indent, profile_block } ] ;
+(* Triggered by presence of CHASSIS or PROFILES keys *)
+capabilities_structured =
+    ( "CHASSIS", assign_operator, list_value, newline,
+      [ "PROFILES", block_operator, newline,
+        { indent, profile_block } ] )
+  | ( "PROFILES", block_operator, newline,
+      { indent, profile_block } ) ;
 
 (* Profile block: named block with match, skills, patterns, kernel_only *)
 profile_block = identifier, block_operator, newline,

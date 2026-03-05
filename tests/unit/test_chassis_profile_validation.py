@@ -172,6 +172,28 @@ META:
         errors = validate_chassis_profiles(doc)
         assert not _errors_only(errors)
 
+    def test_profiles_only_no_chassis(self):
+        """PROFILES without CHASSIS is valid (profiles-only mode).
+
+        Structured mode is triggered by CHASSIS or PROFILES keys.
+        An agent may use profiles without declaring invariant chassis skills.
+        """
+        doc = parse("""===TEST_AGENT===
+META:
+  TYPE::AGENT_DEFINITION
+  VERSION::"8.0.0"
+§3::CAPABILITIES
+  PROFILES:
+    STANDARD:
+      match::[default]
+      skills::[ho-orchestrate, subagent-rules]
+    ECOSYSTEM:
+      match::[context::p15]
+      skills::[ho-ecosystem]
+===END===""")
+        errors = validate_chassis_profiles(doc)
+        assert not _errors_only(errors)
+
 
 # ---------------------------------------------------------------------------
 # Invalid cases — overlap rules

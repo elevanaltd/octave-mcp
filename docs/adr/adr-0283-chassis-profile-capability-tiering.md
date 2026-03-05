@@ -140,7 +140,7 @@ Agents with flat `SKILLS::[]` / `PATTERNS::[]` continue to work. The FLUKES load
 ### Design Decisions on Open Questions
 
 #### Match semantics: OR-only
-`match` conditions use OR semantics. If any condition matches, the profile activates. AND semantics create combinatorial explosion with no current use case. If AND is needed later, it can be added as `match_all::[]` without breaking OR behavior.
+`match` conditions are documentation metadata — they declare the intended contexts for a profile, not runtime selection logic. Runtime profile activation is always explicit via `capability_mode`. Multiple `context::` values in a single match list describe the range of contexts the profile is designed for (e.g., `match::[context::p15, context::ecosystem]` means "this profile is for P15 or ecosystem work"). If a future orchestrator uses match conditions for automatic profile selection, OR semantics apply.
 
 #### No profile inheritance
 Profiles do not inherit from each other. If ECOSYSTEM needs a skill that STANDARD also has, it must list it explicitly. This is intentional:
@@ -258,7 +258,7 @@ This contract ensures that `kernel_only` never produces a silent empty result. T
 
 ### Risks
 - **R1: Profile proliferation**: Agents could accumulate many profiles. Mitigation: validator emits a warning (not error) at 4+ profiles, requiring a justification comment. This makes the convention visible without blocking legitimate use cases.
-- **R2: Match ambiguity**: Multiple profiles could match the same context. Mitigation: profiles are evaluated in declaration order; first match wins. `default` must be the last profile and may only appear as a sole match condition.
+- **R2: Match ambiguity**: If a future orchestrator implements automatic profile selection from `match` conditions, multiple profiles could match. Mitigation: profile selection remains explicit via `capability_mode`. `default` is only a fallback marker when `capability_mode` is absent, and must appear as a sole match condition.
 - **R3: Kernel insufficiency**: `kernel_only` is a ceremony-time commitment — the agent cannot access full procedural content mid-session. Mitigation: the `§5::ANCHOR_KERNEL` spec requires `NEVER` and `MUST` fields, covering safety. Profile designers should default to `skills` and only demote to `kernel_only` when they are confident the procedural content is not needed in that context. When in doubt, use `skills`.
 - **R4: Schema version fragmentation**: The agents-spec v8 introduces a new structure while v7 flat lists must remain valid. Mitigation: version detection is structural (presence of CHASSIS/PROFILES keys), not META-based. The FLUKES loader handles both formats during the v8.x transition window. See "Agents-Spec Versioning" above.
 - **R5: Scope creep into filesystem analysis**: The `match` field could tempt future implementations to make the Anchor inspect the filesystem for context signals. Mitigation: this ADR explicitly constrains the Anchor to text compilation — profile selection is via explicit `capability_mode` parameter only. Filesystem-based context detection is deferred to a future higher-level orchestrator layer.
