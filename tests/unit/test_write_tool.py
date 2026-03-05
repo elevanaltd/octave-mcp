@@ -3208,3 +3208,378 @@ KEY::value
             # In strict mode, no compilations field (or empty)
             if "compilations" in result:
                 assert result["compilations"] == []
+
+
+class TestUnquotedSectionInValueWarning:
+    """Tests for W_UNQUOTED_SECTION_IN_VALUE warning.
+
+    When input content contains unquoted § in a value position (after ::),
+    the lexer correctly tokenizes § as a SECTION operator. This can cause
+    silent data loss or parse errors. The warning helps users discover
+    that they need to quote values containing §.
+    """
+
+    @pytest.mark.asyncio
+    async def test_unquoted_section_at_start_of_value_emits_warning(self):
+        """W_UNQUOTED_SECTION_IN_VALUE emitted when § starts a value after ::."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR_SECTION\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE in corrections, got codes: {codes}"
+            # Verify the warning message is helpful
+            warning = next(c for c in corrections if c.get("code") == "W_UNQUOTED_SECTION_IN_VALUE")
+            assert "§" in warning["message"]
+            assert "quote" in warning["message"].lower() or "Quote" in warning["message"]
+
+    @pytest.mark.asyncio
+    async def test_unquoted_section_in_strict_mode_emits_warning(self):
+        """W_UNQUOTED_SECTION_IN_VALUE emitted in strict mode too."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        # This content parses in strict mode but loses data
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE in corrections, got codes: {codes}"
+
+    @pytest.mark.asyncio
+    async def test_quoted_section_in_value_no_warning(self):
+        """No warning when § is properly quoted in a value."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::"§2_BEHAVIOR_SECTION"\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            assert result["status"] == "success"
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert "W_UNQUOTED_SECTION_IN_VALUE" not in codes
+
+    @pytest.mark.asyncio
+    async def test_section_as_operator_no_warning(self):
+        """No warning when § is used correctly as a section operator."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\n§1::FIRST_SECTION\n  KEY::value\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            assert result["status"] == "success"
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert "W_UNQUOTED_SECTION_IN_VALUE" not in codes
+
+    @pytest.mark.asyncio
+    async def test_warning_includes_line_number(self):
+        """Warning should include the line number where unquoted § appears."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            warning = next(
+                (c for c in corrections if c.get("code") == "W_UNQUOTED_SECTION_IN_VALUE"),
+                None,
+            )
+            assert warning is not None
+            assert "line" in warning, "Warning should include line number"
+            assert warning["line"] == 5
+
+    @pytest.mark.asyncio
+    async def test_flow_reference_with_section_no_false_positive(self):
+        """Flow references like →§TARGET should not trigger the warning."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nACTION::"→§DECISION_LOG"\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            assert result["status"] == "success"
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert "W_UNQUOTED_SECTION_IN_VALUE" not in codes
+
+
+class TestUnquotedSectionFalsePositiveFixes:
+    """Tests for W_UNQUOTED_SECTION_IN_VALUE false positive fixes.
+
+    Covers:
+    - Issue 1: Space before quote after :: should NOT warn
+    - Issue 2: § inside literal zones should NOT warn
+    - Issue 3: Broader key grammar (unicode, hyphens, etc.)
+    - Issue 4: Strict mode parse failure still emits warning
+    """
+
+    @pytest.mark.asyncio
+    async def test_space_before_quote_no_warning(self):
+        """KEY:: "§2_BEHAVIOR" (space before quote) should NOT warn."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE:: "§2_BEHAVIOR"\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" not in codes
+            ), f"False positive: space before quote should not trigger warning. Got: {codes}"
+
+    @pytest.mark.asyncio
+    async def test_multiple_spaces_before_quote_no_warning(self):
+        """KEY::   "§2_BEHAVIOR" (multiple spaces before quote) should NOT warn."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::   "§2_BEHAVIOR"\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert "W_UNQUOTED_SECTION_IN_VALUE" not in codes
+
+    @pytest.mark.asyncio
+    async def test_tab_before_quote_no_warning(self):
+        """KEY::\\t"§2_BEHAVIOR" (tab before quote) should NOT warn."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::\t"§2_BEHAVIOR"\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert "W_UNQUOTED_SECTION_IN_VALUE" not in codes
+
+    @pytest.mark.asyncio
+    async def test_section_inside_literal_zone_no_warning(self):
+        """§ inside a literal zone (fenced code block) should NOT warn."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = (
+            '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\n' "EXAMPLE:\n```\nKEY::§2_BEHAVIOR\n```\n===END==="
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" not in codes
+            ), f"False positive: § inside literal zone should not trigger warning. Got: {codes}"
+
+    @pytest.mark.asyncio
+    async def test_section_outside_literal_zone_still_warns(self):
+        """§ outside a literal zone should still warn even if a literal zone exists."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = (
+            '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\n'
+            "EXAMPLE:\n```\nsome code\n```\nREFERENCE::§2_BEHAVIOR\n===END==="
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert "W_UNQUOTED_SECTION_IN_VALUE" in codes
+
+    @pytest.mark.asyncio
+    async def test_strict_parse_failure_still_emits_section_warning(self):
+        """W_UNQUOTED_SECTION_IN_VALUE emitted even when strict mode parse fails."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        # Content that will cause a parse error in strict mode but has unquoted §
+        # Using malformed content that triggers E_PARSE but includes KEY::§
+        content = "===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::1.0\nREFERENCE::§2_BEHAVIOR\n===BROKEN"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE on strict parse failure path. Got: {codes}"
+
+    @pytest.mark.asyncio
+    async def test_markdown_wrapped_content_emits_section_warning(self):
+        """W_UNQUOTED_SECTION_IN_VALUE emitted even when content is wrapped in markdown fences.
+
+        GH#329: When input is wrapped in ```octave ... ```, the markdown fence
+        is unwrapped before parsing (parse_input), but the detection function
+        was previously called on the raw content. The outer ``` caused the
+        literal zone detector to suppress the warning as a false positive.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '```octave\n===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR\n===END===\n```'
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE when markdown-wrapped. Got: {codes}"
+
+    @pytest.mark.asyncio
+    async def test_markdown_wrapped_strict_mode_emits_section_warning(self):
+        """W_UNQUOTED_SECTION_IN_VALUE emitted in strict mode with markdown fences."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '```octave\n===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR\n===END===\n```'
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE in strict mode with markdown wrap. Got: {codes}"
+
+
+class TestDetectUnquotedSectionUnit:
+    """Unit tests for _detect_unquoted_section_in_values function directly."""
+
+    def test_basic_detection(self):
+        """Basic unquoted § after :: is detected."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values("KEY::§2_BEHAVIOR")
+        assert len(warnings) == 1
+        assert warnings[0]["code"] == "W_UNQUOTED_SECTION_IN_VALUE"
+
+    def test_quoted_no_detection(self):
+        """Quoted § is not detected."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::"§2_BEHAVIOR"')
+        assert len(warnings) == 0
+
+    def test_space_before_quote_no_detection(self):
+        """Space before quote: KEY:: "§2" should not be detected."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY:: "§2_BEHAVIOR"')
+        assert len(warnings) == 0, f"False positive with space before quote: {warnings}"
+
+    def test_literal_zone_excluded(self):
+        """§ inside ``` fenced block should not be detected."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        content = "BEFORE::value\n```\nKEY::§2_BEHAVIOR\n```\nAFTER::value"
+        warnings = _detect_unquoted_section_in_values(content)
+        assert len(warnings) == 0, f"False positive inside literal zone: {warnings}"
+
+    def test_hyphenated_key_detected(self):
+        """Hyphenated keys like my-key::§2 should be detected."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values("my-key::§2_BEHAVIOR")
+        assert len(warnings) == 1
+
+    def test_unicode_key_detected(self):
+        """Unicode identifier keys should be detected."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values("CLEF::§2_BEHAVIOR")
+        assert len(warnings) == 1
+
+    def test_dotted_key_detected(self):
+        """Dotted keys like my.key::§2 should be detected."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values("my.key::§2_BEHAVIOR")
+        assert len(warnings) == 1
+
+    def test_section_operator_not_detected(self):
+        """§1::SECTION_NAME at line start is not a key-value, should not warn."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values("§1::SECTION_NAME")
+        assert len(warnings) == 0
+
+    def test_array_with_quoted_section_no_detection(self):
+        """KEY::["§2_BEHAVIOR"] should NOT warn — § is inside quotes in array."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::["§2_BEHAVIOR"]')
+        assert len(warnings) == 0, f"False positive: quoted § inside array brackets: {warnings}"
+
+    def test_array_with_spaced_quoted_section_no_detection(self):
+        """KEY:: [ "§2_BEHAVIOR" ] should NOT warn — § is inside quotes."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY:: [ "§2_BEHAVIOR" ]')
+        assert len(warnings) == 0, f"False positive: spaced quoted § in array: {warnings}"
+
+    def test_array_with_mixed_quoted_unquoted_section_warns(self):
+        """KEY::["§2_BEHAVIOR", other_§_unquoted] SHOULD warn — mixed case."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::["§2_BEHAVIOR", other_§_unquoted]')
+        assert len(warnings) == 1, f"Expected warning for unquoted § in mixed array: {warnings}"
+
+    def test_array_with_unquoted_section_warns(self):
+        """KEY::[§2_unquoted, "other"] SHOULD warn — unquoted § in array."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::[§2_unquoted, "other"]')
+        assert len(warnings) == 1, f"Expected warning for unquoted § in array: {warnings}"
+
+    def test_non_ascii_unicode_key_detected(self):
+        """Non-ASCII unicode key like clé::§2_BEHAVIOR should be detected."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values("clé::§2_BEHAVIOR")
+        assert len(warnings) == 1, f"Expected warning for unicode key with unquoted §: {warnings}"
+
+    def test_section_in_comment_no_detection(self):
+        """§ in a comment (after //) should NOT trigger warning."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::"value" // see §2_BEHAVIOR')
+        assert len(warnings) == 0, f"False positive: § in comment should not warn: {warnings}"
+
+    def test_unquoted_section_before_comment_still_warns(self):
+        """Unquoted § in value before // comment should still warn."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values("KEY::unquoted_§_value // comment")
+        assert len(warnings) == 1, f"Expected warning for unquoted § before comment: {warnings}"
+
+    def test_quoted_section_with_section_in_comment_no_detection(self):
+        """§ quoted in value + § in comment should NOT warn."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::"§_in_quotes" // §_in_comment')
+        assert len(warnings) == 0, f"False positive: quoted § + comment § should not warn: {warnings}"

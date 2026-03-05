@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This release introduces the cognitive type system — three cognition master files (LOGOS, ETHOS, PATHOS) with a formal spec and schema validation — alongside agents-spec v7.0.0 cognitive separation, and fixes for angle bracket annotations and deep section schema validation.
 
 ### Added
+- **`W_UNQUOTED_SECTION_IN_VALUE` warning** — `octave_write` now warns when unquoted `§` in values is parsed as a section operator, with guidance to quote the value (e.g., `KEY::"value_with_§"`)
 - **Cognition Type System** (#322, #324) — Cognitive kernel architecture for Wind/Wall/Door agent archetypes
   - New `octave-cognition-spec.oct.md` schema contract defining `COGNITION_DEFINITION` type with `§1::COGNITIVE_IDENTITY` (NATURE: FORCE/ESSENCE/ELEMENT) and `§2::COGNITIVE_RULES` (MODE, PRIME_DIRECTIVE, THINK, THINK_NEVER)
   - Three cognition master files: `logos.oct.md` (LOGOS/STRUCTURE/DOOR), `ethos.oct.md` (ETHOS/CONSTRAINT/WALL), `pathos.oct.md` (PATHOS/POSSIBILITY/WIND)
@@ -47,12 +48,13 @@ This release introduces the cognitive type system — three cognition master fil
   - Cascading fallback reworded as extraction priority sequence (resolved logical contradiction)
 
 ### Documentation
+- **`octave-literacy` skill** — Added rule 8 (quote `§` in values) with WRONG/RIGHT example; renumbered file extension rule to 9
 - Cognitive type system guide with Wind/Wall/Door metaphor, separation of concerns diagram, evidence basis (#324)
 - Repository structure realigned with visibility-rules v1.6 and v1.7 (#323) — debate synthesis files relocated from `.hestai/decisions/` to `debates/`
 - CRS review findings resolved: clarified §0 and COGNITION comments in agents spec (#319)
 
 ### Quality Gates
-- 2468 tests passing (14 new for cognition schema), 0 failures
+- 2450 tests passing (6 new for § quoting warning, 14 for cognition schema), 0 failures
 - Constitutional compliance verified: I1, I2, I3, I4, I5
 
 ## [1.8.0] - 2026-03-02 - "Lexical Fidelity" Release

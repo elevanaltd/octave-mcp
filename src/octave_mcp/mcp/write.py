@@ -52,6 +52,137 @@ W_STRUCT_001 = "W_STRUCT_001"  # Section marker loss
 W_STRUCT_002 = "W_STRUCT_002"  # Block count reduction
 W_STRUCT_003 = "W_STRUCT_003"  # Assignment count reduction
 
+# Quoting guidance warning
+W_UNQUOTED_SECTION_IN_VALUE = "W_UNQUOTED_SECTION_IN_VALUE"
+
+# Regex: line with KEY::  followed by § somewhere in the value portion.
+# Matches lines like  KEY::§2_BEHAVIOR  and  KEY::["§2_BEHAVIOR"]
+# but NOT lines where § starts the line (section declarations like §1::NAME).
+# GH#329: Key pattern widened to cover unicode/hyphen/slash identifiers.
+# GH#329r2: Removed fragile lookahead; quoting context checked post-match
+#   by _all_section_marks_quoted() to handle arrays, nested quotes, etc.
+# GH#329r2: Key pattern uses \w for unicode support (e.g. clé::§2).
+_UNQUOTED_SECTION_RE = re.compile(
+    r"^[ \t]*[\w./][\w.\-/]*::"  # KEY:: (unicode-aware identifier grammar)
+    r"[^§\n]*"  # optional non-§ chars before the §
+    r"§",  # a § in value position
+    re.MULTILINE,
+)
+
+# Regex for detecting literal zone (fenced code block) boundaries.
+_LITERAL_ZONE_FENCE_RE = re.compile(r"^[ \t]*```", re.MULTILINE)
+
+
+def _build_literal_zone_line_set(content: str) -> set[int]:
+    """Build a set of 1-based line numbers that fall inside literal zones.
+
+    Literal zones are ``` fenced blocks. Lines between (and including) the
+    opening and closing fences are considered inside the zone.
+    """
+    inside_lines: set[int] = set()
+    in_zone = False
+    for line_num, line in enumerate(content.split("\n"), start=1):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if not in_zone:
+                in_zone = True
+                inside_lines.add(line_num)
+            else:
+                inside_lines.add(line_num)
+                in_zone = False
+            continue
+        if in_zone:
+            inside_lines.add(line_num)
+    return inside_lines
+
+
+def _all_section_marks_quoted(line: str) -> bool:
+    """Return True if every § on *line* appears inside a double-quoted string.
+
+    Scans *line* character-by-character, toggling an ``in_quote`` flag on
+    each unescaped ``"``.  Any ``§`` encountered while ``in_quote`` is False
+    means at least one section mark is unquoted, so we return False.
+
+    When ``//`` is encountered outside quotes, scanning stops because
+    everything after is an OCTAVE comment (GH#329r3).
+
+    This is a secondary filter applied after the regex match to eliminate
+    false positives from array syntax like ``KEY::["§2_BEHAVIOR"]`` where
+    the § is properly quoted inside brackets.
+    """
+    in_quote = False
+    prev_ch = ""
+    for ch in line:
+        if ch == '"':
+            in_quote = not in_quote
+        elif ch == "/" and prev_ch == "/" and not in_quote:
+            # GH#329r3: "//" outside quotes starts a comment; stop scanning.
+            return True
+        elif ch == "§" and not in_quote:
+            return False
+        prev_ch = ch
+    return True
+
+
+def _detect_unquoted_section_in_values(content: str) -> list[dict[str, Any]]:
+    """Detect unquoted § in value positions and emit guidance warnings.
+
+    Scans input content for lines where § appears after :: without quoting.
+    The lexer correctly tokenizes § as a SECTION operator, which can cause
+    silent data loss when the user intended § as literal text in a value.
+
+    This does NOT change parser behavior -- it only emits advisory warnings.
+
+    GH#329: Excludes matches inside literal zones (``` fenced blocks) since
+    the lexer preserves literal zone content verbatim.
+
+    Returns:
+        List of correction dicts with W_UNQUOTED_SECTION_IN_VALUE code.
+    """
+    warnings: list[dict[str, Any]] = []
+    # GH#329: Build set of line numbers inside literal zones to skip
+    literal_zone_lines = _build_literal_zone_line_set(content)
+
+    for match in _UNQUOTED_SECTION_RE.finditer(content):
+        # Calculate line number from match position
+        line_num = content[: match.start()].count("\n") + 1
+
+        # GH#329: Skip matches inside literal zones
+        if line_num in literal_zone_lines:
+            continue
+
+        # Extract the full line for context
+        line_start = content.rfind("\n", 0, match.start()) + 1
+        line_end = content.find("\n", match.start())
+        if line_end == -1:
+            line_end = len(content)
+        full_line = content[line_start:line_end].strip()
+
+        # GH#329r2: Extract value portion (after ::) and check if all §
+        # marks are inside quoted strings.  Handles arrays like ["§2"]
+        # where the regex match alone cannot determine quoting context.
+        colon_idx = full_line.find("::")
+        value_part = full_line[colon_idx + 2 :] if colon_idx != -1 else full_line
+        if _all_section_marks_quoted(value_part):
+            continue
+
+        warnings.append(
+            {
+                "code": W_UNQUOTED_SECTION_IN_VALUE,
+                "tier": "LENIENT_PARSE",
+                "message": (
+                    f"W_UNQUOTED_SECTION_IN_VALUE: Value at line {line_num} contains "
+                    f"unquoted § which is parsed as a section operator. "
+                    f'Quote the value to use § as literal text: KEY::"value_with_§"'
+                ),
+                "line": line_num,
+                "original": full_line,
+                "safe": True,
+                "semantics_changed": False,
+            }
+        )
+    return warnings
+
 
 @dataclass
 class StructuralMetrics:
@@ -1326,15 +1457,22 @@ class WriteTool(BaseTool):
                 try:
                     _, tokenize_repairs = tokenize(parse_input)
                 except Exception as e:
+                    # GH#329: Emit § quoting warnings even on strict tokenize failure path.
+                    # The unquoted § may be the *cause* of the tokenization error.
                     return self._error_envelope(
                         target_path,
                         [{"code": "E_TOKENIZE", "message": f"Tokenization error: {str(e)}"}],
+                        _detect_unquoted_section_in_values(parse_input),
                     )
 
                 try:
                     doc = parse(parse_input)
                 except Exception as e:
                     strict_corrections = self._track_corrections(parse_input, parse_input, tokenize_repairs)
+                    # GH#329: Emit § quoting warnings even on strict parse failure path.
+                    # The warning is user-facing guidance that should not be suppressed by
+                    # parse errors, since the unquoted § may be the *cause* of the error.
+                    strict_corrections.extend(_detect_unquoted_section_in_values(parse_input))
                     return self._error_envelope(
                         target_path,
                         [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
@@ -1342,6 +1480,13 @@ class WriteTool(BaseTool):
                     )
 
                 corrections.extend(self._track_corrections(parse_input, parse_input, tokenize_repairs))
+
+            # Detect unquoted § in value positions and emit guidance warnings.
+            # This runs on parse_input (after markdown fence unwrapping) so that
+            # outer ``` fences don't suppress the warning via literal zone detection.
+            # The lexer/parser behavior is correct; this is purely user-facing guidance.
+            section_warnings = _detect_unquoted_section_in_values(parse_input)
+            corrections.extend(section_warnings)
 
             # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)
