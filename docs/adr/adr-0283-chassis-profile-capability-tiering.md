@@ -1,10 +1,11 @@
 # ADR-0283: Chassis-Profile Schema for Agent Capability Tiering
 
 ## Status
-PROPOSED → RATIFIED (pending human approval)
+APPROVED
 
 Ratification debate: `2026-03-05-ratification-debate-adr-0283-c-01kjygse`
 Ratification conditions: Three strengthening artifacts incorporated (Safety-Invariant Loader Contract, Holographic Overlap Matrix, Risk Mitigation Traceability)
+Approved: 2026-03-05 (human approval)
 
 ## Context
 
@@ -265,7 +266,7 @@ This contract ensures that `kernel_only` never produces a silent empty result. T
 ## Future Considerations
 
 ### On-Demand Inflation (Not in This ADR — tracked as separate issue)
-The debate explored "Vector B" — an agent seeing a kernel and requesting full body loading mid-session via `Skill(inflate::"skill-id")` or a dedicated `inflate_skill` MCP tool. This is the natural escape hatch for the kernel_only irrevocability trap (Dragon 1): an agent hits a capability gap, realizes it only has the kernel, and calls the tool to fetch the full body. This is architecturally compatible with the chassis-profile model and should be prioritized early in the v9 roadmap. See HestAI-MCP issue (to be created) for tracking.
+The debate explored "Vector B" — an agent seeing a kernel and requesting full body loading mid-session via `Skill(inflate::"skill-id")` or a dedicated `inflate_skill` MCP tool. This is the natural escape hatch for the kernel_only irrevocability trap (Dragon 1): an agent hits a capability gap, realizes it only has the kernel, and calls the tool to fetch the full body. This is architecturally compatible with the chassis-profile model and should be prioritized early in the v9 roadmap. See HestAI-MCP#307 for tracking.
 
 ### INFLATE_ON Triggers (Not in This ADR)
 The debate proposed file-pattern and tag-based triggers for automatic skill inflation. This overlaps with the `match` field but operates at the individual skill level rather than the profile level. Deferred until there's a concrete use case that profiles don't satisfy.
