@@ -3489,3 +3489,38 @@ class TestDetectUnquotedSectionUnit:
 
         warnings = _detect_unquoted_section_in_values("§1::SECTION_NAME")
         assert len(warnings) == 0
+
+    def test_array_with_quoted_section_no_detection(self):
+        """KEY::["§2_BEHAVIOR"] should NOT warn — § is inside quotes in array."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::["§2_BEHAVIOR"]')
+        assert len(warnings) == 0, f"False positive: quoted § inside array brackets: {warnings}"
+
+    def test_array_with_spaced_quoted_section_no_detection(self):
+        """KEY:: [ "§2_BEHAVIOR" ] should NOT warn — § is inside quotes."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY:: [ "§2_BEHAVIOR" ]')
+        assert len(warnings) == 0, f"False positive: spaced quoted § in array: {warnings}"
+
+    def test_array_with_mixed_quoted_unquoted_section_warns(self):
+        """KEY::["§2_BEHAVIOR", other_§_unquoted] SHOULD warn — mixed case."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::["§2_BEHAVIOR", other_§_unquoted]')
+        assert len(warnings) == 1, f"Expected warning for unquoted § in mixed array: {warnings}"
+
+    def test_array_with_unquoted_section_warns(self):
+        """KEY::[§2_unquoted, "other"] SHOULD warn — unquoted § in array."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::[§2_unquoted, "other"]')
+        assert len(warnings) == 1, f"Expected warning for unquoted § in array: {warnings}"
+
+    def test_non_ascii_unicode_key_detected(self):
+        """Non-ASCII unicode key like clé::§2_BEHAVIOR should be detected."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values("clé::§2_BEHAVIOR")
+        assert len(warnings) == 1, f"Expected warning for unicode key with unquoted §: {warnings}"

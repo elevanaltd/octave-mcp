@@ -55,16 +55,17 @@ W_STRUCT_003 = "W_STRUCT_003"  # Assignment count reduction
 # Quoting guidance warning
 W_UNQUOTED_SECTION_IN_VALUE = "W_UNQUOTED_SECTION_IN_VALUE"
 
-# Regex: line with KEY::  followed by unquoted § in the value portion.
-# Matches lines like  KEY::§2_BEHAVIOR  but NOT  KEY::"§2_BEHAVIOR"
-# and NOT lines where § starts the line (section declarations like §1::NAME).
+# Regex: line with KEY::  followed by § somewhere in the value portion.
+# Matches lines like  KEY::§2_BEHAVIOR  and  KEY::["§2_BEHAVIOR"]
+# but NOT lines where § starts the line (section declarations like §1::NAME).
 # GH#329: Key pattern widened to cover unicode/hyphen/slash identifiers.
-# GH#329: Lookahead accounts for optional whitespace before opening quote.
+# GH#329r2: Removed fragile lookahead; quoting context checked post-match
+#   by _all_section_marks_quoted() to handle arrays, nested quotes, etc.
+# GH#329r2: Key pattern uses \w for unicode support (e.g. clé::§2).
 _UNQUOTED_SECTION_RE = re.compile(
-    r"^[ \t]*[A-Za-z_./][A-Za-z0-9_.\-/]*::"  # KEY:: (broad identifier grammar)
-    r'(?!\s*")'  # NOT followed by optional whitespace + opening quote
+    r"^[ \t]*[\w./][\w.\-/]*::"  # KEY:: (unicode-aware identifier grammar)
     r"[^§\n]*"  # optional non-§ chars before the §
-    r"§",  # the unquoted § in value position
+    r"§",  # a § in value position
     re.MULTILINE,
 )
 
@@ -93,6 +94,26 @@ def _build_literal_zone_line_set(content: str) -> set[int]:
         if in_zone:
             inside_lines.add(line_num)
     return inside_lines
+
+
+def _all_section_marks_quoted(line: str) -> bool:
+    """Return True if every § on *line* appears inside a double-quoted string.
+
+    Scans *line* character-by-character, toggling an ``in_quote`` flag on
+    each unescaped ``"``.  Any ``§`` encountered while ``in_quote`` is False
+    means at least one section mark is unquoted, so we return False.
+
+    This is a secondary filter applied after the regex match to eliminate
+    false positives from array syntax like ``KEY::["§2_BEHAVIOR"]`` where
+    the § is properly quoted inside brackets.
+    """
+    in_quote = False
+    for ch in line:
+        if ch == '"':
+            in_quote = not in_quote
+        elif ch == "§" and not in_quote:
+            return False
+    return True
 
 
 def _detect_unquoted_section_in_values(content: str) -> list[dict[str, Any]]:
@@ -128,6 +149,14 @@ def _detect_unquoted_section_in_values(content: str) -> list[dict[str, Any]]:
         if line_end == -1:
             line_end = len(content)
         full_line = content[line_start:line_end].strip()
+
+        # GH#329r2: Extract value portion (after ::) and check if all §
+        # marks are inside quoted strings.  Handles arrays like ["§2"]
+        # where the regex match alone cannot determine quoting context.
+        colon_idx = full_line.find("::")
+        value_part = full_line[colon_idx + 2 :] if colon_idx != -1 else full_line
+        if _all_section_marks_quoted(value_part):
+            continue
 
         warnings.append(
             {
