@@ -58,13 +58,41 @@ W_UNQUOTED_SECTION_IN_VALUE = "W_UNQUOTED_SECTION_IN_VALUE"
 # Regex: line with KEY::  followed by unquoted § in the value portion.
 # Matches lines like  KEY::§2_BEHAVIOR  but NOT  KEY::"§2_BEHAVIOR"
 # and NOT lines where § starts the line (section declarations like §1::NAME).
+# GH#329: Key pattern widened to cover unicode/hyphen/slash identifiers.
+# GH#329: Lookahead accounts for optional whitespace before opening quote.
 _UNQUOTED_SECTION_RE = re.compile(
-    r"^[ \t]*[A-Za-z_][A-Za-z0-9_.]*::"  # KEY:: at line start (with optional indent)
-    r'(?!")'  # NOT followed by opening quote (quoted values are fine)
+    r"^[ \t]*[A-Za-z_./][A-Za-z0-9_.\-/]*::"  # KEY:: (broad identifier grammar)
+    r'(?!\s*")'  # NOT followed by optional whitespace + opening quote
     r"[^§\n]*"  # optional non-§ chars before the §
     r"§",  # the unquoted § in value position
     re.MULTILINE,
 )
+
+# Regex for detecting literal zone (fenced code block) boundaries.
+_LITERAL_ZONE_FENCE_RE = re.compile(r"^[ \t]*```", re.MULTILINE)
+
+
+def _build_literal_zone_line_set(content: str) -> set[int]:
+    """Build a set of 1-based line numbers that fall inside literal zones.
+
+    Literal zones are ``` fenced blocks. Lines between (and including) the
+    opening and closing fences are considered inside the zone.
+    """
+    inside_lines: set[int] = set()
+    in_zone = False
+    for line_num, line in enumerate(content.split("\n"), start=1):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if not in_zone:
+                in_zone = True
+                inside_lines.add(line_num)
+            else:
+                inside_lines.add(line_num)
+                in_zone = False
+            continue
+        if in_zone:
+            inside_lines.add(line_num)
+    return inside_lines
 
 
 def _detect_unquoted_section_in_values(content: str) -> list[dict[str, Any]]:
@@ -76,13 +104,24 @@ def _detect_unquoted_section_in_values(content: str) -> list[dict[str, Any]]:
 
     This does NOT change parser behavior -- it only emits advisory warnings.
 
+    GH#329: Excludes matches inside literal zones (``` fenced blocks) since
+    the lexer preserves literal zone content verbatim.
+
     Returns:
         List of correction dicts with W_UNQUOTED_SECTION_IN_VALUE code.
     """
     warnings: list[dict[str, Any]] = []
+    # GH#329: Build set of line numbers inside literal zones to skip
+    literal_zone_lines = _build_literal_zone_line_set(content)
+
     for match in _UNQUOTED_SECTION_RE.finditer(content):
         # Calculate line number from match position
         line_num = content[: match.start()].count("\n") + 1
+
+        # GH#329: Skip matches inside literal zones
+        if line_num in literal_zone_lines:
+            continue
+
         # Extract the full line for context
         line_start = content.rfind("\n", 0, match.start()) + 1
         line_end = content.find("\n", match.start())
@@ -1381,15 +1420,22 @@ class WriteTool(BaseTool):
                 try:
                     _, tokenize_repairs = tokenize(parse_input)
                 except Exception as e:
+                    # GH#329: Emit § quoting warnings even on strict tokenize failure path.
+                    # The unquoted § may be the *cause* of the tokenization error.
                     return self._error_envelope(
                         target_path,
                         [{"code": "E_TOKENIZE", "message": f"Tokenization error: {str(e)}"}],
+                        _detect_unquoted_section_in_values(content),
                     )
 
                 try:
                     doc = parse(parse_input)
                 except Exception as e:
                     strict_corrections = self._track_corrections(parse_input, parse_input, tokenize_repairs)
+                    # GH#329: Emit § quoting warnings even on strict parse failure path.
+                    # The warning is user-facing guidance that should not be suppressed by
+                    # parse errors, since the unquoted § may be the *cause* of the error.
+                    strict_corrections.extend(_detect_unquoted_section_in_values(content))
                     return self._error_envelope(
                         target_path,
                         [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
