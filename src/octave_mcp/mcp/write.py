@@ -103,16 +103,24 @@ def _all_section_marks_quoted(line: str) -> bool:
     each unescaped ``"``.  Any ``§`` encountered while ``in_quote`` is False
     means at least one section mark is unquoted, so we return False.
 
+    When ``//`` is encountered outside quotes, scanning stops because
+    everything after is an OCTAVE comment (GH#329r3).
+
     This is a secondary filter applied after the regex match to eliminate
     false positives from array syntax like ``KEY::["§2_BEHAVIOR"]`` where
     the § is properly quoted inside brackets.
     """
     in_quote = False
+    prev_ch = ""
     for ch in line:
         if ch == '"':
             in_quote = not in_quote
+        elif ch == "/" and prev_ch == "/" and not in_quote:
+            # GH#329r3: "//" outside quotes starts a comment; stop scanning.
+            return True
         elif ch == "§" and not in_quote:
             return False
+        prev_ch = ch
     return True
 
 

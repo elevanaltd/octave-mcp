@@ -3524,3 +3524,24 @@ class TestDetectUnquotedSectionUnit:
 
         warnings = _detect_unquoted_section_in_values("clé::§2_BEHAVIOR")
         assert len(warnings) == 1, f"Expected warning for unicode key with unquoted §: {warnings}"
+
+    def test_section_in_comment_no_detection(self):
+        """§ in a comment (after //) should NOT trigger warning."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::"value" // see §2_BEHAVIOR')
+        assert len(warnings) == 0, f"False positive: § in comment should not warn: {warnings}"
+
+    def test_unquoted_section_before_comment_still_warns(self):
+        """Unquoted § in value before // comment should still warn."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values("KEY::unquoted_§_value // comment")
+        assert len(warnings) == 1, f"Expected warning for unquoted § before comment: {warnings}"
+
+    def test_quoted_section_with_section_in_comment_no_detection(self):
+        """§ quoted in value + § in comment should NOT warn."""
+        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+
+        warnings = _detect_unquoted_section_in_values('KEY::"§_in_quotes" // §_in_comment')
+        assert len(warnings) == 0, f"False positive: quoted § + comment § should not warn: {warnings}"
