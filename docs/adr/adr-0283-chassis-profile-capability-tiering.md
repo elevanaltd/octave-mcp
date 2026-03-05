@@ -1,7 +1,10 @@
 # ADR-0283: Chassis-Profile Schema for Agent Capability Tiering
 
 ## Status
-PROPOSED
+PROPOSED → RATIFIED (pending human approval)
+
+Ratification debate: `2026-03-05-ratification-debate-adr-0283-c-01kjygse`
+Ratification conditions: Three strengthening artifacts incorporated (Safety-Invariant Loader Contract, Holographic Overlap Matrix, Risk Mitigation Traceability)
 
 ## Context
 
@@ -144,8 +147,9 @@ Skills should not know they are "chassis" — that's an agent-level concept. A s
 #### Grammar validation
 Mutual exclusivity (one active profile) is enforced by the anchor ceremony at runtime, not by the OCTAVE grammar at parse time. The grammar validates structural correctness (CHASSIS is a list, PROFILES contains named blocks with required fields). The ceremony validates semantic correctness (exactly one profile selected).
 
-#### Overlap rules
-The following overlap conditions are explicitly defined:
+#### Overlap rules and collision resolution
+
+The following overlap conditions are explicitly defined for **static validation** (parse-time):
 
 | Condition | Verdict | Rationale |
 |-----------|---------|-----------|
@@ -156,6 +160,13 @@ The following overlap conditions are explicitly defined:
 | `default` mixed with `context::` conditions in same `match` list | Validator error | `default` absorbs all contexts, making other conditions meaningless |
 | `default` as sole match condition | Valid | Designates the fallback profile |
 | Duplicate profile names in PROFILES | Validator error | Ambiguous resolution |
+
+The following **runtime collision resolution rules** govern the FLUKES loader when edge cases arise:
+
+1. **Identity Supremacy**: If a skill appears in both CHASSIS and a profile (should be caught by validator, but as a safety invariant): load full body via CHASSIS. Identity cannot be degraded by context.
+2. **Procedural Necessity**: If a skill somehow appears in both `skills` and `kernel_only` within the same profile: load full body. Explicit need for full body overrides the efficiency request.
+3. **Context Specificity**: If a specific context match fires, it suppresses the `default` profile. Specific context always overrides generic default.
+4. **Exclusivity Violation**: If more than one non-default profile matches the current context, the ceremony MUST halt with an error (`AMBIGUOUS_PROFILE_MATCH`). No implicit merging of profiles.
 
 ### Agents-Spec Versioning
 
@@ -186,7 +197,7 @@ Cognition files (`logos.oct.md`, `ethos.oct.md`, `pathos.oct.md`) are explicitly
 1. **FLUKES loader**: Read `§3::CAPABILITIES`, detect flat vs. structured format
 2. **Profile resolver**: Match `capability_mode` parameter to profile name, fall back to `match` rules via context resolution
 3. **Context resolver**: New component — maps working directory state, branch name, and caller-provided tags to `context::` values. Must be configurable and deterministic, with resolution logged in the permit
-4. **Differentiated loading**: Full body for chassis + profile `skills`, kernel extraction for `kernel_only`
+4. **Differentiated loading**: Full body for chassis + profile `skills`, kernel extraction for `kernel_only` via the Safety-Invariant Loader Contract (see below)
 5. **Permit metadata**: Include active profile name, resolved context values, and loading manifest (which skills loaded at what fidelity) in the permit for auditability
 6. **Error handling**: Unknown `capability_mode` → warn + fallback; no match and no default → chassis-only with warning
 
@@ -194,6 +205,36 @@ Cognition files (`logos.oct.md`, `ethos.oct.md`, `pathos.oct.md`) are explicitly
 
 1. **Agent file migration**: Convert flat skill lists to chassis-profile structure
 2. **Profile design**: Determine which skills belong to which profiles per agent
+
+### Safety-Invariant Loader Contract
+
+The `kernel_only` loading mode follows a cascading extraction protocol that guarantees safety constraints are always present, even for skills with incomplete or missing `§5::ANCHOR_KERNEL` sections:
+
+```
+STEP 1: Check §5::ANCHOR_KERNEL exists?
+  → YES: Extract §5 content. DONE.
+  → NO:  Go to Step 2.
+
+STEP 2: Check §3::GOVERNANCE exists?
+  → YES: Extract §3 (truncate to 300 tokens). Tag output with SOURCE::FALLBACK_GOVERNANCE. DONE.
+  → NO:  Go to Step 3.
+
+STEP 3: Identity Fallback
+  → Extract §1::CORE. Tag output with WARN::UNCONSTRAINED_CAPABILITY_LOADED.
+  → Log permit warning: "Safety kernel missing for skill X"
+```
+
+This contract ensures that `kernel_only` never produces a silent empty result. The cascading fallback aligns with the existing skills spec v9 §3 extraction priority but makes the algorithm explicit and mandatory for the FLUKES loader implementation.
+
+### Risk Mitigation Traceability
+
+| Risk | Mitigation | Status |
+|------|-----------|--------|
+| R1: Safety regression in legacy skills (missing §5) | Cascading Safety Extraction Protocol (loader contract above) | Resolved by design |
+| R2: Profile proliferation / capability drift | Mutual exclusivity + no inheritance + validator warning at 4+ profiles | Controlled |
+| R3: Operational friction (kernel_only irrevocability) | Accepted tradeoff — restart cost buys auditability. Future JIT inflation path preserved | Accepted tradeoff |
+| R4: Ambiguous overlap resolution | Holographic Overlap Matrix (static + runtime rules above) | Resolved by spec |
+| R5: Context resolver adds filesystem dependency | Isolated resolver component with configurable signal mapping, logged in permit | Gated by tests |
 
 ## Consequences
 
@@ -229,6 +270,7 @@ The debate proposed file-pattern and tag-based triggers for automatic skill infl
 - Issue #283: RFC for Chassis-Profile schema
 - Debate: `2026-02-25-should-we-create-a-specialized-01kj9rf7` (fork vs. dynamism)
 - Debate: `2026-03-05-how-should-the-chassis-profile-01kjy02r` (skill loading efficiency)
+- Debate: `2026-03-05-ratification-debate-adr-0283-c-01kjygse` (ratification — approved with conditions)
 - Issue #222: AUTHORITY field formalization (precedent for evolving agent spec)
 - Skills spec v9: `§5::ANCHOR_KERNEL` and cascading fallback
 - HestAI-MCP#284: Capability tiers implementation (downstream)
