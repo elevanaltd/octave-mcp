@@ -1462,7 +1462,7 @@ class WriteTool(BaseTool):
                     return self._error_envelope(
                         target_path,
                         [{"code": "E_TOKENIZE", "message": f"Tokenization error: {str(e)}"}],
-                        _detect_unquoted_section_in_values(content),
+                        _detect_unquoted_section_in_values(parse_input),
                     )
 
                 try:
@@ -1472,7 +1472,7 @@ class WriteTool(BaseTool):
                     # GH#329: Emit § quoting warnings even on strict parse failure path.
                     # The warning is user-facing guidance that should not be suppressed by
                     # parse errors, since the unquoted § may be the *cause* of the error.
-                    strict_corrections.extend(_detect_unquoted_section_in_values(content))
+                    strict_corrections.extend(_detect_unquoted_section_in_values(parse_input))
                     return self._error_envelope(
                         target_path,
                         [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
@@ -1482,10 +1482,10 @@ class WriteTool(BaseTool):
                 corrections.extend(self._track_corrections(parse_input, parse_input, tokenize_repairs))
 
             # Detect unquoted § in value positions and emit guidance warnings.
-            # This runs on the original content (before any transformations) so we
-            # detect the user's actual input. The lexer/parser behavior is correct;
-            # this is purely user-facing guidance for discoverability.
-            section_warnings = _detect_unquoted_section_in_values(content)
+            # This runs on parse_input (after markdown fence unwrapping) so that
+            # outer ``` fences don't suppress the warning via literal zone detection.
+            # The lexer/parser behavior is correct; this is purely user-facing guidance.
+            section_warnings = _detect_unquoted_section_in_values(parse_input)
             corrections.extend(section_warnings)
 
             # Apply META mutations (if any)

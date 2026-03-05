@@ -3428,6 +3428,44 @@ class TestUnquotedSectionFalsePositiveFixes:
                 "W_UNQUOTED_SECTION_IN_VALUE" in codes
             ), f"Expected W_UNQUOTED_SECTION_IN_VALUE on strict parse failure path. Got: {codes}"
 
+    @pytest.mark.asyncio
+    async def test_markdown_wrapped_content_emits_section_warning(self):
+        """W_UNQUOTED_SECTION_IN_VALUE emitted even when content is wrapped in markdown fences.
+
+        GH#329: When input is wrapped in ```octave ... ```, the markdown fence
+        is unwrapped before parsing (parse_input), but the detection function
+        was previously called on the raw content. The outer ``` caused the
+        literal zone detector to suppress the warning as a false positive.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '```octave\n===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR\n===END===\n```'
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE when markdown-wrapped. Got: {codes}"
+
+    @pytest.mark.asyncio
+    async def test_markdown_wrapped_strict_mode_emits_section_warning(self):
+        """W_UNQUOTED_SECTION_IN_VALUE emitted in strict mode with markdown fences."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '```octave\n===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR\n===END===\n```'
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE in strict mode with markdown wrap. Got: {codes}"
+
 
 class TestDetectUnquotedSectionUnit:
     """Unit tests for _detect_unquoted_section_in_values function directly."""
