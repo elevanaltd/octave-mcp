@@ -3208,3 +3208,114 @@ KEY::value
             # In strict mode, no compilations field (or empty)
             if "compilations" in result:
                 assert result["compilations"] == []
+
+
+class TestUnquotedSectionInValueWarning:
+    """Tests for W_UNQUOTED_SECTION_IN_VALUE warning.
+
+    When input content contains unquoted § in a value position (after ::),
+    the lexer correctly tokenizes § as a SECTION operator. This can cause
+    silent data loss or parse errors. The warning helps users discover
+    that they need to quote values containing §.
+    """
+
+    @pytest.mark.asyncio
+    async def test_unquoted_section_at_start_of_value_emits_warning(self):
+        """W_UNQUOTED_SECTION_IN_VALUE emitted when § starts a value after ::."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR_SECTION\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE in corrections, got codes: {codes}"
+            # Verify the warning message is helpful
+            warning = next(c for c in corrections if c.get("code") == "W_UNQUOTED_SECTION_IN_VALUE")
+            assert "§" in warning["message"]
+            assert "quote" in warning["message"].lower() or "Quote" in warning["message"]
+
+    @pytest.mark.asyncio
+    async def test_unquoted_section_in_strict_mode_emits_warning(self):
+        """W_UNQUOTED_SECTION_IN_VALUE emitted in strict mode too."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        # This content parses in strict mode but loses data
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE in corrections, got codes: {codes}"
+
+    @pytest.mark.asyncio
+    async def test_quoted_section_in_value_no_warning(self):
+        """No warning when § is properly quoted in a value."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::"§2_BEHAVIOR_SECTION"\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            assert result["status"] == "success"
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert "W_UNQUOTED_SECTION_IN_VALUE" not in codes
+
+    @pytest.mark.asyncio
+    async def test_section_as_operator_no_warning(self):
+        """No warning when § is used correctly as a section operator."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\n§1::FIRST_SECTION\n  KEY::value\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            assert result["status"] == "success"
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert "W_UNQUOTED_SECTION_IN_VALUE" not in codes
+
+    @pytest.mark.asyncio
+    async def test_warning_includes_line_number(self):
+        """Warning should include the line number where unquoted § appears."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nREFERENCE::§2_BEHAVIOR\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            warning = next(
+                (c for c in corrections if c.get("code") == "W_UNQUOTED_SECTION_IN_VALUE"),
+                None,
+            )
+            assert warning is not None
+            assert "line" in warning, "Warning should include line number"
+            assert warning["line"] == 5
+
+    @pytest.mark.asyncio
+    async def test_flow_reference_with_section_no_false_positive(self):
+        """Flow references like →§TARGET should not trigger the warning."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\nACTION::"→§DECISION_LOG"\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            assert result["status"] == "success"
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert "W_UNQUOTED_SECTION_IN_VALUE" not in codes

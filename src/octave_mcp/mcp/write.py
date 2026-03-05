@@ -52,6 +52,61 @@ W_STRUCT_001 = "W_STRUCT_001"  # Section marker loss
 W_STRUCT_002 = "W_STRUCT_002"  # Block count reduction
 W_STRUCT_003 = "W_STRUCT_003"  # Assignment count reduction
 
+# Quoting guidance warning
+W_UNQUOTED_SECTION_IN_VALUE = "W_UNQUOTED_SECTION_IN_VALUE"
+
+# Regex: line with KEY::  followed by unquoted § in the value portion.
+# Matches lines like  KEY::§2_BEHAVIOR  but NOT  KEY::"§2_BEHAVIOR"
+# and NOT lines where § starts the line (section declarations like §1::NAME).
+_UNQUOTED_SECTION_RE = re.compile(
+    r"^[ \t]*[A-Za-z_][A-Za-z0-9_.]*::"  # KEY:: at line start (with optional indent)
+    r'(?!")'  # NOT followed by opening quote (quoted values are fine)
+    r"[^§\n]*"  # optional non-§ chars before the §
+    r"§",  # the unquoted § in value position
+    re.MULTILINE,
+)
+
+
+def _detect_unquoted_section_in_values(content: str) -> list[dict[str, Any]]:
+    """Detect unquoted § in value positions and emit guidance warnings.
+
+    Scans input content for lines where § appears after :: without quoting.
+    The lexer correctly tokenizes § as a SECTION operator, which can cause
+    silent data loss when the user intended § as literal text in a value.
+
+    This does NOT change parser behavior -- it only emits advisory warnings.
+
+    Returns:
+        List of correction dicts with W_UNQUOTED_SECTION_IN_VALUE code.
+    """
+    warnings: list[dict[str, Any]] = []
+    for match in _UNQUOTED_SECTION_RE.finditer(content):
+        # Calculate line number from match position
+        line_num = content[: match.start()].count("\n") + 1
+        # Extract the full line for context
+        line_start = content.rfind("\n", 0, match.start()) + 1
+        line_end = content.find("\n", match.start())
+        if line_end == -1:
+            line_end = len(content)
+        full_line = content[line_start:line_end].strip()
+
+        warnings.append(
+            {
+                "code": W_UNQUOTED_SECTION_IN_VALUE,
+                "tier": "LENIENT_PARSE",
+                "message": (
+                    f"W_UNQUOTED_SECTION_IN_VALUE: Value at line {line_num} contains "
+                    f"unquoted § which is parsed as a section operator. "
+                    f'Quote the value to use § as literal text: KEY::"value_with_§"'
+                ),
+                "line": line_num,
+                "original": full_line,
+                "safe": True,
+                "semantics_changed": False,
+            }
+        )
+    return warnings
+
 
 @dataclass
 class StructuralMetrics:
@@ -1342,6 +1397,13 @@ class WriteTool(BaseTool):
                     )
 
                 corrections.extend(self._track_corrections(parse_input, parse_input, tokenize_repairs))
+
+            # Detect unquoted § in value positions and emit guidance warnings.
+            # This runs on the original content (before any transformations) so we
+            # detect the user's actual input. The lexer/parser behavior is correct;
+            # this is purely user-facing guidance for discoverability.
+            section_warnings = _detect_unquoted_section_in_values(content)
+            corrections.extend(section_warnings)
 
             # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)
