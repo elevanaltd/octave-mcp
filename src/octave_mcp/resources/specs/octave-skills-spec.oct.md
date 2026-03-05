@@ -1,40 +1,33 @@
 ===OCTAVE_SKILLS===
 META:
-  TYPE::LLM_PROFILE
-  VERSION::"8.0.0"
-  STATUS::ACTIVE
-  TOKENS::"~220"
+  TYPE::SKILL_DEFINITION
+  VERSION::"9.0.0"
+  STATUS::DRAFT
+  TOKENS::"~250"
   REQUIRES::octave-core-spec
   PURPOSE::L5_skill_document_format[platform_agnostic]
-  IMPLEMENTATION_NOTES::"v8: Adds compression mandate (AGGRESSIVE body, LOSSLESS YAML, ULTRA kernel), canonical sections (CORE/PROTOCOL/GOVERNANCE/EXAMPLES), token budget (300-700 target), description_role as retrieval_only, and TARGET/GATE fields in anchor kernel. Backward compatible with v7."
+  IMPLEMENTATION_NOTES::"v9: Fixes META type (SKILL_DEFINITION), standardizes §5::ANCHOR_KERNEL as section header, integrates canonical sections into template, isolates legacy compat into §11. Breaking change: ANCHOR_KERNEL::start syntax replaced by §5::ANCHOR_KERNEL section header. Grace period: parsers SHOULD accept both forms until v10."
 
   CONTRACT::SKILL_DEFINITION[
     PRINCIPLE::"Skills use YAML for external discovery and OCTAVE for internal definition",
-    MECHANISM::[YAML_FRONTMATTER, OCTAVE_ENVELOPE[META, BODY, ANCHOR_KERNEL_OPTIONAL]],
+    MECHANISM::[YAML_FRONTMATTER, OCTAVE_ENVELOPE[META, BODY, §5::ANCHOR_KERNEL]],
     COMPATIBILITY::universal_tool_support
   ]
 
 ---
 
 // OCTAVE SKILLS: Universal format for AI agent skill documents.
-// v8: YAML Frontmatter + OCTAVE Envelope + ANCHOR_KERNEL + compression mandate + canonical sections + token budget.
+// v9: YAML Frontmatter + OCTAVE Envelope + §5::ANCHOR_KERNEL + compression mandate + canonical sections + token budget.
+// Breaking change from v8: ANCHOR_KERNEL must use §5 section header (not ANCHOR_KERNEL::start).
+// Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallback until v10 (see §11).
 
 §1::SKILL_DOCUMENT_STRUCTURE
-SEQUENCE::[YAML_FRONTMATTER, OCTAVE_ENVELOPE, ANCHOR_KERNEL_OPTIONAL]
-YAML_FRONTMATTER::[name, description, allowed-tools, triggers, version]
-ENVELOPE::===SKILL_NAME===[META, body, ANCHOR_KERNEL_optional, END]
+SEQUENCE::[YAML_FRONTMATTER, OCTAVE_ENVELOPE, §5::ANCHOR_KERNEL]
+YAML_FRONTMATTER::[name, description, "allowed-tools", triggers, version]
+ENVELOPE::===SKILL_NAME===[META, body_§1_to_§4, §5::ANCHOR_KERNEL, END]
 META_REQUIRED::[TYPE::SKILL,VERSION,STATUS]
 META_OPTIONAL::[PURPOSE,TIER,SPEC_REFERENCE]
 BODY::octave_syntax[full_L1-L4_support]
-ANCHOR_KERNEL::recommended_for_anchor_injection
-
-REQUIRED_V7::[
-  yaml_frontmatter::required_for_discovery,
-  octave_envelope::required_for_parsing,
-  anchor_kernel::recommended_for_anchor_injection,
-  no_markdown_headers::prevent_parser_errors,
-  description_role::retrieval_only[NOT_behavioral_constraint]
-]
 
 DESCRIPTION_ROLE::retrieval_only[NOT_behavioral_constraint]
 ENFORCEMENT_SOURCE::OCTAVE_body[§2::PROTOCOL⊕§3::GOVERNANCE]
@@ -42,17 +35,6 @@ ENFORCEMENT_SOURCE::OCTAVE_body[§2::PROTOCOL⊕§3::GOVERNANCE]
 // Note: No duplicate TRIGGERS/TOOLS in META. Source of truth is YAML.
 
 §2::BODY_FORMAT
-
-V7_STANDARD::hybrid_format[yaml_header + octave_envelope + optional_kernel]
-V6_STANDARD::hybrid_format[yaml_header + octave_envelope]
-V5_DEPRECATED::[markdown_body, missing_envelope, duplicate_meta]
-
-BENEFITS::[
-  simplicity::no_redundant_data,
-  compatibility::yaml_scanners_work,
-  stability::no_markdown_headers_breaking_parsers,
-  anchor_injection::kernel_enables_high_density_capability_loading
-]
 
 COMPRESSION::[
   BODY::AGGRESSIVE[dense_KEY::value⊕operators, preserve_1-2_examples⊕causal_chains, drop_narrative⊕stopwords⊕verbose_phrasing],
@@ -65,36 +47,31 @@ RECOMMENDED_SECTIONS::[
   §1::CORE[what_this_skill_IS⊕mission⊕authority⊕identity_in_2_to_5_lines],
   §2::PROTOCOL[what_agent_DOES⊕procedures⊕decision_trees⊕detection_checks],
   §3::GOVERNANCE[boundaries⊕MUST_NEVER⊕BLOCKED⊕ALLOWED⊕escalation],
-  §4::EXAMPLES[1_to_2_concrete⊕1_anti⊕OPTIONAL_for_small_skills]
+  §4::EXAMPLES[1_to_2_concrete⊕1_anti⊕OPTIONAL_for_small_skills],
+  §5::ANCHOR_KERNEL[high_density_atoms_only⊕server_extractable]
 ]
 CATALOG_VARIANT::section_per_item[anti_patterns⊕failure_patterns⊕each_item_is_a_section]
 
 §3::DOCUMENT_TEMPLATE
 
-// V7 template with optional ANCHOR_KERNEL for anchor auto-injection
-V7_TEMPLATE_STRUCTURE::[
-  YAML_FRONTMATTER::[name, description, allowed_tools, triggers, version],
-  OCTAVE_ENVELOPE::[META, body_sections, ANCHOR_KERNEL_optional, END]
-]
-
-// Kernel structure aligns with patterns spec for consistency
-KERNEL_FIELDS::[
-  TARGET::optional[single_line_purpose],
-  NEVER::[forbidden_actions],
-  MUST::[required_behaviors],
-  GATE::optional[decision_question],
-  LANE::optional[role_type_for_coordination_skills],
-  DELEGATE::optional[task_delegation_mappings]
-]
-
-V6_TEMPLATE::still_valid[kernel_omission_triggers_cascading_fallback]
+// V9 template: canonical sections explicitly mapped. LLMs should emit these exact headers.
+V9_TEMPLATE_STRUCTURE:
+  YAML_FRONTMATTER::[name, description, "allowed-tools", triggers, version]
+  OCTAVE_ENVELOPE:
+    META::[TYPE::SKILL, VERSION, STATUS]
+    §1::CORE[mission, authority, identity]
+    §2::PROTOCOL[procedures, decision_trees, detection_checks]
+    §3::GOVERNANCE[boundaries, MUST_NEVER, BLOCKED, ALLOWED, escalation]
+    §4::EXAMPLES[1_to_2_concrete, 1_anti_pattern, OPTIONAL_for_small_skills]
+    §5::ANCHOR_KERNEL[TARGET, NEVER, MUST, GATE, LANE, DELEGATE, TEMPLATE, SIGNALS]
+    END::marker
 
 CASCADING_FALLBACK::[
-  // If ANCHOR_KERNEL missing, server extracts from these sections:
-  PRIORITY_1::§ANCHOR_KERNEL[explicit_export_interface],
-  PRIORITY_2::§BEHAVIOR.CONDUCT[MUST_NEVER + MUST_ALWAYS],
-  PRIORITY_3::SIGNALS_or_PATTERNS_blocks[detection_skills],
-  PRIORITY_4::WARN_UNSTRUCTURED[skill_name]
+  // Server extraction priority sequence for Anchor injection:
+  PRIORITY_1::§5::ANCHOR_KERNEL[primary_source_if_present],
+  PRIORITY_2::§3::GOVERNANCE[fallback_MUST_NEVER_and_ALLOWED],
+  PRIORITY_3::SIGNALS_or_PATTERNS_blocks[fallback_for_detection_skills],
+  PRIORITY_4::WARN_UNSTRUCTURED[emitted_if_no_kernel_or_governance_found]
 ]
 
 §4::SIZE_CONSTRAINTS
@@ -137,51 +114,21 @@ UNIVERSAL_PRINCIPLES::[
 
 §7::PLATFORM_ADAPTATION
 
-V6_UNIFIED_FORMAT::pure_octave_all_platforms
-V5_PLATFORM_DIFFERENCES::deprecated[maintained_for_backward_compatibility]
-
-UNIVERSAL_V6::[
-  BODY_FORMAT::pure_octave[META.SKILL_defines_all],
-  TOOL_RESTRICTIONS::META.SKILL.TOOLS[declarative],
-  DISCOVERY::META.SKILL.TRIGGERS[keyword_matching],
-  PACKAGING::directory_based[.claude∨.codex∨platform_agnostic]
-]
-
-MIGRATION_PATH::[
-  V5_YAML_FRONTMATTER→V6_META_SKILL::readers_support_both,
-  V5_MARKDOWN_BODY→V6_OCTAVE_BODY::gradual_conversion,
-  V5_PLATFORM_SPECIFIC→V6_UNIFIED::single_source_multiple_platforms
-]
-
-BACKWARD_COMPATIBILITY::[
-  V5_READERS::can_read_v6_via_META_projection,
-  V6_READERS::can_read_v5_via_frontmatter_parsing,
-  MIGRATION::opt_in_per_skill[no_forced_upgrade]
-]
+UNIVERSAL_FORMAT::pure_octave_all_platforms
+PACKAGING::directory_based[.claude∨.codex∨platform_agnostic]
 
 §8::VALIDATION
 
-V7_VALIDATION:
+V9_VALIDATION:
   META_REQUIRED::[TYPE::SKILL,VERSION,STATUS]
   ENVELOPE::"===NAME===[matches_YAML_NAME]"
   SYNTAX::passes_octave_validation
   SIZE::under_constraint_limits
   ANCHOR_KERNEL::recommended[warn_if_missing_for_anchor_enabled_skills]
-
-V6_VALIDATION:
-  META_REQUIRED::[TYPE::SKILL,VERSION,STATUS]
-  ENVELOPE::"===NAME===[matches_YAML_NAME]"
-  SYNTAX::passes_octave_validation
-  SIZE::under_constraint_limits
-
-V5_VALIDATION_DEPRECATED::[
-  frontmatter::valid_yaml,
-  name::matches_directory,
-  description::non_empty_with_triggers
-]
+  ANCHOR_KERNEL_SYNTAX::§5_section_header_required[not_ANCHOR_KERNEL::start]
 
 KERNEL_VALIDATION::[
-  IF_PRESENT::END_KERNEL_marker_required,
+  SYNTAX::must_use_§5::ANCHOR_KERNEL_section_header,
   CONTENT::atoms_only[no_prose_no_rationale],
   SIZE::kernel_50_lines_max
 ]
@@ -195,13 +142,14 @@ NEVER::[
   duplicate_information::SKILL.md_or_resources_not_both,
   table_of_contents::agents_scan_natively,
   line_number_references::stale_and_fragile,
-  prose_in_anchor_kernel::high_density_atoms_only
+  prose_in_anchor_kernel::high_density_atoms_only,
+  ANCHOR_KERNEL_start_syntax::use_§5_section_header_instead
 ]
 
 §10::ANCHOR_KERNEL_FORMAT
 
-// §ANCHOR_KERNEL enables odyssean-anchor server to extract high-density
-// capability atoms for automatic injection into agent anchors §5::CAPABILITY_KERNEL.
+// §5::ANCHOR_KERNEL enables odyssean-anchor server to extract high-density
+// capability atoms for automatic injection into agent anchors.
 // This eliminates the need for agents to Read() skill files manually.
 
 PURPOSE::[
@@ -213,35 +161,74 @@ PURPOSE::[
 ANCHOR_KERNEL_STRUCTURE::[
   // Base fields (align with patterns spec for consistency)
   TARGET::optional[single_line_purpose⊕what_this_skill_enforces],
-  NEVER::[list_of_forbidden_actions],
-  MUST::[list_of_mandatory_behaviors],
+  NEVER::required[list_of_forbidden_actions],
+  MUST::required[list_of_mandatory_behaviors],
   GATE::optional[decision_question⊕the_one_question_this_skill_answers],
   // Skill-specific optional fields
   LANE::optional[role_type_for_coordination_skills],
   DELEGATE::optional[task_type_to_agent_mappings],
-  TEMPLATE::optional[handoff_or_output_template]
+  TEMPLATE::optional[handoff_or_output_template],
+  SIGNALS::optional[detection_patterns_for_detection_skills]
 ]
 
-ANCHOR_KERNEL_TEMPLATE::"§ANCHOR_KERNEL NEVER::[{forbidden}] MUST::[{required}] LANE::{role_type} DELEGATE::[{mappings}] END_KERNEL"
-
 PLACEMENT::before_final_END_of_skill_envelope
+SYNTAX::must_use_§5::ANCHOR_KERNEL[strict_section_header]
 
 EXAMPLE_COORDINATION_SKILL:
-  ANCHOR_KERNEL::start
-  LANE::COORDINATION_ONLY
-  NEVER::[direct_code_implementation, bypass_delegation]
-  MUST::[delegate_to_specialists, update_coordination_docs]
-  DELEGATE:
-    CODE_FIX::impl_lead
-    TEST::ute
-    ARCHITECTURE::tech_architect
-  END_KERNEL::marker
+  ```octave
+  §5::ANCHOR_KERNEL
+    LANE::COORDINATION_ONLY
+    NEVER::[direct_code_implementation, bypass_delegation]
+    MUST::[delegate_to_specialists, update_coordination_docs]
+    DELEGATE:
+      CODE_FIX::impl_lead
+      TEST::ute
+      ARCHITECTURE::tech_architect
+  ===END===
+  ```
 
 EXAMPLE_DETECTION_SKILL:
-  ANCHOR_KERNEL::start
-  NEVER::[ignore_signals, skip_analysis]
-  MUST::[report_findings, cite_evidence]
-  SIGNALS::[placeholder_patterns, stub_indicators, incomplete_implementations]
-  END_KERNEL::marker
+  ```octave
+  §5::ANCHOR_KERNEL
+    NEVER::[ignore_signals, skip_analysis]
+    MUST::[report_findings, cite_evidence]
+    SIGNALS::[placeholder_patterns, stub_indicators, incomplete_implementations]
+  ===END===
+  ```
+
+§11::LEGACY_COMPATIBILITY
+
+// V5/V6/V7/V8 backward compatibility rules consolidated here.
+// Keep the primary spec focused on current V9 standard.
+
+V8_MIGRATION::[
+  ANCHOR_KERNEL_start→§5::ANCHOR_KERNEL::section_header_migration,
+  META_TYPE::LLM_PROFILE→SKILL_DEFINITION,
+  BODY_SECTIONS→CANONICAL_§1_§4_MAPPED
+]
+
+TRANSITION_WINDOW::[
+  GRACE_PERIOD::"v9.0 through v9.x — parsers SHOULD accept both §5::ANCHOR_KERNEL and ANCHOR_KERNEL::start",
+  DEPRECATION_WARNING::"ANCHOR_KERNEL::start emits WARN[deprecated_kernel_syntax] during validation",
+  HARD_REMOVAL::"v10.0 — ANCHOR_KERNEL::start no longer accepted, §5 section header required",
+  RUNTIME_BEHAVIOR::"During grace period, cascading fallback (§3) applies: §5::ANCHOR_KERNEL takes priority over ANCHOR_KERNEL::start if both present"
+]
+
+V7_COMPAT::[
+  V7_TEMPLATE::still_valid[kernel_omission_triggers_cascading_fallback],
+  REQUIRED_V7::[yaml_frontmatter, octave_envelope, anchor_kernel_recommended, no_markdown_headers, description_role_retrieval_only]
+]
+
+V6_COMPAT::[
+  V6_STANDARD::hybrid_format[yaml_header + octave_envelope],
+  V6_READERS::can_read_v5_via_frontmatter_parsing,
+  MIGRATION::opt_in_per_skill[no_forced_upgrade]
+]
+
+V5_DEPRECATED::[
+  V5_FORMAT::[markdown_body, missing_envelope, duplicate_meta],
+  V5_READERS::can_read_v6_via_META_projection,
+  V5_VALIDATION::[frontmatter_valid_yaml, name_matches_directory, description_non_empty_with_triggers]
+]
 
 ===END===

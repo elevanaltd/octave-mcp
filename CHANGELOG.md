@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-03-04 - "Cognitive Architecture" Release
+
+This release introduces the cognitive type system — three cognition master files (LOGOS, ETHOS, PATHOS) with a formal spec and schema validation — alongside agents-spec v7.0.0 cognitive separation, and fixes for angle bracket annotations and deep section schema validation.
+
+### Added
+- **Cognition Type System** (#322, #324) — Cognitive kernel architecture for Wind/Wall/Door agent archetypes
+  - New `octave-cognition-spec.oct.md` schema contract defining `COGNITION_DEFINITION` type with `§1::COGNITIVE_IDENTITY` (NATURE: FORCE/ESSENCE/ELEMENT) and `§2::COGNITIVE_RULES` (MODE, PRIME_DIRECTIVE, THINK, THINK_NEVER)
+  - Three cognition master files: `logos.oct.md` (LOGOS/STRUCTURE/DOOR), `ethos.oct.md` (ETHOS/CONSTRAINT/WALL), `pathos.oct.md` (PATHOS/POSSIBILITY/WIND)
+  - PRIME_DIRECTIVE triad: "Reveal what connects" / "Reveal what breaks" / "Reveal what could be"
+  - Cognitive type system guide with Wind/Wall/Door metaphor (`docs/guides/cognitive-type-system.md`)
+- **COGNITION_DEFINITION Schema Registration** (#325, #326) — Schema validation for cognition files
+  - New `cognition_definition.oct.md` schema with 7 holographic field constraints (FORCE/ELEMENT/MODE enums, REQ fields)
+  - Auto-discovered via existing schema loader — no manual registration code
+  - `octave_validate --schema COGNITION_DEFINITION` now returns `VALIDATED` instead of `UNVALIDATED`
+  - TYPE-based section matching for multi-envelope documents (COGNITION_LOGOS, COGNITION_ETHOS, COGNITION_PATHOS all validate against single schema)
+  - Deep section walking for nested block validation (e.g., NATURE: block inside §1)
+  - 14 new tests: schema loading, happy path for all 3 cognition files, 5 negative cases, 3 envelope regression tests
+- **Agents Spec v7.0.0 — Cognitive Separation** (#314, #319) — Schema evolution for cognitive architecture
+  - Removed ACTIVATION (FORCE/ESSENCE/ELEMENT) and MODE from agent file spec — moved to standalone cognition master files
+  - Renamed §2::BEHAVIOR → §2::OPERATIONAL_BEHAVIOR
+  - Flattened §1 structure (removed CORE:: wrapper, flattened AUTHORITY)
+  - Added COGNITION_LOAD to §5::BOOT_SEQUENCE
+
+### Fixed
+- **Comma-separated angle bracket qualifiers** (#320, #321) — `NEVER<PEDANTIC,DISMISSIVE,VAGUE>` constructor syntax inside `::[]` arrays no longer triggers E005 lexer error. Extended `_match_unicode_identifier()` qualifier loop to consume commas between valid identifier segments
+- **Envelope-level assignments in deep section schemas** (#326) — Valid envelope-style documents (e.g., DEBATE_TRANSCRIPT with root-level fields) no longer falsely marked INVALID when `META.TYPE` triggers deep section schema path. Added pre-walk pass collecting envelope-level assignments
+- **Lite instruction cross-model feedback** (#316) — Tightened guide from zero-shot reviews by Gemini, ChatGPT, Claude Sonnet, and Claude Haiku: defined `NAME[args]` constructor and `---` separator in FORMAT, added quote usage rule, replaced subjective conversion gate with deterministic threshold, added provenance marker to example
+
+### Spec Evolution
+- **Skills Spec v9.0.0 — Structural Cleanup** — Evolved from v8.0.0 based on cross-model assessment
+  - Fixed META TYPE from `LLM_PROFILE` (copy-paste error) to `SKILL_DEFINITION`
+  - Standardized `§5::ANCHOR_KERNEL` as strict section header (replaces inconsistent `ANCHOR_KERNEL::start` syntax)
+  - Integrated §2b canonical sections into §3 document template — LLMs now see exact headers to emit
+  - Consolidated V5/V6/V7/V8 legacy compatibility into §11::LEGACY_COMPATIBILITY
+  - Added SIGNALS and TEMPLATE to kernel field contract; marked NEVER/MUST as required
+  - Explicit v8→v9 transition window with grace period through v9.x, hard removal at v10
+  - Examples wrapped in literal zones for safe `===END===` inclusion
+  - Cascading fallback reworded as extraction priority sequence (resolved logical contradiction)
+
+### Documentation
+- Cognitive type system guide with Wind/Wall/Door metaphor, separation of concerns diagram, evidence basis (#324)
+- Repository structure realigned with visibility-rules v1.6 and v1.7 (#323) — debate synthesis files relocated from `.hestai/decisions/` to `debates/`
+- CRS review findings resolved: clarified §0 and COGNITION comments in agents spec (#319)
+
+### Quality Gates
+- 2468 tests passing (14 new for cognition schema), 0 failures
+- Constitutional compliance verified: I1, I2, I3, I4, I5
+
 ## [1.8.0] - 2026-03-02 - "Lexical Fidelity" Release
 
 This release enforces quote preservation for PATTERN and REGEX values across all emission paths, adds three new lint warnings for better authoring feedback, and fixes multiple parser/emitter edge cases discovered during agent definition audits.
@@ -555,7 +603,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.5.0...v1.6.0
