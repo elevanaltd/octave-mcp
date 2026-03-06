@@ -195,9 +195,9 @@ Cognition files (`logos.oct.md`, `ethos.oct.md`, `pathos.oct.md`) are explicitly
 
 1. **Agent spec update**: Add `CHASSIS`, `PROFILES`, `match`, `skills`, `patterns`, `kernel_only` to `octave-agents-spec.oct.md` §3. Target version: v8.0.0
 2. **Grammar rules**: EBNF/GBNF rules for the new nested structure
-3. **Validator**: Structural validation — CHASSIS is list, each profile has required fields, overlap rules enforced per the table in "Overlap rules" above
-4. **Backward compatibility**: Parser accepts both flat `SKILLS::[]` and new `CHASSIS`/`PROFILES` structure
-5. **Test vectors**: Valid and invalid test cases covering: chassis-profile document, profile with kernel_only, flat backward-compatible list, CHASSIS overlap with profile skill (invalid), CHASSIS overlap with kernel_only (invalid), duplicate profile names (invalid), `default` mixed with context conditions (invalid), `default` as sole match (valid)
+3. **Backward compatibility**: Parser accepts both flat `SKILLS::[]` and new `CHASSIS`/`PROFILES` structure
+
+> **Note**: Chassis-profile validation (overlap rules, missing field checks, structural validation, test vectors) was originally scoped here but has been relocated to odyssean-anchor-mcp. OCTAVE-MCP is a format processor (North Star: IS deterministic_document_format_processor, IS_NOT identity_authentication_system). Domain-level validation of chassis-profile semantics belongs in the FLUKES loader that actually consumes the structure. See odyssean-anchor-mcp section below.
 
 ### odyssean-anchor-mcp (downstream — HestAI-MCP#284)
 
@@ -206,6 +206,8 @@ Cognition files (`logos.oct.md`, `ethos.oct.md`, `pathos.oct.md`) are explicitly
 3. **Differentiated loading**: Full body for chassis + profile `skills`, kernel extraction for `kernel_only` via the Safety-Invariant Loader Contract (see below)
 4. **Permit metadata**: Include active profile name and loading manifest (which skills loaded at what fidelity) in the permit for auditability
 5. **Error handling**: Unknown `capability_mode` → warn + fallback to default or chassis-only; no `capability_mode` and no default profile → chassis-only with warning
+6. **Chassis-profile validation**: ALL structural validation of the chassis-profile structure belongs here — CHASSIS overlap with profile skills/kernel_only, duplicate profile names, `default` mixed with context conditions, missing required fields (match, skills), profile count warnings. This validation runs as part of the FLUKES stage, where the loader has full context about the agent definition being bound
+7. **Test vectors**: Valid and invalid test cases covering: chassis-profile document, profile with kernel_only, flat backward-compatible list, CHASSIS overlap with profile skill (invalid), CHASSIS overlap with kernel_only (invalid), duplicate profile names (invalid), `default` mixed with context conditions (invalid), `default` as sole match (valid)
 
 ### hestai-mcp (downstream — agent definitions)
 
