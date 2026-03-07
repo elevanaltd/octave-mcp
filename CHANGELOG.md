@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-03-07 - "YAML-Optional Alignment" Patch
+
+This patch aligns the skills and agents specs on a consistent YAML frontmatter contract: YAML is OPTIONAL, required only for platform-deployed files (`.claude/skills/`, `.codex/skills/`), not for hub/system files consumed by the anchor ceremony.
+
+### Spec Evolution
+- **Skills Spec v9.1.0 — YAML Optional** — YAML frontmatter changed from mandatory to optional based on deployment context
+  - Added `§7::YAML_FRONTMATTER_RULES` documenting three deployment contexts: platform skills (YAML required), hub skills (YAML optional), dual-deployed skills (YAML present in both)
+  - `§1::SEQUENCE` updated: OCTAVE envelope is the universal constant, YAML serves platform discovery only
+  - `§8::VALIDATION` updated: YAML required only for platform-deployed skills
+  - `§11::V9_0_MIGRATION` added: backward compatible — all v9.0 skills remain valid
+- **Agents Spec v8.1.0 — YAML Frontmatter Section** — Added `§6::YAML_FRONTMATTER` with matching optional contract
+  - Documents existing reality: hub agents have never used YAML and work correctly
+  - Provides schema for platform agents (`.claude/agents/`, `.codex/agents/`) if needed
+  - Same deployment context structure as skills spec for consistency
+
+### Documentation
+- Both specs now follow the same principle: YAML serves platform discovery, OCTAVE serves definition
+- Eliminates inconsistency where skills mandated YAML universally while agents never required it
+
 ## [1.9.0] - 2026-03-07 - "Cognitive Architecture & Chassis-Profile" Release
 
 This release introduces the cognitive type system — three cognition master files (LOGOS, ETHOS, PATHOS) with a formal spec and schema validation — alongside agents-spec v8.0.0 with chassis-profile capability tiering (ADR-0283), and fixes for angle bracket annotations, deep section schema validation, and `§` quoting false positives.
@@ -624,7 +643,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.6.0...v1.7.0
