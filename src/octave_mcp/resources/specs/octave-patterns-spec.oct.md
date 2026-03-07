@@ -1,35 +1,35 @@
 ===OCTAVE_PATTERNS===
 META:
-  TYPE::LLM_PROFILE
-  VERSION::"1.0.0"
+  TYPE::PATTERN_DEFINITION
+  VERSION::"2.0.0"
   STATUS::ACTIVE
-  TOKENS::"~120"
+  TOKENS::"~150"
   REQUIRES::octave-core-spec
   PURPOSE::L5_pattern_document_format[reusable_decision_frameworks]
-  IMPLEMENTATION_NOTES::"v1: Patterns are lightweight skills - decision frameworks without behavior. Pure OCTAVE envelope, no YAML frontmatter required."
+  IMPLEMENTATION_NOTES::"v2: Aligns META.TYPE with PATTERN_DEFINITION (was LLM_PROFILE). Migrates anchor kernel to §5::ANCHOR_KERNEL section header (aligned with skills spec v9). Adds chassis-profile loading context (ADR-0283). Pure OCTAVE envelope, no YAML frontmatter."
 
   CONTRACT::PATTERN_DEFINITION[
     PRINCIPLE::"Patterns encode reusable decision logic for consistent agent behavior",
-    MECHANISM::[OCTAVE_ENVELOPE[META, BODY, ANCHOR_KERNEL]],
+    MECHANISM::[OCTAVE_ENVELOPE[META, BODY, §5::ANCHOR_KERNEL]],
     DISTINCTION::"Skills define WHAT agents do; Patterns define HOW agents decide"
   ]
 
 ---
 
 // OCTAVE PATTERNS: Universal format for reusable decision frameworks.
-// v1: Pure OCTAVE envelope. Lighter than skills - no YAML frontmatter.
+// v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec, chassis-profile awareness.
 
 §1::PATTERN_DOCUMENT_STRUCTURE
-ENVELOPE::PATTERN_NAME[META,body,§ANCHOR_KERNEL,END]
+ENVELOPE::PATTERN_NAME[META,body,§5::ANCHOR_KERNEL,END]
 ENVELOPE_FORMAT::"Three-equals delimiters: ===PATTERN_NAME=== and ===END==="
-META_REQUIRED::[TYPE::PATTERN,VERSION,PURPOSE]
+META_REQUIRED::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
 META_OPTIONAL::[REPLACES,TIER,SPEC_REFERENCE]
 BODY::octave_syntax[L1-L4_support]
-ANCHOR_KERNEL::required_for_auto_loading
+ANCHOR_KERNEL::required_for_auto_loading[§5::ANCHOR_KERNEL_section_header]
 
-REQUIRED_V1::[
+REQUIRED_V2::[
   octave_envelope::required_for_parsing,
-  anchor_kernel::required_for_anchor_injection,
+  anchor_kernel::required_for_anchor_injection[§5::ANCHOR_KERNEL],
   no_yaml_frontmatter::patterns_are_not_discoverable_skills,
   no_markdown_headers::prevent_parser_errors
 ]
@@ -44,25 +44,26 @@ RECOMMENDED_SECTIONS::[
 ]
 
 MINIMAL_VALID_PATTERN:
-  META::[TYPE::PATTERN,VERSION,PURPOSE]
+  META::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
   §1::CORE_PRINCIPLE
-  ANCHOR_KERNEL::required
+  §5::ANCHOR_KERNEL::required
 
 §3::ANCHOR_KERNEL_FORMAT
 
-// §ANCHOR_KERNEL is the "export interface" for anchor auto-injection
-// Server extracts ONLY this block for high-density capability loading
+// §5::ANCHOR_KERNEL is the "export interface" for anchor auto-injection
+// Server extracts ONLY this section for high-density capability loading
+// Aligned with skills spec v9 §10::ANCHOR_KERNEL_FORMAT
 
 ANCHOR_KERNEL_STRUCTURE::[
+  // Base fields (shared with skills spec for consistency)
   TARGET::"metric or optimization goal",
   NEVER::[forbidden_actions_or_anti_patterns],
   MUST::[required_behaviors_or_checks],
   GATE::"quality check question before application"
 ]
 
-ANCHOR_KERNEL_TEMPLATE::"§ANCHOR_KERNEL TARGET::{metric} NEVER::[{anti_patterns}] MUST::[{behaviors}] GATE::{question} END_KERNEL"
-
-PLACEMENT::before_final_END_terminator
+SYNTAX::must_use_§5::ANCHOR_KERNEL[strict_section_header]
+PLACEMENT::before_final_END_of_pattern_envelope
 
 §4::SIZE_CONSTRAINTS
 TARGET::100_lines_max[all_patterns]
@@ -73,14 +74,14 @@ OVERFLOW_STRATEGY::[if_pattern_exceeds_limit→consider_splitting_or_promoting_t
 §5::VALIDATION
 
 VALIDATION_RULES:
-  META_REQUIRED::[TYPE::PATTERN,VERSION,PURPOSE]
+  META_REQUIRED::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
   ENVELOPE::PATTERN_NAME[must_match_filename]
-  ANCHOR_KERNEL::required[§ANCHOR_KERNEL...END_KERNEL]
+  ANCHOR_KERNEL::required[§5::ANCHOR_KERNEL_section_header]
   SYNTAX::passes_octave_validation
   SIZE::under_constraint_limits
 
 VALIDATION_ERRORS::[
-  MISSING_ANCHOR_KERNEL::"Pattern requires §ANCHOR_KERNEL for anchor injection",
+  MISSING_ANCHOR_KERNEL::"Pattern requires §5::ANCHOR_KERNEL for anchor injection",
   MALFORMED_ENVELOPE::"Pattern envelope must be PATTERN_NAME in three-equals delimiters",
   EXCEEDS_SIZE_LIMIT::"Pattern exceeds 150 lines - consider splitting"
 ]
@@ -90,19 +91,18 @@ VALIDATION_ERRORS::[
 // See .hestai-sys/library/patterns/ for concrete examples
 // Template structure (envelope delimiters shown as placeholders):
 
-V1_TEMPLATE_STRUCTURE:
+V2_TEMPLATE_STRUCTURE:
   ENVELOPE_START::PATTERN_NAME[three_equals_delimiters]
-  META::[TYPE::PATTERN,VERSION,PURPOSE]
+  META::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
   BODY_SECTIONS::§1_through_§4
-  ANCHOR_KERNEL_SECTION::§ANCHOR_KERNEL
-  KERNEL_TERMINATOR::END_KERNEL[three_equals]
+  §5::ANCHOR_KERNEL[TARGET,NEVER,MUST,GATE]
   ENVELOPE_END::END[three_equals_delimiter]
 
 SECTION_PATTERN:
   §1::CORE_PRINCIPLE::[ESSENTIAL,ANTI_PATTERN,ENFORCEMENT]
   §2::DECISION_FRAMEWORK::[BEFORE_ACTION,QUALITY_GATE]
   §3::USED_BY::[AGENTS,CONTEXT]
-  ANCHOR_KERNEL::[TARGET,NEVER,MUST,GATE]
+  §5::ANCHOR_KERNEL::[TARGET,NEVER,MUST,GATE]
 
 §7::EXAMPLE_PATTERNS
 
@@ -124,7 +124,28 @@ TDD_DISCIPLINE_SUMMARY:
   §2::GIT_WORKFLOW[PATTERN::[test_commit,feat_commit,refactor_commit]]
   §3::ANTI_PATTERNS[AVOID::[TEST_AFTER,SINGLE_COMMIT,MOCKING_EVERYTHING]]
 
-§8::FORBIDDEN
+§8::CHASSIS_PROFILE_LOADING
+
+// Patterns participate in the chassis-profile capability tiering (ADR-0283)
+// exactly as skills do. Agent definitions reference patterns in §3::CAPABILITIES.
+
+LOADING_CONTEXTS::[
+  CHASSIS::pattern_always_loaded_full_body[invariant_to_profile],
+  PROFILE_PATTERNS::pattern_loaded_full_body_when_profile_active,
+  PROFILE_KERNEL_ONLY::§5::ANCHOR_KERNEL_extracted_only[awareness_without_procedural_weight]
+]
+
+// Example: In an agent definition with chassis-profile structure:
+// §3::CAPABILITIES
+//   CHASSIS::[ho-mode]  // skills only — patterns rarely chassis-level
+//   PROFILES:
+//     STANDARD:
+//       patterns::[mip-orchestration]       // full body loaded
+//       kernel_only::[phase-transition-cleanup]  // §5::ANCHOR_KERNEL only
+
+KERNEL_ONLY_RATIONALE::"Patterns in kernel_only provide decision gate awareness (GATE, NEVER, MUST) without full framework weight. Agent knows the pattern exists and what it prevents, without loading metrics, examples, or decision trees."
+
+§9::FORBIDDEN
 
 NEVER::[
   yaml_frontmatter::patterns_are_not_discoverable_like_skills,
@@ -134,7 +155,7 @@ NEVER::[
   exceeding_150_lines::patterns_must_stay_lightweight
 ]
 
-§9::DISTINCTION_FROM_SKILLS
+§10::DISTINCTION_FROM_SKILLS
 
 PATTERNS_COMPARED_TO_SKILLS:
   DISCOVERY:
@@ -152,5 +173,21 @@ PATTERNS_COMPARED_TO_SKILLS:
   ANCHOR_KERNEL:
     SKILLS::recommended_for_anchor_injection
     PATTERNS::required_for_anchor_injection
+  CHASSIS_PROFILE:
+    SKILLS::appear_in_CHASSIS_or_PROFILES[skills⊕kernel_only]
+    PATTERNS::appear_in_PROFILES[patterns⊕kernel_only][rarely_chassis]
+
+§11::LEGACY_COMPATIBILITY
+
+// v1→v2 migration notes
+
+V1_MIGRATION::[
+  META_TYPE::LLM_PROFILE→PATTERN_DEFINITION,
+  ANCHOR_KERNEL::§ANCHOR_KERNEL→§5::ANCHOR_KERNEL[section_header],
+  KERNEL_TERMINATOR::END_KERNEL→not_needed[section_header_self_terminates]
+]
+
+GRACE_PERIOD::"v2.0 through v2.x — parsers SHOULD accept both §5::ANCHOR_KERNEL and legacy §ANCHOR_KERNEL forms"
+HARD_REMOVAL::"v3.0 — legacy §ANCHOR_KERNEL no longer accepted"
 
 ===END===
