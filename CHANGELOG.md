@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.9.0] - 2026-03-04 - "Cognitive Architecture" Release
+## [1.9.0] - 2026-03-07 - "Cognitive Architecture & Chassis-Profile" Release
 
-This release introduces the cognitive type system — three cognition master files (LOGOS, ETHOS, PATHOS) with a formal spec and schema validation — alongside agents-spec v7.0.0 cognitive separation, and fixes for angle bracket annotations and deep section schema validation.
+This release introduces the cognitive type system — three cognition master files (LOGOS, ETHOS, PATHOS) with a formal spec and schema validation — alongside agents-spec v8.0.0 with chassis-profile capability tiering (ADR-0283), and fixes for angle bracket annotations, deep section schema validation, and `§` quoting false positives.
 
 ### Added
-- **`W_UNQUOTED_SECTION_IN_VALUE` warning** — `octave_write` now warns when unquoted `§` in values is parsed as a section operator, with guidance to quote the value (e.g., `KEY::"value_with_§"`)
+- **ADR-0283: Chassis-Profile Capability Tiering** (#283, #330, #331) — Schema-level capability boundaries for agent definitions
+  - Two-tier architecture: CHASSIS (invariant skills) + PROFILES (context-specific skill sets)
+  - Each profile declares: `match` (documentation-as-schema), `skills`, `patterns`, `kernel_only`
+  - Profile selection via explicit `capability_mode` parameter — no filesystem analysis
+  - `kernel_only` loads `§5::ANCHOR_KERNEL` extraction only (safety constraints without procedural weight)
+  - Backward compatible: flat `SKILLS::[]/PATTERNS::[]` remains valid (v7 format)
+  - Version detection: presence of CHASSIS or PROFILES keys triggers structured mode
+  - Overlap rules defined for downstream validation: CHASSIS∩profile.skills → error, CHASSIS∩kernel_only → error, duplicate profile names → error, `default` mixed with `context::` → error, 4+ profiles → warning
+  - EBNF grammar Section 13 with formal rules for chassis-profile structure
+- **`W_UNQUOTED_SECTION_IN_VALUE` warning** (#329) — `octave_write` now warns when unquoted `§` in values is parsed as a section operator, with guidance to quote the value (e.g., `KEY::"value_with_§"`)
 - **Cognition Type System** (#322, #324) — Cognitive kernel architecture for Wind/Wall/Door agent archetypes
   - New `octave-cognition-spec.oct.md` schema contract defining `COGNITION_DEFINITION` type with `§1::COGNITIVE_IDENTITY` (NATURE: FORCE/ESSENCE/ELEMENT) and `§2::COGNITIVE_RULES` (MODE, PRIME_DIRECTIVE, THINK, THINK_NEVER)
   - Three cognition master files: `logos.oct.md` (LOGOS/STRUCTURE/DOOR), `ethos.oct.md` (ETHOS/CONSTRAINT/WALL), `pathos.oct.md` (PATHOS/POSSIBILITY/WIND)
@@ -25,18 +34,21 @@ This release introduces the cognitive type system — three cognition master fil
   - TYPE-based section matching for multi-envelope documents (COGNITION_LOGOS, COGNITION_ETHOS, COGNITION_PATHOS all validate against single schema)
   - Deep section walking for nested block validation (e.g., NATURE: block inside §1)
   - 14 new tests: schema loading, happy path for all 3 cognition files, 5 negative cases, 3 envelope regression tests
-- **Agents Spec v7.0.0 — Cognitive Separation** (#314, #319) — Schema evolution for cognitive architecture
-  - Removed ACTIVATION (FORCE/ESSENCE/ELEMENT) and MODE from agent file spec — moved to standalone cognition master files
-  - Renamed §2::BEHAVIOR → §2::OPERATIONAL_BEHAVIOR
-  - Flattened §1 structure (removed CORE:: wrapper, flattened AUTHORITY)
-  - Added COGNITION_LOAD to §5::BOOT_SEQUENCE
 
 ### Fixed
+- **`W_UNQUOTED_SECTION_IN_VALUE` false positives** (#329) — Four fixes for the § quoting warning:
+  - Array values containing `§` no longer trigger false warnings
+  - Unicode operator characters adjacent to `§` no longer misdetected
+  - Comments containing `§` no longer trigger warnings
+  - Detection now runs on unwrapped content to avoid markdown false positives
 - **Comma-separated angle bracket qualifiers** (#320, #321) — `NEVER<PEDANTIC,DISMISSIVE,VAGUE>` constructor syntax inside `::[]` arrays no longer triggers E005 lexer error. Extended `_match_unicode_identifier()` qualifier loop to consume commas between valid identifier segments
 - **Envelope-level assignments in deep section schemas** (#326) — Valid envelope-style documents (e.g., DEBATE_TRANSCRIPT with root-level fields) no longer falsely marked INVALID when `META.TYPE` triggers deep section schema path. Added pre-walk pass collecting envelope-level assignments
 - **Lite instruction cross-model feedback** (#316) — Tightened guide from zero-shot reviews by Gemini, ChatGPT, Claude Sonnet, and Claude Haiku: defined `NAME[args]` constructor and `---` separator in FORMAT, added quote usage rule, replaced subjective conversion gate with deterministic threshold, added provenance marker to example
 
 ### Spec Evolution
+- **Agents Spec v8.0.0 — Chassis-Profile** (#283, #314, #319) — Two-release evolution of agent architecture
+  - v7.0.0 (Cognitive Separation): Removed ACTIVATION and MODE from §1 → cognition master files; renamed §2 to OPERATIONAL_BEHAVIOR; flattened §1 structure and AUTHORITY fields
+  - v8.0.0 (Chassis-Profile): Extended §3::CAPABILITIES with CHASSIS/PROFILES structure for context-aware skill loading; comprehensive documentation of overlap rules, loading semantics, and backward compatibility
 - **Skills Spec v9.0.0 — Structural Cleanup** — Evolved from v8.0.0 based on cross-model assessment
   - Fixed META TYPE from `LLM_PROFILE` (copy-paste error) to `SKILL_DEFINITION`
   - Standardized `§5::ANCHOR_KERNEL` as strict section header (replaces inconsistent `ANCHOR_KERNEL::start` syntax)
@@ -46,15 +58,22 @@ This release introduces the cognitive type system — three cognition master fil
   - Explicit v8→v9 transition window with grace period through v9.x, hard removal at v10
   - Examples wrapped in literal zones for safe `===END===` inclusion
   - Cascading fallback reworded as extraction priority sequence (resolved logical contradiction)
+- **Patterns Spec v2.0.0 — Chassis-Profile Alignment** (#331) — Structural alignment with skills spec v9 and ADR-0283
+  - META TYPE: `LLM_PROFILE` → `PATTERN_DEFINITION`
+  - Anchor kernel: `§ANCHOR_KERNEL` → `§5::ANCHOR_KERNEL` section header syntax
+  - New §8::CHASSIS_PROFILE_LOADING: patterns participate in chassis-profile tiering
+  - New §11::LEGACY_COMPATIBILITY: v1→v2 migration with grace period
 
 ### Documentation
+- **ADR-0283** — Chassis-Profile Schema for Agent Capability Tiering: full design document covering two-tier architecture, loading semantics, overlap rules, Safety-Invariant Loader Contract, and risk mitigations. Approved with ratification debate artifacts
 - **`octave-literacy` skill** — Added rule 8 (quote `§` in values) with WRONG/RIGHT example; renumbered file extension rule to 9
 - Cognitive type system guide with Wind/Wall/Door metaphor, separation of concerns diagram, evidence basis (#324)
 - Repository structure realigned with visibility-rules v1.6 and v1.7 (#323) — debate synthesis files relocated from `.hestai/decisions/` to `debates/`
 - CRS review findings resolved: clarified §0 and COGNITION comments in agents spec (#319)
+- EBNF grammar extended with Section 13 for chassis-profile capability tiering rules
 
 ### Quality Gates
-- 2450 tests passing (6 new for § quoting warning, 14 for cognition schema), 0 failures
+- 2498 tests passing, 0 failures
 - Constitutional compliance verified: I1, I2, I3, I4, I5
 
 ## [1.8.0] - 2026-03-02 - "Lexical Fidelity" Release
