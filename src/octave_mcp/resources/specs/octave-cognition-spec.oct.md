@@ -2,7 +2,7 @@
 META:
   TYPE::COGNITION_DEFINITION
   VERSION::"1.0.0"
-  STATUS::APPROVED
+  STATUS::ACTIVE
   PURPOSE::"Cognition master file schema — behavioral kernel for cognitive types"
 // OCTAVE COGNITION v1: The "Behavioral Kernel" Schema
 // Companion to octave-agents-spec.oct.md v7.0.0 (Cognitive Separation)

@@ -1,13 +1,14 @@
 ===OCTAVE_AGENTS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"8.0.0"
-  STATUS::APPROVED
+  VERSION::"8.1.0"
+  STATUS::ACTIVE
   PURPOSE::"Agent architecture schema with cognitive separation, operational clarity, and capability tiering."
   CONTRACT::HOLOGRAPHIC<JIT_GRAMMAR_COMPILATION>
-// OCTAVE AGENTS v8: The "Chassis-Profile" Schema
-// Extends v7 Cognitive Separation with capability tiering (ADR-0283).
-// Introduces CHASSIS/PROFILES structure in §3 for context-aware skill loading.
+// OCTAVE AGENTS v8.1: Adds §6::YAML_FRONTMATTER section.
+// YAML frontmatter is OPTIONAL — required only for platform-deployed agents.
+// Hub/system agents (.hestai-sys/library/agents/) consumed by anchor ceremony need only OCTAVE.
+// This aligns agents and skills specs on the same YAML-optional contract.
 //
 // v8.0.0 CHANGES (ADR-0283):
 // - §3::CAPABILITIES extended with CHASSIS (invariant skills) and PROFILES (context-specific)
@@ -152,4 +153,33 @@ META:
   SHANK_LOCK::"§1::IDENTITY"
   CONDUCT_LOCK::["§2::OPERATIONAL_BEHAVIOR","§4::INTERACTION_RULES"]
   FLUKE_LOAD::"§3::CAPABILITIES"
+§6::YAML_FRONTMATTER
+  // v8.1: YAML frontmatter for platform discovery.
+  // Same contract as skills spec v9.1 — agents and skills treat YAML identically.
+  //
+  // RATIONALE:
+  // The anchor ceremony reads OCTAVE META (§0, §1, §2, §3, §4), not YAML.
+  // YAML frontmatter serves external platform discovery (Claude Code, Desktop, Codex).
+  // Hub/system agents have never used YAML and work correctly — this section
+  // documents that reality and provides the schema for platform agents.
+  STATUS::OPTIONAL
+  REQUIRED_WHEN::"Agent is deployed to a platform discovery path"
+  YAML_FIELDS::[
+    name,
+    description,
+    allowed-tools,
+    triggers,
+    version
+  ]
+  DEPLOYMENT_CONTEXT:
+    PLATFORM_AGENTS:
+      LOCATION::[".claude/agents/", ".codex/agents/", "~/.claude/agents/"]
+      YAML::REQUIRED
+      RATIONALE::"Platforms parse YAML frontmatter for agent matching, description, and tool gating"
+    HUB_AGENTS:
+      LOCATION::[".hestai-sys/library/agents/"]
+      YAML::NOT_REQUIRED
+      RATIONALE::"Anchor ceremony reads OCTAVE META. No platform parser consumes hub agent YAML."
+  // This mirrors skills spec v9.1 §7::PLATFORM_ADAPTATION::YAML_FRONTMATTER_RULES.
+  // Both specs follow the same principle: YAML serves platform discovery, OCTAVE serves definition.
 ===END===

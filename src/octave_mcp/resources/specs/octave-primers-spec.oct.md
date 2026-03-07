@@ -2,7 +2,7 @@
 META:
   TYPE::LLM_PROFILE
   VERSION::"6.2.0"
-  STATUS::APPROVED
+  STATUS::ACTIVE
   TOKENS::"~80"
   REQUIRES::octave-core-spec
   PURPOSE::"Ultra-compressed context injection for immediate capability"

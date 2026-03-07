@@ -2,7 +2,7 @@
 META:
   TYPE::LLM_PROFILE
   VERSION::"6.0.0"
-  STATUS::APPROVED
+  STATUS::ACTIVE
 
   TOKENS::"~200"
   REQUIRES::octave-core-spec
