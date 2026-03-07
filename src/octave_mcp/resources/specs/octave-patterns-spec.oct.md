@@ -2,7 +2,7 @@
 META:
   TYPE::PATTERN_DEFINITION
   VERSION::"2.0.0"
-  STATUS::ACTIVE
+  STATUS::APPROVED
   TOKENS::"~150"
   REQUIRES::octave-core-spec
   PURPOSE::L5_pattern_document_format[reusable_decision_frameworks]
