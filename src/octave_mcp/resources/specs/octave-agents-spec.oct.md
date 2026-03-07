@@ -168,7 +168,8 @@ META:
     name,
     description,
     allowed-tools,
-    triggers
+    triggers,
+    version
   ]
   DEPLOYMENT_CONTEXT::[
     PLATFORM_AGENTS::[
