@@ -2,7 +2,7 @@
 META:
   TYPE::SKILL_DEFINITION
   VERSION::"9.0.0"
-  STATUS::DRAFT
+  STATUS::APPROVED
   TOKENS::"~250"
   REQUIRES::octave-core-spec
   PURPOSE::L5_skill_document_format[platform_agnostic]
