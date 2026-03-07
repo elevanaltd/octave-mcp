@@ -2,7 +2,7 @@
 META:
   TYPE::SKILL_DEFINITION
   VERSION::"9.1.0"
-  STATUS::APPROVED
+  STATUS::ACTIVE
   TOKENS::"~250"
   REQUIRES::octave-core-spec
   PURPOSE::L5_skill_document_format<platform_agnostic>
@@ -115,27 +115,22 @@ UNIVERSAL_PRINCIPLES::[
 §7::PLATFORM_ADAPTATION
 UNIVERSAL_FORMAT::pure_octave_all_platforms
 PACKAGING::"directory_based<.claude∨.codex∨platform_agnostic>"
-YAML_FRONTMATTER_RULES::[
-  PLATFORM_SKILLS::[
-    LOCATION::[
-      ".claude/skills/",
-      ".codex/skills/",
-      "~/.claude/skills/"
-    ],
-    YAML::"REQUIRED<platforms_use_YAML_for_discovery⊕triggers⊕tool_gating>",
+YAML_FRONTMATTER_RULES:
+  // YAML serves platform discovery (BM25, embedding retrieval, tool gating).
+  // The anchor ceremony reads OCTAVE META, not YAML.
+  // Therefore YAML is required only when a platform parser consumes it.
+  PLATFORM_SKILLS:
+    LOCATION::[".claude/skills/", ".codex/skills/", "~/.claude/skills/"]
+    YAML::"REQUIRED<platforms_use_YAML_for_discovery⊕triggers⊕tool_gating>"
     RATIONALE::"Claude Code, Desktop, and Codex parse YAML frontmatter for skill matching and allowed-tools enforcement"
-  ],
-  HUB_SKILLS::[
-    LOCATION::[".hestai-sys/library/skills/"],
-    YAML::OPTIONAL<present_only_if_skill_is_dual_deployed_to_a_platform>,
+  HUB_SKILLS:
+    LOCATION::[".hestai-sys/library/skills/"]
+    YAML::OPTIONAL<present_only_if_skill_is_dual_deployed_to_a_platform>
     RATIONALE::"Anchor ceremony reads OCTAVE META and §5::ANCHOR_KERNEL. YAML adds no value when no platform parser consumes it."
-  ],
-  DUAL_DEPLOYED_SKILLS::[
-    DESCRIPTION::"Skills that exist in both hub and platform locations",
-    YAML::PRESENT_IN_BOTH<serves_the_platform_copy>,
+  DUAL_DEPLOYED_SKILLS:
+    DESCRIPTION::"Skills that exist in both hub and platform locations"
+    YAML::PRESENT_IN_BOTH<serves_the_platform_copy>
     EXAMPLE::"ho-mode exists in .hestai-sys/library/skills/ AND ~/.claude/skills/ — YAML serves the platform copy"
-  ]
-]
 §8::VALIDATION
 V9_VALIDATION:
   META_REQUIRED::[

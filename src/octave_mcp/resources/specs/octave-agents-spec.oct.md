@@ -2,7 +2,7 @@
 META:
   TYPE::LLM_PROFILE
   VERSION::"8.1.0"
-  STATUS::APPROVED
+  STATUS::ACTIVE
   PURPOSE::"Agent architecture schema with cognitive separation, operational clarity, and capability tiering."
   CONTRACT::HOLOGRAPHIC<JIT_GRAMMAR_COMPILATION>
 // OCTAVE AGENTS v8.1: Adds §6::YAML_FRONTMATTER section.
@@ -171,22 +171,15 @@ META:
     triggers,
     version
   ]
-  DEPLOYMENT_CONTEXT::[
-    PLATFORM_AGENTS::[
-      LOCATION::[
-        ".claude/agents/",
-        ".codex/agents/",
-        "~/.claude/agents/"
-      ],
-      YAML::REQUIRED,
+  DEPLOYMENT_CONTEXT:
+    PLATFORM_AGENTS:
+      LOCATION::[".claude/agents/", ".codex/agents/", "~/.claude/agents/"]
+      YAML::REQUIRED
       RATIONALE::"Platforms parse YAML frontmatter for agent matching, description, and tool gating"
-    ],
-    HUB_AGENTS::[
-      LOCATION::[".hestai-sys/library/agents/"],
-      YAML::NOT_REQUIRED,
+    HUB_AGENTS:
+      LOCATION::[".hestai-sys/library/agents/"]
+      YAML::NOT_REQUIRED
       RATIONALE::"Anchor ceremony reads OCTAVE META. No platform parser consumes hub agent YAML."
-    ]
-  ]
   // This mirrors skills spec v9.1 §7::PLATFORM_ADAPTATION::YAML_FRONTMATTER_RULES.
   // Both specs follow the same principle: YAML serves platform discovery, OCTAVE serves definition.
 ===END===
