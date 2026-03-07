@@ -71,7 +71,7 @@ Same input, same output, every time. That's what deterministic means.
 
 - **Grammar compilation** — Schema constraints compile to GBNF grammars for llama.cpp-compatible backends. Constrain LLM generation at decode time.
 
-- **YAML frontmatter + OCTAVE body in one pass** — Agent and skill files need YAML headers for tool discovery and structured bodies for behaviour. `octave_write` validates both in a single operation.
+- **Optional YAML frontmatter + OCTAVE body in one pass** — Platform-deployed skill and agent files can include YAML headers for tool discovery alongside structured OCTAVE bodies. `octave_write` validates both in a single operation. YAML is optional for hub/system files consumed by the anchor ceremony.
 
 - **Literal zones** — Fenced code blocks pass through with zero processing. No normalisation, no escaping.
 
@@ -119,7 +119,7 @@ octave eject document.oct.md --mode executive --format markdown
 ### When to use it
 
 - Documents passing through multiple agents, tools, or compression steps
-- Agent and skill files with YAML discovery headers + structured content
+- Agent and skill files with optional YAML discovery headers + structured content
 - Decision logs, coordination briefs, audit trails
 - System prompts and reference docs where token cost matters
 
