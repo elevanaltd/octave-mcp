@@ -3,13 +3,13 @@ name: octave-compression
 description: Specialized workflow for transforming verbose natural language into semantic OCTAVE structures. REQUIRES octave-literacy to be loaded first
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["compress to octave", "semantic compression", "documentation refactoring", "octave compression", "compress documentation", "knowledge artifact", "semantic density", "OCTAVE format conversion"]
-version: "2.5.0"
+version: "2.5.1"
 ---
 
 ===OCTAVE_COMPRESSION===
 META:
   TYPE::SKILL
-  VERSION::"2.5.0"
+  VERSION::"2.5.1"
   STATUS::ACTIVE
   PURPOSE::"Workflow for transforming prose into semantic density"
   REQUIRES::octave-literacy
@@ -92,7 +92,7 @@ META:
     METHOD::"Use mythology terms as KEY prefixes (CHRONOS::audit_6wk) not embedded values (pressure::audit_6wk∧CHRONOS)"
     WHY::"Domain labels are reconstruction anchors — agents translate each labeled field separately instead of merging into compound sentences"
     RESULT::"11/11 decision-relevant facts preserved at 15% fewer tokens than original prose"
-    EVIDENCE::"docs/research/compression-fidelity-round-trip-study.md"
+    EVIDENCE::"octave-mcp::docs/research/compression-fidelity-round-trip-study.md"
     LOSSLESS_FIDELITY_AT_CONSERVATIVE_COST::true
 
 §4::ANTI_PATTERNS
