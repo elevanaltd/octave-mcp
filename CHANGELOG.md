@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-03-14 - "Downstream Portability" Patch
+
+This patch fixes skill file portability issues flagged by downstream consumers (HestAI-MCP PR #321). All changes are to bundled skill resources — no functional code changes.
+
+### Fixed
+- **`Artemis_Scrape` expression inconsistency** (#336) — Unified `⟨Hidden⟩` (non-OCTAVE syntax) to `Hidden` across octave-mythology §2, §5, §6; quoted THREAT values in §6 for lexer safety
+- **Archetype validation regex scope** (#336) — Clarified in §10 that `[A-Z][A-Z_]*` applies to standalone archetypes; compound behavioral expressions (e.g., `Artemis_Scrape`) use Title\_Case prefix
+- **Dead file references trimmed** (#336) — Removed ADR-0005 references (evidence already inlined), collapsed §11 RESEARCH\_BACKING to findings-only (stripped 5 file paths agents never follow)
+- **Cross-repo reference portability** (#336) — Changed remaining SOURCE/GUIDE/EVIDENCE paths from string literals to constructor syntax (`octave-mcp[path]`), clearly marking them as source-repo references
+
+### Changed
+- **Skill versions bumped**: octave-mythology 1.2.0→1.2.1, octave-ultra-mythic 1.2.0→1.2.1, octave-compression 2.5.0→2.5.1
+
+### Quality Gates
+- 2488 tests passing, 0 failures
+- Constitutional compliance verified: I1, I3, I4, I5
+
 ## [1.9.1] - 2026-03-07 - "YAML-Optional Alignment" Patch
 
 This patch aligns the skills and agents specs on a consistent YAML frontmatter contract: YAML is OPTIONAL, required only for platform-deployed files (`.claude/skills/`, `.codex/skills/`), not for hub/system files consumed by the anchor ceremony.
@@ -643,7 +660,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.1...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.2...HEAD
+[1.9.2]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.7.0...v1.8.0
