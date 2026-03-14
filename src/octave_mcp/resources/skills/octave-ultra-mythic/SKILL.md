@@ -3,13 +3,13 @@ name: octave-ultra-mythic
 description: Ultra-high density compression using mythological atoms and semantic shorthand. Preserves soul and constraints at 60% compression for identity transmission, binding protocols, and extreme token scarcity.
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["ultra mythic", "mythological compression", "semantic atoms", "identity compression", "binding passport", "cognitive passport", "60% compression", "soul preservation"]
-version: "1.2.0"
+version: "1.2.1"
 ---
 
 ===OCTAVE_ULTRA_MYTHIC===
 META:
   TYPE::SKILL
-  VERSION::"1.2.0"
+  VERSION::"1.2.1"
   STATUS::ACTIVE
   PURPOSE::"Ultra-high density compression using mythological atoms for identity and knowledge preservation"
   REQUIRES::[octave-literacy, octave-mythology]
@@ -117,7 +117,7 @@ META:
   ]
 
   PRINCIPLE::"Graceful fallback through cultural semantic density"
-  GUIDE::"docs/guides/mythological-compression.md"
+  GUIDE::octave-mcp[docs/guides/mythological-compression.md]
 
 §7::ANTI_PATTERNS
   AVOID::[
