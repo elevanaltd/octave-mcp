@@ -5,7 +5,7 @@ cognition master file validation via octave_validate --schema COGNITION_DEFINITI
 
 Cognition files (logos.oct.md, ethos.oct.md, pathos.oct.md) have structure:
 - §1::COGNITIVE_IDENTITY with NATURE block (FORCE, ESSENCE, ELEMENT)
-- §2::COGNITIVE_RULES with MODE, PRIME_DIRECTIVE, THINK, THINK_NEVER
+- §2::COGNITIVE_RULES with MODE, PRIME_DIRECTIVE, CRAFT (OPT), THINK, THINK_NEVER
 """
 
 from pathlib import Path
@@ -40,7 +40,7 @@ class TestCognitionSchemaLoading:
         schema = load_schema_by_name("COGNITION_DEFINITION")
         assert schema is not None
         assert schema.version is not None
-        assert schema.version == "1.0"
+        assert schema.version == "1.1"
 
 
 class TestCognitionSchemaValidation:
@@ -201,6 +201,60 @@ META:
             result["validation_status"] == "INVALID"
         ), f"Missing NATURE block should be INVALID. Got: {result.get('validation_status')}"
         assert result["valid"] is False
+
+    def test_cognition_with_craft_validates(self):
+        """Cognition file with optional CRAFT field should pass validation."""
+        content = """===COGNITION_TEST===
+META:
+  TYPE::COGNITION_DEFINITION
+  VERSION::"1.1.0"
+§1::COGNITIVE_IDENTITY
+  NATURE:
+    FORCE::STRUCTURE
+    ESSENCE::ARCHITECT
+    ELEMENT::DOOR
+§2::COGNITIVE_RULES
+  MODE::CONVERGENT
+  PRIME_DIRECTIVE::"Reveal what connects."
+  CRAFT::"Understand fully, shape patterns, act minimally."
+  THINK::["Rule one","Rule two"]
+  THINK_NEVER::["Anti-pattern one"]
+===END==="""
+
+        result = self._validate_content(content)
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"Cognition with CRAFT should validate. Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
+
+    def test_cognition_without_craft_validates(self):
+        """Cognition file without CRAFT (v1.0.0 backward compat) should pass validation."""
+        content = """===COGNITION_TEST===
+META:
+  TYPE::COGNITION_DEFINITION
+  VERSION::"1.0.0"
+§1::COGNITIVE_IDENTITY
+  NATURE:
+    FORCE::CONSTRAINT
+    ESSENCE::GUARDIAN
+    ELEMENT::WALL
+§2::COGNITIVE_RULES
+  MODE::VALIDATION
+  PRIME_DIRECTIVE::"Reveal what breaks."
+  THINK::["Rule one"]
+  THINK_NEVER::["Anti-pattern one"]
+===END==="""
+
+        result = self._validate_content(content)
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"Cognition without CRAFT (backward compat) should validate. "
+            f"Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
 
     def test_missing_cognitive_rules_section_is_invalid(self):
         """Cognition file missing §2::COGNITIVE_RULES should fail validation."""

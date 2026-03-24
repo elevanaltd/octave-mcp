@@ -1,10 +1,10 @@
 ===OCTAVE_COGNITION===
 META:
   TYPE::COGNITION_DEFINITION
-  VERSION::"1.0.0"
+  VERSION::"1.1.0"
   STATUS::ACTIVE
   PURPOSE::"Cognition master file schema — behavioral kernel for cognitive types"
-// OCTAVE COGNITION v1: The "Behavioral Kernel" Schema
+// OCTAVE COGNITION v1.1: Adds CRAFT (optional methodological stance)
 // Companion to octave-agents-spec.oct.md v7.0.0 (Cognitive Separation)
 // Agent files reference cognition type via COGNITION field in §1::IDENTITY.
 // This spec defines the structure of cognition master files loaded before
@@ -15,8 +15,13 @@ META:
 // - M022: Grammar contracts (§4) drove 92% vs 54% adherence — §4 untouched by this separation
 // - Standalone files make A/B testing trivial (load it or don't)
 //
-// FIELD CONTRACT (must match octave-agents-spec.oct.md line 43):
-// NATURE (FORCE/ESSENCE/ELEMENT), MODE, PRIME_DIRECTIVE, THINK, THINK_NEVER
+// v1.1.0 CHANGES:
+// - Added CRAFT (OPT) to §2::COGNITIVE_RULES between PRIME_DIRECTIVE and THINK
+// - CRAFT provides methodological stance — bridges existential (PRIME_DIRECTIVE) and operational (THINK)
+// - Backward compatible: v1.0.0 cognition files without CRAFT remain valid
+//
+// FIELD CONTRACT (must match octave-agents-spec.oct.md line 50):
+// NATURE (FORCE/ESSENCE/ELEMENT), MODE, PRIME_DIRECTIVE, CRAFT (OPT), THINK, THINK_NEVER
 §1::COGNITIVE_IDENTITY
   // WHAT I AM — cognitive nature (immutable per type)
   NATURE:
@@ -31,6 +36,11 @@ META:
   MODE::[CONVERGENT∨VALIDATION∨DIVERGENT]
   PRIME_DIRECTIVE::"Core cognitive instruction"
   // Single sentence that captures the essence of how this cognition type reasons.
+  CRAFT::"Methodological stance"
+  // OPTIONAL. Single sentence describing the discipline of practice.
+  // Where PRIME_DIRECTIVE says "what to reveal" and THINK says "how to reason step-by-step",
+  // CRAFT says "what approach to embody" — the methodological bridge.
+  // v1.0.0 cognition files without CRAFT remain valid.
   THINK::["Cognitive behavioral rules","Each rule shapes reasoning approach"]
   // THINK rules define positive cognitive patterns — how to approach problems.
   THINK_NEVER::["Cognitive anti-patterns","Each rule is a hard cognitive boundary"]
