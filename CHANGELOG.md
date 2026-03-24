@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.4] - 2026-03-24 - "Cognition Spec EPISTEMOLOGY Field" Patch
+
+This patch evolves the cognition spec to v1.2.0, adding an optional EPISTEMOLOGY field to §1::COGNITIVE_IDENTITY NATURE block. EPISTEMOLOGY invokes a named epistemic tradition (e.g. "Aristotelian Logos") to activate pre-trained weight clusters as a decoder key for cognition reasoning style. No functional code changes — spec and schema evolution only.
+
+### Spec Evolution
+- **Cognition Spec v1.2.0 — EPISTEMOLOGY Field** — Added optional EPISTEMOLOGY field to §1::COGNITIVE_IDENTITY NATURE block
+  - Invokes named epistemic tradition to activate high-quality academic/philosophical clusters in LLM pre-training data
+  - Acts as a decoder key for the cognition type's reasoning style
+  - Updated FIELD CONTRACT: `NATURE (FORCE/ESSENCE/ELEMENT/EPISTEMOLOGY (OPT)), MODE, PRIME_DIRECTIVE, CRAFT (OPT), THINK, THINK_NEVER`
+- **COGNITION_DEFINITION Schema v1.2** — Added `EPISTEMOLOGY::["Epistemic tradition"∧OPT→§SELF]` to FIELDS
+  - USAGE_NOTES updated with EPISTEMOLOGY description
+
+### Tests
+- Updated schema version assertion from "1.1" to "1.2"
+- Added `test_cognition_with_epistemology_validates` — validates cognition file with EPISTEMOLOGY passes
+- Added `test_cognition_without_epistemology_validates` — backward compatibility with v1.0.0/v1.1.0 files
+
+### Quality Gates
+- 2492 tests passing, 0 failures
+- Backward compatible: all existing cognition files validate against updated schema
+
 ## [1.9.3] - 2026-03-24 - "Cognition Spec CRAFT Field" Patch
 
 This patch evolves the cognition spec to v1.1.0, adding an optional CRAFT field to §2::COGNITIVE_RULES. CRAFT provides a methodological stance bridging PRIME_DIRECTIVE (existential orientation) and THINK (operational rules). No functional code changes — spec and schema evolution only.
@@ -684,7 +705,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.3...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.4...HEAD
+[1.9.4]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.3...v1.9.4
 [1.9.3]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.0...v1.9.1
