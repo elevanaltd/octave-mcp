@@ -20,7 +20,7 @@ META:
 // - CRAFT provides methodological stance — bridges existential (PRIME_DIRECTIVE) and operational (THINK)
 // - Backward compatible: v1.0.0 cognition files without CRAFT remain valid
 //
-// FIELD CONTRACT (must match octave-agents-spec.oct.md line 50):
+// FIELD CONTRACT (must match octave-agents-spec.oct.md §1::IDENTITY COGNITION comment):
 // NATURE (FORCE/ESSENCE/ELEMENT), MODE, PRIME_DIRECTIVE, CRAFT (OPT), THINK, THINK_NEVER
 §1::COGNITIVE_IDENTITY
   // WHAT I AM — cognitive nature (immutable per type)
