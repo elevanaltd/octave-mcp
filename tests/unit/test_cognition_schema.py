@@ -40,7 +40,7 @@ class TestCognitionSchemaLoading:
         schema = load_schema_by_name("COGNITION_DEFINITION")
         assert schema is not None
         assert schema.version is not None
-        assert schema.version == "1.1"
+        assert schema.version == "1.2"
 
 
 class TestCognitionSchemaValidation:
@@ -251,6 +251,62 @@ META:
 
         assert result["validation_status"] == "VALIDATED", (
             f"Cognition without CRAFT (backward compat) should validate. "
+            f"Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
+
+    def test_cognition_with_epistemology_validates(self):
+        """Cognition file with optional EPISTEMOLOGY field should pass validation."""
+        content = """===COGNITION_TEST===
+META:
+  TYPE::COGNITION_DEFINITION
+  VERSION::"2.0.0"
+§1::COGNITIVE_IDENTITY
+  NATURE:
+    FORCE::STRUCTURE
+    ESSENCE::ARCHITECT
+    ELEMENT::DOOR
+    EPISTEMOLOGY::"Aristotelian Logos: rigorous causality, structural reason, and mathematical coherence."
+§2::COGNITIVE_RULES
+  MODE::CONVERGENT
+  PRIME_DIRECTIVE::"Reveal what connects."
+  CRAFT::"Map the total structural dependencies before executing the minimal intervention."
+  THINK::["Rule one","Rule two"]
+  THINK_NEVER::["Anti-pattern one"]
+===END==="""
+
+        result = self._validate_content(content)
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"Cognition with EPISTEMOLOGY should validate. Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
+
+    def test_cognition_without_epistemology_validates(self):
+        """Cognition file without EPISTEMOLOGY (backward compat) should pass validation."""
+        content = """===COGNITION_TEST===
+META:
+  TYPE::COGNITION_DEFINITION
+  VERSION::"1.1.0"
+§1::COGNITIVE_IDENTITY
+  NATURE:
+    FORCE::STRUCTURE
+    ESSENCE::ARCHITECT
+    ELEMENT::DOOR
+§2::COGNITIVE_RULES
+  MODE::CONVERGENT
+  PRIME_DIRECTIVE::"Reveal what connects."
+  CRAFT::"Understand fully, shape patterns, act minimally."
+  THINK::["Rule one"]
+  THINK_NEVER::["Anti-pattern one"]
+===END==="""
+
+        result = self._validate_content(content)
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"Cognition without EPISTEMOLOGY (backward compat) should validate. "
             f"Got: {result.get('validation_status')}. "
             f"Errors: {result.get('validation_errors', [])}"
         )
