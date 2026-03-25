@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.5] - 2026-03-25 - "OCTAVE Acronym Expansion" Patch
+
+This patch adds the full OCTAVE acronym expansion (Olympian Common Text And Vocabulary Engine) across all bundled resource files — primers, specs, skills, and README. Previously the acronym was only defined in archived specs and docs guides, meaning agents loading active resources never learned the full name.
+
+### Documentation
+- **Primers** — Updated universal OCTAVE definition from `"Semantic DSL for LLMs"` to `"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"` across all 6 primers
+- **Specs** — Added `NAME::"OCTAVE (Olympian Common Text And Vocabulary Engine)"` to core-spec and architecture-spec META; expanded acronym in primers-spec universal definition, skills-spec header, and patterns-spec header
+- **Skills** — Added acronym parenthetical to all 5 SKILL.md YAML descriptions
+- **Resources README** — Added full name to title and universal definition section
+
+### Changed
+- **Primer literal zones** — Mastery, compression, and ultra-mythic primers now use literal zones (fenced code blocks) for teaching examples, preventing normalizer restructuring of pedagogical pseudo-OCTAVE content
+
 ## [1.9.4] - 2026-03-24 - "Cognition Spec EPISTEMOLOGY Field" Patch
 
 This patch evolves the cognition spec to v1.2.0, adding an optional EPISTEMOLOGY field to §1::COGNITIVE_IDENTITY NATURE block. EPISTEMOLOGY invokes a named epistemic tradition (e.g. "Aristotelian Logos") to activate pre-trained weight clusters as a decoder key for cognition reasoning style. No functional code changes — spec and schema evolution only.
@@ -705,7 +718,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.4...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.5...HEAD
+[1.9.5]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.4...v1.9.5
 [1.9.4]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.3...v1.9.4
 [1.9.3]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.2...v1.9.3
 [1.9.2]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.1...v1.9.2
