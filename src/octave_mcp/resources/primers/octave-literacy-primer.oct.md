@@ -6,7 +6,7 @@ META:
   TIER::ULTRA
 §1::ESSENCE
 PURPOSE::"Read and write OCTAVE"
-OCTAVE::"Semantic DSL for LLMs"
+OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
 STRUCTURE::"KEY::value, [list], indent_2"
 §1b::READING
 MYTHOLOGY::"Semantic zip files — compressed meaning, not system names"
@@ -31,7 +31,7 @@ OPERATORS::
 ```
 §4::ONE_SHOT
 IN::"flow from A to B"
-OUT::"A→B"
+OUT::A→B
 §5::VALIDATE
 MUST::[
   valid_OCTAVE,

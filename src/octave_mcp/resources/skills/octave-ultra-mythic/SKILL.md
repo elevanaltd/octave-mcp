@@ -1,6 +1,6 @@
 ---
 name: octave-ultra-mythic
-description: Ultra-high density compression using mythological atoms and semantic shorthand. Preserves soul and constraints at 60% compression for identity transmission, binding protocols, and extreme token scarcity.
+description: Ultra-high density compression using mythological atoms and semantic shorthand for OCTAVE (Olympian Common Text And Vocabulary Engine). Preserves soul and constraints at 60% compression for identity transmission, binding protocols, and extreme token scarcity.
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["ultra mythic", "mythological compression", "semantic atoms", "identity compression", "binding passport", "cognitive passport", "60% compression", "soul preservation"]
 version: "1.2.1"

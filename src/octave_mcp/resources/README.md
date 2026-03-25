@@ -1,4 +1,4 @@
-# OCTAVE Package Resources
+# OCTAVE (Olympian Common Text And Vocabulary Engine) Package Resources
 
 ## Overview
 
@@ -91,9 +91,11 @@ primer = load_resource('primers/octave-compression-primer.oct.md')
 
 ## Universal OCTAVE Definition
 
+OCTAVE stands for **Olympian Common Text And Vocabulary Engine**.
+
 All primers use the standardized definition:
 ```
-OCTAVE::"Semantic DSL for LLMs"
+OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
 ```
 
 ## Version Alignment

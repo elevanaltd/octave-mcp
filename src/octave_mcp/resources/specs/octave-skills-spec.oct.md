@@ -9,7 +9,7 @@ META:
   IMPLEMENTATION_NOTES::"v9.1: YAML frontmatter is now OPTIONAL based on deployment context. Platform-deployed skills require YAML for discovery. Hub/system skills consumed by anchor ceremony need only OCTAVE. Aligns with agents spec v8.1 which treats YAML identically. All other v9.0 rules unchanged."
   CONTRACT::"SKILL_DEFINITION<PRINCIPLE::\"Skills use OCTAVE for definition. YAML frontmatter is OPTIONAL for platform discovery.\",MECHANISM::[YAML_FRONTMATTER[OPTIONAL],\"OCTAVE_ENVELOPE[META, BODY, §5::ANCHOR_KERNEL]\"],COMPATIBILITY::universal_tool_support>"
 ---
-// OCTAVE SKILLS: Universal format for AI agent skill documents.
+// OCTAVE (Olympian Common Text And Vocabulary Engine) SKILLS: Universal format for AI agent skill documents.
 // v9.1: YAML frontmatter optional based on deployment context. OCTAVE envelope is the universal constant.
 // v9.0: §5::ANCHOR_KERNEL section header + compression mandate + canonical sections + token budget.
 // Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallback until v10 (see §11).

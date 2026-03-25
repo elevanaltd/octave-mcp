@@ -6,6 +6,7 @@ META:
   IMPLEMENTATION::PARTIAL
   DATE::"2026-01-06"
   OCTAVE_VERSION::"6.0.0"
+  NAME::"OCTAVE (Olympian Common Text And Vocabulary Engine)"
   PURPOSE::MCP_server_architecture_for_OCTAVE_productization+generative_holographic_contracts
   IMPLEMENTATION_NOTES::"This spec is normative for OCTAVE-MCP behavior. v0.6.0 state: MCP tool surface exists (octave_validate, octave_write, octave_eject) with I5-visible validation_status and canonicalization. Constraint evaluation and holographic schema extraction are partially implemented (SchemaDefinition + ConstraintChain evaluation). Target routing is implemented as an audit surface (routing_log) but not as a full execution router. Generative holographic contracts (META.CONTRACT/META.GRAMMAR) are a v6 principle; JIT grammar compilation is not yet enforced by tools (compiler is stub). Hermetic anchoring is implemented for vocabulary hydration and schema reference resolution, but hermetic schema validation is not yet a hard gate."
   IMPLEMENTATION_REF::[

@@ -6,7 +6,7 @@ META:
   TIER::ULTRA
 §1::ESSENCE
 PURPOSE::"Map concepts→mythological"
-OCTAVE::"Semantic DSL for LLMs"
+OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
 METHOD::"concepts→ATOMS[mythology]"
 FRAMING::"Mythology = semantic zip files — compressed meaning already in the weights, not system names"
 // Adjacent text determines which aspect applies — context disambiguates

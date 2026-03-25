@@ -3,6 +3,7 @@ META:
   TYPE::LLM_PROFILE
   VERSION::"6.0.0"
   STATUS::ACTIVE
+  NAME::"OCTAVE (Olympian Common Text And Vocabulary Engine)"
 
   TOKENS::"~2500"
   REQUIRES::nothing

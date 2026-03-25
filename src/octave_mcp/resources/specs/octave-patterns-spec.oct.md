@@ -16,7 +16,7 @@ META:
 
 ---
 
-// OCTAVE PATTERNS: Universal format for reusable decision frameworks.
+// OCTAVE (Olympian Common Text And Vocabulary Engine) PATTERNS: Universal format for reusable decision frameworks.
 // v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec, chassis-profile awareness.
 
 §1::PATTERN_DOCUMENT_STRUCTURE
