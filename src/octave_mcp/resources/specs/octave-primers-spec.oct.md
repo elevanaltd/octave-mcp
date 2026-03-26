@@ -26,7 +26,7 @@ META:
     PURPOSE::"Skill-specific action + OCTAVE definition"
     CONTENT::PURPOSE[action_verb]+OCTAVE[universal_def]+METHOD
     REQUIRED::[skill_action,OCTAVE_definition,method]
-    EXAMPLE::"PURPOSE::Write_OCTAVE OCTAVE::Olympian_Common_Text_And_Vocabulary_Engine"
+    EXAMPLE::"PURPOSE::Write_OCTAVE OCTAVE::Olympian_Common_Text_And_Vocabulary_Engine—Semantic_DSL_for_LLMs"
     UNIVERSAL::ALL_PRIMERS_USE_SAME_OCTAVE_DEF
 
   §2b::MAP
