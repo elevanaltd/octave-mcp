@@ -1,6 +1,6 @@
 ---
 name: octave-compression
-description: Specialized workflow for transforming verbose natural language into semantic OCTAVE structures. REQUIRES octave-literacy to be loaded first
+description: Specialized workflow for transforming verbose natural language into semantic OCTAVE (Olympian Common Text And Vocabulary Engine) structures. REQUIRES octave-literacy to be loaded first
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["compress to octave", "semantic compression", "documentation refactoring", "octave compression", "compress documentation", "knowledge artifact", "semantic density", "OCTAVE format conversion"]
 version: "2.5.1"

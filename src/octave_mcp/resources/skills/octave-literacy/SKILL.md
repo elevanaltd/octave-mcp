@@ -1,6 +1,6 @@
 ---
 name: octave-literacy
-description: Fundamental reading and writing capability for the OCTAVE format. Basic structural competence without full architectural specifications
+description: Fundamental reading and writing capability for the OCTAVE (Olympian Common Text And Vocabulary Engine) format. Basic structural competence without full architectural specifications
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave format", "write octave", "octave syntax", "structured output", "OCTAVE basics", "OCTAVE literacy", "OCTAVE structure", "semantic format", "key::value", "OCTAVE notation"]
 version: "1.4.0"

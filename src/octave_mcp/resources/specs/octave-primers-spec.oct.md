@@ -9,7 +9,7 @@ META:
   COMPRESSION_TIER::ULTRA["50%_compression",facts∧structure_only]
 
 §1::DEFINITION
-  OCTAVE::"Semantic DSL for LLMs"  // Universal definition for all primers
+  OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"  // Universal definition for all primers
   PRIMER::"Minimal bootstrap for a single workflow — execution OR comprehension"
   PRIMER_MODES::[EXECUTION[write_without_deep_understanding]∨READING[comprehend_without_output_generation]]
   SKILL::"Complete reference with rationale and examples"
@@ -26,7 +26,7 @@ META:
     PURPOSE::"Skill-specific action + OCTAVE definition"
     CONTENT::PURPOSE[action_verb]+OCTAVE[universal_def]+METHOD
     REQUIRED::[skill_action,OCTAVE_definition,method]
-    EXAMPLE::"PURPOSE::Write_OCTAVE OCTAVE::Semantic_DSL_for_LLMs"
+    EXAMPLE::"PURPOSE::Write_OCTAVE OCTAVE::Olympian_Common_Text_And_Vocabulary_Engine—Semantic_DSL_for_LLMs"
     UNIVERSAL::ALL_PRIMERS_USE_SAME_OCTAVE_DEF
 
   §2b::MAP

@@ -6,7 +6,7 @@ META:
   TIER::ULTRA
 §1::ESSENCE
 PURPOSE::"Understand OCTAVE format when you receive it"
-OCTAVE::"Semantic DSL for LLMs"
+OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
 MYTHOLOGY::"Semantic zip files — compressed meaning already in the weights, not system names"
 §2::MAP
 ASSIGN::"::"

@@ -1,6 +1,6 @@
 ---
 name: octave-mastery
-description: Advanced semantic vocabulary and architectural patterns for the OCTAVE format. REQUIRES octave-literacy to be loaded first
+description: Advanced semantic vocabulary and architectural patterns for the OCTAVE (Olympian Common Text And Vocabulary Engine) format. REQUIRES octave-literacy to be loaded first
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced octave", "OCTAVE mastery", "holographic patterns", "archetypes", "high-density specifications", "system architecture", "OCTAVE patterns"]
 version: "2.3.0"
