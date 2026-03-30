@@ -610,7 +610,7 @@ wheels = [
 
 [[package]]
 name = "octave-mcp"
-version = "1.9.5"
+version = "1.9.6"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

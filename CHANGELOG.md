@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.6] - 2026-03-30 - "CRS_REVIEW Schema" Patch
+
+This patch adds the CRS_REVIEW builtin schema for structured code review artifacts (Issue #342). Replaces verbose 900-line markdown PR comments with compact, machine-parseable OCTAVE output for the HestAI review gate system. Token economy: 30-50% size reduction vs markdown equivalent.
+
+### Schema
+- **CRS_REVIEW v1.0.0** — New builtin schema at `schemas/builtin/crs_review.oct.md`
+  - `§1::VERDICT` — ROLE (REQ), PROVIDER (OPT), VERDICT (REQ, ENUM[APPROVED,BLOCKED,CONDITIONAL]), SHA (REQ), TIER (REQ, ENUM[T0-T4])
+  - `§2::DISTRIBUTION` — TOTAL (REQ), BLOCKING (REQ), TRIAGED (REQ), OMITTED/P0-P5 (OPT)
+  - `§3::FINDINGS` — flat sequential inline-map records (no field-level schema validation; content is structural)
+  - `§4::SUMMARY` — ASSESSMENT (REQ), TOP_RISKS (REQ, TYPE[LIST])
+  - POLICY: UNKNOWN_FIELDS WARN, targets all 4 sections
+  - Section-level fields validated via `_build_deep_section_schemas()` (document-type schema pattern, same as COGNITION_DEFINITION)
+  - META fields (TYPE, VERSION, SCHEMA_VERSION) validated separately by META block validator, not in FIELDS block
+
+### Design Decisions
+- No evidence field — `file` + `line` sufficient; CE reads files independently
+- No escalation section — workflow logic stays in agent definition, not data format
+- Single string `line` field — `"27"` or `"27-58"` range format
+- Flat sequential finding records — no indexed sub-records (F1, F2, etc.)
+- UNKNOWN_FIELDS::WARN (not REJECT) — fields are distributed across sections; per-section validation only sees its own subset, so other sections' fields would be false-positive unknowns under REJECT
+- No FINDINGS section field constraints — findings are inline maps `[tier::P0,...]` which are structural content, not assignments the schema extractor can constrain
+
+### Tests
+- 37 tests across 8 test classes covering schema loading, field definitions, policy, document parsing, validator integration, and negative validation
+- Integration tests call `validate()` with `_build_deep_section_schemas()` end-to-end
+- Negative tests verify ENUM rejection (invalid VERDICT, invalid TIER) and required field detection (missing VERDICT, missing ASSESSMENT)
+
+### Quality Gates
+- All tests passing, 0 failures
+- ruff, mypy, black clean
+
 ## [1.9.5] - 2026-03-25 - "OCTAVE Acronym Expansion" Patch
 
 This patch adds the full OCTAVE acronym expansion (Olympian Common Text And Vocabulary Engine) across all bundled resource files — primers, specs, skills, and README. Previously the acronym was only defined in archived specs and docs guides, meaning agents loading active resources never learned the full name.
