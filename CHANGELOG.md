@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.6] - 2026-03-30 - "CRS_REVIEW Schema" Patch
+
+This patch adds the CRS_REVIEW builtin schema for structured code review artifacts (Issue #342). Replaces verbose 900-line markdown PR comments with compact, machine-parseable OCTAVE output for the HestAI review gate system. Token economy: 30-50% size reduction vs markdown equivalent.
+
+### Schema
+- **CRS_REVIEW v1.0.0** — New builtin schema at `schemas/builtin/crs_review.oct.md`
+  - `§1::VERDICT` — role, provider, verdict (APPROVED/BLOCKED), SHA, tier (T0-T4)
+  - `§2::DISTRIBUTION` — finding counts by priority tier (P0-P5), blocking count, triage status
+  - `§3::FINDINGS` — flat sequential records with tier, confidence, file, line, category, issue, impact, fix
+  - `§4::SUMMARY` — one-sentence assessment and top 3 risks
+  - POLICY: UNKNOWN_FIELDS REJECT, targets all 4 sections
+
+### Design Decisions
+- No evidence field — `file` + `line` sufficient; CE reads files independently
+- No escalation section — workflow logic stays in agent definition, not data format
+- Single string `line` field — `"27"` or `"27-58"` range format
+- Flat sequential finding records — no indexed sub-records (F1, F2, etc.)
+
+### Tests
+- 24 new tests across 6 test classes covering schema loading, field validation, policy, document parsing, edge cases
+
+### Quality Gates
+- All tests passing, 0 failures
+- ruff, mypy, black clean
+
 ## [1.9.5] - 2026-03-25 - "OCTAVE Acronym Expansion" Patch
 
 This patch adds the full OCTAVE acronym expansion (Olympian Common Text And Vocabulary Engine) across all bundled resource files — primers, specs, skills, and README. Previously the acronym was only defined in archived specs and docs guides, meaning agents loading active resources never learned the full name.
