@@ -19,7 +19,7 @@ from typing import Any
 
 import yaml
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue
+from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue, Section
 from octave_mcp.core.gbnf_compiler import GBNFCompiler, compile_gbnf_from_meta
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.parser import parse
@@ -44,9 +44,11 @@ def _ast_to_dict(doc: Document) -> dict[str, Any]:
     if doc.meta:
         result["META"] = {k: _convert_value(v) for k, v in doc.meta.items()}
 
-    # Convert sections
+    # Convert sections (Issue #341: handle Section, Assignment, and Block)
     for section in doc.sections:
-        if isinstance(section, Assignment):
+        if isinstance(section, Section):
+            result[_section_header_key(section)] = _convert_section(section)
+        elif isinstance(section, Assignment):
             result[section.key] = _convert_value(section.value)
         elif isinstance(section, Block):
             result[section.key] = _convert_block(section)
@@ -98,6 +100,116 @@ def _convert_block(block: Block) -> dict[str, Any]:
             result[child.key] = _convert_block(child)
 
     return result
+
+
+def _convert_section(section: Section) -> dict[str, Any]:
+    """Convert Section AST node to dictionary (Issue #341).
+
+    Section children are a mix of Assignment and Block nodes,
+    identical to Block children. Reuses the same conversion logic.
+
+    Args:
+        section: Section node
+
+    Returns:
+        Dictionary representation of section contents
+    """
+    result: dict[str, Any] = {}
+
+    for child in section.children:
+        if isinstance(child, Assignment):
+            result[child.key] = _convert_value(child.value)
+        elif isinstance(child, Block):
+            result[child.key] = _convert_block(child)
+        elif isinstance(child, Section):
+            # Nested sections (rare but possible)
+            section_key = f"\u00a7{child.section_id}::{child.key}"
+            result[section_key] = _convert_section(child)
+
+    return result
+
+
+def _section_header_key(section: Section) -> str:
+    """Build the dictionary key for a Section node.
+
+    Uses the format '§N::NAME' to mirror OCTAVE source syntax
+    and preserve section identification in JSON output.
+
+    Args:
+        section: Section node
+
+    Returns:
+        Key string like '§3::CAPABILITIES'
+    """
+    return f"\u00a7{section.section_id}::{section.key}"
+
+
+def _parse_section_id(identifier: str) -> str:
+    """Parse a flexible section identifier to a bare section_id string (Issue #341).
+
+    Accepts multiple formats:
+    - '§3' -> '3'
+    - '3' -> '3'
+    - '§3::CAPABILITIES' -> '3'
+    - '§3.5' -> '3.5'
+    - '3.5' -> '3.5'
+
+    Args:
+        identifier: Section identifier string in any supported format
+
+    Returns:
+        Bare section_id string (e.g., '3', '3.5', '2b')
+    """
+    # Strip whitespace
+    identifier = identifier.strip()
+
+    # Remove leading § if present
+    if identifier.startswith("\u00a7"):
+        identifier = identifier[1:]
+
+    # Remove ::NAME suffix if present (e.g., '3::CAPABILITIES' -> '3')
+    if "::" in identifier:
+        identifier = identifier.split("::")[0]
+
+    return identifier
+
+
+def _filter_document_by_sections(doc: Document, section_ids: list[str]) -> tuple[Document, list[str]]:
+    """Filter document to include only specified sections (Issue #341).
+
+    When section filtering is applied:
+    - Only Section nodes matching the requested IDs are kept
+    - Non-Section nodes (Assignment, Block) are excluded
+    - META is preserved separately (always included in output)
+    - Non-existent sections are silently omitted (I3: reflect only present)
+
+    Args:
+        doc: Document AST (after projection)
+        section_ids: List of raw section identifier strings (already parsed)
+
+    Returns:
+        Tuple of (filtered Document, list of omitted section header strings)
+    """
+    from dataclasses import replace
+
+    requested_ids = set(section_ids)
+    kept_sections: list = []
+    omitted: list[str] = []
+
+    for node in doc.sections:
+        if isinstance(node, Section):
+            if node.section_id in requested_ids:
+                kept_sections.append(node)
+            else:
+                omitted.append(_section_header_key(node))
+        else:
+            # Non-Section nodes (Assignment, Block) are excluded
+            # when section filtering is active
+            if hasattr(node, "key"):
+                omitted.append(node.key)
+
+    filtered_doc = replace(doc, sections=kept_sections)
+    return filtered_doc, omitted
 
 
 def _format_markdown_value(value: Any) -> str:
@@ -233,7 +345,21 @@ class EjectTool(BaseTool):
             enum=["octave", "json", "yaml", "markdown", "gbnf"],
         )
 
-        return schema.build()
+        # Build base schema then add sections array parameter manually
+        # (SchemaBuilder doesn't support array types natively)
+        built = schema.build()
+        built["properties"]["sections"] = {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "List of section identifiers to extract (Issue #341). "
+                "When provided, only matching sections + META are included in output. "
+                "Accepts flexible formats: '\u00a73', '3', '\u00a73::CAPABILITIES' all match section 3. "
+                "Non-existent sections are silently omitted."
+            ),
+        }
+
+        return built
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
         """Execute eject projection.
@@ -243,6 +369,7 @@ class EjectTool(BaseTool):
             schema: Schema name for validation/template
             mode: Projection mode (canonical, authoring, executive, developer)
             format: Output format (octave, json, yaml, markdown, gbnf)
+            sections: List of section identifiers to extract (Issue #341)
 
         Returns:
             Dictionary with:
@@ -256,6 +383,7 @@ class EjectTool(BaseTool):
         schema_name = params["schema"]
         mode = params.get("mode", "canonical")
         output_format = params.get("format", "octave")
+        sections_filter: list[str] | None = params.get("sections", None)
 
         # If content is None, generate template
         if content is None:
@@ -291,6 +419,21 @@ META:
 
         # Project to desired mode
         result = project(doc, mode=mode)
+
+        # Issue #341: Apply section filtering if sections parameter is provided.
+        # Section filtering happens AFTER projection (mode-based filtering first).
+        # When active, only Section nodes matching the requested IDs are kept,
+        # and non-Section nodes (Assignment, Block) are excluded.
+        if sections_filter:
+            # Parse flexible identifiers to bare section_ids
+            parsed_ids = [_parse_section_id(s) for s in sections_filter]
+            filtered_doc, sections_omitted = _filter_document_by_sections(result.filtered_doc, parsed_ids)
+            result = result.__class__(
+                output=result.output,
+                lossy=True,  # Section filtering is inherently lossy
+                fields_omitted=result.fields_omitted + sections_omitted,
+                filtered_doc=filtered_doc,
+            )
 
         # Issue #235 T15: Compute literal zone info once; add to each format's return dict.
         # Uses the filtered_doc (after projection) so zone count reflects the projected view.
