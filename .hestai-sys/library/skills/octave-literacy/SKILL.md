@@ -51,7 +51,7 @@ META:
   ⇌::Tension A⇌B (binary opposition) (precedence 4) | ASCII: vs [requires word boundaries]
   ∧::Constraint [A∧B∧C] (precedence 5) | ASCII: &
   ∨::Alternative A∨B (precedence 6) | ASCII: |
-  →::Flow A→B→C (precedence 7, right-associative) | ASCII: ->
+  →::Flow [A→B→C] (precedence 7, right-associative) | ASCII: ->
 
   // PREFIX/SPECIAL
   §::Target (→§DECISION_LOG)

@@ -1082,9 +1082,12 @@ class WriteTool(BaseTool):
                 )
                 continue
 
-            # Pattern 3: Non-META dot-paths (e.g., CONDUCT.PROTOCOL.MUST_NEVER)
+            # Pattern 3: Non-META hierarchical dot-paths (e.g., CONDUCT.PROTOCOL.MUST_NEVER)
             # META.FIELD is handled by _apply_changes; other dot-paths are not.
-            if "." in key and not key.startswith("META.") and key != "META":
+            # GH#347: Single-dot keys like P1.1 or v2.0 are valid OCTAVE identifiers
+            # (the lexer allows dots in identifiers). Only reject keys with 2+ dots,
+            # which indicate hierarchical paths that cannot be resolved to AST nodes.
+            if key.count(".") >= 2 and not key.startswith("META."):
                 errors.append(
                     {
                         "code": "E_UNRESOLVABLE_PATH",

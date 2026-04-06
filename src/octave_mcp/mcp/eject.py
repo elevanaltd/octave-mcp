@@ -20,6 +20,7 @@ from typing import Any
 import yaml
 
 from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue, Section
+from octave_mcp.core.emitter import emit
 from octave_mcp.core.gbnf_compiler import GBNFCompiler, compile_gbnf_from_meta
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.parser import parse
@@ -522,8 +523,11 @@ META:
             }
 
         else:  # output_format == "octave"
+            # GH#347: When section filtering is active, result.output still contains
+            # the pre-filtering emit. Re-emit from filtered_doc to produce correct output.
+            octave_output = emit(result.filtered_doc) if sections_filter else result.output
             return {
-                "output": result.output,
+                "output": octave_output,
                 "lossy": result.lossy,
                 "fields_omitted": result.fields_omitted,
                 "validation_status": "UNVALIDATED",  # I5: Explicit bypass

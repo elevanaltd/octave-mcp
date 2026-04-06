@@ -3915,3 +3915,66 @@ KEY::value
             error_messages = " ".join(e["message"] for e in result["errors"])
             assert "KEY[0]" in error_messages
             assert "§1.IDENTITY.ROLE" in error_messages
+
+    @pytest.mark.asyncio
+    async def test_single_dot_key_accepted(self):
+        """Single-dot keys like P1.1 are valid OCTAVE identifiers, not paths.
+
+        GH#347: The lexer allows dots in identifiers (e.g., P1.1, v2.0).
+        Only multi-dot keys (A.B.C) should be rejected as hierarchical paths.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+P1.1::original
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"P1.1": "updated"},
+            )
+
+            assert (
+                result["status"] == "success"
+            ), f"Single-dot key P1.1 should be accepted, got: {result.get('errors', [])}"
+
+    @pytest.mark.asyncio
+    async def test_multi_dot_path_still_rejected(self):
+        """Multi-dot keys like CONDUCT.PROTOCOL.MUST_NEVER are hierarchical paths.
+
+        GH#347: Ensure multi-dot paths are still rejected even with the
+        single-dot allowance fix.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"CONDUCT.PROTOCOL.MUST_NEVER": "new_value"},
+            )
+
+            assert result["status"] == "error", "Multi-dot path CONDUCT.PROTOCOL.MUST_NEVER should be rejected"
+            assert result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"

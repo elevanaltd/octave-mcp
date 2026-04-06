@@ -487,3 +487,32 @@ TOP_FIELD::value
         assert "\u00a71::IDENTITY" in parsed
         # Top-level Assignment should be excluded when sections filter is active
         assert "TOP_FIELD" not in parsed
+
+    @pytest.mark.asyncio
+    async def test_sections_filter_works_for_octave_format(self, eject_tool):
+        """GH#347: Sections filtering must also work for default octave format.
+
+        Bug: When format='octave' (the default), sections filtering updated
+        filtered_doc but left result.output unchanged, so the output was NOT
+        actually filtered even though metadata said it was.
+        """
+        result = await eject_tool.execute(
+            content=SAMPLE_AGENT_CONTENT,
+            schema="AGENT_DEFINITION",
+            format="octave",
+            sections=["\u00a73"],
+        )
+
+        output = result["output"]
+
+        # The requested section MUST be present in octave output
+        assert "\u00a73::CAPABILITIES" in output
+
+        # Other sections MUST NOT be present in octave output
+        assert "\u00a71::IDENTITY" not in output
+        assert "\u00a72::BEHAVIOR" not in output
+        assert "\u00a74::INTERACTION_RULES" not in output
+
+        # Metadata should reflect filtering
+        assert result["lossy"] is True
+        assert len(result["fields_omitted"]) > 0
