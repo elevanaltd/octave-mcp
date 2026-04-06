@@ -283,6 +283,11 @@ def _normalize_value_for_ast(value: Any) -> Any:
 # The identifier pattern mirrors _is_valid_identifier_start/char from lexer.py
 _CURLY_BRACE_ANNOTATION_PATTERN = re.compile(r"([A-Za-z_][A-Za-z0-9_./\-]*)\{([A-Za-z_][A-Za-z0-9_./\-]*)\}")
 
+# GH#335: Regex pattern for detecting array-index notation in change paths.
+# Matches keys containing bracket-enclosed integers like KEY[0], ITEMS[42], etc.
+# Used to reject unresolvable paths instead of silently appending them.
+_ARRAY_INDEX_RE = re.compile(r"\[\d+\]")
+
 
 class WriteTool(BaseTool):
     """MCP tool for octave_write - unified write operation for OCTAVE files."""
@@ -1016,6 +1021,88 @@ class WriteTool(BaseTool):
 
         return corrections
 
+    def _validate_change_paths(self, changes: dict[str, Any]) -> list[dict[str, Any]]:
+        """GH#335: Validate change paths are resolvable before applying.
+
+        Detects paths that _apply_changes cannot resolve to AST nodes and
+        returns error records instead of silently appending literal dot-path
+        lines to the document.
+
+        I3 (Mirror Constraint): reflect only present, create nothing.
+        Silent append of unresolvable paths fabricates content, violating I3.
+
+        Unresolvable path patterns:
+        1. Array-index notation: KEY[N] -- _apply_changes has no array element
+           resolution; would silently append 'KEY[N]::"value"' as a literal key.
+        2. Section-prefixed paths: §N.X.Y -- _apply_changes has no section/block
+           traversal; would silently append '§N.X.Y::"value"' as a literal key.
+        3. Non-META dot-paths: X.Y.Z (where X != "META") -- _apply_changes only
+           resolves META.FIELD; other dot-paths would be treated as literal keys
+           containing dots, which is almost certainly not what the caller intended.
+
+        Args:
+            changes: Dictionary of change paths to validate
+
+        Returns:
+            List of error dicts for unresolvable paths (empty if all paths are valid)
+        """
+        errors: list[dict[str, Any]] = []
+
+        for key in changes:
+            # Pattern 1: Array-index notation (e.g., KEY[4], §2.X.Y[0])
+            if _ARRAY_INDEX_RE.search(key):
+                errors.append(
+                    {
+                        "code": "E_UNRESOLVABLE_PATH",
+                        "message": (
+                            f"Unresolvable change path '{key}': array-index notation "
+                            f"(e.g., KEY[N]) is not supported by the changes parameter. "
+                            f"The changes parameter can only update top-level keys and "
+                            f"META fields (via META.FIELD dot-notation). To modify array "
+                            f"elements, use the content parameter with the full document."
+                        ),
+                    }
+                )
+                continue
+
+            # Pattern 2: Section-prefixed paths (e.g., §2.CONDUCT.PROTOCOL)
+            if key.startswith("§"):
+                errors.append(
+                    {
+                        "code": "E_UNRESOLVABLE_PATH",
+                        "message": (
+                            f"Unresolvable change path '{key}': section-prefixed paths "
+                            f"(e.g., §N.BLOCK.FIELD) are not supported by the changes "
+                            f"parameter. The changes parameter can only update top-level "
+                            f"keys and META fields (via META.FIELD dot-notation). To "
+                            f"modify fields within sections, use the content parameter "
+                            f"with the full document."
+                        ),
+                    }
+                )
+                continue
+
+            # Pattern 3: Non-META hierarchical dot-paths (e.g., CONDUCT.PROTOCOL.MUST_NEVER)
+            # META.FIELD is handled by _apply_changes; other dot-paths are not.
+            # GH#347: Single-dot keys like P1.1 or v2.0 are valid OCTAVE identifiers
+            # (the lexer allows dots in identifiers). Only reject keys with 2+ dots,
+            # which indicate hierarchical paths that cannot be resolved to AST nodes.
+            if key.count(".") >= 2 and not key.startswith("META."):
+                errors.append(
+                    {
+                        "code": "E_UNRESOLVABLE_PATH",
+                        "message": (
+                            f"Unresolvable change path '{key}': nested dot-path notation "
+                            f"is only supported for META fields (e.g., META.STATUS). "
+                            f"Other dot-paths cannot be resolved to AST nodes. To modify "
+                            f"nested fields, use the content parameter with the full document."
+                        ),
+                    }
+                )
+                continue
+
+        return errors
+
     def _apply_changes(self, doc: Any, changes: dict[str, Any]) -> Any:
         """Apply changes to AST document with tri-state and dot-notation semantics.
 
@@ -1036,7 +1123,17 @@ class WriteTool(BaseTool):
 
         Returns:
             Modified document
+
+        Raises:
+            ValueError: If any change paths are unresolvable (GH#335)
         """
+        # GH#335: Validate all paths before applying any changes.
+        # Fail-fast: if ANY path is unresolvable, reject the entire batch
+        # to prevent partial application with silent corruption.
+        path_errors = self._validate_change_paths(changes)
+        if path_errors:
+            raise ValueError(path_errors)
+
         for key, new_value in changes.items():
             # Check for dot-notation: META.FIELD
             if key.startswith("META."):
@@ -1346,6 +1443,16 @@ class WriteTool(BaseTool):
             # Apply changes with tri-state semantics
             try:
                 doc = self._apply_changes(doc, changes)
+            except ValueError as e:
+                # GH#335: _validate_change_paths raises ValueError with
+                # structured error list for unresolvable paths.
+                error_list = e.args[0] if e.args and isinstance(e.args[0], list) else []
+                if error_list:
+                    return self._error_envelope(target_path, error_list)
+                return self._error_envelope(
+                    target_path,
+                    [{"code": "E_APPLY", "message": f"Apply changes error: {str(e)}"}],
+                )
             except Exception as e:
                 return self._error_envelope(
                     target_path,

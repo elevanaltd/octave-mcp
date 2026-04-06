@@ -633,8 +633,36 @@ def emit_meta(meta: dict[str, Any], format_options: FormatOptions | None = None)
                 nested_value = value[nested_key]
                 if is_absent(nested_value):
                     continue
-                nested_value_str = emit_value(nested_value, indent=2)
-                content_lines.append(f"    {nested_key}::{nested_value_str}")
+                # GH#346: LiteralZoneValue in nested META needs special
+                # handling -- fence markers must be on their own lines with
+                # matching indentation (mirrors emit_assignment pattern).
+                if isinstance(nested_value, LiteralZoneValue):
+                    indent_str = "    "  # indent level 2
+                    content_lines.append(f"{indent_str}{nested_key}::")
+                    opening = f"{indent_str}{nested_value.fence_marker}"
+                    if nested_value.info_tag:
+                        opening += nested_value.info_tag
+                    content_lines.append(opening)
+                    if nested_value.content:
+                        content_lines.append(nested_value.content)
+                    content_lines.append(f"{indent_str}{nested_value.fence_marker}")
+                else:
+                    nested_value_str = emit_value(nested_value, indent=2)
+                    content_lines.append(f"    {nested_key}::{nested_value_str}")
+        # GH#346: LiteralZoneValue in META needs special handling --
+        # fence markers must be on their own lines with matching
+        # indentation, not inline with the key (which produces invalid
+        # OCTAVE that the lexer rejects as E006).
+        elif isinstance(value, LiteralZoneValue):
+            indent_str = "  "  # indent level 1
+            content_lines.append(f"{indent_str}{key}::")
+            opening = f"{indent_str}{value.fence_marker}"
+            if value.info_tag:
+                opening += value.info_tag
+            content_lines.append(opening)
+            if value.content:
+                content_lines.append(value.content)
+            content_lines.append(f"{indent_str}{value.fence_marker}")
         else:
             value_str = emit_value(value, indent=1)
             content_lines.append(f"  {key}::{value_str}")

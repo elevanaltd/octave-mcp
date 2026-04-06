@@ -3583,3 +3583,398 @@ class TestDetectUnquotedSectionUnit:
 
         warnings = _detect_unquoted_section_in_values('KEY::"§_in_quotes" // §_in_comment')
         assert len(warnings) == 0, f"False positive: quoted § + comment § should not warn: {warnings}"
+
+
+class TestGH335UnresolvableChangePaths:
+    """GH#335: Reject unresolvable paths in changes parameter.
+
+    When octave_write receives a changes dict with paths it cannot resolve
+    to existing AST nodes (e.g., array-index notation like KEY[4], or
+    section-prefixed dot-paths like §2.CONDUCT.PROTOCOL.MUST_NEVER),
+    it should return an error instead of silently appending a literal
+    dot-path line to the file.
+
+    I3 (Mirror Constraint): reflect only present, create nothing.
+    Silent append violates I3 by fabricating content for unresolvable paths.
+    """
+
+    @pytest.mark.asyncio
+    async def test_array_index_path_rejected_with_error(self):
+        """Array-index notation in changes key must be rejected, not silently appended.
+
+        Bug: changes={"MUST_NEVER[4]": "Updated"} silently appends
+        'MUST_NEVER[4]::"Updated"' as a literal key instead of modifying
+        the 5th element of the MUST_NEVER array.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+ITEMS::[one,two,three,four,five]
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"ITEMS[2]": "updated_value"},
+            )
+
+            # Must return error status, NOT success with silent append
+            assert result["status"] == "error", f"Array-index path should be rejected, got status={result['status']}"
+            # Must have an error explaining the path is unresolvable
+            assert len(result["errors"]) > 0
+            error_msg = result["errors"][0]["message"]
+            assert (
+                "ITEMS[2]" in error_msg or "array" in error_msg.lower() or "index" in error_msg.lower()
+            ), f"Error should mention the problematic path or array indexing: {error_msg}"
+
+            # File must NOT be corrupted with a literal 'ITEMS[2]::' line
+            with open(target_path) as f:
+                content = f.read()
+            assert "ITEMS[2]::" not in content, f"File was silently corrupted with literal array-index key:\n{content}"
+
+    @pytest.mark.asyncio
+    async def test_section_prefixed_dot_path_rejected_with_error(self):
+        """Section-prefixed dot-path in changes key must be rejected.
+
+        Bug: changes={"§2.CONDUCT.PROTOCOL.MUST_NEVER": "value"} silently
+        appends '§2.CONDUCT.PROTOCOL.MUST_NEVER::"value"' as a literal line.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===AGENT===
+META:
+  TYPE::"AGENT_DEF"
+---
+§1::IDENTITY
+  ROLE::TESTER
+§2::CONDUCT
+  PROTOCOL:
+    MUST_NEVER::[a,b,c]
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§2.CONDUCT.PROTOCOL.MUST_NEVER": "new_value"},
+            )
+
+            # Must return error status
+            assert (
+                result["status"] == "error"
+            ), f"Section-prefixed dot-path should be rejected, got status={result['status']}"
+            assert len(result["errors"]) > 0
+            error_msg = result["errors"][0]["message"]
+            assert (
+                "§" in error_msg or "section" in error_msg.lower() or "unresolvable" in error_msg.lower()
+            ), f"Error should mention the problematic path: {error_msg}"
+
+    @pytest.mark.asyncio
+    async def test_section_prefixed_array_index_rejected(self):
+        """Combined section-prefix + array-index must be rejected.
+
+        This is the exact pattern from the issue:
+        changes={"§2.CONDUCT.PROTOCOL.MUST_NEVER[4]": "Updated value"}
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===AGENT===
+META:
+  TYPE::"AGENT_DEF"
+---
+§1::IDENTITY
+  ROLE::TESTER
+§2::CONDUCT
+  PROTOCOL:
+    MUST_NEVER::[a,b,c,d,e]
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§2.CONDUCT.PROTOCOL.MUST_NEVER[4]": "Updated value"},
+            )
+
+            # Must return error status
+            assert (
+                result["status"] == "error"
+            ), f"Section+array-index path should be rejected, got status={result['status']}"
+            assert len(result["errors"]) > 0
+
+            # File must NOT be corrupted
+            with open(target_path) as f:
+                content = f.read()
+            assert "§2.CONDUCT.PROTOCOL.MUST_NEVER[4]::" not in content, f"File was silently corrupted:\n{content}"
+
+    @pytest.mark.asyncio
+    async def test_non_meta_dot_path_rejected(self):
+        """Non-META dot-path in changes key must be rejected.
+
+        Only META.FIELD dot-paths are supported. Other dot-paths like
+        CONDUCT.PROTOCOL should be rejected since _apply_changes has no
+        AST path resolution for nested sections/blocks.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"CONDUCT.PROTOCOL.MUST_NEVER": "new_value"},
+            )
+
+            # Must return error status
+            assert result["status"] == "error", f"Non-META dot-path should be rejected, got status={result['status']}"
+            assert len(result["errors"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_meta_dot_notation_still_works(self):
+        """META.FIELD dot-notation must still work after the fix (regression guard)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+  STATUS::DRAFT
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"META.STATUS": "ACTIVE"},
+            )
+
+            assert (
+                result["status"] == "success"
+            ), f"META.FIELD dot-notation should still work: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "ACTIVE" in content
+
+    @pytest.mark.asyncio
+    async def test_simple_top_level_key_still_works(self):
+        """Simple top-level key changes must still work after the fix (regression guard)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::old_value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"KEY": "new_value"},
+            )
+
+            assert result["status"] == "success", f"Simple top-level key should still work: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "new_value" in content
+
+    @pytest.mark.asyncio
+    async def test_delete_sentinel_still_works(self):
+        """DELETE sentinel on top-level key must still work after the fix (regression guard)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+REMOVEME::gone
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"REMOVEME": {"$op": "DELETE"}},
+            )
+
+            assert result["status"] == "success", f"DELETE sentinel should still work: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "REMOVEME" not in content
+
+    @pytest.mark.asyncio
+    async def test_error_code_is_e_unresolvable_path(self):
+        """Error response must use E_UNRESOLVABLE_PATH code for clear identification."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"KEY[0]": "updated"},
+            )
+
+            assert result["status"] == "error"
+            assert (
+                result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"
+            ), f"Expected E_UNRESOLVABLE_PATH error code, got: {result['errors'][0]}"
+
+    @pytest.mark.asyncio
+    async def test_multiple_unresolvable_paths_all_reported(self):
+        """When multiple unresolvable paths are provided, all should be reported."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={
+                    "KEY[0]": "updated",
+                    "§1.IDENTITY.ROLE": "new_role",
+                    "KEY": "this_is_valid",  # This one IS valid
+                },
+            )
+
+            assert result["status"] == "error"
+            # Should report at least 2 unresolvable paths
+            error_messages = " ".join(e["message"] for e in result["errors"])
+            assert "KEY[0]" in error_messages
+            assert "§1.IDENTITY.ROLE" in error_messages
+
+    @pytest.mark.asyncio
+    async def test_single_dot_key_accepted(self):
+        """Single-dot keys like P1.1 are valid OCTAVE identifiers, not paths.
+
+        GH#347: The lexer allows dots in identifiers (e.g., P1.1, v2.0).
+        Only multi-dot keys (A.B.C) should be rejected as hierarchical paths.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+P1.1::original
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"P1.1": "updated"},
+            )
+
+            assert (
+                result["status"] == "success"
+            ), f"Single-dot key P1.1 should be accepted, got: {result.get('errors', [])}"
+
+    @pytest.mark.asyncio
+    async def test_multi_dot_path_still_rejected(self):
+        """Multi-dot keys like CONDUCT.PROTOCOL.MUST_NEVER are hierarchical paths.
+
+        GH#347: Ensure multi-dot paths are still rejected even with the
+        single-dot allowance fix.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+KEY::value
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"CONDUCT.PROTOCOL.MUST_NEVER": "new_value"},
+            )
+
+            assert result["status"] == "error", "Multi-dot path CONDUCT.PROTOCOL.MUST_NEVER should be rejected"
+            assert result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"
