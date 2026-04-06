@@ -119,6 +119,7 @@ def _build_deep_section_schemas(
 def _check_required_field_coverage(
     full_schema: SchemaDefinition,
     section_schemas: dict[str, SchemaDefinition],
+    doc: Any | None = None,
 ) -> list[ValidationError]:
     """Check that all required schema fields appear in at least one section.
 
@@ -127,9 +128,17 @@ def _check_required_field_coverage(
     But if a required field is entirely absent from the document, no section schema
     is created for it, so it silently passes. This function catches those gaps.
 
+    Issue #344: Fields present in doc.meta (like TYPE, VERSION) are also considered
+    covered. Schema FIELDS blocks may define META-level fields with REQ constraints.
+    These fields live in doc.meta, not in sections, so section_schemas alone cannot
+    detect them. Passing the parsed Document allows this function to check doc.meta
+    for coverage, preventing false E003 errors for META-resident fields.
+
     Args:
         full_schema: The complete schema with all fields
         section_schemas: Per-section schemas built by _build_deep_section_schemas
+        doc: Optional parsed Document. When provided, fields present in doc.meta
+             are considered covered (fixes GH#344 false positive).
 
     Returns:
         List of ValidationError for required fields not covered by any section
@@ -142,6 +151,14 @@ def _check_required_field_coverage(
     covered_fields: set[str] = set()
     for section_schema in section_schemas.values():
         covered_fields.update(section_schema.fields.keys())
+
+    # GH#344: Fields present in doc.meta are also covered.
+    # Schema FIELDS blocks (e.g., SKILL) may define TYPE/VERSION with REQ
+    # constraints. These fields reside in doc.meta, not in document sections.
+    # Without this check, _build_deep_section_schemas never finds them
+    # (it only walks doc.sections), causing false E003 errors.
+    if doc is not None and hasattr(doc, "meta") and doc.meta:
+        covered_fields.update(doc.meta.keys())
 
     # Check each required field in the full schema
     for field_name, field_def in full_schema.fields.items():
@@ -696,7 +713,7 @@ class ValidateTool(BaseTool):
             # Check that every REQ field from the full schema appears in at least
             # one section's schema.
             if section_schemas is not None and schema_definition is not None and doc.meta.get("TYPE") == schema_name:
-                coverage_errors = _check_required_field_coverage(schema_definition, section_schemas)
+                coverage_errors = _check_required_field_coverage(schema_definition, section_schemas, doc=doc)
                 validation_errors.extend(coverage_errors)
 
             if validation_errors:
