@@ -2,10 +2,12 @@
 
 Issue #235: Verifies emit_value() and emit_assignment() for LiteralZoneValue,
 including round-trip fidelity with the parser.
+
+GH#346: Tests for literal zone fence indentation in emit_meta().
 """
 
 from octave_mcp.core.ast_nodes import Assignment, LiteralZoneValue
-from octave_mcp.core.emitter import emit, emit_assignment, emit_value
+from octave_mcp.core.emitter import emit, emit_assignment, emit_meta, emit_value
 from octave_mcp.core.parser import parse
 
 
@@ -200,3 +202,112 @@ class TestRoundTrip:
                 assert s2.value.content == s3.value.content
                 assert s2.value.info_tag == s3.value.info_tag
                 assert s2.value.fence_marker == s3.value.fence_marker
+
+
+class TestEmitMetaLiteralZone:
+    """GH#346: emit_meta() for META fields with LiteralZoneValue.
+
+    The emitter must produce valid OCTAVE when META contains literal zone
+    values. The fence markers must be on their own lines (not inline with
+    the key) and opening/closing fences must have matching indentation.
+    """
+
+    def test_meta_literal_zone_fence_indentation_matches(self):
+        """GH#346: Opening and closing fences in META must have matching indent.
+
+        The emitter must not produce inline fences (KEY::```), which are
+        invalid OCTAVE. Instead, the key should be on its own line, followed
+        by properly indented opening and closing fences.
+        """
+        meta = {"CONTRACT": LiteralZoneValue(content="hello", info_tag="octave", fence_marker="```")}
+        result = emit_meta(meta)
+        lines = result.split("\n")
+
+        # Find fence lines
+        fence_lines = [(i, line) for i, line in enumerate(lines) if "```" in line]
+        assert len(fence_lines) == 2, f"Expected 2 fence lines, got {len(fence_lines)}: {fence_lines}"
+
+        open_idx, open_line = fence_lines[0]
+        close_idx, close_line = fence_lines[1]
+
+        # Opening fence must NOT be inline with key (KEY::``` is invalid OCTAVE)
+        assert "::" not in open_line, f"Opening fence must not be inline with key. Got: {open_line!r}"
+
+        # Both fences must have the same indentation
+        open_indent = len(open_line) - len(open_line.lstrip())
+        close_indent = len(close_line) - len(close_line.lstrip())
+        assert open_indent == close_indent, (
+            f"Fence indentation mismatch: opening={open_indent} spaces, "
+            f"closing={close_indent} spaces. "
+            f"Opening: {open_line!r}, Closing: {close_line!r}"
+        )
+
+    def test_meta_literal_zone_round_trip(self):
+        """GH#346: META with literal zone must round-trip through parse/emit.
+
+        parse(emit(doc)) must not raise -- the emitted output must be
+        valid OCTAVE that can be re-parsed.
+        """
+        content = (
+            "===DOC===\n"
+            "META:\n"
+            "  TYPE::TEST\n"
+            '  VERSION::"1.0"\n'
+            "  CONTRACT::\n"
+            "  ```octave\n"
+            "hello world\n"
+            "  ```\n"
+            "===END==="
+        )
+        doc1 = parse(content)
+        emitted = emit(doc1)
+
+        # The emitted output must be parseable (not produce LexerError)
+        doc2 = parse(emitted)
+
+        # The literal zone content must survive the round-trip
+        contract1 = doc1.meta["CONTRACT"]
+        contract2 = doc2.meta["CONTRACT"]
+        assert isinstance(contract1, LiteralZoneValue)
+        assert isinstance(contract2, LiteralZoneValue)
+        assert contract1.content == contract2.content
+        assert contract1.info_tag == contract2.info_tag
+        assert contract1.fence_marker == contract2.fence_marker
+
+    def test_meta_nested_literal_zone_fence_indentation_matches(self):
+        """GH#346: Nested dict META with literal zone has matching fence indent."""
+        meta = {"NESTED": {"CODE": LiteralZoneValue(content="hello", info_tag="python", fence_marker="```")}}
+        result = emit_meta(meta)
+        lines = result.split("\n")
+
+        # Find fence lines
+        fence_lines = [(i, line) for i, line in enumerate(lines) if "```" in line]
+        assert len(fence_lines) == 2, f"Expected 2 fence lines, got {len(fence_lines)}: {fence_lines}"
+
+        open_idx, open_line = fence_lines[0]
+        close_idx, close_line = fence_lines[1]
+
+        # Opening fence must NOT be inline with key
+        assert "::" not in open_line, f"Opening fence must not be inline with key. Got: {open_line!r}"
+
+        # Both fences must have the same indentation
+        open_indent = len(open_line) - len(open_line.lstrip())
+        close_indent = len(close_line) - len(close_line.lstrip())
+        assert open_indent == close_indent, (
+            f"Fence indentation mismatch: opening={open_indent} spaces, "
+            f"closing={close_indent} spaces. "
+            f"Opening: {open_line!r}, Closing: {close_line!r}"
+        )
+
+    def test_meta_literal_zone_empty_content(self):
+        """GH#346: Empty literal zone in META emits correctly."""
+        meta = {"CODE": LiteralZoneValue(content="", info_tag=None, fence_marker="```")}
+        result = emit_meta(meta)
+        lines = result.split("\n")
+
+        fence_lines = [(i, line) for i, line in enumerate(lines) if "```" in line]
+        assert len(fence_lines) == 2
+
+        open_indent = len(fence_lines[0][1]) - len(fence_lines[0][1].lstrip())
+        close_indent = len(fence_lines[1][1]) - len(fence_lines[1][1].lstrip())
+        assert open_indent == close_indent
