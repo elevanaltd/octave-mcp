@@ -21,7 +21,9 @@ META:
 
 §1::PATTERN_DOCUMENT_STRUCTURE
 ENVELOPE::PATTERN_NAME[META,body,§5::ANCHOR_KERNEL,END]
-ENVELOPE_FORMAT::"Three-equals delimiters: ===PATTERN_NAME=== and ===END==="
+ENVELOPE_FORMAT::"Three-equals delimiters: ===PATTERN_NAME=== or ===PATTERN:NAME=== and ===END==="
+// Both ===MIP_BUILD=== and ===PATTERN:MIP_BUILD=== are valid envelope forms
+// Typed form (PATTERN:NAME) provides explicit type prefix for discovery and categorization
 META_REQUIRED::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
 META_OPTIONAL::[REPLACES,TIER,SPEC_REFERENCE]
 BODY::octave_syntax[L1-L4_support]

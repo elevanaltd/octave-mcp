@@ -236,6 +236,42 @@ class TestEnvelopeIdentifierErrors:
         assert tokens[0].type == TokenType.ENVELOPE_START
         assert tokens[0].value == "VERSION_2"
 
+    def test_typed_envelope_identifier_pattern(self):
+        """Should accept typed envelope identifiers like PATTERN:NAME (GH#347)."""
+        tokens, _ = tokenize("===PATTERN:MIP_BUILD===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "PATTERN:MIP_BUILD"
+
+    def test_typed_envelope_identifier_skill(self):
+        """Should accept SKILL:NAME typed envelope identifiers (GH#347)."""
+        tokens, _ = tokenize("===SKILL:MY_SKILL===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "SKILL:MY_SKILL"
+
+    def test_typed_envelope_multi_segment(self):
+        """Should accept multi-segment typed identifiers like A:B:C (GH#347)."""
+        tokens, _ = tokenize("===SCOPE:TYPE:NAME===")
+        assert tokens[0].type == TokenType.ENVELOPE_START
+        assert tokens[0].value == "SCOPE:TYPE:NAME"
+
+    def test_typed_envelope_colon_at_start_invalid(self):
+        """Should reject envelope identifiers starting with colon."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===:NAME===")
+        assert exc_info.value.error_code == "E_INVALID_ENVELOPE_ID"
+
+    def test_typed_envelope_trailing_colon_invalid(self):
+        """Should reject envelope identifiers ending with colon."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===NAME:===")
+        assert exc_info.value.error_code == "E_INVALID_ENVELOPE_ID"
+
+    def test_typed_envelope_empty_segment_invalid(self):
+        """Should reject empty segment between colons."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===NAME::OTHER===")
+        assert exc_info.value.error_code == "E_INVALID_ENVELOPE_ID"
+
     def test_empty_envelope_identifier(self):
         """Should report error for empty envelope identifier."""
         with pytest.raises(LexerError) as exc_info:

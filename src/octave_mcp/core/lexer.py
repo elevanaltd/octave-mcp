@@ -581,7 +581,9 @@ TOKEN_PATTERNS = [
     (r"===END===", TokenType.ENVELOPE_END),
     # GH#145: Accept both upper and lowercase letters in envelope identifiers
     # Per spec §4::STRUCTURE: KEYS::[A-Z,a-z,0-9,_][start_with_letter_or_underscore]
-    (r"===([A-Za-z_][A-Za-z0-9_]*)===", TokenType.ENVELOPE_START),
+    # GH#347: Support typed envelope identifiers (e.g., PATTERN:NAME, SKILL:NAME)
+    # Colon separates type prefix from name — both segments follow identifier rules
+    (r"===([A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_]*)*)===", TokenType.ENVELOPE_START),
     # Separator
     (r"---", TokenType.SEPARATOR),
     # Comments (must come before operators)
@@ -637,7 +639,8 @@ TOKEN_PATTERNS = [
 _INVALID_ENVELOPE_PATTERN = re.compile(r"===([^=\n]*)===")
 
 # Valid envelope identifier pattern (for error detection)
-_VALID_ENVELOPE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# GH#347: Support typed envelope identifiers with colon separator (e.g., PATTERN:NAME)
+_VALID_ENVELOPE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_]*)*$")
 
 
 def _check_invalid_envelope(content: str, pos: int, line: int, column: int) -> LexerError | None:
