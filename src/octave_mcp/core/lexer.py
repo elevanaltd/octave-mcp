@@ -1265,6 +1265,18 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                     pos = suffix_pos
                     continue
 
+            # GH#351: Enhanced error for YAML-style hyphen list markers
+            if content[pos] == "-":
+                raise LexerError(
+                    "Unexpected character: '-'. "
+                    "OCTAVE does not use YAML-style list markers. "
+                    "Use inline list syntax instead:\n"
+                    "  ITEMS::[item1, item2, item3]",
+                    line,
+                    column,
+                    "E005",
+                )
+
             # Unrecognized character
             raise LexerError(f"Unexpected character: '{content[pos]}'", line, column, "E005")
 

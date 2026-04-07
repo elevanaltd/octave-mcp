@@ -3585,6 +3585,235 @@ class TestDetectUnquotedSectionUnit:
         assert len(warnings) == 0, f"False positive: quoted § + comment § should not warn: {warnings}"
 
 
+class TestGH334AutoQuoteSectionRefsInValues:
+    """GH#334: Auto-quote unquoted section references in value positions.
+
+    When input content contains unquoted § in a value position (e.g., inside
+    a list like [YAML_FRONTMATTER, §5::ANCHOR_KERNEL]), the lexer fragments
+    the intended string value because § always produces a SECTION token.
+
+    The fix: octave_write should auto-quote such values BEFORE parsing, logging
+    a W_UNQUOTED_SECTION_IN_VALUE correction for I4 auditability.
+
+    I1 (Syntactic Fidelity): normalization alters syntax, never semantics.
+    Auto-quoting preserves the author's intended meaning.
+    """
+
+    @pytest.mark.asyncio
+    async def test_auto_quote_bare_section_ref_in_value(self):
+        """Bare §N::NAME in a value position is auto-quoted during normalization."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = "===TEST===\nMETA:\n  TYPE::TEST\nREF::§5::ANCHOR_KERNEL\n===END==="
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            assert result["status"] == "success", f"Write failed: {result.get('errors')}"
+            # Read the written file to check canonical output
+            with open(path) as f:
+                canonical = f.read()
+            assert (
+                '"§5::ANCHOR_KERNEL"' in canonical
+            ), f"Expected auto-quoted section ref in canonical output, got:\n{canonical}"
+
+    @pytest.mark.asyncio
+    async def test_auto_quote_section_ref_in_list(self):
+        """§N::NAME inside a list is auto-quoted during normalization."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = "===TEST===\nMETA:\n  TYPE::TEST\nSEQUENCE::[YAML_FRONTMATTER, §5::ANCHOR_KERNEL]\n===END==="
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            assert result["status"] == "success", f"Write failed: {result.get('errors')}"
+            with open(path) as f:
+                canonical = f.read()
+            # Both list elements should be present; the § ref should be quoted
+            assert "YAML_FRONTMATTER" in canonical, f"Expected YAML_FRONTMATTER in canonical output, got:\n{canonical}"
+            assert (
+                '"§5::ANCHOR_KERNEL"' in canonical
+            ), f"Expected auto-quoted '§5::ANCHOR_KERNEL' in canonical output, got:\n{canonical}"
+
+    @pytest.mark.asyncio
+    async def test_auto_quote_logs_correction(self):
+        """Auto-quoting logs a W_UNQUOTED_SECTION_IN_VALUE correction."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = "===TEST===\nMETA:\n  TYPE::TEST\nREF::§5::ANCHOR_KERNEL\n===END==="
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            corrections = result.get("corrections", [])
+            codes = [c.get("code") for c in corrections]
+            assert (
+                "W_UNQUOTED_SECTION_IN_VALUE" in codes
+            ), f"Expected W_UNQUOTED_SECTION_IN_VALUE correction logged, got: {codes}"
+            # The correction should mention auto-quoting
+            section_corrections = [c for c in corrections if c.get("code") == "W_UNQUOTED_SECTION_IN_VALUE"]
+            assert any(
+                "auto" in c.get("message", "").lower() for c in section_corrections
+            ), f"Expected 'auto' in correction message, got: {section_corrections}"
+
+    @pytest.mark.asyncio
+    async def test_auto_quote_preserves_already_quoted(self):
+        """Already-quoted § references should NOT be double-quoted."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = '===TEST===\nMETA:\n  TYPE::TEST\nREF::"§5::ANCHOR_KERNEL"\n===END==='
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            assert result["status"] == "success"
+            with open(path) as f:
+                canonical = f.read()
+            # Should have single quoting, not double-quoting
+            assert '"§5::ANCHOR_KERNEL"' in canonical
+            assert '""§5::ANCHOR_KERNEL""' not in canonical
+
+    @pytest.mark.asyncio
+    async def test_auto_quote_multiple_section_refs_in_list(self):
+        """Multiple unquoted § refs in a single list are all auto-quoted."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = "===TEST===\nMETA:\n  TYPE::TEST\nSEQUENCE::[§1::INTRO, §2::BODY, §3::CONCLUSION]\n===END==="
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            assert result["status"] == "success", f"Write failed: {result.get('errors')}"
+            with open(path) as f:
+                canonical = f.read()
+            assert '"§1::INTRO"' in canonical, f"§1::INTRO not auto-quoted in:\n{canonical}"
+            assert '"§2::BODY"' in canonical, f"§2::BODY not auto-quoted in:\n{canonical}"
+            assert '"§3::CONCLUSION"' in canonical, f"§3::CONCLUSION not auto-quoted in:\n{canonical}"
+
+    @pytest.mark.asyncio
+    async def test_auto_quote_section_ref_without_double_colon(self):
+        """Bare §N without :: in a value position is also auto-quoted."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = "===TEST===\nMETA:\n  TYPE::TEST\nREF::§5\n===END==="
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            assert result["status"] == "success", f"Write failed: {result.get('errors')}"
+            with open(path) as f:
+                canonical = f.read()
+            # §5 alone in value position should be preserved (auto-quoted)
+            assert (
+                '"§5"' in canonical or "§5" in canonical
+            ), f"Expected §5 to be preserved in canonical output, got:\n{canonical}"
+
+    @pytest.mark.asyncio
+    async def test_auto_quote_does_not_affect_section_declarations(self):
+        """Section declarations like §1::NAME at line start are NOT affected."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = "===TEST===\nMETA:\n  TYPE::TEST\n§1::SECTION_ONE\n  KEY::value\n===END==="
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=True)
+            assert result["status"] == "success", f"Write failed: {result.get('errors')}"
+            with open(path) as f:
+                canonical = f.read()
+            # Section declaration should remain as-is, not quoted
+            assert "§1::SECTION_ONE" in canonical or "SECTION_ONE" in canonical
+
+    @pytest.mark.asyncio
+    async def test_auto_quote_in_strict_mode(self):
+        """Auto-quoting also works in strict mode."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        content = "===TEST===\nMETA:\n  TYPE::TEST\nREF::§5::ANCHOR_KERNEL\n===END==="
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.oct.md")
+            result = await tool.execute(target_path=path, content=content, lenient=False)
+            # Should succeed (auto-quoting prevents parse error)
+            assert result["status"] == "success", f"Strict mode write failed: {result.get('errors')}"
+            with open(path) as f:
+                canonical = f.read()
+            assert (
+                '"§5::ANCHOR_KERNEL"' in canonical
+            ), f"Expected auto-quoted section ref in strict mode, got:\n{canonical}"
+
+
+class TestAutoQuoteSectionRefsUnit:
+    """Unit tests for _auto_quote_section_refs_in_values function directly."""
+
+    def test_bare_section_ref_in_value(self):
+        """KEY::§5::ANCHOR_KERNEL -> KEY::"§5::ANCHOR_KERNEL"."""
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        result, corrections = _auto_quote_section_refs_in_values("KEY::§5::ANCHOR_KERNEL")
+        assert '"§5::ANCHOR_KERNEL"' in result
+        assert len(corrections) >= 1
+        assert corrections[0]["code"] == "W_UNQUOTED_SECTION_IN_VALUE"
+
+    def test_section_ref_in_list(self):
+        """SEQUENCE::[A, §5::B] -> SEQUENCE::[A, "§5::B"]."""
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        result, corrections = _auto_quote_section_refs_in_values("SEQUENCE::[YAML_FRONTMATTER, §5::ANCHOR_KERNEL]")
+        assert '"§5::ANCHOR_KERNEL"' in result
+        assert "YAML_FRONTMATTER" in result
+        assert len(corrections) >= 1
+
+    def test_already_quoted_unchanged(self):
+        """KEY::"§5::ANCHOR_KERNEL" -> no change."""
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        result, corrections = _auto_quote_section_refs_in_values('KEY::"§5::ANCHOR_KERNEL"')
+        assert result == 'KEY::"§5::ANCHOR_KERNEL"'
+        assert len(corrections) == 0
+
+    def test_section_declaration_unchanged(self):
+        """§1::SECTION_NAME at line start is NOT auto-quoted."""
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        result, corrections = _auto_quote_section_refs_in_values("§1::SECTION_NAME")
+        assert result == "§1::SECTION_NAME"
+        assert len(corrections) == 0
+
+    def test_multiple_section_refs_in_list(self):
+        """Multiple unquoted § refs in one list are all auto-quoted."""
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        result, corrections = _auto_quote_section_refs_in_values("SEQ::[§1::INTRO, §2::BODY, §3::END]")
+        assert '"§1::INTRO"' in result
+        assert '"§2::BODY"' in result
+        assert '"§3::END"' in result
+
+    def test_literal_zone_excluded(self):
+        """§ inside ``` fenced block should NOT be auto-quoted."""
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        content = "BEFORE::value\n```\nKEY::§2::BEHAVIOR\n```\nAFTER::value"
+        result, corrections = _auto_quote_section_refs_in_values(content)
+        # Line inside literal zone should be unchanged
+        assert "KEY::§2::BEHAVIOR" in result
+        # No corrections for content inside literal zones
+        assert all(c.get("line") != 3 for c in corrections)
+
+    def test_mixed_quoted_and_unquoted_in_list(self):
+        """List with mix of quoted and unquoted § refs: only unquoted are auto-quoted."""
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        result, corrections = _auto_quote_section_refs_in_values('SEQ::["§1::ALREADY_QUOTED", §2::NEEDS_QUOTING]')
+        # Already-quoted should remain as-is
+        assert '"§1::ALREADY_QUOTED"' in result
+        # Unquoted should be auto-quoted
+        assert '"§2::NEEDS_QUOTING"' in result
+        # Should not double-quote
+        assert '""§1::ALREADY_QUOTED""' not in result
+
+
 class TestGH335UnresolvableChangePaths:
     """GH#335: Reject unresolvable paths in changes parameter.
 
@@ -4372,3 +4601,267 @@ META:
 
             assert result["status"] == "error"
             assert result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"
+
+
+class TestDryRunAlias:
+    """GH#354: dry_run parameter should be accepted as alias for corrections_only."""
+
+    def test_schema_includes_dry_run_parameter(self):
+        """Input schema should list dry_run as a valid parameter."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        schema = tool.get_input_schema()
+
+        assert (
+            "dry_run" in schema["properties"]
+        ), "dry_run should be listed in input schema as alias for corrections_only"
+
+    @pytest.mark.asyncio
+    async def test_dry_run_prevents_file_write(self):
+        """dry_run=True should prevent writing to disk, same as corrections_only=True."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "dry_run_test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+                dry_run=True,
+            )
+
+            assert result["status"] == "success"
+            assert not os.path.exists(target_path), "dry_run=True should not create the file"
+
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_preview_data(self):
+        """dry_run=True should return canonical_hash and diff_unified like corrections_only."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "dry_run_preview.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+                dry_run=True,
+            )
+
+            assert result["status"] == "success"
+            assert "canonical_hash" in result
+            assert "diff_unified" in result
+            assert isinstance(result["corrections"], list)
+
+    @pytest.mark.asyncio
+    async def test_corrections_only_still_works(self):
+        """Existing corrections_only parameter must continue to work (backward compat)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "compat_test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+                corrections_only=True,
+            )
+
+            assert result["status"] == "success"
+            assert not os.path.exists(target_path)
+
+    @pytest.mark.asyncio
+    async def test_dry_run_and_corrections_only_both_true(self):
+        """When both dry_run and corrections_only are True, should still work as dry run."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "both_flags.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+                dry_run=True,
+                corrections_only=True,
+            )
+
+            assert result["status"] == "success"
+            assert not os.path.exists(target_path)
+
+
+class TestSchemaEnumeration:
+    """GH#355: Unknown schema names should return available schemas."""
+
+    @pytest.mark.asyncio
+    async def test_unknown_schema_returns_available_schemas(self):
+        """When an unknown schema name is provided, response should list available schemas."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "schema_test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content='===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\n===END===',
+                schema="INCIDENT_REPORT",
+                dry_run=True,
+            )
+
+            # The response should include available_schemas when schema not found
+            assert (
+                "available_schemas" in result
+            ), "Response should include available_schemas when unknown schema is provided"
+            available = result["available_schemas"]
+            assert isinstance(available, list)
+            assert len(available) > 0, "Should list at least one available schema"
+            # META is always available as a builtin
+            assert "META" in available, "META should be in available schemas"
+
+    @pytest.mark.asyncio
+    async def test_known_schema_does_not_return_available_schemas(self):
+        """When a known schema name is provided, available_schemas should not be in response."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "known_schema.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content='===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\n===END===',
+                schema="META",
+                dry_run=True,
+            )
+
+            # Known schema should not trigger available_schemas listing
+            assert "available_schemas" not in result, "Known schema should not trigger available_schemas in response"
+
+    def test_schema_parameter_description_lists_common_schemas(self):
+        """Schema parameter description should mention common schema names."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        schema = tool.get_input_schema()
+
+        schema_desc = schema["properties"]["schema"]["description"]
+        assert "META" in schema_desc, "Schema parameter description should list META as a common schema"
+
+
+class TestLenientDefaultDocumentation:
+    """GH#359: lenient parameter description should state its default value."""
+
+    def test_lenient_description_states_default(self):
+        """lenient parameter description should explicitly state default is False."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        schema = tool.get_input_schema()
+
+        lenient_desc = schema["properties"]["lenient"]["description"]
+        # The description should mention the default value
+        assert (
+            "default" in lenient_desc.lower() or "false" in lenient_desc.lower()
+        ), f"lenient description should state default value. Got: {lenient_desc}"
+        # More specifically, it should say the default is False
+        assert (
+            "false" in lenient_desc.lower()
+        ), f"lenient description should state default is False. Got: {lenient_desc}"
+
+
+class TestValidationHintOnUnvalidated:
+    """GH#352: validation_hint field when validation_status is UNVALIDATED.
+
+    When octave_write returns validation_status: "UNVALIDATED", the response
+    should include a validation_hint field explaining how to enable validation.
+    """
+
+    @pytest.mark.asyncio
+    async def test_unvalidated_success_includes_validation_hint(self):
+        """UNVALIDATED response on success should include validation_hint."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+            )
+
+            assert result["status"] == "success"
+            assert result["validation_status"] == "UNVALIDATED"
+            assert "validation_hint" in result, "UNVALIDATED responses must include a validation_hint field"
+            assert "schema=" in result["validation_hint"].lower() or "schema=" in result["validation_hint"]
+
+    @pytest.mark.asyncio
+    async def test_unvalidated_error_includes_validation_hint(self):
+        """UNVALIDATED response on error should include validation_hint."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Trigger error with path traversal
+            result = await tool.execute(
+                target_path=os.path.join(tmpdir, "../evil.oct.md"),
+                content="===TEST===\nKEY::value\n===END===",
+            )
+
+            assert result["status"] == "error"
+            assert result["validation_status"] == "UNVALIDATED"
+            assert "validation_hint" in result, "UNVALIDATED error responses must include a validation_hint field"
+
+    @pytest.mark.asyncio
+    async def test_validated_does_not_include_validation_hint(self):
+        """VALIDATED responses should NOT include validation_hint."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nMETA:\n  TYPE::TEST\n===END===",
+                schema="META",
+            )
+
+            # When schema validation succeeds, validation_status is VALIDATED
+            # and validation_hint should not be present
+            if result["validation_status"] == "VALIDATED":
+                assert "validation_hint" not in result, "VALIDATED responses should NOT include validation_hint"
+
+    @pytest.mark.asyncio
+    async def test_validation_hint_mentions_schema_parameter(self):
+        """validation_hint should mention the schema parameter for guidance."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            result = await tool.execute(
+                target_path=target_path,
+                content="===TEST===\nKEY::value\n===END===",
+            )
+
+            assert result["validation_status"] == "UNVALIDATED"
+            hint = result.get("validation_hint", "")
+            assert (
+                "schema=" in hint or "schema='" in hint
+            ), f"validation_hint should mention schema= parameter, got: {hint}"

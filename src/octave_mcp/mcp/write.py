@@ -42,7 +42,13 @@ from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 from octave_mcp.mcp.compile_grammar import USAGE_HINTS
-from octave_mcp.schemas.loader import get_builtin_schema, load_schema, load_schema_by_name
+from octave_mcp.schemas.loader import (
+    BUILTIN_SCHEMA_DEFINITIONS,
+    get_builtin_schema,
+    get_schema_search_paths,
+    load_schema,
+    load_schema_by_name,
+)
 
 # Sentinel for DELETE operation in tri-state changes
 DELETE_SENTINEL = {"$op": "DELETE"}
@@ -57,6 +63,9 @@ W_UNQUOTED_SECTION_IN_VALUE = "W_UNQUOTED_SECTION_IN_VALUE"
 
 # GH#349: Data loss warning for bare lines dropped during lenient parsing (I4)
 W_BARE_LINE_DROPPED = "W_BARE_LINE_DROPPED"
+
+# GH#352: Guidance hint for UNVALIDATED status (I5)
+_VALIDATION_HINT_UNVALIDATED = "Pass schema='META' (or another schema name) to enable I5 schema validation."
 
 # Regex: line with KEY::  followed by § somewhere in the value portion.
 # Matches lines like  KEY::§2_BEHAVIOR  and  KEY::["§2_BEHAVIOR"]
@@ -125,6 +134,134 @@ def _all_section_marks_quoted(line: str) -> bool:
             return False
         prev_ch = ch
     return True
+
+
+# GH#334: Regex matching an unquoted §-prefixed token in a value position.
+# Captures the full section reference: §N or §N::NAME (including underscores,
+# hyphens, dots, and other identifier characters after the ::).
+_SECTION_REF_TOKEN_RE = re.compile(
+    r"§"
+    r"\w+"  # section number/name (e.g., "5", "2_BEHAVIOR")
+    r"(?:::\w[\w.\-]*)*"  # optional ::NAME suffix(es)
+)
+
+
+def _auto_quote_section_refs_in_values(content: str) -> tuple[str, list[dict[str, Any]]]:
+    """GH#334: Auto-quote unquoted § references in value positions.
+
+    When a line has KEY::...§N::NAME... where the § is not inside double quotes,
+    the lexer would fragment it (§ -> SECTION token, corrupting the value).
+    This function wraps such references in double quotes BEFORE parsing.
+
+    I1 (Syntactic Fidelity): normalization alters syntax, never semantics.
+    The author intended §5::ANCHOR_KERNEL as a literal string value, not a
+    section declaration.  Quoting preserves that intent.
+
+    I4 (Transform Auditability): every auto-quote is logged as a correction.
+
+    Args:
+        content: Raw OCTAVE content that may contain unquoted § in values.
+
+    Returns:
+        Tuple of (transformed_content, list of correction records).
+    """
+    corrections: list[dict[str, Any]] = []
+    literal_zone_lines = _build_literal_zone_line_set(content)
+
+    lines = content.split("\n")
+    result_lines: list[str] = []
+
+    for line_num_0, line in enumerate(lines):
+        line_num = line_num_0 + 1  # 1-based
+
+        # Skip lines inside literal zones
+        if line_num in literal_zone_lines:
+            result_lines.append(line)
+            continue
+
+        # Only process lines that match the unquoted-section-in-value pattern
+        if not _UNQUOTED_SECTION_RE.match(line.lstrip()):
+            # Also check: line might have leading whitespace that re.match misses
+            # The regex is MULTILINE so it anchors to ^ but we're checking per-line
+            if not _UNQUOTED_SECTION_RE.search(line):
+                result_lines.append(line)
+                continue
+
+        # Extract value portion (after first ::)
+        colon_idx = line.find("::")
+        if colon_idx == -1:
+            result_lines.append(line)
+            continue
+
+        key_part = line[: colon_idx + 2]  # includes the ::
+        value_part = line[colon_idx + 2 :]
+
+        # Check if all § marks are already quoted
+        if _all_section_marks_quoted(value_part):
+            result_lines.append(line)
+            continue
+
+        # Auto-quote unquoted § references in the value portion.
+        # Walk character by character, tracking quote state.
+        new_value_chars: list[str] = []
+        i = 0
+        modified = False
+        in_quote = False
+
+        while i < len(value_part):
+            ch = value_part[i]
+
+            if ch == '"':
+                in_quote = not in_quote
+                new_value_chars.append(ch)
+                i += 1
+            elif ch == "/" and i + 1 < len(value_part) and value_part[i + 1] == "/" and not in_quote:
+                # Comment start: rest of line is comment, append as-is
+                new_value_chars.append(value_part[i:])
+                i = len(value_part)
+            elif ch == "§" and not in_quote:
+                # Found unquoted § — extract the full section reference token
+                match = _SECTION_REF_TOKEN_RE.match(value_part, i)
+                if match:
+                    ref_text = match.group(0)
+                    new_value_chars.append('"')
+                    new_value_chars.append(ref_text)
+                    new_value_chars.append('"')
+                    i = match.end()
+                    modified = True
+                else:
+                    # Bare § without a following identifier — quote just §
+                    new_value_chars.append('"§"')
+                    i += 1
+                    modified = True
+            else:
+                new_value_chars.append(ch)
+                i += 1
+
+        if modified:
+            new_value = "".join(new_value_chars)
+            new_line = key_part + new_value
+            result_lines.append(new_line)
+            corrections.append(
+                {
+                    "code": W_UNQUOTED_SECTION_IN_VALUE,
+                    "tier": "LENIENT_PARSE",
+                    "message": (
+                        f"W_UNQUOTED_SECTION_IN_VALUE: Value at line {line_num} contains "
+                        f"unquoted § which would be parsed as a section operator. "
+                        f"Auto-quoted to preserve intended meaning (I1 fidelity)."
+                    ),
+                    "line": line_num,
+                    "original": line.strip(),
+                    "repaired": new_line.strip(),
+                    "safe": True,
+                    "semantics_changed": False,
+                }
+            )
+        else:
+            result_lines.append(line)
+
+    return "\n".join(result_lines), corrections
 
 
 def _detect_unquoted_section_in_values(content: str) -> list[dict[str, Any]]:
@@ -871,6 +1008,7 @@ class WriteTool(BaseTool):
             "diff_unified": "",
             "errors": errors,
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
+            "validation_hint": _VALIDATION_HINT_UNVALIDATED,  # GH#352: guidance for agents
         }
 
     def get_name(self) -> str:
@@ -921,7 +1059,18 @@ class WriteTool(BaseTool):
             description="Expected SHA-256 hash of existing file for consistency check (CAS).",
         )
 
-        schema.add_parameter("schema", "string", required=False, description="Schema name for validation (I5).")
+        # GH#355: List common schemas in description so agents know what's available
+        schema.add_parameter(
+            "schema",
+            "string",
+            required=False,
+            description=(
+                "Schema name for validation (I5). "
+                "Common schemas: META, SKILL, CRS_REVIEW, COGNITION_DEFINITION, DEBATE_TRANSCRIPT. "
+                "Use 'frozen@<hash>' or 'latest' for hermetic resolution. "
+                "If an unknown schema is provided, the response includes available_schemas."
+            ),
+        )
 
         schema.add_parameter(
             "debug_grammar",
@@ -941,7 +1090,8 @@ class WriteTool(BaseTool):
             "lenient",
             "boolean",
             required=False,
-            description="If True, enable deterministic lenient parsing + optional schema repairs.",
+            # GH#359: Explicitly state default value so agents know lenient is opt-in
+            description="If True, enable deterministic lenient parsing + optional schema repairs. Default: false (strict parsing).",
         )
 
         schema.add_parameter(
@@ -949,6 +1099,14 @@ class WriteTool(BaseTool):
             "boolean",
             required=False,
             description="If True, return corrections/diff without writing to disk (dry run).",
+        )
+
+        # GH#354: Accept dry_run as alias for corrections_only
+        schema.add_parameter(
+            "dry_run",
+            "boolean",
+            required=False,
+            description="Alias for corrections_only. If True, return corrections/diff without writing to disk (default: false).",
         )
 
         schema.add_parameter(
@@ -1046,6 +1204,33 @@ class WriteTool(BaseTool):
             Hex digest of SHA-256 hash
         """
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    def _list_available_schemas(self) -> list[str]:
+        """Enumerate all available schema names from builtins and search paths.
+
+        GH#355: Returns a sorted list of schema names that agents can use
+        with the schema parameter. Combines builtin dict schemas and
+        file-based schemas from search paths.
+
+        Returns:
+            Sorted list of available schema name strings.
+        """
+        names: set[str] = set()
+
+        # Builtin dict schemas (e.g. META)
+        names.update(BUILTIN_SCHEMA_DEFINITIONS.keys())
+
+        # File-based schemas from search paths
+        for search_path in get_schema_search_paths():
+            for schema_file in search_path.glob("*.oct.md"):
+                # Schema name is derived from filename: meta.oct.md -> META
+                name = schema_file.stem  # e.g. "meta" from "meta.oct.md"
+                # Remove .oct suffix if present (stem of .oct.md is "meta.oct" not "meta")
+                if name.endswith(".oct"):
+                    name = name[:-4]
+                names.add(name.upper())
+
+        return sorted(names)
 
     def _track_corrections(
         self, original: str, canonical: str, tokenize_repairs: list[dict[str, Any]]
@@ -1485,7 +1670,8 @@ class WriteTool(BaseTool):
         debug_grammar = params.get("debug_grammar", False)
         grammar_hint = params.get("grammar_hint", False)
         lenient = params.get("lenient", False)
-        corrections_only = params.get("corrections_only", False)
+        # GH#354: Accept dry_run as alias for corrections_only (either triggers dry-run)
+        corrections_only = params.get("corrections_only", False) or params.get("dry_run", False)
         parse_error_policy = params.get("parse_error_policy", "error")
 
         if parse_error_policy not in ("error", "salvage"):
@@ -1507,6 +1693,7 @@ class WriteTool(BaseTool):
             "diff_unified": "",
             "errors": [],
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass until validated
+            "validation_hint": _VALIDATION_HINT_UNVALIDATED,  # GH#352: guidance for agents
         }
 
         # STEP 1: Validate path
@@ -1701,6 +1888,13 @@ class WriteTool(BaseTool):
                     }
                 )
 
+            # GH#334: Auto-quote unquoted § references in value positions BEFORE
+            # parsing. The lexer is context-free and always produces SECTION tokens
+            # for §, which fragments intended string values. Auto-quoting preserves
+            # author intent (I1) and logs corrections (I4).
+            parse_input, section_quote_corrections = _auto_quote_section_refs_in_values(parse_input)
+            corrections.extend(section_quote_corrections)
+
             if lenient:
                 # Detect likely OCTAVE structure using line-anchored patterns to avoid false positives in prose.
                 # GH#263 rework round 4: Only strong, unambiguous OCTAVE signals trigger structured mode.
@@ -1746,11 +1940,19 @@ class WriteTool(BaseTool):
                     _, tokenize_repairs = tokenize(parse_input)
                 except Exception as e:
                     # GH#329: Emit § quoting warnings even on strict tokenize failure path.
-                    # The unquoted § may be the *cause* of the tokenization error.
+                    # GH#334: Include auto-quoting corrections already accumulated in
+                    # `corrections` (from the pre-parse auto-quoting step).
+                    error_corrections = list(corrections)
+                    error_corrections.extend(_detect_unquoted_section_in_values(parse_input))
                     return self._error_envelope(
                         target_path,
-                        [{"code": "E_TOKENIZE", "message": f"Tokenization error: {str(e)}"}],
-                        _detect_unquoted_section_in_values(parse_input),
+                        [
+                            {
+                                "code": "E_TOKENIZE",
+                                "message": f"Tokenization error: {str(e)}",
+                            }
+                        ],
+                        error_corrections,
                     )
 
                 try:
@@ -1760,14 +1962,19 @@ class WriteTool(BaseTool):
                     doc, strict_parse_warnings = parse_with_warnings(parse_input)
                     corrections.extend(self._map_parse_warnings_to_corrections(strict_parse_warnings))
                 except Exception as e:
-                    strict_corrections = self._track_corrections(parse_input, parse_input, tokenize_repairs)
-                    # GH#329: Emit § quoting warnings even on strict parse failure path.
-                    # The warning is user-facing guidance that should not be suppressed by
-                    # parse errors, since the unquoted § may be the *cause* of the error.
+                    # GH#334: Start from existing corrections (includes auto-quoting).
+                    strict_corrections = list(corrections)
+                    strict_corrections.extend(self._track_corrections(parse_input, parse_input, tokenize_repairs))
+                    # GH#329: Emit § quoting warnings even on strict parse failure.
                     strict_corrections.extend(_detect_unquoted_section_in_values(parse_input))
                     return self._error_envelope(
                         target_path,
-                        [{"code": "E_PARSE", "message": f"Parse error: {str(e)}"}],
+                        [
+                            {
+                                "code": "E_PARSE",
+                                "message": f"Parse error: {str(e)}",
+                            }
+                        ],
                         strict_corrections,
                     )
 
@@ -2023,6 +2230,7 @@ class WriteTool(BaseTool):
 
                 if validation_errors:
                     result["validation_status"] = "INVALID"
+                    result.pop("validation_hint", None)  # GH#352: remove hint when validated
                     result["validation_errors"] = [
                         {"code": err.code, "message": err.message, "field": err.field_path} for err in validation_errors
                     ]
@@ -2043,7 +2251,11 @@ class WriteTool(BaseTool):
                             }
                 else:
                     result["validation_status"] = "VALIDATED"
-            # else: schema not found - remain UNVALIDATED (bypass is visible)
+                    result.pop("validation_hint", None)  # GH#352: remove hint when validated
+            else:
+                # GH#355: Schema not found - remain UNVALIDATED but list available schemas
+                # I5 (Schema Sovereignty): make available options visible so agents can self-correct
+                result["available_schemas"] = self._list_available_schemas()
 
         # I4 (Transform Auditability): record the mode in the response envelope
         if normalize_mode:
