@@ -5,15 +5,16 @@ TDD RED Phase: These tests define expected behavior for:
 - Subsequent lines should maintain correct sibling relationships
 - Indentation tracking should not be corrupted by unconsumed tokens
 
-Root cause analysis:
-- Lexer produces: NUMBER(123), IDENTIFIER(_suffix)
-- Parser's NUMBER path (lines 505-507) returns immediately without checking for trailing IDENTIFIER
-- IDENTIFIER(_suffix) left unconsumed corrupts indentation tracking for subsequent lines
+Root cause analysis (original GH#87):
+- Lexer produced: NUMBER(123), IDENTIFIER(_suffix)
+- Parser's NUMBER path returned immediately without checking for trailing IDENTIFIER
+- IDENTIFIER(_suffix) left unconsumed corrupted indentation tracking
 
-Expected fix:
-- After consuming NUMBER, check if next token is IDENTIFIER
-- If so, coalesce into multi-word string value (same pattern as IDENTIFIER path)
-- Emit I4 audit warning when coalescing occurs
+Fix history:
+- GH#87: Parser coalesces NUMBER + IDENTIFIER into multi-word value with space
+- GH#356: Lexer now merges number+identifier into single IDENTIFIER token
+  when they are adjacent (no whitespace). This eliminates the space insertion
+  that violated I1 (SYNTACTIC_FIDELITY).
 """
 
 from octave_mcp.core.lexer import TokenType, tokenize
@@ -23,11 +24,12 @@ from octave_mcp.core.parser import parse, parse_with_warnings
 class TestNumberUnderscoreLexer:
     """Verify lexer behavior for number_underscore patterns."""
 
-    def test_lexer_tokenizes_123_suffix_as_two_tokens(self):
-        """Lexer should produce NUMBER and IDENTIFIER for 123_suffix.
+    def test_lexer_tokenizes_123_suffix_as_single_identifier(self):
+        """GH#356: Lexer should produce single IDENTIFIER for 123_suffix.
 
-        This documents the current (correct) lexer behavior.
-        The issue is in the parser, not the lexer.
+        When a number is immediately followed by identifier-start chars
+        (no whitespace), the lexer merges them into a single IDENTIFIER
+        token to prevent space insertion during canonicalization.
         """
         content = "a::123_suffix"
         tokens, _ = tokenize(content)
@@ -35,30 +37,26 @@ class TestNumberUnderscoreLexer:
         # Filter to just the value-related tokens
         value_tokens = [t for t in tokens if t.type in (TokenType.NUMBER, TokenType.IDENTIFIER)]
 
-        # Should have: IDENTIFIER(a), NUMBER(123), IDENTIFIER(_suffix)
-        assert len(value_tokens) == 3, f"Expected 3 tokens, got {len(value_tokens)}: {value_tokens}"
+        # Should have: IDENTIFIER(a), IDENTIFIER(123_suffix)
+        assert len(value_tokens) == 2, f"Expected 2 tokens, got {len(value_tokens)}: {value_tokens}"
 
         # First is the key 'a'
         assert value_tokens[0].type == TokenType.IDENTIFIER
         assert value_tokens[0].value == "a"
 
-        # Second is NUMBER(123)
-        assert value_tokens[1].type == TokenType.NUMBER
-        assert value_tokens[1].value == 123
-
-        # Third is IDENTIFIER(_suffix)
-        assert value_tokens[2].type == TokenType.IDENTIFIER
-        assert value_tokens[2].value == "_suffix"
+        # Second is IDENTIFIER(123_suffix) — merged by lexer (GH#356)
+        assert value_tokens[1].type == TokenType.IDENTIFIER
+        assert value_tokens[1].value == "123_suffix"
 
 
 class TestNumberUnderscoreBasicParsing:
     """GH#87: Number followed by underscore should be parsed as combined value."""
 
     def test_number_underscore_simple(self):
-        """123_suffix should be parsed as a coalesced string value.
+        """GH#356: 123_suffix should be parsed as a single identifier value (no space).
 
         Input: a::123_suffix
-        Expected: value should include both 123 and _suffix
+        Expected: value is "123_suffix" (no space insertion)
         """
         content = """===TEST===
 a::123_suffix
@@ -67,11 +65,11 @@ a::123_suffix
 
         assignment = doc.sections[0]
         assert assignment.key == "a"
-        # Value should be the full coalesced form, not just 123
-        assert assignment.value == "123 _suffix", f"Got: {assignment.value!r}"
+        # GH#356: Lexer merges into single IDENTIFIER — no space insertion
+        assert assignment.value == "123_suffix", f"Got: {assignment.value!r}"
 
     def test_number_underscore_zero_prefix(self):
-        """0_test should be parsed as coalesced value."""
+        """GH#356: 0_test should be parsed as single identifier value."""
         content = """===TEST===
 a::0_test
 ===END==="""
@@ -79,7 +77,7 @@ a::0_test
 
         assignment = doc.sections[0]
         assert assignment.key == "a"
-        assert assignment.value == "0 _test", f"Got: {assignment.value!r}"
+        assert assignment.value == "0_test", f"Got: {assignment.value!r}"
 
     def test_number_underscore_multi_part(self):
         """123_abc_def should be parsed as coalesced value with multiple IDENTIFIER tokens."""
@@ -239,32 +237,26 @@ OUTER:
 class TestNumberUnderscoreI4Audit:
     """GH#87 I4 Audit: Coalescing NUMBER+IDENTIFIER must emit warning."""
 
-    def test_number_underscore_emits_warning(self):
-        """Coalescing 123_suffix should emit I4 audit warning.
+    def test_number_underscore_no_coalesce_warning(self):
+        """GH#356: 123_suffix is now a single IDENTIFIER token, so no coalescing occurs.
 
-        Per I4 immutable: "If bits lost must have receipt"
-        Coalescing NUMBER(123) + IDENTIFIER(_suffix) is an entropy-reducing
-        transformation that must be audited.
+        The lexer merges number+identifier at tokenization time, so the parser
+        never sees separate tokens and never needs to coalesce. No I4 warning
+        is emitted because no information is lost.
         """
         content = """===TEST===
 a::123_suffix
 ===END==="""
         doc, warnings = parse_with_warnings(content)
 
-        # Should have warning about coalescing
+        # No coalescing should occur — the lexer handles the merge
         coalesce_warnings = [
             w for w in warnings if w.get("type") == "lenient_parse" and w.get("subtype") == "multi_word_coalesce"
         ]
 
         assert (
-            len(coalesce_warnings) >= 1
-        ), f"Expected I4 audit warning for NUMBER+IDENTIFIER coalescing. Got warnings: {warnings}"
-
-        warning = coalesce_warnings[0]
-        # Warning should capture both parts
-        original = warning.get("original", [])
-        assert "123" in str(original) or 123 in original, f"Warning missing '123': {warning}"
-        assert "_suffix" in str(original), f"Warning missing '_suffix': {warning}"
+            len(coalesce_warnings) == 0
+        ), f"Lexer-merged token should not emit coalescing warning. Got: {coalesce_warnings}"
 
     def test_number_underscore_warning_has_position(self):
         """I4 warning should include line and column for auditability."""

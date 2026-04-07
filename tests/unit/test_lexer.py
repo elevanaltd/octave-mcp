@@ -1121,3 +1121,51 @@ class TestPercentKeyContextRegression:
         ident_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER]
         values = [t.value for t in ident_tokens]
         assert "100%_complete" in values
+
+
+class TestE005HyphenGuidance:
+    """GH#351: E005 for YAML-style hyphen should include OCTAVE list syntax guidance.
+
+    When agents write YAML-style lists using '-' bullets, the E005 error
+    should explain what syntax to use instead, not just say 'Unexpected character'.
+    """
+
+    def test_hyphen_at_line_start_includes_list_syntax_hint(self):
+        """E005 for '-' should mention OCTAVE inline list syntax.
+
+        Input: YAML-style list with '- item' bullets
+        Expected: Error message includes guidance about ITEMS::[item1, item2, item3]
+        """
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("ITEMS:\n  - item1\n  - item2")
+        error = exc_info.value
+        assert error.error_code == "E005"
+        assert "YAML-style list markers" in error.message
+        assert "ITEMS::[item1, item2, item3]" in error.message
+
+    def test_hyphen_e005_mentions_inline_list_syntax(self):
+        """E005 for standalone '-' should include the inline list syntax example."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("- first_item")
+        error = exc_info.value
+        assert error.error_code == "E005"
+        assert "inline list syntax" in error.message.lower()
+
+    def test_negative_number_not_affected_by_hyphen_guidance(self):
+        """Negative numbers like -42 must still tokenize correctly (no false positive)."""
+        tokens, _ = tokenize("VALUE::-42")
+        number_tokens = [t for t in tokens if t.type == TokenType.NUMBER]
+        assert len(number_tokens) == 1
+        assert number_tokens[0].value == -42
+
+    def test_hyphen_in_identifier_not_affected(self):
+        """Hyphens within identifiers like 'my-tool' must still work."""
+        tokens, _ = tokenize("my-tool")
+        assert tokens[0].type == TokenType.IDENTIFIER
+        assert tokens[0].value == "my-tool"
+
+    def test_flow_operator_not_affected_by_hyphen_guidance(self):
+        """Flow operator -> must still tokenize correctly."""
+        tokens, _ = tokenize("A->B")
+        flow_tokens = [t for t in tokens if t.type == TokenType.FLOW]
+        assert len(flow_tokens) == 1

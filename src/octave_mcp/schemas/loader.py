@@ -37,6 +37,7 @@ BUILTIN_SCHEMA_DEFINITIONS: dict[str, dict[str, Any]] = {
                 "TYPE": {"type": "STRING"},
                 "VERSION": {"type": "STRING"},
                 "STATUS": {"type": "ENUM", "values": ["DRAFT", "ACTIVE", "DEPRECATED"]},
+                "ID": {"type": "STRING"},
             },
         },
     },

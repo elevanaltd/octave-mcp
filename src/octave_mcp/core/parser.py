@@ -917,6 +917,19 @@ class Parser:
                 if current_line_indent < child_indent:
                     break
 
+                # GH#348: Detect numeric keys before parse_section to avoid
+                # silent data loss (I4 violation). Numeric keys are consumed
+                # and warnings emitted for recovery.
+                if self._try_consume_numeric_key():
+                    # GH#361r4: Flush pending comments as children before
+                    # resetting. Silently discarding comments violates I4
+                    # (Transform Auditability).
+                    for comment_text in pending_comments:
+                        children.append(Comment(text=comment_text))
+                    pending_comments = []
+                    current_line_indent = 0
+                    continue
+
                 # Parse child with any pending comments
                 child = self.parse_section(child_indent, pending_comments)
                 pending_comments = []  # Reset after passing to child
@@ -960,6 +973,50 @@ class Parser:
             line=section_token.line,
             column=section_token.column,
         )
+
+    def _try_consume_numeric_key(self) -> bool:
+        """Detect and consume numeric key assignments, emitting I4 warning.
+
+        GH#348: Numeric keys (e.g., 1::"value") are not valid OCTAVE identifiers.
+        When encountered as block/section children, the parser previously returned
+        None from parse_section(), causing the child loop to break and silently
+        drop all remaining content (I4 violation: silent data loss).
+
+        This method detects NUMBER::value patterns, consumes the tokens to avoid
+        infinite loops, and emits a W_NUMERIC_KEY_DROPPED warning with the
+        dropped key and value for recovery (I4: "if bits lost must have receipt").
+
+        Returns:
+            True if a numeric key was consumed (caller should continue), False otherwise.
+        """
+        if self.current().type == TokenType.NUMBER and self.peek().type == TokenType.ASSIGN:
+            key_token = self.current()
+            key_str = str(key_token.value)
+            self.advance()  # consume NUMBER
+            self.advance()  # consume ASSIGN (::)
+            # Parse the value so it's fully consumed from the token stream
+            value = self.parse_value()
+            # Convert value to string for the warning message
+            value_str = str(value) if value is not None else ""
+            self.warnings.append(
+                {
+                    "type": "lenient_parse",
+                    "subtype": "numeric_key_dropped",
+                    "key": key_str,
+                    "value": value_str,
+                    "line": key_token.line,
+                    "column": key_token.column,
+                    "message": (
+                        f"W_NUMERIC_KEY_DROPPED at line {key_token.line}: "
+                        f"Numeric key '{key_str}' is not a valid OCTAVE identifier. "
+                        f"Assignment {key_str}::{value_str!r} was dropped from "
+                        f"canonical output. Use a string identifier instead "
+                        f"(e.g., ITEM_{key_str}::{value_str!r})."
+                    ),
+                }
+            )
+            return True
+        return False
 
     def parse_section(
         self, base_indent: int, leading_comments: list[str] | None = None
@@ -1153,6 +1210,19 @@ class Parser:
                                 leading_comments=pending_comments or [],
                             )
                         )
+                        pending_comments = []
+                        current_line_indent = 0
+                        continue
+
+                    # GH#348: Detect numeric keys before parse_section to avoid
+                    # silent data loss (I4 violation). Numeric keys are consumed
+                    # and warnings emitted for recovery.
+                    if self._try_consume_numeric_key():
+                        # GH#361r4: Flush pending comments as children before
+                        # resetting. Silently discarding comments violates I4
+                        # (Transform Auditability).
+                        for comment_text in pending_comments:
+                            children.append(Comment(text=comment_text))
                         pending_comments = []
                         current_line_indent = 0
                         continue
@@ -2602,7 +2672,11 @@ def parse_meta_only(content: str) -> dict[str, Any]:
     return {}
 
 
-def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict]]:
+def parse_with_warnings(
+    content: str | list[Token],
+    *,
+    strict_structure: bool = False,
+) -> tuple[Document, list[dict]]:
     """Parse OCTAVE content into AST with I4 audit trail.
 
     Returns both the parsed document and any warnings generated during
@@ -2614,6 +2688,9 @@ def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict
 
     Args:
         content: Raw OCTAVE text (lenient or canonical) or list of tokens
+        strict_structure: If True, raise ParserError on structural issues
+            (e.g., unclosed lists, nested inline maps) instead of leniently
+            recovering. Use True when lenient=False in write mode (GH#361r3).
 
     Returns:
         Tuple of (Document AST, list of warning dicts)
@@ -2628,7 +2705,8 @@ def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict
         }
 
     Raises:
-        ParserError: On syntax errors
+        ParserError: On syntax errors (always), or structural issues
+            when strict_structure=True
     """
     raw_frontmatter: str | None = None
 
@@ -2640,7 +2718,7 @@ def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict
         tokens = content
         lexer_repairs = []
 
-    parser = Parser(tokens)
+    parser = Parser(tokens, strict_structure=strict_structure)
     doc = parser.parse_document()
 
     # Preserve frontmatter in Document AST for I4 auditability

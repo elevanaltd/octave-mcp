@@ -15,4 +15,7 @@ FIELDS:
     REQUIRED::false
     TYPE::STRING
     ENUM::[DRAFT,ACTIVE,DEPRECATED]
+  ID:
+    REQUIRED::false
+    TYPE::STRING
 ===END===

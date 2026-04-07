@@ -6,6 +6,9 @@ Provides the MCP server with OCTAVE tools:
 - octave_eject (projection to different modes/formats)
 - octave_compile_grammar (compile schema/contract to constraint grammar)
 
+Also provides MCP resources (Issue #280):
+- octave://grammars/{SCHEMA_NAME} — pre-compiled GBNF for builtin schemas
+
 Environment Variables:
 - DISABLED_TOOLS: Comma-separated list of tools to disable.
   Available tools: octave_validate, octave_write, octave_eject, octave_compile_grammar
@@ -39,6 +42,7 @@ from mcp.types import TextContent, Tool
 from octave_mcp.mcp.base_tool import BaseTool
 from octave_mcp.mcp.compile_grammar import CompileGrammarTool
 from octave_mcp.mcp.eject import EjectTool
+from octave_mcp.mcp.grammar_resources import register_grammar_resources
 from octave_mcp.mcp.validate import ValidateTool
 from octave_mcp.mcp.write import WriteTool
 
@@ -213,6 +217,9 @@ def create_server() -> Server:
 
         # Return result as TextContent
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    # Register grammar resource endpoints (Issue #280)
+    register_grammar_resources(server)
 
     return server
 
