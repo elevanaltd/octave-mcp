@@ -3704,10 +3704,9 @@ class TestGH334AutoQuoteSectionRefsInValues:
             assert result["status"] == "success", f"Write failed: {result.get('errors')}"
             with open(path) as f:
                 canonical = f.read()
-            # §5 alone in value position should be preserved (auto-quoted)
-            assert (
-                '"§5"' in canonical or "§5" in canonical
-            ), f"Expected §5 to be preserved in canonical output, got:\n{canonical}"
+            # §5 alone in value position should be auto-quoted
+            # GH#361r3: Assert exact quoted rendering, no fallback
+            assert '"§5"' in canonical, f"Expected auto-quoted '\"§5\"' in canonical output, got:\n{canonical}"
 
     @pytest.mark.asyncio
     async def test_auto_quote_does_not_affect_section_declarations(self):
@@ -3723,7 +3722,10 @@ class TestGH334AutoQuoteSectionRefsInValues:
             with open(path) as f:
                 canonical = f.read()
             # Section declaration should remain as-is, not quoted
-            assert "§1::SECTION_ONE" in canonical or "SECTION_ONE" in canonical
+            # GH#361r3: Assert exact rendering, no fallback
+            assert (
+                "§1::SECTION_ONE" in canonical
+            ), f"Expected section declaration '§1::SECTION_ONE' in canonical output, got:\n{canonical}"
 
     @pytest.mark.asyncio
     async def test_auto_quote_in_strict_mode(self):
@@ -4381,8 +4383,16 @@ META:
 
             with open(target_path) as f:
                 content = f.read()
+            # GH#361r3: Verify the value appears UNDER the section, not just
+            # as generic string presence anywhere in the document.
             assert "NEW_FIELD" in content
             assert "new_value" in content
+            section_pos = content.find("§1::IDENTITY")
+            field_pos = content.find("NEW_FIELD")
+            assert section_pos != -1, "Section header §1::IDENTITY must be present"
+            assert (
+                field_pos > section_pos
+            ), f"NEW_FIELD (pos {field_pos}) must appear AFTER §1::IDENTITY (pos {section_pos})"
 
     @pytest.mark.asyncio
     async def test_section_number_delete_key(self):
@@ -4892,16 +4902,19 @@ class TestValidationHintOnUnvalidated:
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "test.oct.md")
 
+            # GH#361r3: Use valid META content (TYPE + VERSION required by META schema)
+            # so validation_status is deterministically VALIDATED.
             result = await tool.execute(
                 target_path=target_path,
-                content="===TEST===\nMETA:\n  TYPE::TEST\n===END===",
+                content='===TEST===\nMETA:\n  TYPE::TEST\n  VERSION::"1.0"\n===END===',
                 schema="META",
             )
 
-            # When schema validation succeeds, validation_status is VALIDATED
-            # and validation_hint should not be present
-            if result["validation_status"] == "VALIDATED":
-                assert "validation_hint" not in result, "VALIDATED responses should NOT include validation_hint"
+            # Unconditional assertion: valid META content MUST produce VALIDATED
+            assert (
+                result["validation_status"] == "VALIDATED"
+            ), f"Expected VALIDATED with valid META content, got: {result['validation_status']}"
+            assert "validation_hint" not in result, "VALIDATED responses should NOT include validation_hint"
 
     @pytest.mark.asyncio
     async def test_validation_hint_mentions_schema_parameter(self):

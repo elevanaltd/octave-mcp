@@ -41,9 +41,7 @@ class TestBareLineDroppedCorrectionCode:
             assert result["status"] == "success"
 
             # Must have a correction with code W_BARE_LINE_DROPPED
-            bare_corrections = [
-                c for c in result.get("corrections", []) if c.get("code") == "W_BARE_LINE_DROPPED"
-            ]
+            bare_corrections = [c for c in result.get("corrections", []) if c.get("code") == "W_BARE_LINE_DROPPED"]
             assert len(bare_corrections) == 1, (
                 f"Expected exactly 1 W_BARE_LINE_DROPPED correction, "
                 f"got {len(bare_corrections)}. Corrections: {result.get('corrections', [])}"
@@ -63,9 +61,7 @@ class TestBareLineDroppedCorrectionCode:
                 lenient=True,
             )
 
-            bare_corrections = [
-                c for c in result.get("corrections", []) if c.get("code") == "W_BARE_LINE_DROPPED"
-            ]
+            bare_corrections = [c for c in result.get("corrections", []) if c.get("code") == "W_BARE_LINE_DROPPED"]
             assert len(bare_corrections) == 1
 
             correction = bare_corrections[0]
@@ -86,18 +82,14 @@ class TestBareLineDroppedCorrectionCode:
                 lenient=True,
             )
 
-            bare_corrections = [
-                c for c in result.get("corrections", []) if c.get("code") == "W_BARE_LINE_DROPPED"
-            ]
+            bare_corrections = [c for c in result.get("corrections", []) if c.get("code") == "W_BARE_LINE_DROPPED"]
             assert len(bare_corrections) == 1
 
             correction = bare_corrections[0]
-            assert "login_spike" in correction.get("message", ""), (
-                "Correction message must include the dropped content"
-            )
-            assert correction.get("before") == "login_spike", (
-                "Correction 'before' field must contain the dropped bare line"
-            )
+            assert "login_spike" in correction.get("message", ""), "Correction message must include the dropped content"
+            assert (
+                correction.get("before") == "login_spike"
+            ), "Correction 'before' field must contain the dropped bare line"
 
     @pytest.mark.asyncio
     async def test_multiple_bare_lines_produce_multiple_corrections(self):
@@ -113,12 +105,9 @@ class TestBareLineDroppedCorrectionCode:
                 lenient=True,
             )
 
-            bare_corrections = [
-                c for c in result.get("corrections", []) if c.get("code") == "W_BARE_LINE_DROPPED"
-            ]
+            bare_corrections = [c for c in result.get("corrections", []) if c.get("code") == "W_BARE_LINE_DROPPED"]
             assert len(bare_corrections) == 2, (
-                f"Expected 2 W_BARE_LINE_DROPPED corrections for 2 bare lines, "
-                f"got {len(bare_corrections)}"
+                f"Expected 2 W_BARE_LINE_DROPPED corrections for 2 bare lines, " f"got {len(bare_corrections)}"
             )
 
 
@@ -166,8 +155,7 @@ class TestBareLineDroppedTopLevelWarnings:
 
             warning_codes = [w.get("code") for w in result["warnings"]]
             assert "W_BARE_LINE_DROPPED" in warning_codes, (
-                f"W_BARE_LINE_DROPPED must appear in top-level warnings. "
-                f"Got warnings: {result.get('warnings', [])}"
+                f"W_BARE_LINE_DROPPED must appear in top-level warnings. " f"Got warnings: {result.get('warnings', [])}"
             )
 
     @pytest.mark.asyncio
@@ -186,9 +174,7 @@ class TestBareLineDroppedTopLevelWarnings:
 
             assert result["status"] == "success"
             assert "warnings" in result
-            assert len(result["warnings"]) == 0, (
-                f"Expected empty warnings for clean content, got: {result['warnings']}"
-            )
+            assert len(result["warnings"]) == 0, f"Expected empty warnings for clean content, got: {result['warnings']}"
 
     @pytest.mark.asyncio
     async def test_warnings_array_present_in_strict_mode_too(self):
@@ -247,9 +233,11 @@ class TestBareLineDroppedTopLevelWarnings:
 
             assert result["status"] == "success"
             # Duplicate key is also data loss (safe=False, semantics_changed=True)
-            # It should appear in warnings array too
-            if any(c.get("code") == "W_DUPLICATE_KEY" for c in result.get("corrections", [])):
-                warning_codes = [w.get("code") for w in result.get("warnings", [])]
-                assert "W_DUPLICATE_KEY" in warning_codes, (
-                    "W_DUPLICATE_KEY data loss should also surface in warnings array"
-                )
+            # It MUST appear in both corrections and warnings arrays.
+            # GH#361r3: Unconditional assertion — if the correction disappears,
+            # the test must fail rather than silently pass.
+            assert any(
+                c.get("code") == "W_DUPLICATE_KEY" for c in result.get("corrections", [])
+            ), f"Expected W_DUPLICATE_KEY correction for duplicate keys, got: {result.get('corrections', [])}"
+            warning_codes = [w.get("code") for w in result.get("warnings", [])]
+            assert "W_DUPLICATE_KEY" in warning_codes, "W_DUPLICATE_KEY data loss should also surface in warnings array"

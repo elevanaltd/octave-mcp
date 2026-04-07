@@ -65,7 +65,8 @@ W_UNQUOTED_SECTION_IN_VALUE = "W_UNQUOTED_SECTION_IN_VALUE"
 W_BARE_LINE_DROPPED = "W_BARE_LINE_DROPPED"
 
 # GH#352: Guidance hint for UNVALIDATED status (I5)
-_VALIDATION_HINT_UNVALIDATED = "Pass schema='META' (or another schema name) to enable I5 schema validation."
+# GH#361r3: Base hint text; available schemas appended dynamically at runtime.
+_VALIDATION_HINT_BASE = "Pass schema='META' (or another schema name) to enable I5 schema validation."
 
 # Regex: line with KEY::  followed by § somewhere in the value portion.
 # Matches lines like  KEY::§2_BEHAVIOR  and  KEY::["§2_BEHAVIOR"]
@@ -1047,7 +1048,7 @@ class WriteTool(BaseTool):
             "diff_unified": "",
             "errors": errors,
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass - no schema validator yet
-            "validation_hint": _VALIDATION_HINT_UNVALIDATED,  # GH#352: guidance for agents
+            "validation_hint": self._build_validation_hint(),  # GH#352+361r3: guidance with available schemas
         }
 
     def get_name(self) -> str:
@@ -1271,6 +1272,21 @@ class WriteTool(BaseTool):
 
         return sorted(names)
 
+    def _build_validation_hint(self) -> str:
+        """Build UNVALIDATED hint including available schema names.
+
+        GH#361r3: Agents receiving UNVALIDATED status need to know which
+        schema names are valid so they can self-correct. Appends the
+        available schemas list to the base hint text.
+
+        Returns:
+            Hint string with available schemas enumerated.
+        """
+        schemas = self._list_available_schemas()
+        if schemas:
+            return f"{_VALIDATION_HINT_BASE} Available schemas: {', '.join(schemas)}"
+        return _VALIDATION_HINT_BASE
+
     def _track_corrections(
         self, original: str, canonical: str, tokenize_repairs: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
@@ -1478,6 +1494,26 @@ class WriteTool(BaseTool):
                     }
                 ]
             )
+
+        # GH#361r3: Reject changes targeting Block children (I3 - Mirror Constraint).
+        # Section-path changes only support Assignment children. If the child_key
+        # resolves to a Block node, reject with an error rather than silently
+        # no-opping (delete) or appending a sibling Assignment (set).
+        for child in section.children:
+            if isinstance(child, Block) and child.key == child_key:
+                raise ValueError(
+                    [
+                        {
+                            "code": "E_BLOCK_TARGET",
+                            "message": (
+                                f"Cannot modify '{child_key}' in §{section_id} via section-path: "
+                                f"it is a Block (nested structure), not an Assignment. "
+                                f"Use content= to rewrite the section, or target individual "
+                                f"keys within the block."
+                            ),
+                        }
+                    ]
+                )
 
         if _is_delete_sentinel(new_value):
             # I2: DELETE sentinel - remove child from section
@@ -1732,7 +1768,7 @@ class WriteTool(BaseTool):
             "diff_unified": "",
             "errors": [],
             "validation_status": "UNVALIDATED",  # I5: Explicit bypass until validated
-            "validation_hint": _VALIDATION_HINT_UNVALIDATED,  # GH#352: guidance for agents
+            "validation_hint": self._build_validation_hint(),  # GH#352+361r3: guidance with available schemas
         }
 
         # STEP 1: Validate path
