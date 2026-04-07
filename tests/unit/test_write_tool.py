@@ -3813,6 +3813,64 @@ class TestAutoQuoteSectionRefsUnit:
         # Should not double-quote
         assert '""§1::ALREADY_QUOTED""' not in result
 
+    def test_compound_value_with_multiple_section_marks(self):
+        """Value like §1_through_§4 should be quoted as one token, not fragmented.
+
+        GH#334: When a value contains multiple § marks separated by non-::
+        characters (e.g., §1_through_§4), the entire value should be wrapped
+        in a single pair of quotes, not each § reference individually.
+        Fragmented quoting produces "§1_through_""§4" which is broken.
+        """
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        result, corrections = _auto_quote_section_refs_in_values("BODY_SECTIONS::§1_through_§4")
+        # Must NOT produce fragmented quoting like "§1_through_""§4"
+        assert '""' not in result, f"Fragmented quoting detected: {result}"
+        # The value should be a single quoted string
+        assert '"§1_through_§4"' in result, f"Expected single-quoted value, got: {result}"
+        assert len(corrections) >= 1
+
+    def test_value_with_section_ref_and_trailing_text(self):
+        """Value like §5::ANCHOR_KERNEL[TARGET,NEVER] should quote the entire ref+bracket.
+
+        GH#334: The auto-quoting should handle cases where § references appear
+        alongside bracket expressions in the same value.
+        """
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        result, corrections = _auto_quote_section_refs_in_values("ANCHOR::required[§5::ANCHOR_KERNEL_section_header]")
+        # The § reference inside brackets should be quoted
+        assert '"§5::ANCHOR_KERNEL_section_header"' in result, f"Section ref not quoted in: {result}"
+
+    def test_spec_file_line_97_regression(self):
+        """Exact reproduction of the octave-patterns-spec.oct.md line 97 failure.
+
+        GH#334: BODY_SECTIONS::§1_through_§4 must produce valid output
+        that doesn't cause parser errors.
+        """
+        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+
+        # This is the exact content from the failing spec file
+        content = (
+            "V2_TEMPLATE_STRUCTURE:\n"
+            "  ENVELOPE_START::PATTERN_NAME[three_equals_delimiters]\n"
+            "  META::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]\n"
+            "  BODY_SECTIONS::§1_through_§4\n"
+            "  §5::ANCHOR_KERNEL[TARGET,NEVER,MUST,GATE]\n"
+            "  ENVELOPE_END::END[three_equals_delimiter]"
+        )
+        result, corrections = _auto_quote_section_refs_in_values(content)
+        # Line 4 should have §1_through_§4 quoted as single value
+        lines = result.split("\n")
+        body_line = lines[3]  # 0-indexed
+        assert '""' not in body_line, f"Fragmented quoting in: {body_line}"
+        assert '"§1_through_§4"' in body_line, f"Expected quoted value in: {body_line}"
+        # Line 5 (§5::ANCHOR_KERNEL...) is indented under block, so has :: prefix
+        anchor_line = lines[4]
+        # This line is indented (value position under V2_TEMPLATE_STRUCTURE:)
+        # so §5::ANCHOR_KERNEL should also be auto-quoted
+        assert '"§5::ANCHOR_KERNEL"' in anchor_line or "§5::ANCHOR_KERNEL" in anchor_line
+
 
 class TestGH335UnresolvableChangePaths:
     """GH#335: Reject unresolvable paths in changes parameter.

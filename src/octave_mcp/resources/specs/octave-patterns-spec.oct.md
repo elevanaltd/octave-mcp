@@ -10,7 +10,7 @@ META:
 
   CONTRACT::PATTERN_DEFINITION[
     PRINCIPLE::"Patterns encode reusable decision logic for consistent agent behavior",
-    MECHANISM::[OCTAVE_ENVELOPE[META, BODY, §5::ANCHOR_KERNEL]],
+    MECHANISM::[OCTAVE_ENVELOPE[META, BODY, "§5::ANCHOR_KERNEL"]],
     DISTINCTION::"Skills define WHAT agents do; Patterns define HOW agents decide"
   ]
 
@@ -20,16 +20,16 @@ META:
 // v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec, chassis-profile awareness.
 
 §1::PATTERN_DOCUMENT_STRUCTURE
-ENVELOPE::PATTERN_NAME[META,body,§5::ANCHOR_KERNEL,END]
+ENVELOPE::PATTERN_NAME[META,body,"§5::ANCHOR_KERNEL",END]
 ENVELOPE_FORMAT::"Three-equals delimiters: ===PATTERN_NAME=== and ===END==="
 META_REQUIRED::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
 META_OPTIONAL::[REPLACES,TIER,SPEC_REFERENCE]
 BODY::octave_syntax[L1-L4_support]
-ANCHOR_KERNEL::required_for_auto_loading[§5::ANCHOR_KERNEL_section_header]
+ANCHOR_KERNEL::required_for_auto_loading["§5::ANCHOR_KERNEL_section_header"]
 
 REQUIRED_V2::[
   octave_envelope::required_for_parsing,
-  anchor_kernel::required_for_anchor_injection[§5::ANCHOR_KERNEL],
+  anchor_kernel::required_for_anchor_injection["§5::ANCHOR_KERNEL"],
   no_yaml_frontmatter::patterns_are_not_discoverable_skills,
   no_markdown_headers::prevent_parser_errors
 ]
@@ -62,7 +62,7 @@ ANCHOR_KERNEL_STRUCTURE::[
   GATE::"quality check question before application"
 ]
 
-SYNTAX::must_use_§5::ANCHOR_KERNEL[strict_section_header]
+SYNTAX::"must_use_§5::ANCHOR_KERNEL"[strict_section_header]
 PLACEMENT::before_final_END_of_pattern_envelope
 
 §4::SIZE_CONSTRAINTS
@@ -76,7 +76,7 @@ OVERFLOW_STRATEGY::[if_pattern_exceeds_limit→consider_splitting_or_promoting_t
 VALIDATION_RULES:
   META_REQUIRED::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
   ENVELOPE::PATTERN_NAME[must_match_filename]
-  ANCHOR_KERNEL::required[§5::ANCHOR_KERNEL_section_header]
+  ANCHOR_KERNEL::required["§5::ANCHOR_KERNEL_section_header"]
   SYNTAX::passes_octave_validation
   SIZE::under_constraint_limits
 
@@ -94,7 +94,7 @@ VALIDATION_ERRORS::[
 V2_TEMPLATE_STRUCTURE:
   ENVELOPE_START::PATTERN_NAME[three_equals_delimiters]
   META::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
-  BODY_SECTIONS::§1_through_§4
+  BODY_SECTIONS::"§1_through_§4"
   §5::ANCHOR_KERNEL[TARGET,NEVER,MUST,GATE]
   ENVELOPE_END::END[three_equals_delimiter]
 
@@ -132,7 +132,7 @@ TDD_DISCIPLINE_SUMMARY:
 LOADING_CONTEXTS::[
   CHASSIS::pattern_always_loaded_full_body[invariant_to_profile],
   PROFILE_PATTERNS::pattern_loaded_full_body_when_profile_active,
-  PROFILE_KERNEL_ONLY::§5::ANCHOR_KERNEL_extracted_only[awareness_without_procedural_weight]
+  PROFILE_KERNEL_ONLY::"§5::ANCHOR_KERNEL_extracted_only"[awareness_without_procedural_weight]
 ]
 
 // Example: In an agent definition with chassis-profile structure:
@@ -183,7 +183,7 @@ PATTERNS_COMPARED_TO_SKILLS:
 
 V1_MIGRATION::[
   META_TYPE::LLM_PROFILE→PATTERN_DEFINITION,
-  ANCHOR_KERNEL::§ANCHOR_KERNEL→§5::ANCHOR_KERNEL[section_header],
+  ANCHOR_KERNEL::"§ANCHOR_KERNEL→§5::ANCHOR_KERNEL"[section_header],
   KERNEL_TERMINATOR::END_KERNEL→not_needed[section_header_self_terminates]
 ]
 

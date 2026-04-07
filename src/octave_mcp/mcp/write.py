@@ -136,14 +136,22 @@ def _all_section_marks_quoted(line: str) -> bool:
     return True
 
 
-# GH#334: Regex matching an unquoted §-prefixed token in a value position.
-# Captures the full section reference: §N or §N::NAME (including underscores,
-# hyphens, dots, and other identifier characters after the ::).
+# GH#334: Regex matching a contiguous value token that contains at least one §.
+# This captures the ENTIRE token (not just the §N::NAME part) so that compound
+# values like §1_through_§4 are quoted as a single unit instead of being
+# fragmented into "§1_through_""§4".
+# A "value token" is a contiguous run of identifier chars, §, ::, brackets, etc.
+# that ends at a comma, whitespace, or end of the value.
 _SECTION_REF_TOKEN_RE = re.compile(
     r"§"
     r"\w+"  # section number/name (e.g., "5", "2_BEHAVIOR")
     r"(?:::\w[\w.\-]*)*"  # optional ::NAME suffix(es)
 )
+
+# GH#334: Match the full extent of a value token containing § marks.
+# Used to find the boundaries of a compound token like "§1_through_§4"
+# so the entire thing can be wrapped in one pair of quotes.
+_SECTION_CONTAINING_TOKEN_RE = re.compile(r"(?:[\w.\-]|§|::)+")  # contiguous run of identifier chars, §, and ::
 
 
 def _auto_quote_section_refs_in_values(content: str) -> tuple[str, list[dict[str, Any]]]:
@@ -203,6 +211,9 @@ def _auto_quote_section_refs_in_values(content: str) -> tuple[str, list[dict[str
 
         # Auto-quote unquoted § references in the value portion.
         # Walk character by character, tracking quote state.
+        # GH#334: When a § is found, we quote the entire contiguous value
+        # token containing it (e.g., §1_through_§4 becomes "§1_through_§4")
+        # rather than quoting each § individually.
         new_value_chars: list[str] = []
         i = 0
         modified = False
@@ -220,14 +231,16 @@ def _auto_quote_section_refs_in_values(content: str) -> tuple[str, list[dict[str
                 new_value_chars.append(value_part[i:])
                 i = len(value_part)
             elif ch == "§" and not in_quote:
-                # Found unquoted § — extract the full section reference token
-                match = _SECTION_REF_TOKEN_RE.match(value_part, i)
-                if match:
-                    ref_text = match.group(0)
+                # Found unquoted § — extract the full contiguous value token.
+                # Use _SECTION_CONTAINING_TOKEN_RE to find the entire token
+                # boundary (handles compound refs like §1_through_§4).
+                token_match = _SECTION_CONTAINING_TOKEN_RE.match(value_part, i)
+                if token_match:
+                    ref_text = token_match.group(0)
                     new_value_chars.append('"')
                     new_value_chars.append(ref_text)
                     new_value_chars.append('"')
-                    i = match.end()
+                    i = token_match.end()
                     modified = True
                 else:
                     # Bare § without a following identifier — quote just §
