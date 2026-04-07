@@ -690,6 +690,48 @@ def _check_invalid_envelope(content: str, pos: int, line: int, column: int) -> L
     if _VALID_ENVELOPE_ID_PATTERN.match(identifier):
         return None
 
+    # Check for malformed typed identifiers (colon-aware diagnostics)
+    if ":" in identifier:
+        # Typed identifier attempted but malformed
+        segments = identifier.split(":")
+        if segments[0] == "":
+            return LexerError(
+                f"Envelope identifier '{identifier}' has a leading colon. "
+                "Typed identifiers use TYPE:NAME format (e.g., ===PATTERN:MY_PATTERN===).",
+                line,
+                column,
+                "E_INVALID_ENVELOPE_ID",
+            )
+        if segments[-1] == "":
+            return LexerError(
+                f"Envelope identifier '{identifier}' has a trailing colon. "
+                "Typed identifiers use TYPE:NAME format (e.g., ===PATTERN:MY_PATTERN===).",
+                line,
+                column,
+                "E_INVALID_ENVELOPE_ID",
+            )
+        empty_segments = [i for i, s in enumerate(segments) if s == ""]
+        if empty_segments:
+            return LexerError(
+                f"Envelope identifier '{identifier}' has empty segment(s) between colons. "
+                "Each segment must be a valid identifier (e.g., ===TYPE:NAME===).",
+                line,
+                column,
+                "E_INVALID_ENVELOPE_ID",
+            )
+        # Check each segment individually
+        segment_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+        for seg in segments:
+            if not segment_re.match(seg):
+                return LexerError(
+                    f"Envelope identifier '{identifier}' has invalid segment '{seg}'. "
+                    "Each segment must start with a letter or underscore and contain only "
+                    "letters, digits, and underscores.",
+                    line,
+                    column,
+                    "E_INVALID_ENVELOPE_ID",
+                )
+
     # Find the first invalid character
     first_invalid_char = None
     first_invalid_pos = 0

@@ -317,6 +317,24 @@ class TestEnvelopeIdentifierErrors:
             tokenize("===NAME::OTHER===")
         assert exc_info.value.error_code == "E_INVALID_ENVELOPE_ID"
 
+    # GH#362: Colon-aware error message diagnostics
+
+    def test_typed_envelope_trailing_colon_error_message(self):
+        """Should mention 'trailing colon' in error for ===NAME:===, not 'invalid character'."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===NAME:===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "trailing colon" in error.message.lower()
+
+    def test_typed_envelope_empty_segment_error_message(self):
+        """Should mention 'empty segment' in error for ===NAME::OTHER===, not 'invalid character'."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===NAME::OTHER===")
+        error = exc_info.value
+        assert error.error_code == "E_INVALID_ENVELOPE_ID"
+        assert "empty segment" in error.message.lower()
+
 
 class TestStringTokenization:
     """Test string literal handling."""

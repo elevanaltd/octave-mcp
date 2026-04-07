@@ -82,7 +82,7 @@ VALIDATION_RULES:
 
 VALIDATION_ERRORS::[
   MISSING_ANCHOR_KERNEL::"Pattern requires §5::ANCHOR_KERNEL for anchor injection",
-  MALFORMED_ENVELOPE::"Pattern envelope must be NAME or TYPE:NAME in three-equals delimiters",
+  MALFORMED_ENVELOPE::"Pattern envelope must be NAME or colon-separated segments (TYPE:NAME, A:B:C) in three-equals delimiters",
   EXCEEDS_SIZE_LIMIT::"Pattern exceeds 150 lines - consider splitting"
 ]
 
