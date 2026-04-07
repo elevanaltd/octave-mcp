@@ -4550,6 +4550,44 @@ META:
             assert "new" in content
 
     @pytest.mark.asyncio
+    async def test_section_path_with_uppercase_suffix_id(self):
+        """§12A.KEY should resolve sections with uppercase suffix IDs like 12A.
+
+        CodeRabbit finding on PR#361: _SECTION_PATH_RE used [a-z]? which
+        rejected uppercase suffixes. The OCTAVE spec uses uppercase suffixes
+        (e.g., §12A::UNKNOWN_FIELDS_POLICY in octave-mcp-architecture.oct.md).
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§12A::UNKNOWN_FIELDS_POLICY
+  MODE::strict
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§12A.MODE": "lenient"},
+            )
+
+            assert (
+                result["status"] == "success"
+            ), f"§12A.MODE should be resolvable (uppercase suffix), got: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "lenient" in content
+
+    @pytest.mark.asyncio
     async def test_section_path_mixed_with_top_level_changes(self):
         """Section paths and top-level keys can coexist in the same changes dict."""
         from octave_mcp.mcp.write import WriteTool

@@ -478,7 +478,7 @@ _ARRAY_INDEX_RE = re.compile(r"\[\d+\]")
 # The section name in ::NAME allows dots (for names like v2.0) but the child key does NOT,
 # since dots in the child position indicate hierarchical path traversal which is unsupported.
 _SECTION_PATH_RE = re.compile(
-    r"^§([0-9]+[a-z]?(?:\.[0-9]+)?)"  # §<id>: digits + optional letter suffix + optional .N
+    r"^§([0-9]+[a-zA-Z]?(?:\.[0-9]+)?)"  # §<id>: digits + optional letter suffix + optional .N
     r"(?:::([A-Za-z_][A-Za-z0-9_/\-]*))?"  # optional ::NAME (no dots in name)
     r"\.([A-Za-z_][A-Za-z0-9_/\-]*)$"  # .KEY (required child key, no dots)
 )
