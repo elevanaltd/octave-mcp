@@ -128,8 +128,12 @@ class TestGrammarResourceReading:
         assert "::=" in content.text, "GBNF grammar should contain ::= rules"
 
     @pytest.mark.asyncio
-    async def test_read_unknown_grammar_returns_error(self, server):
-        """Reading a non-existent grammar resource raises an error."""
+    async def test_read_unknown_grammar_returns_error_content(self, server):
+        """Reading a non-existent grammar resource returns error content (GH#361r6).
+
+        Previously raised ValueError; now catches compilation errors and returns
+        error content to avoid crashing the MCP resource handler.
+        """
         from mcp.types import ReadResourceRequest
 
         request = ReadResourceRequest(
@@ -138,8 +142,12 @@ class TestGrammarResourceReading:
         )
         handler = server.request_handlers.get(ReadResourceRequest)
 
-        with pytest.raises(ValueError, match="not found"):
-            await handler(request)
+        result = await handler(request)
+        contents = result.root.contents
+        assert len(contents) == 1
+        content_text = contents[0].text
+        assert "Error" in content_text or "error" in content_text
+        assert "NONEXISTENT_SCHEMA_XYZ" in content_text
 
     @pytest.mark.asyncio
     async def test_read_non_grammar_uri_raises_error(self, server):

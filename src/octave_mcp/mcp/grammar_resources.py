@@ -134,10 +134,11 @@ class GrammarResourceProvider:
             uri: The resource URI (e.g., octave://grammars/META).
 
         Returns:
-            List with a single ReadResourceContents containing the grammar.
+            List with a single ReadResourceContents containing the grammar,
+            or error content if compilation fails.
 
         Raises:
-            ValueError: If the URI is not a grammar URI or schema not found.
+            ValueError: If the URI is not a grammar URI or schema name is empty.
         """
         uri_str = str(uri)
 
@@ -148,7 +149,26 @@ class GrammarResourceProvider:
         if not schema_name:
             raise ValueError("Schema name is required in URI")
 
-        grammar = self._compile_grammar(schema_name)
+        # GH#361r6: Catch compilation errors (ValueError, RuntimeError) from
+        # compile_schema and return error content instead of crashing the
+        # MCP resource handler.
+        try:
+            grammar = self._compile_grammar(schema_name)
+        except (ValueError, RuntimeError, Exception) as exc:
+            logger.error(f"Grammar compilation failed for schema '{schema_name}': {exc}")
+            error_content = (
+                f"# Error: Grammar compilation failed for schema '{schema_name}'\n"
+                f"# {type(exc).__name__}: {exc}\n"
+                f"#\n"
+                f"# The schema may have invalid constraint patterns or be malformed.\n"
+                f"# Use octave_compile_grammar tool for detailed error diagnostics.\n"
+            )
+            return [
+                ReadResourceContents(
+                    content=error_content,
+                    mime_type="text/plain",
+                )
+            ]
 
         return [
             ReadResourceContents(

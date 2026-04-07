@@ -921,6 +921,11 @@ class Parser:
                 # silent data loss (I4 violation). Numeric keys are consumed
                 # and warnings emitted for recovery.
                 if self._try_consume_numeric_key():
+                    # GH#361r4: Flush pending comments as children before
+                    # resetting. Silently discarding comments violates I4
+                    # (Transform Auditability).
+                    for comment_text in pending_comments:
+                        children.append(Comment(text=comment_text))
                     pending_comments = []
                     current_line_indent = 0
                     continue
@@ -998,7 +1003,7 @@ class Parser:
                     "type": "lenient_parse",
                     "subtype": "numeric_key_dropped",
                     "key": key_str,
-                    "value": value,
+                    "value": value_str,
                     "line": key_token.line,
                     "column": key_token.column,
                     "message": (
@@ -1213,6 +1218,11 @@ class Parser:
                     # silent data loss (I4 violation). Numeric keys are consumed
                     # and warnings emitted for recovery.
                     if self._try_consume_numeric_key():
+                        # GH#361r4: Flush pending comments as children before
+                        # resetting. Silently discarding comments violates I4
+                        # (Transform Auditability).
+                        for comment_text in pending_comments:
+                            children.append(Comment(text=comment_text))
                         pending_comments = []
                         current_line_indent = 0
                         continue
@@ -2662,7 +2672,11 @@ def parse_meta_only(content: str) -> dict[str, Any]:
     return {}
 
 
-def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict]]:
+def parse_with_warnings(
+    content: str | list[Token],
+    *,
+    strict_structure: bool = False,
+) -> tuple[Document, list[dict]]:
     """Parse OCTAVE content into AST with I4 audit trail.
 
     Returns both the parsed document and any warnings generated during
@@ -2674,6 +2688,9 @@ def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict
 
     Args:
         content: Raw OCTAVE text (lenient or canonical) or list of tokens
+        strict_structure: If True, raise ParserError on structural issues
+            (e.g., unclosed lists, nested inline maps) instead of leniently
+            recovering. Use True when lenient=False in write mode (GH#361r3).
 
     Returns:
         Tuple of (Document AST, list of warning dicts)
@@ -2688,7 +2705,8 @@ def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict
         }
 
     Raises:
-        ParserError: On syntax errors
+        ParserError: On syntax errors (always), or structural issues
+            when strict_structure=True
     """
     raw_frontmatter: str | None = None
 
@@ -2700,7 +2718,7 @@ def parse_with_warnings(content: str | list[Token]) -> tuple[Document, list[dict
         tokens = content
         lexer_repairs = []
 
-    parser = Parser(tokens)
+    parser = Parser(tokens, strict_structure=strict_structure)
     doc = parser.parse_document()
 
     # Preserve frontmatter in Document AST for I4 auditability

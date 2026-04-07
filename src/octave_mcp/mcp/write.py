@@ -115,6 +115,9 @@ def _all_section_marks_quoted(line: str) -> bool:
     each unescaped ``"``.  Any ``§`` encountered while ``in_quote`` is False
     means at least one section mark is unquoted, so we return False.
 
+    GH#361r1: Escaped quotes (``\\"``) do NOT toggle the ``in_quote`` state.
+    A preceding backslash means the quote is escaped and should be skipped.
+
     When ``//`` is encountered outside quotes, scanning stops because
     everything after is an OCTAVE comment (GH#329r3).
 
@@ -123,16 +126,20 @@ def _all_section_marks_quoted(line: str) -> bool:
     the § is properly quoted inside brackets.
     """
     in_quote = False
-    prev_ch = ""
-    for ch in line:
+    i = 0
+    length = len(line)
+    while i < length:
+        ch = line[i]
         if ch == '"':
-            in_quote = not in_quote
-        elif ch == "/" and prev_ch == "/" and not in_quote:
+            # GH#361r1: Only toggle if NOT preceded by backslash (escape).
+            if i == 0 or line[i - 1] != "\\":
+                in_quote = not in_quote
+        elif ch == "/" and i > 0 and line[i - 1] == "/" and not in_quote:
             # GH#329r3: "//" outside quotes starts a comment; stop scanning.
             return True
         elif ch == "§" and not in_quote:
             return False
-        prev_ch = ch
+        i += 1
     return True
 
 
@@ -1972,7 +1979,10 @@ class WriteTool(BaseTool):
                     # GH#348: Use parse_with_warnings even in strict mode to
                     # capture I4 audit warnings (e.g., W_NUMERIC_KEY_DROPPED).
                     # Silent data loss must be reported regardless of mode.
-                    doc, strict_parse_warnings = parse_with_warnings(parse_input)
+                    # GH#361r3: Pass strict_structure=True so structural issues
+                    # (unclosed lists, nested inline maps) raise ParserError
+                    # instead of being silently recovered.
+                    doc, strict_parse_warnings = parse_with_warnings(parse_input, strict_structure=True)
                     corrections.extend(self._map_parse_warnings_to_corrections(strict_parse_warnings))
                 except Exception as e:
                     # GH#334: Start from existing corrections (includes auto-quoting).
@@ -2045,15 +2055,9 @@ class WriteTool(BaseTool):
 
         result["corrections"] = corrections
 
-        # GH#349: Surface data-loss corrections as top-level warnings (I4).
-        # Agents can detect data loss by checking result["warnings"] without
-        # parsing corrections internals. Any correction with safe=False
-        # indicates data loss and is promoted to the warnings array.
-        result["warnings"] = [
-            {"code": c["code"], "message": c["message"], "line": c.get("line", 0)}
-            for c in corrections
-            if c.get("safe") is False
-        ]
+        # GH#361r5: warnings generation moved AFTER schema repair logic below.
+        # Previously built here, but schema repairs can append safe=False
+        # corrections that would be excluded from the warnings array.
 
         # GH#287 Decision 6: Confirmation echo — show SOURCE→STRICT compilations
         # When lenient parsing produces corrections, build a compilations list
@@ -2269,6 +2273,18 @@ class WriteTool(BaseTool):
                 # GH#355: Schema not found - remain UNVALIDATED but list available schemas
                 # I5 (Schema Sovereignty): make available options visible so agents can self-correct
                 result["available_schemas"] = self._list_available_schemas()
+
+        # GH#349 + GH#361r5: Surface data-loss corrections as top-level warnings (I4).
+        # Agents can detect data loss by checking result["warnings"] without
+        # parsing corrections internals. Any correction with safe=False
+        # indicates data loss and is promoted to the warnings array.
+        # IMPORTANT: This MUST run AFTER schema repair logic above, which may
+        # append additional safe=False corrections to result["corrections"].
+        result["warnings"] = [
+            {"code": c["code"], "message": c["message"], "line": c.get("line", 0)}
+            for c in result["corrections"]
+            if c.get("safe") is False
+        ]
 
         # I4 (Transform Auditability): record the mode in the response envelope
         if normalize_mode:
