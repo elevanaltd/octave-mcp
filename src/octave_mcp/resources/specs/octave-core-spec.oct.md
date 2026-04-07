@@ -47,6 +47,9 @@ META:
 §1::ENVELOPE
 FILE_EXTENSION::.oct.md[canonical][.octave.txt_deprecated]
 START::===NAME===[first_line,exact_match]
+// NAME allows typed identifiers with colon separator: ===TYPE:NAME===
+// Both segments follow identifier rules: [A-Za-z_][A-Za-z0-9_]*
+// Examples: ===MY_DOC===, ===PATTERN:MIP_BUILD===, ===SKILL:MY_SKILL===
 META::required[TYPE,VERSION][immediately_after_start]
 META_OPTIONAL::[CONTRACT,GRAMMAR][v6_holographic_contracts]
 SEPARATOR::---[optional_for_discovery,signals_metadata_boundary]

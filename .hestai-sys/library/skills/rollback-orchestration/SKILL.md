@@ -52,7 +52,7 @@ NEVER::[
   rollback_without_data_integrity_check
 ]
 
-ESCALATION::[irreversible_migration_detected→technical-architect]
+ESCALATION::irreversible_migration_detected→technical-architect
 
 §5::ANCHOR_KERNEL
 TARGET::tested_rollback_plan_for_every_deployment

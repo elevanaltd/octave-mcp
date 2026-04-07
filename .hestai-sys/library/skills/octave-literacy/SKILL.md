@@ -51,7 +51,7 @@ META:
   ⇌::Tension A⇌B (binary opposition) (precedence 4) | ASCII: vs [requires word boundaries]
   ∧::Constraint [A∧B∧C] (precedence 5) | ASCII: &
   ∨::Alternative A∨B (precedence 6) | ASCII: |
-  →::Flow [A→B→C] (precedence 7, right-associative) | ASCII: ->
+  →::Flow A→B→C (precedence 7, right-associative) | ASCII: ->
 
   // PREFIX/SPECIAL
   §::Target (→§DECISION_LOG)
@@ -85,7 +85,7 @@ META:
   §3c::ASSEMBLY_RULES
     WHEN_CONCATENATING_PROFILES::omit_intermediate_===END===[only_final_===END===_terminates]
     USE_CASES::[agent_context_injection,specification_layering,multi_part_documents]
-    EXAMPLE::[core_profile⊕schema_profile→single_===END===_at_finish]
+    EXAMPLE::core_profile⊕schema_profile→single_===END===_at_finish
     V6_PATTERN::multiple_profiles_one_document[no_intermediate_terminators]
 
 §4::EXAMPLE_BLOCK

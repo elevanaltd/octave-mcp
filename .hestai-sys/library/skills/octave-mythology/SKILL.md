@@ -95,10 +95,10 @@ META:
 
   FORCE_TRACKING:
     // Use for temporal/emotional dynamics
-    RISK::[HUBRIS→NEMESIS[overconfidence_heading_toward_consequence]]
+    RISK::HUBRIS→NEMESIS[overconfidence_heading_toward_consequence]
     OPPORTUNITY::KAIROS_WINDOW[critical_timing_moment]
     PRESSURE::CHRONOS_DEADLINE[time_urgency]
-    STABILITY::[CHAOS→COSMOS[degradation_then_recovery]]
+    STABILITY::CHAOS→COSMOS[degradation_then_recovery]
 
 §6::AGENT_COMMUNICATION_PATTERNS
   // Real-world examples of mythology in action — for states and dynamics
@@ -106,7 +106,7 @@ META:
   SYSTEM_STATE::
     HEALTH::[GREEN→YELLOW→ICARIAN]
     RISK::PANDORAN_CASCADE
-    FORCE::[HUBRIS→NEMESIS]
+    FORCE::HUBRIS→NEMESIS
     INTERVENTION::"REQUIRED at KAIROS"
 
   ERROR_PROPAGATION::

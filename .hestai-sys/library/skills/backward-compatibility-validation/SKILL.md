@@ -50,7 +50,7 @@ NEVER::[
   mismatch_semver_with_change_type
 ]
 
-ESCALATION::[external_consumer_impact→technical-architect]
+ESCALATION::external_consumer_impact→technical-architect
 
 §5::ANCHOR_KERNEL
 TARGET::prevent_unintended_breaking_changes_with_migration_paths

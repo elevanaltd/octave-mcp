@@ -19,10 +19,10 @@ META:
     WALL::ETHOS["Yes, but..."|grounding|critical|reality_testing],
     DOOR::LOGOS["Therefore..."|synthesizing|decisive|actionable_truth]
   ]
-  DYNAMIC::[WIND⇌WALL→DOOR[tension_produces_emergence]]
+  DYNAMIC::WIND⇌WALL→DOOR[tension_produces_emergence]
 
 §2::WORKFLOW
-  SEQUENCE::[INIT→TURN→GET→CLOSE]
+  SEQUENCE::INIT→TURN→GET→CLOSE
   TOOLS::[
     init_debate(thread_id,topic,mode?,max_turns?,max_rounds?,strict_cognition?),
     add_turn(thread_id,role,content,cognition?,agent_role?,model?),
@@ -60,7 +60,7 @@ META:
 
 §4::MODES
   FIXED::[
-    SEQUENCE::[Wind→Wall→Door→repeat],
+    SEQUENCE::Wind→Wall→Door→repeat,
     USE_FOR::[structured_decisions,guaranteed_coverage,standard_debates]
   ]
   MEDIATED::[
@@ -120,7 +120,7 @@ META:
     INNOVATION::ideator+validator+synthesizer,
     ARCHITECTURE::ideator+critical-engineer+holistic-orchestrator
   ]
-  MAPPING::[specialists→cognition_role[PATHOS→Wind,ETHOS→Wall,LOGOS→Door]]
+  MAPPING::specialists→cognition_role[PATHOS→Wind,ETHOS→Wall,LOGOS→Door]
 
 §6::RECIPES
   // Pre-defined configurations for common scenarios
@@ -134,7 +134,7 @@ META:
 §7::PATTERNS
   FLASH_DEBATE::[
     PURPOSE::"Quick 3-turn decision cycle",
-    SEQUENCE::[init→wind_turn→wall_turn→door_turn→close],
+    SEQUENCE::init→wind_turn→wall_turn→door_turn→close,
     CONSTRAINT::"Server orchestrates state, caller supplies content"
   ]
   SOCRATIC::[
@@ -171,7 +171,7 @@ META:
   INTEGRATION::[
     IF::complexity_trigger_detected,
     THEN::init_debate(thread_id:"ho-{task}-{ts}",topic:decision_point,mode:"mediated"),
-    RUN::[Wind→Wall→Door_cycle],
+    RUN::Wind→Wall→Door_cycle,
     APPLY::synthesis_to_task
   ]
 

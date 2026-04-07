@@ -61,7 +61,7 @@ META:
     DOMAIN::{mythological_atom}
     CORE::[fact1, fact2, fact3]
     CONSTRAINT::NEVER[{forbidden_action}]
-    FLOW::[A→B→C]
+    FLOW::A→B→C
 
 §4::EXAMPLE_TRANSFORMATION
   INPUT::

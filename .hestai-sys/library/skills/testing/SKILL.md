@@ -19,7 +19,7 @@ META:
   BEHAVIOR::@pytest.mark.behavior["NOW: Real behavioral tests"]
   CONTRACT::@pytest.mark.contract["SOON: Integration contract tests"]
   INTEGRATION::@pytest.mark.integration["LATER: Full integration tests"]
-  PROGRESSION::[smoke→behavior→contract→integration]
+  PROGRESSION::smoke→behavior→contract→integration
 
 §2::TEST_STRUCTURE
   LAYOUT::[

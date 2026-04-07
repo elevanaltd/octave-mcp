@@ -51,7 +51,7 @@ NEVER::[
   mock_everything_in_e2e<defeats_purpose>
 ]
 
-ESCALATION::[test_infrastructure_gaps→implementation-lead]
+ESCALATION::test_infrastructure_gaps→implementation-lead
 
 §5::ANCHOR_KERNEL
 TARGET::e2e_validation_proving_cross_component_user_outcomes

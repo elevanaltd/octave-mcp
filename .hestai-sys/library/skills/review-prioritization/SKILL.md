@@ -28,7 +28,7 @@ DEFAULT::PR_REVIEW
 
 §4::OUTPUT
 SUMMARY::include_tier_distribution["P0:N P1:N P2:N P3:N P4:N P5:N"]
-STRUCTURE::[P0_P1_first→P2_P4_next→P5_last]
+STRUCTURE::P0_P1_first→P2_P4_next→P5_last
 // PR metadata fields (priority_distribution, findings_omitted) defined in review-handoff pattern
 
 §5::ANCHOR_KERNEL

@@ -57,7 +57,7 @@ NEVER::[
   bypass_phase_gate_verification
 ]
 
-ESCALATION::[architecture_disputes→technical-architect]
+ESCALATION::architecture_disputes→technical-architect
 
 §5::ANCHOR_KERNEL
 TARGET::correct_component_integration_through_systematic_interface_verification

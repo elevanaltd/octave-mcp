@@ -20,8 +20,8 @@ META:
 // v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec, chassis-profile awareness.
 
 §1::PATTERN_DOCUMENT_STRUCTURE
-ENVELOPE::PATTERN_NAME[META,body,"§5::ANCHOR_KERNEL",END]
-ENVELOPE_FORMAT::"Three-equals delimiters: ===PATTERN_NAME=== and ===END==="
+ENVELOPE::NAME_or_TYPE_colon_NAME[META,body,"§5::ANCHOR_KERNEL",END]
+ENVELOPE_FORMAT::"Three-equals delimiters: ===PATTERN_NAME=== or ===PATTERN:NAME=== and ===END==="
 META_REQUIRED::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
 META_OPTIONAL::[REPLACES,TIER,SPEC_REFERENCE]
 BODY::octave_syntax[L1-L4_support]
@@ -75,14 +75,14 @@ OVERFLOW_STRATEGY::[if_pattern_exceeds_limit→consider_splitting_or_promoting_t
 
 VALIDATION_RULES:
   META_REQUIRED::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
-  ENVELOPE::PATTERN_NAME[must_match_filename]
+  ENVELOPE::PATTERN_NAME_or_PATTERN_colon_NAME[must_match_filename]
   ANCHOR_KERNEL::required["§5::ANCHOR_KERNEL_section_header"]
   SYNTAX::passes_octave_validation
   SIZE::under_constraint_limits
 
 VALIDATION_ERRORS::[
   MISSING_ANCHOR_KERNEL::"Pattern requires §5::ANCHOR_KERNEL for anchor injection",
-  MALFORMED_ENVELOPE::"Pattern envelope must be PATTERN_NAME in three-equals delimiters",
+  MALFORMED_ENVELOPE::"Pattern envelope must be NAME or TYPE:NAME in three-equals delimiters",
   EXCEEDS_SIZE_LIMIT::"Pattern exceeds 150 lines - consider splitting"
 ]
 
@@ -92,7 +92,7 @@ VALIDATION_ERRORS::[
 // Template structure (envelope delimiters shown as placeholders):
 
 V2_TEMPLATE_STRUCTURE:
-  ENVELOPE_START::PATTERN_NAME[three_equals_delimiters]
+  ENVELOPE_START::NAME_or_TYPE_colon_NAME[three_equals_delimiters]
   META::[TYPE::PATTERN_DEFINITION,VERSION,PURPOSE]
   BODY_SECTIONS::"§1_through_§4"
   §5::ANCHOR_KERNEL[TARGET,NEVER,MUST,GATE]

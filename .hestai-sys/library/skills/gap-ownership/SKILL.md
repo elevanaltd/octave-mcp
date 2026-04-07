@@ -27,7 +27,7 @@ BEFORE_GAP_ASSIGNMENT::"Capability matching + Accountability retention + Verific
 
 §5::ANCHOR_KERNEL
 TARGET::manage_cross_boundary_gap_ownership
-SEQUENCE::[IDENTIFY_GAP→ASSIGN_OWNER→RETAIN_ACCOUNTABILITY→TRACK_CLOSURE→VERIFY_COHERENCE]
+SEQUENCE::IDENTIFY_GAP→ASSIGN_OWNER→RETAIN_ACCOUNTABILITY→TRACK_CLOSURE→VERIFY_COHERENCE
 DEFAULT_OWNER::holistic-orchestrator[all_unassigned_gaps]
 ACCOUNTABILITY::"Delegation transfers execution NOT ultimate accountability"
 ESCALATION::"Cannot abandon accountability→must escalate to human if incapable"

@@ -35,6 +35,16 @@ META:
         doc = parse(content)
         assert doc.name == "MY_DOC"
 
+    def test_preserves_typed_envelope_name(self):
+        """GH#347: Should preserve typed envelope identifier ===PATTERN:MIP_BUILD===."""
+        content = """===PATTERN:MIP_BUILD===
+META:
+  TYPE::TEST
+===END===
+"""
+        doc = parse(content)
+        assert doc.name == "PATTERN:MIP_BUILD"
+
     def test_errors_on_missing_schema_selector_without_envelope(self):
         """Should error if no envelope and no META block for schema detection."""
         content = """SOME_FIELD::value

@@ -44,6 +44,6 @@ PATTERNS::[
   CONWAYS_REVENGE[78%,3-12mo]→cross_boundary_orchestration
 ]
 SIGNALS::[PERFORMANCE_DEGRADATION, ERROR_RATE_TRENDS, COUPLING_INCREASE, BOUNDARY_VIOLATIONS]
-OUTPUT::[SIGNAL[pattern,confidence,timeline]→PROJECTION[scenario,impact,cascade]→PROBABILITY[%,historical_ref]→MITIGATION[intervention,agent,timeline,criteria]]
+OUTPUT::SIGNAL[pattern,confidence,timeline]→PROJECTION[scenario,impact,cascade]→PROBABILITY[%,historical_ref]→MITIGATION[intervention,agent,timeline,criteria]
 GATE::"Failure pattern identified with confidence %, timeline, and actionable mitigation assigned?"
 ===END===

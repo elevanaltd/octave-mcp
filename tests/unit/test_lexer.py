@@ -279,6 +279,44 @@ class TestEnvelopeIdentifierErrors:
         assert "underscore" in error.message.lower() or "_" in error.message
         assert "CamelCase" in error.message or "camelcase" in error.message.lower()
 
+    # GH#347: Typed envelope identifier tests (TYPE:NAME support)
+
+    def test_typed_envelope_pattern_name(self):
+        """Should tokenize ===PATTERN:NAME=== as valid ENVELOPE_START."""
+        tokens, _ = tokenize("===PATTERN:NAME===\nMETA:\n  TYPE::TEST\n===END===")
+        start_token = [t for t in tokens if t.type == TokenType.ENVELOPE_START][0]
+        assert start_token.value == "PATTERN:NAME"
+
+    def test_typed_envelope_skill_name(self):
+        """Should tokenize ===SKILL:MY_SKILL=== as valid ENVELOPE_START."""
+        tokens, _ = tokenize("===SKILL:MY_SKILL===\nMETA:\n  TYPE::TEST\n===END===")
+        start_token = [t for t in tokens if t.type == TokenType.ENVELOPE_START][0]
+        assert start_token.value == "SKILL:MY_SKILL"
+
+    def test_typed_envelope_multi_segment(self):
+        """Should tokenize ===A:B:C=== as valid ENVELOPE_START with multi-segment identifier."""
+        tokens, _ = tokenize("===A:B:C===\nMETA:\n  TYPE::TEST\n===END===")
+        start_token = [t for t in tokens if t.type == TokenType.ENVELOPE_START][0]
+        assert start_token.value == "A:B:C"
+
+    def test_typed_envelope_leading_colon_invalid(self):
+        """Should reject ===:NAME=== with E_INVALID_ENVELOPE_ID."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===:NAME===")
+        assert exc_info.value.error_code == "E_INVALID_ENVELOPE_ID"
+
+    def test_typed_envelope_trailing_colon_invalid(self):
+        """Should reject ===NAME:=== with E_INVALID_ENVELOPE_ID."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===NAME:===")
+        assert exc_info.value.error_code == "E_INVALID_ENVELOPE_ID"
+
+    def test_typed_envelope_empty_segment_invalid(self):
+        """Should reject ===NAME::OTHER=== with E_INVALID_ENVELOPE_ID."""
+        with pytest.raises(LexerError) as exc_info:
+            tokenize("===NAME::OTHER===")
+        assert exc_info.value.error_code == "E_INVALID_ENVELOPE_ID"
+
 
 class TestStringTokenization:
     """Test string literal handling."""
