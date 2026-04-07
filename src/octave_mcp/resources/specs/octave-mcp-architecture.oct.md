@@ -24,14 +24,14 @@ META:
     src/octave_mcp/core/grammar.py
   ]
   CRITICAL_GAPS::[
-    repair_tier_repair_completeness,
-    projection_mode_field_filtering_completeness
+    repair_tier_repair_completeness
   ]
   RESOLVED_GAPS::[
     meta_contract_grammar_extraction[octave_compile_grammar_tool+octave_eject_gbnf],
     jit_grammar_compilation[gbnf_compiler_735_LOC+compile_gbnf_from_meta],
     schema_policy_unknown_fields[E007+STRICT_LENIENT_WARN_modes],
-    grammar_hints_on_validation_failure[grammar_hint_param_on_validate+write_tools]
+    grammar_hints_on_validation_failure[grammar_hint_param_on_validate+write_tools],
+    projection_mode_field_filtering_completeness[dynamic_fields_omitted+GH281]
   ]
 
 ---

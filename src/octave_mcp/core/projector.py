@@ -86,6 +86,45 @@ def _filter_fields(doc: Document, keep: list[str]) -> Document:
     return replace(doc, sections=filtered_sections)
 
 
+def _collect_top_level_keys(doc: Document) -> list[str]:
+    """Collect top-level Assignment and Block keys from document sections.
+
+    Extracts the key from each top-level node in doc.sections, preserving
+    insertion order. META is excluded since it lives in doc.meta and is
+    always preserved by projection modes.
+
+    Args:
+        doc: Document AST
+
+    Returns:
+        List of top-level field key strings in document order
+    """
+    keys: list[str] = []
+    for node in doc.sections:
+        if isinstance(node, Assignment | Block):
+            keys.append(node.key)
+    return keys
+
+
+def _compute_fields_omitted(original_doc: Document, filtered_doc: Document) -> list[str]:
+    """Compute which top-level fields were omitted by projection filtering.
+
+    Compares original document keys against filtered document keys to produce
+    an accurate I4-compliant transform receipt. Only top-level field keys are
+    reported; children of omitted blocks are not individually listed.
+
+    Args:
+        original_doc: Document before projection filtering
+        filtered_doc: Document after projection filtering
+
+    Returns:
+        List of omitted top-level field key strings in original document order
+    """
+    original_keys = _collect_top_level_keys(original_doc)
+    kept_keys = set(_collect_top_level_keys(filtered_doc))
+    return [key for key in original_keys if key not in kept_keys]
+
+
 def project(doc: Document, mode: str = "canonical") -> ProjectionResult:
     """Project document to specified mode.
 
@@ -110,17 +149,15 @@ def project(doc: Document, mode: str = "canonical") -> ProjectionResult:
         # Executive view: STATUS, RISKS, DECISIONS only
         filtered_doc = _filter_fields(doc, keep=["STATUS", "RISKS", "DECISIONS"])
         output = emit(filtered_doc)
-        return ProjectionResult(
-            output=output, lossy=True, fields_omitted=["TESTS", "CI", "DEPS"], filtered_doc=filtered_doc
-        )
+        omitted = _compute_fields_omitted(doc, filtered_doc)
+        return ProjectionResult(output=output, lossy=True, fields_omitted=omitted, filtered_doc=filtered_doc)
 
     elif mode == "developer":
         # Developer view: TESTS, CI, DEPS only
         filtered_doc = _filter_fields(doc, keep=["TESTS", "CI", "DEPS"])
         output = emit(filtered_doc)
-        return ProjectionResult(
-            output=output, lossy=True, fields_omitted=["STATUS", "RISKS", "DECISIONS"], filtered_doc=filtered_doc
-        )
+        omitted = _compute_fields_omitted(doc, filtered_doc)
+        return ProjectionResult(output=output, lossy=True, fields_omitted=omitted, filtered_doc=filtered_doc)
 
     else:
         # Default to canonical

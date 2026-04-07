@@ -240,18 +240,185 @@ TESTS::suite
         assert result.filtered_doc is not None
         assert hasattr(result.filtered_doc, "sections")
 
-    def test_executive_mode_reports_omitted_fields(self):
-        """Executive mode should report which fields are omitted."""
-        doc = parse("===TEST===\nSTATUS::ACTIVE\n===END===")
+
+class TestProjectionDynamicFieldsOmitted:
+    """Test that fields_omitted is dynamically computed from actual document content (#281).
+
+    The critical gap: fields_omitted must reflect the ACTUAL fields dropped from
+    the specific document, not a hardcoded list. This satisfies I4 (Transform
+    Auditability) - every transformation must be logged with accurate receipts.
+    """
+
+    def test_executive_omits_actual_non_executive_fields(self):
+        """Executive mode fields_omitted lists actual dropped fields, not hardcoded ones (#281)."""
+        content = """===TEST===
+STATUS::ACTIVE
+RISKS::[security]
+DECISIONS::use_redis
+TESTS::pytest_suite
+CI::github_actions
+DEPS::[python]
+BUDGET::50000
+TIMELINE::Q2_2026
+===END==="""
+        doc = parse(content)
         result = project(doc, "executive")
+
+        # fields_omitted must include ALL actually-omitted fields
         assert "TESTS" in result.fields_omitted
         assert "CI" in result.fields_omitted
         assert "DEPS" in result.fields_omitted
+        assert "BUDGET" in result.fields_omitted
+        assert "TIMELINE" in result.fields_omitted
 
-    def test_developer_mode_reports_omitted_fields(self):
-        """Developer mode should report which fields are omitted."""
-        doc = parse("===TEST===\nTESTS::suite\n===END===")
+        # fields_omitted must NOT include fields that were kept
+        assert "STATUS" not in result.fields_omitted
+        assert "RISKS" not in result.fields_omitted
+        assert "DECISIONS" not in result.fields_omitted
+
+    def test_developer_omits_actual_non_developer_fields(self):
+        """Developer mode fields_omitted lists actual dropped fields, not hardcoded ones (#281)."""
+        content = """===TEST===
+STATUS::ACTIVE
+RISKS::[security]
+DECISIONS::use_redis
+TESTS::pytest_suite
+CI::github_actions
+DEPS::[python]
+BUDGET::50000
+COVERAGE::90
+===END==="""
+        doc = parse(content)
         result = project(doc, "developer")
+
+        # fields_omitted must include ALL actually-omitted fields
         assert "STATUS" in result.fields_omitted
         assert "RISKS" in result.fields_omitted
         assert "DECISIONS" in result.fields_omitted
+        assert "BUDGET" in result.fields_omitted
+
+        # fields_omitted must NOT include fields that were kept
+        assert "TESTS" not in result.fields_omitted
+        assert "CI" not in result.fields_omitted
+        assert "DEPS" not in result.fields_omitted
+
+        # COVERAGE is not in the keep set, so it should be omitted
+        assert "COVERAGE" in result.fields_omitted
+
+    def test_executive_fields_omitted_count_matches_actual(self):
+        """Executive mode FIELDS_OMITTED count must match actual dropped field count (#281)."""
+        content = """===TEST===
+STATUS::ACTIVE
+TESTS::suite
+BUDGET::50000
+TIMELINE::Q2
+===END==="""
+        doc = parse(content)
+        result = project(doc, "executive")
+
+        # 3 fields dropped: TESTS, BUDGET, TIMELINE
+        # STATUS is kept
+        assert len(result.fields_omitted) == 3
+        assert set(result.fields_omitted) == {"TESTS", "BUDGET", "TIMELINE"}
+
+    def test_developer_fields_omitted_count_matches_actual(self):
+        """Developer mode FIELDS_OMITTED count must match actual dropped field count (#281)."""
+        content = """===TEST===
+TESTS::suite
+CI::enabled
+STATUS::ACTIVE
+RISKS::[sec]
+COVERAGE::90
+===END==="""
+        doc = parse(content)
+        result = project(doc, "developer")
+
+        # 3 fields dropped: STATUS, RISKS, COVERAGE
+        # TESTS and CI are kept
+        assert len(result.fields_omitted) == 3
+        assert set(result.fields_omitted) == {"STATUS", "RISKS", "COVERAGE"}
+
+    def test_executive_no_extra_fields_omitted_when_only_kept_present(self):
+        """Executive mode with only kept fields should have empty fields_omitted (#281)."""
+        content = """===TEST===
+STATUS::ACTIVE
+RISKS::[security]
+DECISIONS::use_redis
+===END==="""
+        doc = parse(content)
+        result = project(doc, "executive")
+
+        # All fields are in the keep set, nothing should be omitted
+        assert result.fields_omitted == []
+        assert result.lossy is True  # Mode is still lossy by nature
+
+    def test_developer_no_extra_fields_omitted_when_only_kept_present(self):
+        """Developer mode with only kept fields should have empty fields_omitted (#281)."""
+        content = """===TEST===
+TESTS::suite
+CI::enabled
+DEPS::[python]
+===END==="""
+        doc = parse(content)
+        result = project(doc, "developer")
+
+        # All fields are in the keep set, nothing should be omitted
+        assert result.fields_omitted == []
+        assert result.lossy is True  # Mode is still lossy by nature
+
+    def test_executive_preserves_meta_always(self):
+        """Executive mode always preserves META, META is never in fields_omitted (#281)."""
+        content = """===TEST===
+META:
+  TYPE::SKILL
+  VERSION::"1.0"
+STATUS::ACTIVE
+TESTS::suite
+BUDGET::50000
+===END==="""
+        doc = parse(content)
+        result = project(doc, "executive")
+
+        # META must never be omitted
+        assert "META" not in result.fields_omitted
+        # META should be present in output
+        assert "TYPE::SKILL" in result.output
+        # Non-kept fields should be in omitted
+        assert "TESTS" in result.fields_omitted
+        assert "BUDGET" in result.fields_omitted
+
+    def test_developer_preserves_meta_always(self):
+        """Developer mode always preserves META, META is never in fields_omitted (#281)."""
+        content = """===TEST===
+META:
+  TYPE::SKILL
+  VERSION::"1.0"
+TESTS::suite
+STATUS::ACTIVE
+===END==="""
+        doc = parse(content)
+        result = project(doc, "developer")
+
+        # META must never be omitted
+        assert "META" not in result.fields_omitted
+        # META should be present in output
+        assert "TYPE::SKILL" in result.output
+        # Non-kept fields should be in omitted
+        assert "STATUS" in result.fields_omitted
+
+    def test_executive_block_fields_omitted_reports_parent_key(self):
+        """Executive mode reports parent Block key in fields_omitted, not children (#281)."""
+        content = """===TEST===
+STATUS::ACTIVE
+COVERAGE:
+  UNIT::90
+  INTEGRATION::85
+===END==="""
+        doc = parse(content)
+        result = project(doc, "executive")
+
+        # COVERAGE block should be reported as omitted (parent key)
+        assert "COVERAGE" in result.fields_omitted
+        # Its children should NOT be individually listed
+        assert "UNIT" not in result.fields_omitted
+        assert "INTEGRATION" not in result.fields_omitted
