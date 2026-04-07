@@ -469,7 +469,10 @@ class WriteTool(BaseTool):
         corrections: list[dict[str, Any]] = []
 
         # Extract document envelope name from content
-        envelope_match = re.search(r"^===([A-Za-z_][A-Za-z0-9_]*)===\s*$", content, re.MULTILINE)
+        # GH#347: Support typed envelope identifiers (e.g., PATTERN:MIP_BUILD)
+        envelope_match = re.search(
+            r"^===([A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_]*)*)===\s*$", content, re.MULTILINE
+        )
         doc_name = envelope_match.group(1) if envelope_match else "DOC"
 
         # Create document with extracted name
