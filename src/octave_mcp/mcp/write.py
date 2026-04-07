@@ -55,6 +55,9 @@ W_STRUCT_003 = "W_STRUCT_003"  # Assignment count reduction
 # Quoting guidance warning
 W_UNQUOTED_SECTION_IN_VALUE = "W_UNQUOTED_SECTION_IN_VALUE"
 
+# GH#349: Data loss warning for bare lines dropped during lenient parsing (I4)
+W_BARE_LINE_DROPPED = "W_BARE_LINE_DROPPED"
+
 # Regex: line with KEY::  followed by § somewhere in the value portion.
 # Matches lines like  KEY::§2_BEHAVIOR  and  KEY::["§2_BEHAVIOR"]
 # but NOT lines where § starts the line (section declarations like §1::NAME).
@@ -772,6 +775,44 @@ class WriteTool(BaseTool):
                             "semantics_changed": True,
                         }
                     )
+                # GH#348: Numeric key dropped = silent data loss (I4 violation)
+                # Numeric keys are not valid OCTAVE identifiers; content is
+                # dropped from canonical output. Must be safe:false,
+                # semantics_changed:true so agents detect the loss.
+                elif subtype == "numeric_key_dropped":
+                    corrections.append(
+                        {
+                            "code": "W_NUMERIC_KEY_DROPPED",
+                            "tier": "LENIENT_PARSE",
+                            "message": w.get(
+                                "message",
+                                f"Numeric key dropped: {w.get('key', '?')}",
+                            ),
+                            "line": w.get("line", 0),
+                            "column": w.get("column", 0),
+                            "key": w.get("key", ""),
+                            "value": w.get("value", ""),
+                            "safe": False,
+                            "semantics_changed": True,
+                        }
+                    )
+                # GH#349: Bare line dropped = silent data loss (I4 violation)
+                # Must be safe:false, semantics_changed:true so agents detect loss
+                elif subtype == "bare_line_dropped":
+                    original = w.get("original", "?")
+                    corrections.append(
+                        {
+                            "code": W_BARE_LINE_DROPPED,
+                            "tier": "LENIENT_PARSE",
+                            "message": f"Bare line dropped: '{original}' has no :: or : operator and was silently removed",
+                            "line": w.get("line", 0),
+                            "column": w.get("column", 0),
+                            "before": original,
+                            "after": "",
+                            "safe": False,
+                            "semantics_changed": True,
+                        }
+                    )
                 else:
                     corrections.append(
                         {
@@ -1322,6 +1363,7 @@ class WriteTool(BaseTool):
             "path": target_path,
             "canonical_hash": "",
             "corrections": [],
+            "warnings": [],  # GH#349: Top-level warnings for data loss (I4)
             "diff": "",
             "diff_unified": "",
             "errors": [],
@@ -1573,7 +1615,13 @@ class WriteTool(BaseTool):
                     )
 
                 try:
-                    doc = parse(parse_input)
+                    # GH#348: Use parse_with_warnings even in strict mode to
+                    # capture I4 audit warnings (e.g., W_NUMERIC_KEY_DROPPED).
+                    # Silent data loss must be reported regardless of mode.
+                    doc, strict_parse_warnings = parse_with_warnings(parse_input)
+                    corrections.extend(
+                        self._map_parse_warnings_to_corrections(strict_parse_warnings)
+                    )
                 except Exception as e:
                     strict_corrections = self._track_corrections(parse_input, parse_input, tokenize_repairs)
                     # GH#329: Emit § quoting warnings even on strict parse failure path.
@@ -1639,6 +1687,16 @@ class WriteTool(BaseTool):
             )
 
         result["corrections"] = corrections
+
+        # GH#349: Surface data-loss corrections as top-level warnings (I4).
+        # Agents can detect data loss by checking result["warnings"] without
+        # parsing corrections internals. Any correction with safe=False
+        # indicates data loss and is promoted to the warnings array.
+        result["warnings"] = [
+            {"code": c["code"], "message": c["message"], "line": c.get("line", 0)}
+            for c in corrections
+            if c.get("safe") is False
+        ]
 
         # GH#287 Decision 6: Confirmation echo — show SOURCE→STRICT compilations
         # When lenient parsing produces corrections, build a compilations list
