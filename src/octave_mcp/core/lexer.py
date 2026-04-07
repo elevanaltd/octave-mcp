@@ -140,6 +140,19 @@ FENCE_PATTERN = re.compile(r"^( *)((`{3,})([^\n`]*)?)$")
 # This is invalid OCTAVE -- the fence must start on the line AFTER the key
 _INLINE_FENCE_PATTERN = re.compile(r"^.*::(`{3,})")
 
+# GH#350: ISO 8601 timestamp pattern for detection of unquoted timestamps.
+# Matches: YYYY-MM-DD (date only) and YYYY-MM-DDThh:mm:ss with optional
+# fractional seconds and timezone (Z or +/-HH:MM).
+# Used to detect and prevent silent fragmentation of unquoted timestamps.
+_ISO_TIMESTAMP_PATTERN = re.compile(
+    r"\d{4}-\d{2}-\d{2}"  # Date: YYYY-MM-DD
+    r"(?:"
+    r"T\d{2}:\d{2}:\d{2}"  # Time: Thh:mm:ss
+    r"(?:\.\d+)?"  # Optional fractional seconds
+    r"(?:Z|[+-]\d{2}:\d{2})?"  # Optional timezone
+    r")?"
+)
+
 
 def _evaluate_fence_line(
     backtick_seq: str,
@@ -864,6 +877,51 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                 pos += 1
                 column += 1
                 continue
+
+        # GH#350: Detect unquoted ISO timestamps BEFORE pattern matching.
+        # Without this check, the NUMBER pattern matches the year (e.g. 2026),
+        # then -MM matches as a negative number, etc., silently fragmenting
+        # the timestamp into multiple tokens and destroying its meaning.
+        if content[pos].isdigit():
+            iso_match = _ISO_TIMESTAMP_PATTERN.match(content, pos)
+            if iso_match:
+                matched_ts = iso_match.group()
+                # Only trigger for date patterns (YYYY-MM-DD), not plain numbers.
+                # The regex requires at least YYYY-MM-DD (10 chars with hyphens).
+                if len(matched_ts) >= 10 and "-" in matched_ts:
+                    # Verify the match is not followed by more identifier chars
+                    # that would indicate it's part of a larger token
+                    end_pos = iso_match.end()
+                    if end_pos >= len(content) or not _is_valid_identifier_char(content[end_pos]):
+                        if lenient:
+                            # Auto-repair: emit as STRING token and log repair
+                            tokens.append(Token(TokenType.STRING, matched_ts, line, column))
+                            repairs.append(
+                                {
+                                    "type": "repair_candidate",
+                                    "subtype": "unquoted_timestamp",
+                                    "original": matched_ts,
+                                    "repaired": f'"{matched_ts}"',
+                                    "line": line,
+                                    "column": column,
+                                    "message": (
+                                        f'W_REPAIR_CANDIDATE::{matched_ts} repaired to "{matched_ts}". '
+                                        f"ISO 8601 timestamps must be quoted in OCTAVE."
+                                    ),
+                                }
+                            )
+                            column += len(matched_ts)
+                            pos = end_pos
+                            continue
+                        else:
+                            raise LexerError(
+                                f"E_UNQUOTED_TIMESTAMP: Unquoted ISO 8601 timestamp "
+                                f"detected: {matched_ts}. Timestamps must be quoted in "
+                                f'OCTAVE. Use "{matched_ts}" instead.',
+                                line,
+                                column,
+                                "E_UNQUOTED_TIMESTAMP",
+                            )
 
         # Try to match token patterns
         matched = False
