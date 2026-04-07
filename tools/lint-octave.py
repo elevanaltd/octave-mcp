@@ -8,7 +8,8 @@ Handles .oct.md, .octave, and .oct files
 import re
 import sys
 
-HEADER_RE = re.compile(r"^===([A-Z0-9_]+)===$")
+# GH#347: Support typed envelope identifiers (e.g., PATTERN:MIP_BUILD, SKILL:MY_SKILL)
+HEADER_RE = re.compile(r"^===([A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_]*)*)===\s*$")
 FOOTER_RE = re.compile(r"^===END===$")
 PREFACE_RE = re.compile(r"^\s*(//.*)?$")
 QUOTED_RE = re.compile(r'"(?:\\.|[^"\\])*"')

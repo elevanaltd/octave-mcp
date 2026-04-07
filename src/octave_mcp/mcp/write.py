@@ -34,7 +34,7 @@ from octave_mcp.core.ast_nodes import (
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.gbnf_compiler import GBNFCompiler
 from octave_mcp.core.hydrator import resolve_hermetic_standard
-from octave_mcp.core.lexer import LexerError, tokenize
+from octave_mcp.core.lexer import ENVELOPE_ID_PATTERN, LexerError, tokenize
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.parser import ParserError, parse, parse_with_warnings
 from octave_mcp.core.repair import repair
@@ -469,10 +469,8 @@ class WriteTool(BaseTool):
         corrections: list[dict[str, Any]] = []
 
         # Extract document envelope name from content
-        # GH#347: Support typed envelope identifiers (e.g., PATTERN:MIP_BUILD)
-        envelope_match = re.search(
-            r"^===([A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_]*)*)===\s*$", content, re.MULTILINE
-        )
+        # Uses shared ENVELOPE_ID_PATTERN (single source of truth from lexer)
+        envelope_match = re.search(rf"^===({ENVELOPE_ID_PATTERN})===\s*$", content, re.MULTILINE)
         doc_name = envelope_match.group(1) if envelope_match else "DOC"
 
         # Create document with extracted name

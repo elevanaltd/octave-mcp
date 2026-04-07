@@ -50,11 +50,13 @@ def _ensure_src_on_path() -> None:
 
 _ensure_src_on_path()
 
+from octave_mcp.core.lexer import ENVELOPE_ID_PATTERN  # noqa: E402
 from octave_mcp.core.parser import ParserError, parse_with_warnings  # noqa: E402
 from octave_mcp.core.validator import Validator  # noqa: E402
 from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name  # noqa: E402
 
-_HEADER_RE = re.compile(r"^===([A-Z0-9_]+)===$")
+# GH#347: Use shared envelope pattern (single source of truth from lexer)
+_HEADER_RE = re.compile(rf"^===({ENVELOPE_ID_PATTERN})===$")
 _FOOTER_RE = re.compile(r"^===END===$")
 
 # HestAI dialect compatibility:
