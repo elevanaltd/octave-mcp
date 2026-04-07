@@ -291,6 +291,21 @@ _CURLY_BRACE_ANNOTATION_PATTERN = re.compile(r"([A-Za-z_][A-Za-z0-9_./\-]*)\{([A
 # Used to reject unresolvable paths instead of silently appending them.
 _ARRAY_INDEX_RE = re.compile(r"\[\d+\]")
 
+# GH#353: Regex pattern for parsing section-prefixed change paths.
+# Matches: §<id>.<key>  or  §<id>::<name>.<key>
+# Where <id> is a section number with optional suffix (e.g., "1", "2b", "3.5"),
+# <name> is the section name (identifiers), and <key> is the child key to target.
+# Only single-level child keys are supported (no deep nesting like §1.BLOCK.NESTED).
+# Group layout: (1) section_id, (2) optional ::name, (3) child_key
+# NOTE: The child key pattern excludes dots to prevent matching deep paths like §1.A.B.C.
+# The section name in ::NAME allows dots (for names like v2.0) but the child key does NOT,
+# since dots in the child position indicate hierarchical path traversal which is unsupported.
+_SECTION_PATH_RE = re.compile(
+    r"^§([0-9]+[a-z]?(?:\.[0-9]+)?)"  # §<id>: digits + optional letter suffix + optional .N
+    r"(?:::([A-Za-z_][A-Za-z0-9_/\-]*))?"  # optional ::NAME (no dots in name)
+    r"\.([A-Za-z_][A-Za-z0-9_/\-]*)$"  # .KEY (required child key, no dots)
+)
+
 
 class WriteTool(BaseTool):
     """MCP tool for octave_write - unified write operation for OCTAVE files."""
@@ -1062,12 +1077,16 @@ class WriteTool(BaseTool):
 
         return corrections
 
-    def _validate_change_paths(self, changes: dict[str, Any]) -> list[dict[str, Any]]:
-        """GH#335: Validate change paths are resolvable before applying.
+    def _validate_change_paths(self, changes: dict[str, Any], doc: Any | None = None) -> list[dict[str, Any]]:
+        """GH#335/GH#353: Validate change paths are resolvable before applying.
 
         Detects paths that _apply_changes cannot resolve to AST nodes and
         returns error records instead of silently appending literal dot-path
         lines to the document.
+
+        GH#353: Section-prefixed paths (§N.KEY or §N::NAME.KEY) are now valid
+        when they match a single child key within an existing section. When
+        ``doc`` is provided, section existence and name matching are verified.
 
         I3 (Mirror Constraint): reflect only present, create nothing.
         Silent append of unresolvable paths fabricates content, violating I3.
@@ -1075,14 +1094,16 @@ class WriteTool(BaseTool):
         Unresolvable path patterns:
         1. Array-index notation: KEY[N] -- _apply_changes has no array element
            resolution; would silently append 'KEY[N]::"value"' as a literal key.
-        2. Section-prefixed paths: §N.X.Y -- _apply_changes has no section/block
-           traversal; would silently append '§N.X.Y::"value"' as a literal key.
+        2. Invalid section paths: §N without child key, or deep nested §N.A.B.C
+           -- only §N.KEY and §N::NAME.KEY are supported (GH#353).
         3. Non-META dot-paths: X.Y.Z (where X != "META") -- _apply_changes only
            resolves META.FIELD; other dot-paths would be treated as literal keys
            containing dots, which is almost certainly not what the caller intended.
 
         Args:
             changes: Dictionary of change paths to validate
+            doc: Optional parsed AST document for section existence validation.
+                When provided, section paths are verified against actual sections.
 
         Returns:
             List of error dicts for unresolvable paths (empty if all paths are valid)
@@ -1106,21 +1127,41 @@ class WriteTool(BaseTool):
                 )
                 continue
 
-            # Pattern 2: Section-prefixed paths (e.g., §2.CONDUCT.PROTOCOL)
+            # Pattern 2: Section-prefixed paths
+            # GH#353: Valid section paths (§N.KEY or §N::NAME.KEY) are now resolvable.
+            # Only reject invalid section path patterns.
             if key.startswith("§"):
-                errors.append(
-                    {
-                        "code": "E_UNRESOLVABLE_PATH",
-                        "message": (
-                            f"Unresolvable change path '{key}': section-prefixed paths "
-                            f"(e.g., §N.BLOCK.FIELD) are not supported by the changes "
-                            f"parameter. The changes parameter can only update top-level "
-                            f"keys and META fields (via META.FIELD dot-notation). To "
-                            f"modify fields within sections, use the content parameter "
-                            f"with the full document."
-                        ),
-                    }
-                )
+                match = _SECTION_PATH_RE.match(key)
+                if not match:
+                    # Invalid section path: either bare §N, or deep nested §N.A.B.C,
+                    # or malformed syntax.
+                    errors.append(
+                        {
+                            "code": "E_UNRESOLVABLE_PATH",
+                            "message": (
+                                f"Unresolvable change path '{key}': invalid section path. "
+                                f"Section paths must use §N.KEY or §N::NAME.KEY format "
+                                f"(single child key only). Deep nested paths like "
+                                f"§N.BLOCK.NESTED are not supported. To modify deeply "
+                                f"nested fields, use the content parameter with the full document."
+                            ),
+                        }
+                    )
+                elif doc is not None:
+                    # GH#353: Verify the section actually exists in the document.
+                    section_id, section_name, _child_key = match.groups()
+                    section = self._find_section(doc, section_id, section_name)
+                    if section is None:
+                        name_detail = f" with name '{section_name}'" if section_name else ""
+                        errors.append(
+                            {
+                                "code": "E_UNRESOLVABLE_PATH",
+                                "message": (
+                                    f"Unresolvable change path '{key}': section "
+                                    f"§{section_id}{name_detail} not found in document."
+                                ),
+                            }
+                        )
                 continue
 
             # Pattern 3: Non-META hierarchical dot-paths (e.g., CONDUCT.PROTOCOL.MUST_NEVER)
@@ -1143,6 +1184,95 @@ class WriteTool(BaseTool):
                 continue
 
         return errors
+
+    def _find_section(
+        self,
+        doc: Any,
+        section_id: str,
+        section_name: str | None,
+    ) -> Section | None:
+        """Find a Section node in doc.sections by ID and optional name.
+
+        GH#353: Navigates doc.sections to locate a Section matching the given
+        section_id. If section_name is provided, also verifies the name matches.
+
+        Args:
+            doc: Parsed AST document
+            section_id: Section number to match (e.g., "1", "2b", "3.5")
+            section_name: Optional section name to verify (e.g., "IDENTITY")
+
+        Returns:
+            Matching Section node, or None if not found / name mismatch.
+        """
+        for node in doc.sections:
+            if isinstance(node, Section) and node.section_id == section_id:
+                if section_name is not None and node.key != section_name:
+                    return None  # Name mismatch
+                return node
+        return None
+
+    def _apply_section_change(
+        self,
+        doc: Any,
+        original_key: str,
+        section_id: str,
+        section_name: str | None,
+        child_key: str,
+        new_value: Any,
+    ) -> None:
+        """Apply a change to a child key within a section node.
+
+        GH#353: Navigates into a Section's children to update, add, or delete
+        a child Assignment by key name.
+
+        Args:
+            doc: Parsed AST document
+            original_key: The original changes key (for error messages)
+            section_id: Section number (e.g., "1", "2b")
+            section_name: Optional section name for verification (e.g., "IDENTITY")
+            child_key: The child key to modify within the section
+            new_value: The new value (with tri-state semantics)
+
+        Raises:
+            ValueError: If the section cannot be found (section_id not present
+                or section_name mismatch). This should not happen because
+                _validate_change_paths runs first, but provides a safety net
+                for direct callers.
+        """
+        section = self._find_section(doc, section_id, section_name)
+        if section is None:
+            # Safety net: _validate_change_paths should catch this first.
+            raise ValueError(
+                [
+                    {
+                        "code": "E_UNRESOLVABLE_PATH",
+                        "message": (
+                            f"Section §{section_id} not found in document"
+                            + (f" (expected name '{section_name}')" if section_name else "")
+                            + f" for change path '{original_key}'."
+                        ),
+                    }
+                ]
+            )
+
+        if _is_delete_sentinel(new_value):
+            # I2: DELETE sentinel - remove child from section
+            section.children = [c for c in section.children if not (isinstance(c, Assignment) and c.key == child_key)]
+        else:
+            # Update or add child assignment
+            # I1 (Syntactic Fidelity): Normalize Python values to AST types
+            normalized_value = _normalize_value_for_ast(new_value)
+            found = False
+            for child in section.children:
+                if isinstance(child, Assignment) and child.key == child_key:
+                    child.value = normalized_value
+                    found = True
+                    break
+
+            if not found:
+                # Add new assignment to section children
+                new_assignment = Assignment(key=child_key, value=normalized_value)
+                section.children.append(new_assignment)
 
     def _apply_changes(self, doc: Any, changes: dict[str, Any]) -> Any:
         """Apply changes to AST document with tri-state and dot-notation semantics.
@@ -1171,11 +1301,20 @@ class WriteTool(BaseTool):
         # GH#335: Validate all paths before applying any changes.
         # Fail-fast: if ANY path is unresolvable, reject the entire batch
         # to prevent partial application with silent corruption.
-        path_errors = self._validate_change_paths(changes)
+        path_errors = self._validate_change_paths(changes, doc)
         if path_errors:
             raise ValueError(path_errors)
 
         for key, new_value in changes.items():
+            # GH#353: Section-prefixed paths (§N.KEY or §N::NAME.KEY)
+            if key.startswith("§"):
+                match = _SECTION_PATH_RE.match(key)
+                if match:
+                    section_id, section_name, child_key = match.groups()
+                    self._apply_section_change(doc, key, section_id, section_name, child_key, new_value)
+                # Invalid section paths already rejected by _validate_change_paths
+                continue
+
             # Check for dot-notation: META.FIELD
             if key.startswith("META."):
                 # Extract the field name after "META."
@@ -1619,9 +1758,7 @@ class WriteTool(BaseTool):
                     # capture I4 audit warnings (e.g., W_NUMERIC_KEY_DROPPED).
                     # Silent data loss must be reported regardless of mode.
                     doc, strict_parse_warnings = parse_with_warnings(parse_input)
-                    corrections.extend(
-                        self._map_parse_warnings_to_corrections(strict_parse_warnings)
-                    )
+                    corrections.extend(self._map_parse_warnings_to_corrections(strict_parse_warnings))
                 except Exception as e:
                     strict_corrections = self._track_corrections(parse_input, parse_input, tokenize_repairs)
                     # GH#329: Emit § quoting warnings even on strict parse failure path.

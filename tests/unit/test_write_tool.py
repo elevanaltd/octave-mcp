@@ -3978,3 +3978,397 @@ KEY::value
 
             assert result["status"] == "error", "Multi-dot path CONDUCT.PROTOCOL.MUST_NEVER should be rejected"
             assert result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"
+
+
+class TestGH353SectionPathResolution:
+    """GH#353: Section-prefixed keys in changes must resolve to AST section nodes.
+
+    When agents use changes={"§3.KEY": value} or changes={"§3::NAME.KEY": value},
+    the path resolver should navigate into the matching Section node and modify
+    the target key within that section's children.
+
+    Without this, agents must fall back to full content rewrites, losing the
+    benefit of delta updates and violating I4 (Transform Auditability).
+    """
+
+    @pytest.mark.asyncio
+    async def test_section_number_dot_key_updates_child(self):
+        """§N.KEY notation should update an existing key within section N."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§1::IDENTITY
+  ROLE::OLD_ROLE
+  MISSION::unchanged
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§1.ROLE": "NEW_ROLE"},
+            )
+
+            assert result["status"] == "success", f"§1.ROLE should be resolvable, got: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "NEW_ROLE" in content
+            assert "OLD_ROLE" not in content
+            assert "MISSION" in content
+            assert "unchanged" in content
+
+    @pytest.mark.asyncio
+    async def test_section_number_name_dot_key_updates_child(self):
+        """§N::NAME.KEY notation should update key in section matching both number and name."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§1::IDENTITY
+  ROLE::lead
+§2::CONDUCT
+  TONE::formal
+  STYLE::precise
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§2::CONDUCT.TONE": "casual"},
+            )
+
+            assert (
+                result["status"] == "success"
+            ), f"§2::CONDUCT.TONE should be resolvable, got: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "casual" in content
+            assert "formal" not in content
+            assert "STYLE" in content
+            assert "precise" in content
+
+    @pytest.mark.asyncio
+    async def test_section_number_add_new_key(self):
+        """§N.NEW_KEY should add a new key to section N when it doesn't exist."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§1::IDENTITY
+  ROLE::lead
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§1.NEW_FIELD": "new_value"},
+            )
+
+            assert result["status"] == "success", f"§1.NEW_FIELD should be resolvable, got: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "NEW_FIELD" in content
+            assert "new_value" in content
+
+    @pytest.mark.asyncio
+    async def test_section_number_delete_key(self):
+        """§N.KEY with DELETE sentinel should remove key from section N."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§1::IDENTITY
+  ROLE::lead
+  REMOVEME::gone
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§1.REMOVEME": {"$op": "DELETE"}},
+            )
+
+            assert (
+                result["status"] == "success"
+            ), f"§1.REMOVEME DELETE should be resolvable, got: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "REMOVEME" not in content
+            assert "ROLE" in content
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_section_number_rejected(self):
+        """§N.KEY where section N doesn't exist should return an error."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§1::IDENTITY
+  ROLE::lead
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§99.KEY": "value"},
+            )
+
+            assert result["status"] == "error"
+            assert result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"
+
+    @pytest.mark.asyncio
+    async def test_section_name_mismatch_rejected(self):
+        """§N::NAME.KEY where NAME doesn't match section N's name should error."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§1::IDENTITY
+  ROLE::lead
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§1::WRONG_NAME.ROLE": "new"},
+            )
+
+            assert result["status"] == "error"
+            assert result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"
+
+    @pytest.mark.asyncio
+    async def test_section_path_with_list_value(self):
+        """§N.KEY should handle list values correctly."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§3::CAPABILITIES
+  SKILLS::[old_skill]
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§3.SKILLS": ["a", "b", "c"]},
+            )
+
+            assert result["status"] == "success", f"§3.SKILLS should be resolvable, got: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "a" in content
+            assert "b" in content
+            assert "c" in content
+
+    @pytest.mark.asyncio
+    async def test_section_path_with_suffix_id(self):
+        """§2b.KEY should resolve sections with suffix IDs like 2b."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§2b::EXTRA
+  KEY::old
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§2b.KEY": "new"},
+            )
+
+            assert result["status"] == "success", f"§2b.KEY should be resolvable, got: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "new" in content
+
+    @pytest.mark.asyncio
+    async def test_section_path_mixed_with_top_level_changes(self):
+        """Section paths and top-level keys can coexist in the same changes dict."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+TOP_KEY::original
+§1::IDENTITY
+  ROLE::old_role
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§1.ROLE": "new_role", "TOP_KEY": "updated"},
+            )
+
+            assert (
+                result["status"] == "success"
+            ), f"Mixed section and top-level changes should work, got: {result.get('errors', [])}"
+
+            with open(target_path) as f:
+                content = f.read()
+            assert "new_role" in content
+            assert "updated" in content
+            assert "old_role" not in content
+            assert "original" not in content
+
+    @pytest.mark.asyncio
+    async def test_section_only_key_rejected(self):
+        """§N without a dot-path child key should be rejected."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§1::IDENTITY
+  ROLE::lead
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§1": "value"},
+            )
+
+            assert result["status"] == "error"
+            assert result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"
+
+    @pytest.mark.asyncio
+    async def test_array_index_in_section_path_still_rejected(self):
+        """§N.KEY[0] should still be rejected (array index not supported)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§1::IDENTITY
+  SKILLS::[a,b,c]
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§1.SKILLS[0]": "value"},
+            )
+
+            assert result["status"] == "error"
+            assert result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"
+
+    @pytest.mark.asyncio
+    async def test_deep_section_path_rejected(self):
+        """§N.BLOCK.NESTED.KEY (3+ segments) should be rejected."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            initial = """===TEST===
+META:
+  TYPE::"TEST_DOC"
+---
+§1::IDENTITY
+  ROLE::lead
+===END==="""
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"§1.CONDUCT.PROTOCOL.MUST_NEVER": "value"},
+            )
+
+            assert result["status"] == "error"
+            assert result["errors"][0]["code"] == "E_UNRESOLVABLE_PATH"
