@@ -452,3 +452,35 @@ class TestIssue7SlashInSectionContainingToken:
         assert (
             '"§2::CAPS/EXECUTION"' in transformed
         ), f"Expected §2::CAPS/EXECUTION quoted as one unit, got: {transformed!r}"
+
+
+class TestDoubleSlashCommentNotSwallowedByTokenRegex:
+    """Cubic finding on PR#361: _SECTION_CONTAINING_TOKEN_RE swallows // comments.
+
+    The regex ``(?:[\\w./\\-]|§|::)+`` includes ``/`` in its character class,
+    which means ``§5::ANCHOR//comment_text`` gets matched as one token --
+    turning comment text into quoted data.
+
+    The fix uses a negative lookahead ``/(?!/)`` so that single ``/`` still
+    works in paths but ``//`` (comment delimiter) stops the token match.
+    """
+
+    def test_double_slash_comment_not_included_in_quoted_token(self):
+        """§5::ANCHOR//comment should quote only §5::ANCHOR, not the comment."""
+        content = "KEY::§5::ANCHOR//comment_text"
+        transformed, corrections = _auto_quote_section_refs_in_values(content)
+        assert '"§5::ANCHOR"' in transformed, f"Expected only §5::ANCHOR quoted, got: {transformed!r}"
+        assert (
+            "//comment_text" in transformed
+        ), f"Expected //comment_text preserved outside quotes, got: {transformed!r}"
+        assert (
+            '"§5::ANCHOR//comment_text"' not in transformed
+        ), f"Comment text must NOT be swallowed into the quoted token, got: {transformed!r}"
+
+    def test_single_slash_still_works_in_section_path(self):
+        """§5::path/to/thing should still capture the full path with single slashes."""
+        content = "KEY::§5::path/to/thing"
+        transformed, corrections = _auto_quote_section_refs_in_values(content)
+        assert (
+            '"§5::path/to/thing"' in transformed
+        ), f"Expected full path with single slashes quoted, got: {transformed!r}"
