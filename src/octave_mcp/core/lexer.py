@@ -908,6 +908,30 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                     value = value.replace(r"\n", "\n")
                     value = value.replace(r"\t", "\t")
                 elif token_type == TokenType.NUMBER:
+                    # GH#356: Check if the number is immediately followed by an
+                    # identifier-start character (no whitespace gap).  When this
+                    # happens the whole sequence (e.g. "12000_USERS") is really a
+                    # single identifier, not a number.  Emitting NUMBER + IDENTIFIER
+                    # causes the parser to join them with a space ("12000 _USERS")
+                    # which violates I1 (SYNTACTIC_FIDELITY).
+                    end_pos = match.end()
+                    if end_pos < len(content) and _is_valid_identifier_start(content[end_pos]):
+                        # Consume the numeric prefix + trailing identifier chars
+                        # as a single IDENTIFIER token.
+                        ident_end = end_pos
+                        while ident_end < len(content) and _is_valid_identifier_char(content[ident_end]):
+                            ident_end += 1
+                        # Strip trailing hyphens (same rule as identifiers)
+                        while ident_end > end_pos and content[ident_end - 1] == "-":
+                            ident_end -= 1
+                        merged_value = content[pos:ident_end]
+                        token = Token(TokenType.IDENTIFIER, merged_value, line, column)
+                        tokens.append(token)
+                        column += len(merged_value)
+                        pos = ident_end
+                        matched = True
+                        break
+
                     # Convert to int or float, but preserve raw lexeme for fidelity (GH#66)
                     if "." in matched_text or "e" in matched_text.lower():
                         value = float(matched_text)

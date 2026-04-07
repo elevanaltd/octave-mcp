@@ -265,20 +265,20 @@ class TestEmojiEdgeCases:
         assert tokens[0].type == TokenType.IDENTIFIER
         assert tokens[0].value == "⚠️123"
 
-    def test_number_followed_by_emoji_is_separate_tokens(self):
-        """Numbers followed by emoji tokenize as separate tokens.
+    def test_number_followed_by_emoji_is_merged_identifier(self):
+        """GH#356: Numbers immediately followed by emoji merge into single IDENTIFIER.
 
-        In OCTAVE, 123⚠️ is valid as NUMBER(123) IDENTIFIER(⚠️).
-        This is different from traditional languages where this would be an error.
+        In OCTAVE, 123⚠️ (no whitespace) is merged into IDENTIFIER("123⚠️")
+        to prevent space insertion during canonicalization (I1 SYNTACTIC_FIDELITY).
+        If the user wants them separate, they should write "123 ⚠️" with a space.
         """
         tokens, _ = tokenize("123⚠️")
-        # Should have NUMBER and IDENTIFIER as separate tokens
-        number_tokens = [t for t in tokens if t.type == TokenType.NUMBER]
+        # GH#356: Should be a single IDENTIFIER token (merged at lexer level)
         identifier_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER]
-        assert len(number_tokens) == 1
-        assert number_tokens[0].value == 123
+        number_tokens = [t for t in tokens if t.type == TokenType.NUMBER]
         assert len(identifier_tokens) == 1
-        assert identifier_tokens[0].value == "⚠️"
+        assert identifier_tokens[0].value == "123⚠️"
+        assert len(number_tokens) == 0
 
     def test_emoji_does_not_break_line_tracking(self):
         """Multi-byte emoji should not break line/column tracking."""
