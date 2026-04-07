@@ -16,7 +16,7 @@ import pytest
 
 from octave_mcp.core.ast_nodes import Comment
 from octave_mcp.core.parser import parse_with_warnings
-from octave_mcp.mcp.write import WriteTool, _all_section_marks_quoted
+from octave_mcp.mcp.write import WriteTool, _all_section_marks_quoted, _auto_quote_section_refs_in_values
 
 
 class TestIssue1EscapeUnawareAutoQuoteScanner:
@@ -61,6 +61,109 @@ class TestIssue1EscapeUnawareAutoQuoteScanner:
         # Escaped \" do not close the string
         # Section mark is still inside the outer quotes
         assert _all_section_marks_quoted(line) is True
+
+
+class TestIssue1R2BackslashParityInScanner:
+    """Fix #1 round 2: Backslash parity in escape-aware scanner.
+
+    PR#361 rework round 2: The single-character backslash check fails for
+    even-count backslashes before a quote mark. For example, ``\\\\\"`` has
+    two escaped backslashes followed by an unescaped quote, but the scanner
+    sees ``line[i-1] == '\\\\'`` and incorrectly treats the quote as escaped.
+
+    The fix counts consecutive backslashes: even count = unescaped quote,
+    odd count = escaped quote.
+    """
+
+    def test_four_backslashes_then_quote_is_unescaped(self):
+        r"""4 backslashes + quote = 2 escaped backslashes + unescaped quote.
+
+        Input: KEY::"\\\\" §1::SECTION"
+        The 4 backslashes are 2 escaped backslash pairs.
+        The quote after them is NOT escaped — it closes the string.
+        Therefore §1::SECTION is OUTSIDE quotes → should return False.
+        """
+        # Python string: KEY::"\\\\" §1::SECTION"
+        # Raw content:   KEY::"\\" §1::SECTION"
+        # The value part after KEY:: is: "\\" §1::SECTION"
+        line = 'KEY::"\\\\\\\\" §1::SECTION"'
+        # After KEY:: the value is: "\\\\" §1::SECTION"
+        # In the actual string bytes: " \\ \\ " space § 1 :: S E C T I O N "
+        # The first " opens quote, \\\\ is two escaped backslashes, " closes quote
+        # Then §1::SECTION is OUTSIDE quotes
+        value_part = line[len("KEY::") :]
+        assert _all_section_marks_quoted(value_part) is False
+
+    def test_two_backslashes_then_quote_is_unescaped(self):
+        r"""2 backslashes + quote = 1 escaped backslash + unescaped quote.
+
+        Input: KEY::"\\" §1::SECTION"
+        The 2 backslashes are 1 escaped backslash pair.
+        The quote after them is NOT escaped — it closes the string.
+        Therefore §1::SECTION is OUTSIDE quotes → should return False.
+        """
+        line = 'KEY::"\\\\" §1::SECTION"'
+        value_part = line[len("KEY::") :]
+        assert _all_section_marks_quoted(value_part) is False
+
+    def test_simple_escaped_quote_section_inside(self):
+        r"""Simple escaped quote: § inside quotes should return True.
+
+        Input: KEY::"He said \"§1::SECTION\""
+        The \" is an escaped quote inside the string.
+        §1::SECTION is INSIDE the outer quotes → should return True.
+        """
+        # KEY::"He said \"§1::SECTION\""
+        line = r'KEY::"He said \"§1::SECTION\""'
+        value_part = line[len("KEY::") :]
+        assert _all_section_marks_quoted(value_part) is True
+
+    def test_single_escaped_backslash_then_quote_outside(self):
+        r"""Single escaped quote followed by § outside.
+
+        Input: KEY::"\\" §1::SECTION
+        The \\ is an escaped backslash. The " after it closes the string.
+        §1::SECTION is OUTSIDE quotes → should return False.
+        """
+        # In Python string: KEY::"\\" §1::SECTION
+        # The value_part is: "\\" §1::SECTION
+        # Bytes: " \ \ " space § ...
+        # First " opens, \\ is escaped backslash, " closes → § outside
+        line = 'KEY::"\\\\" §1::SECTION'
+        value_part = line[len("KEY::") :]
+        assert _all_section_marks_quoted(value_part) is False
+
+    def test_auto_quote_mutation_with_backslash_parity(self):
+        r"""_auto_quote_section_refs_in_values must also handle backslash parity.
+
+        When the value contains "\\\\" followed by §, the mutation function
+        must recognize that § is outside quotes and auto-quote it.
+        """
+        # Line: KEY::"\\" §1::SECTION
+        # Value portion: "\\" §1::SECTION
+        # The \\ is an escaped backslash, " closes the string, § is outside
+        content = '  KEY::"\\\\" §1::SECTION'
+        transformed, corrections = _auto_quote_section_refs_in_values(content)
+        # The § reference should have been auto-quoted
+        assert len(corrections) >= 1, (
+            f"Expected auto-quote correction for unquoted § after escaped backslash. "
+            f"Input: {content!r}, Output: {transformed!r}"
+        )
+        assert "§1::SECTION" in transformed
+
+    def test_auto_quote_skips_section_inside_escaped_quotes(self):
+        r"""_auto_quote_section_refs_in_values must not quote § inside escaped quotes.
+
+        When the value contains \"§1::SECTION\" (escaped quotes inside outer
+        quotes), the § is inside the string and must NOT be auto-quoted.
+        """
+        content = r'  KEY::"He said \"§1::SECTION\""'
+        transformed, corrections = _auto_quote_section_refs_in_values(content)
+        # No corrections expected — § is already inside quotes
+        section_corrections = [c for c in corrections if "§" in c.get("message", "")]
+        assert len(section_corrections) == 0, (
+            f"Should not auto-quote § inside escaped-quote string. " f"Corrections: {section_corrections}"
+        )
 
 
 class TestIssue2ASTNodeInJSONPayload:

@@ -116,7 +116,10 @@ def _all_section_marks_quoted(line: str) -> bool:
     means at least one section mark is unquoted, so we return False.
 
     GH#361r1: Escaped quotes (``\\"``) do NOT toggle the ``in_quote`` state.
-    A preceding backslash means the quote is escaped and should be skipped.
+    GH#361r2: Backslash parity is checked by counting consecutive backslashes
+    before a quote. Even count (including 0) means the quote is unescaped;
+    odd count means it is escaped. This handles cases like ``\\\\"`` where
+    the backslashes are themselves escaped and the quote is actually unescaped.
 
     When ``//`` is encountered outside quotes, scanning stops because
     everything after is an OCTAVE comment (GH#329r3).
@@ -131,8 +134,15 @@ def _all_section_marks_quoted(line: str) -> bool:
     while i < length:
         ch = line[i]
         if ch == '"':
-            # GH#361r1: Only toggle if NOT preceded by backslash (escape).
-            if i == 0 or line[i - 1] != "\\":
+            # GH#361r2: Count consecutive backslashes before this quote
+            # to determine parity.  Even count (including 0) means the
+            # quote is NOT escaped; odd count means it IS escaped.
+            backslash_count = 0
+            j = i - 1
+            while j >= 0 and line[j] == "\\":
+                backslash_count += 1
+                j -= 1
+            if backslash_count % 2 == 0:
                 in_quote = not in_quote
         elif ch == "/" and i > 0 and line[i - 1] == "/" and not in_quote:
             # GH#329r3: "//" outside quotes starts a comment; stop scanning.
@@ -230,7 +240,16 @@ def _auto_quote_section_refs_in_values(content: str) -> tuple[str, list[dict[str
             ch = value_part[i]
 
             if ch == '"':
-                in_quote = not in_quote
+                # GH#361r2: Count consecutive backslashes before this quote
+                # to determine parity.  Even count (including 0) means the
+                # quote is NOT escaped; odd count means it IS escaped.
+                backslash_count = 0
+                j = i - 1
+                while j >= 0 and value_part[j] == "\\":
+                    backslash_count += 1
+                    j -= 1
+                if backslash_count % 2 == 0:
+                    in_quote = not in_quote
                 new_value_chars.append(ch)
                 i += 1
             elif ch == "/" and i + 1 < len(value_part) and value_part[i + 1] == "/" and not in_quote:
