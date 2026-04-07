@@ -423,3 +423,32 @@ class TestIssue6UnhandledCompilerExceptions:
             pytest.fail("read_resource raised unhandled ValueError instead of " "returning error content")
         finally:
             provider._compile_grammar = original_compile  # type: ignore[assignment]
+
+
+class TestIssue7SlashInSectionContainingToken:
+    """Fix #7: _SECTION_CONTAINING_TOKEN_RE must include slash in character class.
+
+    CodeRabbit finding on PR#361: The regex ``(?:[\\w.\\-]|§|::)+`` stops at ``/``,
+    so a token like ``§1::NAME/SUBNAME`` gets split at the slash.  The auto-quote
+    scanner rewrites it as ``"§1::NAME"/SUBNAME`` instead of ``"§1::NAME/SUBNAME"``.
+
+    The fix adds ``/`` to the character class so the full token is captured.
+    """
+
+    def test_slash_in_section_ref_quoted_as_complete_token(self):
+        """A section reference containing a slash must be quoted in its entirety."""
+        content = "KEY::§1::NAME/SUBNAME"
+        transformed, corrections = _auto_quote_section_refs_in_values(content)
+        assert '"§1::NAME/SUBNAME"' in transformed, f"Expected full token quoted as one unit, got: {transformed!r}"
+        assert corrections, "Expected a correction record for auto-quoting"
+
+    def test_slash_in_compound_section_ref(self):
+        """Compound section refs with slashes should be fully captured."""
+        content = "REFS::§2::CAPS/ADVISORY through §2::CAPS/EXECUTION"
+        transformed, corrections = _auto_quote_section_refs_in_values(content)
+        assert (
+            '"§2::CAPS/ADVISORY"' in transformed
+        ), f"Expected §2::CAPS/ADVISORY quoted as one unit, got: {transformed!r}"
+        assert (
+            '"§2::CAPS/EXECUTION"' in transformed
+        ), f"Expected §2::CAPS/EXECUTION quoted as one unit, got: {transformed!r}"

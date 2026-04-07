@@ -169,7 +169,7 @@ _SECTION_REF_TOKEN_RE = re.compile(
 # GH#334: Match the full extent of a value token containing § marks.
 # Used to find the boundaries of a compound token like "§1_through_§4"
 # so the entire thing can be wrapped in one pair of quotes.
-_SECTION_CONTAINING_TOKEN_RE = re.compile(r"(?:[\w.\-]|§|::)+")  # contiguous run of identifier chars, §, and ::
+_SECTION_CONTAINING_TOKEN_RE = re.compile(r"(?:[\w./\-]|§|::)+")  # contiguous run of identifier chars, §, ::, and /
 
 
 def _auto_quote_section_refs_in_values(content: str) -> tuple[str, list[dict[str, Any]]]:
