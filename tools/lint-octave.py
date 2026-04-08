@@ -8,7 +8,9 @@ Handles .oct.md, .octave, and .oct files
 import re
 import sys
 
-HEADER_RE = re.compile(r"^===([A-Z0-9_]+)===$")
+# Canonical pattern: ENVELOPE_ID_PATTERN in src/octave_mcp/core/lexer.py
+# Duplicated here because lint-octave.py is a standalone script (no project imports).
+HEADER_RE = re.compile(r"^===([A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_]*)*)===\s*$")
 FOOTER_RE = re.compile(r"^===END===$")
 PREFACE_RE = re.compile(r"^\s*(//.*)?$")
 QUOTED_RE = re.compile(r'"(?:\\.|[^"\\])*"')

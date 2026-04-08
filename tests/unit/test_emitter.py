@@ -43,6 +43,14 @@ class TestCanonicalEmission:
         assert result.startswith("===TEST===")
         assert result.strip().endswith("===END===")
 
+    def test_typed_envelope_roundtrip(self):
+        """GH#347: Emit roundtrip should preserve typed envelope name."""
+        content = "===PATTERN:MIP_BUILD===\nMETA:\n  TYPE::TEST\n===END===\n"
+        doc = parse(content)
+        result = emit(doc)
+        assert result.startswith("===PATTERN:MIP_BUILD===")
+        assert result.strip().endswith("===END===")
+
     def test_quoted_strings_where_required(self):
         """Should quote strings with spaces/special chars."""
         doc = Document(name="TEST", sections=[Assignment(key="KEY", value="hello world")])

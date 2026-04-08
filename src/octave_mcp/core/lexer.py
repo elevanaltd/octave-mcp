@@ -569,6 +569,9 @@ def _match_unicode_identifier(
     return content[pos:end]
 
 
+# GH#347: Single source of truth for valid envelope identifier pattern.
+ENVELOPE_ID_PATTERN = r"[A-Za-z_][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_]*)*"
+
 # Token patterns (order matters for longest match)
 TOKEN_PATTERNS = [
     # Grammar sentinel (Issue #48 Phase 2) - must come first
@@ -594,7 +597,7 @@ TOKEN_PATTERNS = [
     (r"===END===", TokenType.ENVELOPE_END),
     # GH#145: Accept both upper and lowercase letters in envelope identifiers
     # Per spec §4::STRUCTURE: KEYS::[A-Z,a-z,0-9,_][start_with_letter_or_underscore]
-    (r"===([A-Za-z_][A-Za-z0-9_]*)===", TokenType.ENVELOPE_START),
+    (rf"===({ENVELOPE_ID_PATTERN})===", TokenType.ENVELOPE_START),
     # Separator
     (r"---", TokenType.SEPARATOR),
     # Comments (must come before operators)
@@ -650,7 +653,7 @@ TOKEN_PATTERNS = [
 _INVALID_ENVELOPE_PATTERN = re.compile(r"===([^=\n]*)===")
 
 # Valid envelope identifier pattern (for error detection)
-_VALID_ENVELOPE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_VALID_ENVELOPE_ID_PATTERN = re.compile(rf"^{ENVELOPE_ID_PATTERN}$")
 
 
 def _check_invalid_envelope(content: str, pos: int, line: int, column: int) -> LexerError | None:
@@ -686,6 +689,48 @@ def _check_invalid_envelope(content: str, pos: int, line: int, column: int) -> L
     # Check if it's already valid (shouldn't reach here, but safety check)
     if _VALID_ENVELOPE_ID_PATTERN.match(identifier):
         return None
+
+    # Check for malformed typed identifiers (colon-aware diagnostics)
+    if ":" in identifier:
+        # Typed identifier attempted but malformed
+        segments = identifier.split(":")
+        if segments[0] == "":
+            return LexerError(
+                f"Envelope identifier '{identifier}' has a leading colon. "
+                "Typed identifiers use TYPE:NAME format (e.g., ===PATTERN:MY_PATTERN===).",
+                line,
+                column,
+                "E_INVALID_ENVELOPE_ID",
+            )
+        if segments[-1] == "":
+            return LexerError(
+                f"Envelope identifier '{identifier}' has a trailing colon. "
+                "Typed identifiers use TYPE:NAME format (e.g., ===PATTERN:MY_PATTERN===).",
+                line,
+                column,
+                "E_INVALID_ENVELOPE_ID",
+            )
+        empty_segments = [i for i, s in enumerate(segments) if s == ""]
+        if empty_segments:
+            return LexerError(
+                f"Envelope identifier '{identifier}' has empty segment(s) between colons. "
+                "Each segment must be a valid identifier (e.g., ===TYPE:NAME===).",
+                line,
+                column,
+                "E_INVALID_ENVELOPE_ID",
+            )
+        # Check each segment individually
+        segment_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+        for seg in segments:
+            if not segment_re.match(seg):
+                return LexerError(
+                    f"Envelope identifier '{identifier}' has invalid segment '{seg}'. "
+                    "Each segment must start with a letter or underscore and contain only "
+                    "letters, digits, and underscores.",
+                    line,
+                    column,
+                    "E_INVALID_ENVELOPE_ID",
+                )
 
     # Find the first invalid character
     first_invalid_char = None

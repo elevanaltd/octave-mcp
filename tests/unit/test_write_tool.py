@@ -2174,6 +2174,45 @@ FIELD2::value2
             )
 
     @pytest.mark.asyncio
+    async def test_salvage_mode_preserves_typed_envelope_name(self):
+        """GH#347: Salvage mode should preserve typed envelope name like PATTERN:MIP_BUILD."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+
+            # Content with typed envelope and a parse error (tab causes lexer error)
+            content = """===PATTERN:MIP_BUILD===
+META:
+  TYPE::PATTERN_DEFINITION
+FIELD1::value1
+BROKEN::a\tb
+===END==="""
+
+            result = await tool.execute(
+                target_path=target_path,
+                content=content,
+                lenient=True,
+                parse_error_policy="salvage",
+            )
+
+            assert result["status"] == "success"
+            assert os.path.exists(target_path)
+
+            with open(target_path, encoding="utf-8") as f:
+                written = f.read()
+
+            # CRITICAL: Typed envelope name should be preserved
+            assert "===PATTERN:MIP_BUILD===" in written, (
+                f"GH#347 BUG: Typed envelope name was not preserved. "
+                f"Expected '===PATTERN:MIP_BUILD===' but got content:\n{written}"
+            )
+            # Should NOT fall through to generic DOC or END
+            assert "===DOC===" not in written
+
+    @pytest.mark.asyncio
     async def test_salvage_mode_preserves_valid_fields(self):
         """Issue #177: Salvage mode should preserve valid fields that parsed successfully.
 
