@@ -76,11 +76,11 @@ META:
     FENCE_SCALING::"use N+1 backticks to wrap content containing N-backtick fences"
 
   §1c::BRACKET_FORMS
-    CONTAINER::"[a,b,c] — bare brackets = list"
-    CONSTRUCTOR::"NAME[args] — typed constructor e.g. REGEX[pattern], ENUM[a,b]"
-    ANNOTATION::"NAME<qualifier> — canonical form of constructors after normalization e.g. ATHENA<strategic_wisdom>"
-    // Input NAME[args] is canonicalized to NAME<args> by octave_write — same as ASCII + becoming ⊕
-    // [] = list, <> = qualifier — unambiguous in canonical output
+    // [] = list, <> = qualifier — keep them distinct
+    CONTAINER::"[a,b,c] — bare brackets = list (always square brackets)"
+    QUALIFIER::"NAME<args> — canonical constructor form e.g. ATHENA<strategic_wisdom>, REGEX<pattern>, ENUM<a,b>"
+    // Prefer NAME<args> when writing. NAME[args] is accepted on input and auto-canonicalized to NAME<args>.
+    // Same principle as preferring ⊕ over + — write canonical, accept either.
     INLINE_MAP::"[key::val, key2::val2] — dense key-value pairs, values must be atoms"
     HOLOGRAPHIC::"schema mode only — self-validating contracts, see octave-mastery §4b"
 
