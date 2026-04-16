@@ -492,6 +492,18 @@ def _match_unicode_identifier(
     while end < len(content) and _is_valid_identifier_char(content[end]):
         end += 1
 
+    # W002: Consume mid-value `#` as part of identifier.
+    # When `#` appears immediately after identifier chars (e.g., Issue_#111),
+    # it is NOT a section marker -- treat it as literal identifier text.
+    # This loop extends the identifier across `#` boundaries so that
+    # `Issue_#111` becomes a single IDENTIFIER token instead of being
+    # fragmented into IDENTIFIER(Issue_) + SECTION(§) + NUMBER(111).
+    while end < len(content) and content[end] == "#":
+        # Consume the `#` and any following identifier/digit chars
+        end += 1
+        while end < len(content) and _is_valid_identifier_char(content[end]):
+            end += 1
+
     # Don't end with hyphen (per existing lexer behavior)
     while end > pos + 1 and content[end - 1] == "-":
         end -= 1
@@ -975,6 +987,31 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
             # to prevent silent data loss in nested assignments like NOTE::OCTAVE::5.1.0
             if token_type == TokenType.GRAMMAR_SENTINEL and pos != 0:
                 continue  # Skip GRAMMAR_SENTINEL pattern if not at position 0
+
+            # W002: Context-aware # tokenization.
+            # ASCII `#` as SECTION is blocked ONLY when preceded immediately
+            # by an identifier character (e.g., Issue_#111 where `#` is
+            # mid-token).  In that case, `_match_unicode_identifier` already
+            # consumed the `#` as part of the identifier, so this guard is
+            # a safety net for any edge case where the identifier matching
+            # split before `#`.
+            # Unicode `§` is always SECTION regardless of position.
+            # NOTE: `#` after `::` (like TARGET::#INDEXER) is a legitimate
+            # section reference and MUST still be tokenized as SECTION.
+            if token_type == TokenType.SECTION and content[pos] == "#":
+                # Only suppress when preceded by an identifier char (mid-token #)
+                if pos > 0 and _is_valid_identifier_char(content[pos - 1]):
+                    continue  # Skip: # embedded in identifier, not a section marker
+
+            # W002: URL scheme protection for `://`.
+            # When `//` matches as COMMENT, check if it's preceded by `:` forming
+            # `://` (a URL scheme delimiter like https://, ftp://, file://).
+            # If so, skip the COMMENT match to prevent silent URL truncation.
+            if token_type == TokenType.COMMENT and pos >= 1 and content[pos - 1] == ":":
+                # Check if the character before `:` is an identifier char
+                # (confirming this is scheme://... not just bare ://)
+                if pos >= 2 and _is_valid_identifier_char(content[pos - 2]):
+                    continue  # Skip: :// is a URL scheme, not a comment
 
             match = pattern.match(content, pos)
             if match:
