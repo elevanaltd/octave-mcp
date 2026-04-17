@@ -58,6 +58,14 @@ META:
         embedding_generation,
         dense_reference
       ]
+    ULTRA_MYTHIC:
+      TARGET::"60%_compression"
+      PRESERVE::soul∧constraints
+      METHOD::mythological_atoms
+      USE::[agent_binding, identity_transfer]
+      REQUIRES::octave-ultra-mythic
+      // Specialized identity compression skill for agent binding and
+      // identity transfer contexts. See skills/octave-ultra-mythic.
   DECISION_RULES::[
     "IF[reconstruction_accuracy_critical]→CONSERVATIVE∨LOSSLESS",
     "IF[context_window_scarce∧loss_acceptable]→AGGRESSIVE∨ULTRA",

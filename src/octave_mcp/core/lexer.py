@@ -1362,6 +1362,67 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                     pos = suffix_pos
                     continue
 
+            # W002 (digit-prefix): Handle `#` that was suppressed by the SECTION guard
+            # when preceded by a NUMBER token.
+            #
+            # Sequence: NUMBER("123") is emitted, then `#` reaches `not matched`
+            # because the SECTION guard saw identifier_char on both sides and
+            # issued `continue` without emitting a token.
+            #
+            # When `#` is immediately followed by an identifier char (e.g. `123#foo`),
+            # merge `#` + following identifier chars into the previous NUMBER token,
+            # producing a single IDENTIFIER token for the full `123#foo` value.
+            #
+            # GUARD: Only when # is mid-value (next char is identifier char).
+            # Trailing # (FOO# at EOF) is handled by the SECTION guard not
+            # suppressing it (lookahead fails), so it never reaches here.
+            if (
+                content[pos] == "#"
+                and tokens
+                and tokens[-1].type in (TokenType.NUMBER, TokenType.IDENTIFIER)
+                and pos + 1 < len(content)
+                and _is_valid_identifier_char(content[pos + 1])
+            ):
+                # Build the suffix: `#` + following identifier chars (with
+                # nested `#` support, same as _match_unicode_identifier W002 loop)
+                suffix = "#"
+                suffix_pos = pos + 1
+                while suffix_pos < len(content) and _is_valid_identifier_char(content[suffix_pos]):
+                    suffix += content[suffix_pos]
+                    suffix_pos += 1
+                # After consuming ident chars, continue consuming nested #identifier
+                while (
+                    suffix_pos < len(content)
+                    and content[suffix_pos] == "#"
+                    and suffix_pos + 1 < len(content)
+                    and _is_valid_identifier_char(content[suffix_pos + 1])
+                ):
+                    suffix += content[suffix_pos]
+                    suffix_pos += 1
+                    while suffix_pos < len(content) and _is_valid_identifier_char(content[suffix_pos]):
+                        suffix += content[suffix_pos]
+                        suffix_pos += 1
+                # Strip trailing hyphens (per identifier rule)
+                while len(suffix) > 1 and suffix[-1] == "-":
+                    suffix = suffix[:-1]
+                    suffix_pos -= 1
+                # Merge suffix into previous token, upgrading NUMBER -> IDENTIFIER
+                prev_token = tokens[-1]
+                prev_val = str(prev_token.value if prev_token.raw is None else prev_token.raw)
+                merged_value = prev_val + suffix
+                tokens[-1] = Token(
+                    TokenType.IDENTIFIER,
+                    merged_value,
+                    prev_token.line,
+                    prev_token.column,
+                    prev_token.normalized_from,
+                    None,
+                )
+                advance = suffix_pos - pos
+                column += advance
+                pos = suffix_pos
+                continue
+
             # GH#351: Enhanced error for YAML-style hyphen list markers
             if content[pos] == "-":
                 raise LexerError(

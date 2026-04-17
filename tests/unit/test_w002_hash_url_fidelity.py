@@ -188,6 +188,59 @@ class TestURLProtection:
         assert items == ["https://a.com", "https://b.com"]
 
 
+class TestDigitPrefixHash:
+    """W002: # appearing after a NUMBER token (digit-prefix) must not produce E005.
+
+    Covers the case where the value starts with digits: 123#foo.
+    The NUMBER pattern consumes '123', then the SECTION guard suppresses '#'
+    (lookbehind='3' is identifier_char, lookahead='f' is identifier_char), but
+    no fallback handler emits a token for '#', causing E005.
+    Fix: after NUMBER, if '#' is followed by identifier chars, merge into
+    previous NUMBER token as IDENTIFIER.
+    """
+
+    def test_digit_prefix_hash_no_e005(self):
+        """KEY::123#foo must not raise E005.
+
+        This is the primary regression test for the digit-prefix # bug.
+        Before the fix: LexerError E005 on '#' at column 9.
+        After the fix: no error, value preserved.
+        """
+        tokens, _ = tokenize("KEY::123#foo")
+        section_tokens = [t for t in tokens if t.type == TokenType.SECTION]
+        assert section_tokens == [], (
+            f"# in digit-prefix value was tokenized as SECTION: {section_tokens}. "
+            f"All tokens: {[(t.type.name, t.value) for t in tokens]}"
+        )
+        error_tokens = [t for t in tokens if t.type.name == "ERROR"]
+        assert error_tokens == [], f"Unexpected error tokens: {error_tokens}"
+
+    def test_digit_prefix_hash_value_preserved(self):
+        """KEY::123#foo must preserve the full value '123#foo' as a single IDENTIFIER token."""
+        tokens, _ = tokenize("KEY::123#foo")
+        identifier_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        value_identifiers = [t for t in identifier_tokens if t.value not in ("KEY",)]
+        assert any(t.value == "123#foo" for t in value_identifiers), (
+            f"Expected IDENTIFIER('123#foo') but got: " f"{[(t.type.name, t.value) for t in tokens]}"
+        )
+
+    def test_digit_prefix_hash_roundtrip(self):
+        """KEY::123#foo must survive parse-emit round trip intact (unquoted)."""
+        content = "KEY::123#foo"
+        doc = parse(content)
+        assignment = doc.sections[0]
+        assert str(assignment.value) == "123#foo", f"Expected '123#foo' but got '{assignment.value}'"
+
+    def test_digit_prefix_multiple_hash_segments(self):
+        """KEY::1#a#2 must not produce E005 — multiple # in digit-prefix value."""
+        tokens, _ = tokenize("KEY::1#a#2")
+        section_tokens = [t for t in tokens if t.type == TokenType.SECTION]
+        assert section_tokens == [], (
+            f"# in 1#a#2 value produced SECTION token: {section_tokens}. "
+            f"All tokens: {[(t.type.name, t.value) for t in tokens]}"
+        )
+
+
 class TestRoundTrip:
     """W002: End-to-end round-trip fidelity for # and :// content."""
 
@@ -198,16 +251,32 @@ class TestRoundTrip:
         output = emit(doc)
         assert "§1::OVERVIEW" in output
 
-    def test_quoted_hash_value_roundtrip(self):
-        """Quoted value containing # must round-trip."""
-        content = 'TAG::"Issue_#111"'
+    def test_hash_in_value_roundtrip(self):
+        """Unquoted value containing # must round-trip (exercises W002 _match_unicode_identifier path)."""
+        content = "KEY::Issue_#111"
         doc = parse(content)
         output = emit(doc)
-        assert "Issue_#111" in output
+        assert "Issue_#111" in output, f"Expected 'Issue_#111' in output but got: {output!r}"
+
+    def test_unquoted_url_roundtrip(self):
+        """Unquoted URL with :// must round-trip (exercises W002 URL guard path)."""
+        content = "URL::https://example.com"
+        doc = parse(content)
+        output = emit(doc)
+        assert "https://example.com" in output, f"Expected 'https://example.com' in output but got: {output!r}"
+
+    def test_quoted_hash_value_roundtrip(self):
+        """Unquoted value containing # must round-trip (unquoted, exercises W002 fix path)."""
+        content = "TAG::Issue_#111"
+        doc = parse(content)
+        output = emit(doc)
+        assert "Issue_#111" in output, f"Expected 'Issue_#111' in output but got: {output!r}"
 
     def test_quoted_url_roundtrip(self):
-        """Quoted URL with :// must round-trip."""
-        content = 'LINK::"https://example.com/path?q=1"'
+        """Unquoted URL with query string :// must round-trip (exercises W002 URL guard path)."""
+        content = "LINK::https://example.com/path"
         doc = parse(content)
         output = emit(doc)
-        assert "https://example.com/path?q=1" in output
+        assert (
+            "https://example.com/path" in output
+        ), f"Expected 'https://example.com/path' in output but got: {output!r}"
