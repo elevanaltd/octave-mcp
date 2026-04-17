@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-04-17 - "Lexer Safety & Skill Upgrades" Release
+
+This release fixes silent data loss from `#` characters in values and `://` in URLs (W002 warning), hardens the lexer against trailing `#` edge cases, and fixes E005 false positives on digit-prefix hash values. On the skills side, three major version upgrades ship: `octave-literacy` v2.0 (LLM-consumption paradigm), `octave-mastery` v3.0, and `octave-compression` v3.0 with the new ULTRA_MYTHIC compression tier.
+
+### Added
+- **`octave-literacy` v2.0** — Upgraded to LLM-consumption paradigm with `NAME<args>` as canonical primary form
+- **`octave-mastery` v3.0** — Major skill version upgrade
+- **`octave-compression` v3.0** — Major skill version upgrade with ULTRA_MYTHIC compression tier
+- **All 3 secretary skills synced to v3.0** — Governance-aligned skill versions across the secretary skill set
+
+### Fixed
+- **Silent data loss from `#` in values and `://` in URLs** (W002) — Parser now detects and warns when `#` characters in values or `://` URL patterns would be silently lost during normalization, preventing I1 (Syntactic Fidelity) violations
+- **Trailing `#` edge case in lexer** — Lexer now correctly handles trailing `#` characters without misinterpreting them as comment delimiters; also fixes LOSS_PROFILE syntax consistency
+- **E005 false positive on digit-prefix hash values** — Lexer no longer raises E005 for values starting with digits followed by hash characters (e.g., `6#abc`)
+- **Accidental `dependency-groups` in pyproject.toml** — Removed spurious dependency group added during PR#366; bare operators in SKILL.md wrapped in brackets per spec
+
+### Quality Gates
+- All tests passing, 0 failures
+- Constitutional compliance verified: I1, I2, I3, I4, I5
+
 ## [1.10.0] - 2026-04-08 - "Typed Envelopes & Section-Aware Export" Release
 
 This release delivers typed envelope identifiers, section-aware JSON export, and a batch of 15 parser/lexer/validator improvements resolved in PR#361. Key additions include MCP resource endpoints for GBNF grammars, dynamic FIELDS_OMITTED for projection modes, and section-prefixed path resolution in `octave_write`. The lexer gains unquoted ISO timestamp detection and number+identifier token coalescing, while the validator eliminates false positives for TYPE/VERSION in META blocks.
@@ -786,7 +806,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.6...v1.10.0
 [1.9.6]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.5...v1.9.6
 [1.9.5]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.4...v1.9.5
