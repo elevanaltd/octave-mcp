@@ -125,9 +125,9 @@ DECISION::["adopt microservices"∧REQ]
 ===END===
       ```
 §5::BLOCK_NOTATION_RULE
-  // Hierarchical content MUST use block notation
+  // Hierarchical content MUST use block notation — this is a NEVER rule with an error code
   RULE::"Nested structures (maps containing maps) MUST use BLOCK notation: single colon + indented children"
-  NEVER::"Inner value is itself an inline map: KEY::[outer::[inner::val]] — error E_NESTED_INLINE_MAP in strict mode, warning W_NESTED_INLINE_MAP in lenient mode"
+  NEVER::"Inline map nesting: KEY::[inner::val, inner2::val2] is invalid when inner values are themselves maps"
   PRIMARY_CASE::"Agent §2::BEHAVIOR definitions — CONDUCT, PROTOCOL, OUTPUT blocks require block notation"
   CORRECT:
     ```
