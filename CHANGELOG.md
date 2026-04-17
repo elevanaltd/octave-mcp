@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-04-08 - "Typed Envelopes & Section-Aware Export" Release
+
+This release delivers typed envelope identifiers, section-aware JSON export, and a batch of 15 parser/lexer/validator improvements resolved in PR#361. Key additions include MCP resource endpoints for GBNF grammars, dynamic FIELDS_OMITTED for projection modes, and section-prefixed path resolution in `octave_write`. The lexer gains unquoted ISO timestamp detection and number+identifier token coalescing, while the validator eliminates false positives for TYPE/VERSION in META blocks.
+
+### Added
+- **Typed envelope identifiers (`TYPE:NAME`)** — Parser now supports typed envelope syntax for multi-envelope documents with explicit type discrimination
+- **Section-aware JSON export in `octave_eject`** (#341) — New `sections` parameter allows extracting specific sections by ID (e.g., `§3`, `3`, `§3::CAPABILITIES`) with META always included
+- **MCP resource endpoints for GBNF grammars** (#280) — New `octave://grammars/{schema_name}` resource URI for pre-compiled grammar access
+- **Dynamic `FIELDS_OMITTED` for executive/developer projection** (#281) — Projection modes now include a `FIELDS_OMITTED` marker listing which fields were filtered, improving auditability of lossy projections
+- **`ID` as optional first-class META schema field** (#358) — META blocks can now include an `ID` field validated by the schema system
+- **`W_NUMERIC_KEY_DROPPED` warning** (#348) — Parser now emits a warning when numeric keys are dropped during normalization, preventing silent data loss
+- **`bare_line_dropped` surfaced as top-level warning** (#349) — `octave_write` response now includes `bare_line_dropped` warnings at the top level for immediate visibility
+- **DX guidance hints for `E005` and `UNVALIDATED`** (#351, #352) — Error and status messages now include actionable guidance for common developer pain points
+
+### Fixed
+- **Validator false positive for `TYPE`/`VERSION` in META** (#344) — META block validator no longer falsely rejects valid TYPE and VERSION fields
+- **Literal zone closing fence indentation** (#346) — Emitter now preserves indentation of closing fences in literal zones
+- **Auto-quote compound `§` references in `octave_write`** (#334) — Values containing compound section references are now automatically quoted to prevent parser misinterpretation
+- **Array-index path rejection in `octave_write` changes** (#335) — Unresolvable array-index paths in the `changes` parameter now raise clear errors instead of silently failing
+- **Unquoted ISO timestamp detection in lexer** (#350) — Lexer now detects unquoted ISO timestamps to prevent silent fragmentation of date values
+- **Number+identifier token coalescing in lexer** (#356) — Lexer now merges adjacent number and identifier tokens to prevent spurious space insertion in canonical output
+- **Section-prefixed path resolution in `octave_write` changes** (#353) — Paths like `§3::SKILLS` now correctly resolve to the target section
+- **Uppercase section ID suffixes in `_SECTION_PATH_RE`** (#361) — Section path regex now accepts uppercase suffixes
+- **`_SECTION_CONTAINING_TOKEN_RE` swallowing `//` comments** (#361) — Section-containing token regex no longer consumes comment delimiters
+- **Slash included in `_SECTION_CONTAINING_TOKEN_RE` character class** (#361) — Fixes regex to include forward slash in the character class
+- **Backslash parity in escape-aware auto-quote scanner** (#361) — Auto-quote scanner now correctly handles backslash escape sequences
+- **Colon-aware diagnostics for malformed typed envelope identifiers** — Improved error messages when typed envelope syntax is malformed
+- **Review findings: dotted key regression, bare flow example, section filter** (#347) — Batch fix for issues discovered during code review
+- **Deeply nested section indentation regression tests** (#357) — Added regression tests ensuring correct indentation at deep nesting levels
+
+### Documentation
+- **Bare flow operators wrapped in brackets per spec §6** (#345) — Documentation examples updated to use bracket notation for bare flow operators
+
+### Quality Gates
+- 2788 tests passing, 0 failures
+- Constitutional compliance verified: I1, I2, I3, I4, I5
+
 ## [1.9.6] - 2026-03-30 - "CRS_REVIEW Schema" Patch
 
 This patch adds the CRS_REVIEW builtin schema for structured code review artifacts (Issue #342). Replaces verbose 900-line markdown PR comments with compact, machine-parseable OCTAVE output for the HestAI review gate system. Token economy: 30-50% size reduction vs markdown equivalent.
@@ -749,7 +786,9 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.5...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.6...v1.10.0
+[1.9.6]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.5...v1.9.6
 [1.9.5]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.4...v1.9.5
 [1.9.4]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.3...v1.9.4
 [1.9.3]: https://github.com/elevanaltd/octave-mcp/compare/v1.9.2...v1.9.3
