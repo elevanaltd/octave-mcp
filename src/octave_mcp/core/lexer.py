@@ -498,7 +498,17 @@ def _match_unicode_identifier(
     # This loop extends the identifier across `#` boundaries so that
     # `Issue_#111` becomes a single IDENTIFIER token instead of being
     # fragmented into IDENTIFIER(Issue_) + SECTION(§) + NUMBER(111).
-    while end < len(content) and content[end] == "#":
+    #
+    # GUARD: Only consume `#` when immediately followed by an identifier
+    # character.  A trailing `#` at EOF (FOO#), before a newline (FOO#\n),
+    # or before a non-identifier character must NOT be consumed -- it is a
+    # section marker, not part of the identifier.
+    while (
+        end < len(content)
+        and content[end] == "#"
+        and end + 1 < len(content)
+        and _is_valid_identifier_char(content[end + 1])
+    ):
         # Consume the `#` and any following identifier/digit chars
         end += 1
         while end < len(content) and _is_valid_identifier_char(content[end]):
@@ -989,19 +999,24 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                 continue  # Skip GRAMMAR_SENTINEL pattern if not at position 0
 
             # W002: Context-aware # tokenization.
-            # ASCII `#` as SECTION is blocked ONLY when preceded immediately
-            # by an identifier character (e.g., Issue_#111 where `#` is
-            # mid-token).  In that case, `_match_unicode_identifier` already
-            # consumed the `#` as part of the identifier, so this guard is
-            # a safety net for any edge case where the identifier matching
-            # split before `#`.
+            # ASCII `#` as SECTION is blocked ONLY when it is a mid-identifier
+            # `#` (e.g., Issue_#111), meaning it is both preceded by an
+            # identifier character AND immediately followed by one.
+            # A trailing `#` (FOO# at EOF or before a newline) is NOT a
+            # mid-identifier token -- it must be treated as a SECTION marker.
             # Unicode `§` is always SECTION regardless of position.
             # NOTE: `#` after `::` (like TARGET::#INDEXER) is a legitimate
             # section reference and MUST still be tokenized as SECTION.
             if token_type == TokenType.SECTION and content[pos] == "#":
-                # Only suppress when preceded by an identifier char (mid-token #)
-                if pos > 0 and _is_valid_identifier_char(content[pos - 1]):
-                    continue  # Skip: # embedded in identifier, not a section marker
+                # Suppress only when # is mid-identifier: preceded AND followed
+                # by a valid identifier character.
+                if (
+                    pos > 0
+                    and _is_valid_identifier_char(content[pos - 1])
+                    and pos + 1 < len(content)
+                    and _is_valid_identifier_char(content[pos + 1])
+                ):
+                    continue  # Skip: # mid-identifier, not a section marker
 
             # W002: URL scheme protection for `://`.
             # When `//` matches as COMMENT, check if it's preceded by `:` forming

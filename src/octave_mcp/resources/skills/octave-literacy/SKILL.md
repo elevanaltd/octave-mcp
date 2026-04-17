@@ -126,7 +126,7 @@ META:
   TYPE::DECISION
   VERSION::"1.0.0"
   COMPRESSION_TIER::CONSERVATIVE
-  LOSS_PROFILE::[preserve:causal_chains,drop:verbose_phrasing]
+  LOSS_PROFILE::"[preserve:causal_chains,drop:verbose_phrasing]"
 ---
 STATUS::ACTIVE
 CONTEXT::API_redesign[KAIROS<Q2_window>]

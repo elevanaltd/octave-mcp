@@ -68,19 +68,19 @@ META:
   // I4::TRANSFORM_AUDITABILITY — every transformation must log what was preserved vs dropped.
   // These META fields are MANDATORY for any compressed output.
   REQUIRED_META_FIELDS::[COMPRESSION_TIER,LOSS_PROFILE]
-  LOSS_PROFILE_FORMAT::[preserve:X,drop:Y]
+  LOSS_PROFILE_FORMAT::"[preserve:X,drop:Y]"
   // LOSS_PROFILE must be explicit — never hidden
   EXAMPLES:
-    CONSERVATIVE::[preserve:causal_chains,drop:verbose_phrasing]
-    AGGRESSIVE::[preserve:core_thesis∧conclusions,drop:explanatory_depth∨edge_cases]
-    ULTRA::[preserve:facts∧structure,drop:all_narrative∨tradeoff_reasoning]
+    CONSERVATIVE::"[preserve:causal_chains,drop:verbose_phrasing]"
+    AGGRESSIVE::"[preserve:core_thesis∧conclusions,drop:explanatory_depth∨edge_cases]"
+    ULTRA::"[preserve:facts∧structure,drop:all_narrative∨tradeoff_reasoning]"
   META_BLOCK_TEMPLATE:
     ```
 META:
   TYPE::DECISION
   VERSION::"1.0.0"
   COMPRESSION_TIER::CONSERVATIVE
-  LOSS_PROFILE::[preserve:causal_chains,drop:verbose_phrasing]
+  LOSS_PROFILE::"[preserve:causal_chains,drop:verbose_phrasing]"
     ```
   I4_RULE::"If bits were dropped, the output must carry a receipt. No silent loss."
 §3::TRANSFORMATION_WORKFLOW

@@ -75,6 +75,63 @@ class TestHashInValuePosition:
         assert len(section_tokens) == 1
 
 
+class TestTrailingHashEdgeCases:
+    """W002: Trailing # at EOF or before non-identifier chars must NOT be consumed."""
+
+    def test_trailing_hash_at_eof_not_consumed_into_identifier(self):
+        """FOO# at EOF: the trailing # must NOT become part of the identifier.
+
+        The W002 fix should only consume # when it is immediately followed by
+        an identifier character. A trailing # with nothing following it is a
+        SECTION marker, not part of the preceding identifier.
+        """
+        tokens, _ = tokenize("KEY::FOO#")
+        identifier_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        # The value identifier must be 'FOO', not 'FOO#'
+        value_identifiers = [t for t in identifier_tokens if t.value not in ("KEY",)]
+        assert any(
+            t.value == "FOO" for t in value_identifiers
+        ), f"Expected IDENTIFIER('FOO') but got: {[(t.type.name, t.value) for t in tokens]}"
+        # The trailing # must produce a SECTION token
+        section_tokens = [t for t in tokens if t.type == TokenType.SECTION]
+        assert len(section_tokens) == 1, (
+            f"Expected 1 SECTION token for trailing #, got {len(section_tokens)}. "
+            f"All tokens: {[(t.type.name, t.value) for t in tokens]}"
+        )
+
+    def test_trailing_hash_before_newline_not_consumed(self):
+        """FOO# followed by newline: trailing # must NOT become part of identifier."""
+        tokens, _ = tokenize("KEY::FOO#\n")
+        identifier_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        value_identifiers = [t for t in identifier_tokens if t.value not in ("KEY",)]
+        assert any(
+            t.value == "FOO" for t in value_identifiers
+        ), f"Expected IDENTIFIER('FOO') but got: {[(t.type.name, t.value) for t in tokens]}"
+        section_tokens = [t for t in tokens if t.type == TokenType.SECTION]
+        assert len(section_tokens) == 1, (
+            f"Expected 1 SECTION token for # before newline, got {len(section_tokens)}. "
+            f"All tokens: {[(t.type.name, t.value) for t in tokens]}"
+        )
+
+    def test_hash_followed_by_digit_consumed_as_identifier(self):
+        """REF::GH_#123 — # followed by digit IS a valid identifier continuation.
+
+        Digits satisfy _is_valid_identifier_char, so GH_#123 must remain
+        a single IDENTIFIER token (regression guard for the W002 fix).
+        """
+        tokens, _ = tokenize("REF::GH_#123")
+        section_tokens = [t for t in tokens if t.type == TokenType.SECTION]
+        assert section_tokens == [], (
+            f"# followed by digit should not produce SECTION token: {section_tokens}. "
+            f"All tokens: {[(t.type.name, t.value) for t in tokens]}"
+        )
+        identifier_tokens = [t for t in tokens if t.type == TokenType.IDENTIFIER]
+        value_identifiers = [t for t in identifier_tokens if t.value not in ("REF",)]
+        assert any(
+            t.value == "GH_#123" for t in value_identifiers
+        ), f"Expected IDENTIFIER('GH_#123') but got: {[(t.type.name, t.value) for t in tokens]}"
+
+
 class TestURLProtection:
     """W002: :// in URLs must not trigger comment splitting."""
 
