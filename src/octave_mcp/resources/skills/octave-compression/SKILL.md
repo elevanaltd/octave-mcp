@@ -40,8 +40,8 @@ META:
       ]
     AGGRESSIVE:
       TARGET::"70%_fidelity"
-      PRESERVE::core_thesis∧conclusions
-      DROP::nuance∨narrative
+      PRESERVE::[core_thesis∧conclusions]
+      DROP::[nuance∨narrative]
       LOSS::"30%[explanatory_depth,tradeoff_narratives,edge_case_exploration]"
       USE::[
         context_window_scarcity,
@@ -50,7 +50,7 @@ META:
       ]
     ULTRA:
       TARGET::"50%_fidelity"
-      PRESERVE::facts∧structure
+      PRESERVE::[facts∧structure]
       DROP::all_narrative
       LOSS::"50%[almost_all_explanatory_content,tradeoff_reasoning]"
       USE::[
@@ -60,7 +60,7 @@ META:
       ]
     ULTRA_MYTHIC:
       TARGET::"60%_compression"
-      PRESERVE::soul∧constraints
+      PRESERVE::[soul∧constraints]
       METHOD::mythological_atoms
       USE::[agent_binding, identity_transfer]
       REQUIRES::octave-ultra-mythic
