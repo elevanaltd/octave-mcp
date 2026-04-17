@@ -610,7 +610,7 @@ wheels = [
 
 [[package]]
 name = "octave-mcp"
-version = "1.10.0"
+version = "1.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -641,15 +641,6 @@ http = [
     { name = "uvicorn" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "hypothesis" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=26.0.0" },
@@ -674,15 +665,6 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'http'", specifier = ">=0.34.0" },
 ]
 provides-extras = ["http", "dev"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "hypothesis", specifier = ">=6.148.7" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-asyncio", specifier = ">=1.3.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "ruff", specifier = ">=0.14.10" },
-]
 
 [[package]]
 name = "packaging"
