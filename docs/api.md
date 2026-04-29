@@ -212,7 +212,7 @@ if any descriptor is invalid, none are applied (fail-fast atomicity).
 |---|---|
 | `E_OP_TARGET_MISMATCH` | `APPEND`/`PREPEND` on a non-array, or `MERGE` on a non-block |
 | `E_UNRESOLVABLE_PATH` | path does not resolve in the AST (auto-create is forbidden) |
-| `E_INVALID_OP_DESCRIPTOR` | unknown `$op`, missing `value`, or `MERGE` with non-dict `value` |
+| `E_INVALID_OP_DESCRIPTOR` | unknown `$op`, missing `value` for `APPEND`/`PREPEND`/`MERGE` (not `DELETE`), or `MERGE` with non-dict `value` |
 
 > **Diff-locality note.** `$op` descriptors give you correct, targeted *semantics*
 > (e.g. APPEND mutates only the array's contents in the AST), but the rendered
