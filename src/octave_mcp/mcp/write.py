@@ -422,6 +422,150 @@ def _is_delete_sentinel(value: Any) -> bool:
     return isinstance(value, dict) and value.get("$op") == "DELETE"
 
 
+# GH#373: Recognised op descriptors for op-aware nested mutation.
+# Bare values (no $op) preserve PR #370 full-replacement semantics.
+_KNOWN_OPS = frozenset({"APPEND", "PREPEND", "MERGE", "DELETE"})
+
+
+def _is_op_descriptor(value: Any) -> bool:
+    """GH#373: True iff value is a dict carrying a recognised "$op" key.
+
+    Discriminates op descriptors from bare dict values (which are valid full
+    replacements emitted as InlineMap). A dict without "$op" is bare data;
+    a dict with "$op" is interpreted as an instruction and validated.
+    """
+    return isinstance(value, dict) and "$op" in value
+
+
+def _extract_op_descriptor(value: Any) -> tuple[str | None, Any, dict[str, Any] | None]:
+    """GH#373: Parse a changes-mode value into (op, payload, error).
+
+    Returns:
+        (op, payload, error) tuple where:
+          - op: one of "APPEND" | "PREPEND" | "MERGE" | "DELETE" if the value
+            is a recognised op descriptor; None for bare values (legacy
+            full-replacement semantics).
+          - payload: the descriptor's "value" field (for APPEND/PREPEND/MERGE),
+            None for DELETE, or the bare value verbatim when op is None.
+          - error: None on success; otherwise an error dict with code
+            "E_INVALID_OP_DESCRIPTOR" describing the malformation.
+
+    Validation rules:
+      - Unknown $op string -> E_INVALID_OP_DESCRIPTOR.
+      - APPEND / PREPEND / MERGE without "value" key -> E_INVALID_OP_DESCRIPTOR.
+        (DELETE has no "value" by design.)
+      - MERGE with non-dict "value" -> E_INVALID_OP_DESCRIPTOR.
+    """
+    if not _is_op_descriptor(value):
+        return (None, value, None)
+
+    op = value.get("$op")
+    if not isinstance(op, str) or op not in _KNOWN_OPS:
+        return (
+            None,
+            None,
+            {
+                "code": "E_INVALID_OP_DESCRIPTOR",
+                "message": (
+                    f"Invalid $op value {op!r}: expected one of "
+                    f"{sorted(_KNOWN_OPS)}. Bare values (no $op) are "
+                    f"interpreted as full replacement."
+                ),
+            },
+        )
+
+    if op == "DELETE":
+        # DELETE has no payload; ignore any extra keys for forward-compat.
+        return ("DELETE", None, None)
+
+    if "value" not in value:
+        return (
+            None,
+            None,
+            {
+                "code": "E_INVALID_OP_DESCRIPTOR",
+                "message": (f"$op {op!r} descriptor is missing required 'value' field."),
+            },
+        )
+
+    payload = value["value"]
+    if op == "MERGE" and not isinstance(payload, dict):
+        return (
+            None,
+            None,
+            {
+                "code": "E_INVALID_OP_DESCRIPTOR",
+                "message": (
+                    f"$op MERGE requires 'value' to be a dict (block contents); " f"got {type(payload).__name__}."
+                ),
+            },
+        )
+
+    return (op, payload, None)
+
+
+def _apply_array_op_inplace(assignment: Assignment, op: str, payload: Any) -> None:
+    """GH#373: Apply APPEND or PREPEND to a list-valued Assignment in place.
+
+    Caller is responsible for verifying target type via _resolve_target_type
+    (validator already does this and rejects mismatches with E_OP_TARGET_MISMATCH).
+
+    Semantics:
+      - payload as a single element: push/unshift one element.
+      - payload as a list: bulk push/unshift in caller order.
+    Existing items keep their original tokens (where present); new items are
+    appended as Python values, mirroring how _normalize_value_for_ast produces
+    list contents.
+
+    Args:
+        assignment: The Assignment node holding a ListValue or list.
+        op: "APPEND" or "PREPEND".
+        payload: Element or list of elements to push.
+    """
+    new_items = list(payload) if isinstance(payload, list) else [payload]
+
+    current = assignment.value
+    if isinstance(current, ListValue):
+        existing = list(current.items)
+        # Drop tokens: bulk-edit invalidates the verbatim token slice. Re-emission
+        # will use canonical form for the modified array's bytes (diff-locality
+        # gap is documented in GH#371).
+        if op == "APPEND":
+            assignment.value = ListValue(items=existing + new_items)
+        else:  # PREPEND
+            assignment.value = ListValue(items=new_items + existing)
+    elif isinstance(current, list):
+        if op == "APPEND":
+            assignment.value = ListValue(items=current + new_items)
+        else:  # PREPEND
+            assignment.value = ListValue(items=new_items + current)
+    else:
+        # Validator should prevent this; defensive raise for direct callers.
+        raise ValueError(
+            [
+                {
+                    "code": "E_OP_TARGET_MISMATCH",
+                    "message": (f"$op {op} requires list-valued target; got " f"{type(current).__name__}."),
+                }
+            ]
+        )
+
+
+def _target_type_for_assignment(value: Any) -> str:
+    """GH#373: Classify an Assignment's value for op/target-type validation.
+
+    Returns one of: "array" | "scalar" | "map".
+      - "array": ListValue or Python list.
+      - "map":   InlineMap or Python dict (non-op-descriptor).
+      - "scalar": everything else (str, int, bool, None, LiteralZoneValue, etc.).
+    """
+    if isinstance(value, ListValue | list):
+        return "array"
+    if isinstance(value, InlineMap) or (isinstance(value, dict) and not _is_op_descriptor(value)):
+        return "map"
+    return "scalar"
+
+
 def _normalize_value_for_ast(value: Any) -> Any:
     """Normalize a Python value to an AST-compatible type.
 
@@ -1084,7 +1228,23 @@ class WriteTool(BaseTool):
             "changes",
             "object",
             required=False,
-            description='Dictionary of field updates for existing files. Uses tri-state semantics: absent=no-op, {"$op":"DELETE"}=remove, null=empty.',
+            description=(
+                "Dictionary of field updates for existing files. "
+                "Each value is either a bare value (full replacement, default) "
+                "or a $op descriptor: "
+                '{"$op":"DELETE"} removes the target; '
+                '{"$op":"APPEND","value":x} pushes x (or each item of list x) '
+                "onto the end of an array target; "
+                '{"$op":"PREPEND","value":x} unshifts onto the front of an array; '
+                '{"$op":"MERGE","value":{...}} deep-merges into a block target, '
+                "preserving unmentioned children (use inner $op:DELETE to remove). "
+                "Op/target-type mismatches return E_OP_TARGET_MISMATCH; "
+                "missing paths return E_UNRESOLVABLE_PATH (no auto-create, I3); "
+                "malformed descriptors return E_INVALID_OP_DESCRIPTOR. "
+                "Paths support: top-level KEY, META.FIELD, PARENT.CHILD into a "
+                "top-level Block, and §N.KEY / §N::NAME.KEY into Sections. "
+                "(GH#373)"
+            ),
         )
 
         schema.add_parameter(
@@ -1352,7 +1512,26 @@ class WriteTool(BaseTool):
         """
         errors: list[dict[str, Any]] = []
 
+        # GH#373: Pre-pass for op-descriptor shape validation. Catches malformed
+        # descriptors (unknown $op, missing 'value', MERGE-with-non-dict) before
+        # path resolution so the caller sees descriptor errors even when the path
+        # itself is fine. Op/target-type mismatch is checked further below
+        # (requires AST lookup of the resolved target).
+        op_descriptors: dict[str, tuple[str | None, Any]] = {}
+        for key, raw_value in changes.items():
+            op, payload, op_err = _extract_op_descriptor(raw_value)
+            if op_err is not None:
+                err = {**op_err, "message": f"Invalid descriptor for '{key}': {op_err['message']}"}
+                errors.append(err)
+                continue
+            op_descriptors[key] = (op, payload)
+
         for key in changes:
+            # Skip keys that already failed descriptor validation; their target
+            # type cannot be safely inspected in op/target-mismatch checks.
+            if key not in op_descriptors:
+                continue
+
             # Pattern 1: Array-index notation (e.g., KEY[4], §2.X.Y[0])
             if _ARRAY_INDEX_RE.search(key):
                 errors.append(
@@ -1497,7 +1676,157 @@ class WriteTool(BaseTool):
                 # doc is None: cannot do AST-aware resolution. Fall through and
                 # accept (legacy behaviour). _apply_changes will resolve.
 
+        # GH#373: Op/target-type compatibility post-pass.
+        # For each key with a recognised $op, look up the resolved target in the
+        # AST and verify the op is compatible with the target type.
+        # I5 (Schema Sovereignty): mismatches surface as visible E_OP_TARGET_MISMATCH
+        # errors, never silent coercion.
+        # I3 (Mirror Constraint): MERGE/APPEND/PREPEND on a missing path is
+        # rejected (no auto-create) via E_UNRESOLVABLE_PATH.
+        # Already-errored keys are skipped to keep error reports focused.
+        already_errored_keys = {
+            k
+            for k in changes
+            if any(
+                # Heuristic: any error message that quotes this key counts.
+                # Keeps the post-pass from double-reporting.
+                f"'{k}'" in (e.get("message") or "")
+                for e in errors
+            )
+        }
+        if doc is not None:
+            for key, (op, _payload) in op_descriptors.items():
+                if op is None or op == "DELETE":
+                    # Bare values: no target-type constraint.
+                    # DELETE is permitted on any target (idempotent for missing).
+                    continue
+                if key in already_errored_keys:
+                    continue
+
+                target_kind, target_node = self._resolve_target_type(doc, key)
+                if target_kind == "missing":
+                    errors.append(
+                        {
+                            "code": "E_UNRESOLVABLE_PATH",
+                            "message": (
+                                f"Unresolvable change path '{key}': $op {op} "
+                                f"requires an existing target, but no node "
+                                f"resolves at this path. Auto-create is forbidden "
+                                f"by I3 (Mirror Constraint); use content= to add "
+                                f"new structure."
+                            ),
+                        }
+                    )
+                    continue
+
+                if op in ("APPEND", "PREPEND"):
+                    if target_kind != "array":
+                        errors.append(
+                            {
+                                "code": "E_OP_TARGET_MISMATCH",
+                                "message": (
+                                    f"$op {op} requires an array target at '{key}', "
+                                    f"but found {target_kind}. APPEND/PREPEND only "
+                                    f"apply to list-valued assignments."
+                                ),
+                            }
+                        )
+                elif op == "MERGE":
+                    if target_kind not in ("block", "section", "meta"):
+                        errors.append(
+                            {
+                                "code": "E_OP_TARGET_MISMATCH",
+                                "message": (
+                                    f"$op MERGE requires a block (dict) target at "
+                                    f"'{key}', but found {target_kind}. MERGE only "
+                                    f"applies to top-level Blocks, Sections, or META."
+                                ),
+                            }
+                        )
+
         return errors
+
+    def _resolve_target_type(self, doc: Any, key: str) -> tuple[str, Any]:
+        """GH#373: Classify the AST target a change-path resolves to.
+
+        Returns:
+            (kind, node) where kind is one of:
+              - "missing": no target node exists at this path.
+              - "array":   target is a list-valued Assignment (ListValue / list).
+              - "scalar":  target is a non-list, non-map Assignment value.
+              - "map":     target is an InlineMap or dict Assignment value.
+              - "block":   target is a top-level Block.
+              - "section": target is a Section node.
+              - "meta":    target is the document's META block as a whole.
+            node is the resolved AST node (or value), or None when missing.
+
+        Used by _validate_change_paths to enforce op/target-type compatibility.
+        Path patterns mirror the resolution logic in _apply_changes.
+        """
+        # META.FIELD -> doc.meta[field]
+        if key.startswith("META.") and len(key) > 5:
+            field_name = key[5:]
+            if field_name in doc.meta:
+                value = doc.meta[field_name]
+                if isinstance(value, ListValue | list):
+                    return ("array", value)
+                if isinstance(value, InlineMap) or (isinstance(value, dict) and not _is_op_descriptor(value)):
+                    return ("map", value)
+                return ("scalar", value)
+            return ("missing", None)
+
+        # Top-level META as a whole -> meta block.
+        if key == "META":
+            return ("meta", doc.meta)
+
+        # §N.KEY or §N::NAME.KEY -> child Assignment within Section.
+        if key.startswith("§"):
+            match = _SECTION_PATH_RE.match(key)
+            if match is not None:
+                section_id, section_name, child_key = match.groups()
+                section = self._find_section(doc, section_id, section_name)
+                if section is None:
+                    return ("missing", None)
+                for child in section.children:
+                    if isinstance(child, Assignment) and child.key == child_key:
+                        kind = _target_type_for_assignment(child.value)
+                        return (kind, child)
+                    if isinstance(child, Block) and child.key == child_key:
+                        return ("block", child)
+                return ("missing", None)
+            return ("missing", None)
+
+        # PARENT.CHILD where PARENT is a top-level Block -> nested Assignment.
+        if "." in key and key.count(".") == 1:
+            parent_key, _, child_key = key.partition(".")
+            parent_block = self._find_block(doc, parent_key)
+            if parent_block is not None:
+                for child in parent_block.children:
+                    if isinstance(child, Assignment) and child.key == child_key:
+                        kind = _target_type_for_assignment(child.value)
+                        return (kind, child)
+                    if isinstance(child, Block) and child.key == child_key:
+                        return ("block", child)
+                # PARENT is a Block but CHILD missing inside it.
+                # Fall through to flat-key lookup (GH#370 conflicted-doc carve-out).
+            # Either PARENT is not a Block, or CHILD missing inside PARENT block.
+            # Try literal flat top-level Assignment (GH#347 dotted identifiers).
+            for node in doc.sections:
+                if isinstance(node, Assignment) and node.key == key:
+                    kind = _target_type_for_assignment(node.value)
+                    return (kind, node)
+            return ("missing", None)
+
+        # Bare top-level KEY.
+        for node in doc.sections:
+            if isinstance(node, Assignment) and node.key == key:
+                kind = _target_type_for_assignment(node.value)
+                return (kind, node)
+            if isinstance(node, Block) and node.key == key:
+                return ("block", node)
+            if isinstance(node, Section) and node.key == key:
+                return ("section", node)
+        return ("missing", None)
 
     def _find_block(self, doc: Any, block_key: str) -> Block | None:
         """Find a top-level Block node in doc.sections by key.
@@ -1576,10 +1905,35 @@ class WriteTool(BaseTool):
                     ]
                 )
 
-        if _is_delete_sentinel(new_value):
+        # GH#373: Op-aware dispatch. Bare values fall through to legacy
+        # full-replacement; descriptors (DELETE/APPEND/PREPEND) take their op
+        # branch. MERGE on a nested Assignment is unreachable here because
+        # _validate_change_paths rejects it via E_OP_TARGET_MISMATCH.
+        op, payload, _ = _extract_op_descriptor(new_value)
+
+        if op == "DELETE" or _is_delete_sentinel(new_value):
             block.children = [c for c in block.children if not (isinstance(c, Assignment) and c.key == child_key)]
             return
 
+        if op in ("APPEND", "PREPEND"):
+            for child in block.children:
+                if isinstance(child, Assignment) and child.key == child_key:
+                    _apply_array_op_inplace(child, op, payload)
+                    return
+            # Validator should have caught missing target; safety net.
+            raise ValueError(
+                [
+                    {
+                        "code": "E_UNRESOLVABLE_PATH",
+                        "message": (
+                            f"$op {op} target '{child_key}' not found in block "
+                            f"'{block_key}' (path '{original_key}')."
+                        ),
+                    }
+                ]
+            )
+
+        # Legacy full-value replacement (or new Assignment if missing).
         normalized_value = _normalize_value_for_ast(new_value)
         for child in block.children:
             if isinstance(child, Assignment) and child.key == child_key:
@@ -1680,24 +2034,44 @@ class WriteTool(BaseTool):
                     ]
                 )
 
-        if _is_delete_sentinel(new_value):
+        # GH#373: Op-aware dispatch parallel to _apply_block_change.
+        op, payload, _ = _extract_op_descriptor(new_value)
+
+        if op == "DELETE" or _is_delete_sentinel(new_value):
             # I2: DELETE sentinel - remove child from section
             section.children = [c for c in section.children if not (isinstance(c, Assignment) and c.key == child_key)]
-        else:
-            # Update or add child assignment
-            # I1 (Syntactic Fidelity): Normalize Python values to AST types
-            normalized_value = _normalize_value_for_ast(new_value)
-            found = False
+            return
+
+        if op in ("APPEND", "PREPEND"):
             for child in section.children:
                 if isinstance(child, Assignment) and child.key == child_key:
-                    child.value = normalized_value
-                    found = True
-                    break
+                    _apply_array_op_inplace(child, op, payload)
+                    return
+            raise ValueError(
+                [
+                    {
+                        "code": "E_UNRESOLVABLE_PATH",
+                        "message": (
+                            f"$op {op} target '{child_key}' not found in §{section_id} " f"(path '{original_key}')."
+                        ),
+                    }
+                ]
+            )
 
-            if not found:
-                # Add new assignment to section children
-                new_assignment = Assignment(key=child_key, value=normalized_value)
-                section.children.append(new_assignment)
+        # Update or add child assignment
+        # I1 (Syntactic Fidelity): Normalize Python values to AST types
+        normalized_value = _normalize_value_for_ast(new_value)
+        found = False
+        for child in section.children:
+            if isinstance(child, Assignment) and child.key == child_key:
+                child.value = normalized_value
+                found = True
+                break
+
+        if not found:
+            # Add new assignment to section children
+            new_assignment = Assignment(key=child_key, value=normalized_value)
+            section.children.append(new_assignment)
 
     def _apply_changes(self, doc: Any, changes: dict[str, Any]) -> Any:
         """Apply changes to AST document with tri-state and dot-notation semantics.
@@ -1764,7 +2138,13 @@ class WriteTool(BaseTool):
                     # included in the changes dict.  Merge preserves unmentioned
                     # fields (I3 Mirror Constraint: reflect only present, create
                     # nothing -- and do not destroy what is already present).
-                    for mk, mv in new_value.items():
+                    #
+                    # GH#373: An explicit {"$op": "MERGE", "value": {...}} descriptor
+                    # has the same semantics as the bare-dict legacy form; payload
+                    # is the inner dict.
+                    op_meta, payload_meta, _ = _extract_op_descriptor(new_value)
+                    merge_dict = payload_meta if op_meta == "MERGE" else new_value
+                    for mk, mv in merge_dict.items():
                         if _is_delete_sentinel(mv):
                             doc.meta.pop(mk, None)
                         else:
@@ -1792,7 +2172,85 @@ class WriteTool(BaseTool):
                 # I2: DELETE sentinel - remove field entirely from sections
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
             else:
-                # Update or set to null in sections
+                # GH#373: Op-aware dispatch on top-level keys.
+                # MERGE on a top-level Block; APPEND/PREPEND on a top-level
+                # array Assignment. Bare values fall through to legacy
+                # full-replacement.
+                op, payload, _ = _extract_op_descriptor(new_value)
+
+                if op == "MERGE":
+                    # Validator restricts MERGE to block/section/meta targets.
+                    target_block: Block | None = self._find_block(doc, key)
+                    if target_block is not None:
+                        for mk, mv in payload.items():
+                            if _is_delete_sentinel(mv):
+                                target_block.children = [
+                                    c for c in target_block.children if not (isinstance(c, Assignment) and c.key == mk)
+                                ]
+                                continue
+                            normalized_mv = _normalize_value_for_ast(mv)
+                            found_child = False
+                            for child in target_block.children:
+                                if isinstance(child, Assignment) and child.key == mk:
+                                    child.value = normalized_mv
+                                    found_child = True
+                                    break
+                            if not found_child:
+                                target_block.children.append(Assignment(key=mk, value=normalized_mv))
+                        continue
+
+                    # MERGE on a Section -- search and merge children.
+                    target_section: Section | None = None
+                    for node in doc.sections:
+                        if isinstance(node, Section) and node.key == key:
+                            target_section = node
+                            break
+                    if target_section is not None:
+                        for mk, mv in payload.items():
+                            if _is_delete_sentinel(mv):
+                                target_section.children = [
+                                    c
+                                    for c in target_section.children
+                                    if not (isinstance(c, Assignment) and c.key == mk)
+                                ]
+                                continue
+                            normalized_mv = _normalize_value_for_ast(mv)
+                            found_child = False
+                            for child in target_section.children:
+                                if isinstance(child, Assignment) and child.key == mk:
+                                    child.value = normalized_mv
+                                    found_child = True
+                                    break
+                            if not found_child:
+                                target_section.children.append(Assignment(key=mk, value=normalized_mv))
+                        continue
+                    # Validator should have caught missing target; safety net.
+                    raise ValueError(
+                        [
+                            {
+                                "code": "E_UNRESOLVABLE_PATH",
+                                "message": (f"$op MERGE target '{key}' not found as a Block " f"or Section."),
+                            }
+                        ]
+                    )
+
+                if op in ("APPEND", "PREPEND"):
+                    for section in doc.sections:
+                        if isinstance(section, Assignment) and section.key == key:
+                            _apply_array_op_inplace(section, op, payload)
+                            break
+                    else:
+                        raise ValueError(
+                            [
+                                {
+                                    "code": "E_UNRESOLVABLE_PATH",
+                                    "message": (f"$op {op} target '{key}' not found as a " f"top-level Assignment."),
+                                }
+                            ]
+                        )
+                    continue
+
+                # Legacy full-value replacement (or new Assignment if missing).
                 # I1 (Syntactic Fidelity): Normalize Python values to AST types
                 normalized_value = _normalize_value_for_ast(new_value)
                 found = False

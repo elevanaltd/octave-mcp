@@ -161,6 +161,65 @@ result = await client.call_tool(
 )
 ```
 
+#### Op-aware mutation in `changes` (GH#373)
+
+Each value in `changes` is either a **bare value** (full replacement, default
+behaviour) or a **`$op` descriptor** that targets a specific operation:
+
+| `$op` | Target type | Semantics |
+|---|---|---|
+| `APPEND` | array | push `value` (or each item of list `value`) onto the end |
+| `PREPEND` | array | unshift `value` (or each item of list `value`) onto the front |
+| `MERGE` | block (dict) | deep-merge `value` into the block; unmentioned keys preserved |
+| `DELETE` | any | remove the target (key or assignment) |
+| _(none)_ | any | full-value replacement (legacy behaviour) |
+
+Paths support: top-level `KEY`, `META.FIELD`, `PARENT.CHILD` into a top-level
+Block, and `§N.KEY` / `§N::NAME.KEY` into Sections.
+
+```python
+# Append a new token to a nested array (no read-modify-write of the whole array).
+await client.call_tool("octave_write", {
+    "target_path": path,
+    "changes": {"NAV.OPERATIONAL_CONVENTIONS": {"$op": "APPEND", "value": "NEW_TOKEN"}}
+})
+
+# Bulk-append multiple elements in caller order.
+await client.call_tool("octave_write", {
+    "target_path": path,
+    "changes": {"NAV.OPERATIONAL_CONVENTIONS": {"$op": "APPEND", "value": ["A", "B"]}}
+})
+
+# Merge into a top-level Block, preserving unmentioned children.
+await client.call_tool("octave_write", {
+    "target_path": path,
+    "changes": {"NAV": {"$op": "MERGE", "value": {"NEW_KEY": "x"}}}
+})
+
+# Remove a nested child.
+await client.call_tool("octave_write", {
+    "target_path": path,
+    "changes": {"NAV.DEPRECATED": {"$op": "DELETE"}}
+})
+```
+
+**Validation contract.** Op/target-type mismatches and missing paths surface as
+explicit error codes; they are never silently coerced (I3 Mirror Constraint,
+I5 Schema Sovereignty). All descriptors in a batch are validated up-front:
+if any descriptor is invalid, none are applied (fail-fast atomicity).
+
+| Error code | Cause |
+|---|---|
+| `E_OP_TARGET_MISMATCH` | `APPEND`/`PREPEND` on a non-array, or `MERGE` on a non-block |
+| `E_UNRESOLVABLE_PATH` | path does not resolve in the AST (auto-create is forbidden) |
+| `E_INVALID_OP_DESCRIPTOR` | unknown `$op`, missing `value`, or `MERGE` with non-dict `value` |
+
+> **Diff-locality note.** `$op` descriptors give you correct, targeted *semantics*
+> (e.g. APPEND mutates only the array's contents in the AST), but the rendered
+> diff is not yet guaranteed to be byte-stable outside the changed region — the
+> renderer canonicalises the whole document. Renderer stability is tracked
+> separately in [GH#371](https://github.com/elevanaltd/octave-mcp/issues/371).
+
 ---
 
 ### octave_eject
