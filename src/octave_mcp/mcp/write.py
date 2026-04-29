@@ -1406,26 +1406,189 @@ class WriteTool(BaseTool):
                         )
                 continue
 
-            # Pattern 3: Non-META hierarchical dot-paths (e.g., CONDUCT.PROTOCOL.MUST_NEVER)
-            # META.FIELD is handled by _apply_changes; other dot-paths are not.
-            # GH#347: Single-dot keys like P1.1 or v2.0 are valid OCTAVE identifiers
-            # (the lexer allows dots in identifiers). Only reject keys with 2+ dots,
-            # which indicate hierarchical paths that cannot be resolved to AST nodes.
-            if key.count(".") >= 2 and not key.startswith("META."):
-                errors.append(
-                    {
-                        "code": "E_UNRESOLVABLE_PATH",
-                        "message": (
-                            f"Unresolvable change path '{key}': nested dot-path notation "
-                            f"is only supported for META fields (e.g., META.STATUS). "
-                            f"Other dot-paths cannot be resolved to AST nodes. To modify "
-                            f"nested fields, use the content parameter with the full document."
-                        ),
-                    }
-                )
-                continue
+            # Pattern 3: Non-META hierarchical dot-paths.
+            # META.FIELD is handled by _apply_changes.
+            #
+            # GH#347 carve-out: Single-dot keys like P1.1 or v2.0 are valid OCTAVE
+            # identifiers (the lexer allows dots in identifiers).
+            # GH#369: AST-aware resolution distinguishes "identifier with dots"
+            # from "PARENT.CHILD path expression":
+            #   - 2+ dots, non-META: always reject (deep nested paths unsupported).
+            #   - exactly 1 dot, non-META:
+            #       * If PARENT is a top-level Block in the AST -> treat dot as
+            #         path separator. CHILD must resolve inside that Block,
+            #         otherwise reject with E_UNRESOLVABLE_PATH.
+            #       * Else if the literal dotted key already exists as a flat
+            #         top-level Assignment -> accept (modify in place).
+            #       * Else if doc is None (no AST available for resolution) ->
+            #         accept (defer; legacy behaviour relied on this for the
+            #         GH#347 carve-out without parsing).
+            #       * Else -> reject (no resolvable target).
+            if "." in key and not key.startswith("META."):
+                if key.count(".") >= 2:
+                    errors.append(
+                        {
+                            "code": "E_UNRESOLVABLE_PATH",
+                            "message": (
+                                f"Unresolvable change path '{key}': nested dot-path notation "
+                                f"is only supported for META fields (e.g., META.STATUS). "
+                                f"Other dot-paths cannot be resolved to AST nodes. To modify "
+                                f"nested fields, use the content parameter with the full document."
+                            ),
+                        }
+                    )
+                    continue
+
+                # Exactly one dot, non-META. AST-aware resolution.
+                if doc is not None:
+                    parent_key, _, child_key = key.partition(".")
+                    parent_block = self._find_block(doc, parent_key)
+                    if parent_block is not None:
+                        # PARENT exists as a top-level Block. Treat dot as path
+                        # separator; CHILD must resolve inside the Block.
+                        if not any(isinstance(c, Assignment) and c.key == child_key for c in parent_block.children):
+                            # GH#370: Before rejecting, check if the literal dotted key
+                            # exists as a flat assignment (conflict scenario from GH#369).
+                            # If the flat key exists, applier will handle it; validator
+                            # must not reject to maintain contract with applier.
+                            flat_match = any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
+                            if flat_match:
+                                # Conflicted document: Block + flat dotted assignment coexist.
+                                # Applier will route to flat assignment (GH#347 carve-out).
+                                # Tolerate here for consistency; validator will emit W_DUPLICATE_TARGET.
+                                continue
+                            # No flat fallback; reject the unresolvable path.
+                            errors.append(
+                                {
+                                    "code": "E_UNRESOLVABLE_PATH",
+                                    "message": (
+                                        f"Unresolvable change path '{key}': '{parent_key}' is a "
+                                        f"top-level block but does not contain a child assignment "
+                                        f"named '{child_key}'. To add a new child field to a block, "
+                                        f"use the content parameter with the full document."
+                                    ),
+                                }
+                            )
+                            continue
+                        # PARENT.CHILD resolves inside the block. _apply_changes
+                        # will route to _apply_block_change.
+                        continue
+                    # PARENT is not a top-level Block. The key is acceptable
+                    # only if it already exists as a flat top-level Assignment
+                    # (preserves the GH#347 single-identifier carve-out for
+                    # legitimate dotted identifiers like P1.1).
+                    flat_match = any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
+                    if flat_match:
+                        continue
+                    errors.append(
+                        {
+                            "code": "E_UNRESOLVABLE_PATH",
+                            "message": (
+                                f"Unresolvable change path '{key}': '{parent_key}' is not a "
+                                f"top-level block and the literal key '{key}' does not exist "
+                                f"as a flat top-level assignment. If you intended a nested "
+                                f"field, use the content parameter with the full document. "
+                                f"If you intended a flat top-level key, ensure it exists "
+                                f"or pass content= to create it."
+                            ),
+                        }
+                    )
+                    continue
+                # doc is None: cannot do AST-aware resolution. Fall through and
+                # accept (legacy behaviour). _apply_changes will resolve.
 
         return errors
+
+    def _find_block(self, doc: Any, block_key: str) -> Block | None:
+        """Find a top-level Block node in doc.sections by key.
+
+        GH#369: Companion to _find_section for nested Block path resolution.
+        Walks doc.sections looking for a Block whose .key matches block_key.
+        Only inspects direct children of the document (top-level blocks);
+        deeper nesting is intentionally not searched, mirroring the single-
+        level child-key constraint of _find_section.
+
+        Args:
+            doc: Parsed AST document
+            block_key: Block key name to match (e.g., "NAV")
+
+        Returns:
+            Matching Block node, or None if not found.
+        """
+        for node in doc.sections:
+            if isinstance(node, Block) and node.key == block_key:
+                return node
+        return None
+
+    def _apply_block_change(
+        self,
+        doc: Any,
+        original_key: str,
+        block_key: str,
+        child_key: str,
+        new_value: Any,
+    ) -> None:
+        """Apply a change to a child Assignment within a top-level Block node.
+
+        GH#369: Mirrors _apply_section_change for top-level Block nodes.
+        Used when the change key is PARENT.CHILD and PARENT is a top-level
+        Block. Supports set/replace and DELETE sentinel for the child
+        Assignment. Modifying nested Block-within-Block targets and array
+        merge ops are explicitly out of scope.
+
+        Args:
+            doc: Parsed AST document
+            original_key: The original changes key (for error messages)
+            block_key: Top-level block key to navigate into
+            child_key: Child key within the block to modify
+            new_value: New value (with tri-state semantics)
+
+        Raises:
+            ValueError: If the block cannot be found, or if child_key resolves
+                to a Block (nested block-in-block modification not supported).
+                _validate_change_paths runs first so these are safety nets.
+        """
+        block = self._find_block(doc, block_key)
+        if block is None:
+            raise ValueError(
+                [
+                    {
+                        "code": "E_UNRESOLVABLE_PATH",
+                        "message": (f"Block '{block_key}' not found in document for " f"change path '{original_key}'."),
+                    }
+                ]
+            )
+
+        # Reject Block-in-Block targets (mirrors _apply_section_change I3 guard).
+        for child in block.children:
+            if isinstance(child, Block) and child.key == child_key:
+                raise ValueError(
+                    [
+                        {
+                            "code": "E_BLOCK_TARGET",
+                            "message": (
+                                f"Cannot modify '{child_key}' in block '{block_key}' via "
+                                f"changes-mode: it is a Block (nested structure), not an "
+                                f"Assignment. Use content= to rewrite the block, or target "
+                                f"individual keys within the inner block."
+                            ),
+                        }
+                    ]
+                )
+
+        if _is_delete_sentinel(new_value):
+            block.children = [c for c in block.children if not (isinstance(c, Assignment) and c.key == child_key)]
+            return
+
+        normalized_value = _normalize_value_for_ast(new_value)
+        for child in block.children:
+            if isinstance(child, Assignment) and child.key == child_key:
+                child.value = normalized_value
+                return
+
+        # If we reach here, _validate_change_paths missed the case. Add as new
+        # child Assignment to keep behaviour consistent with _apply_section_change.
+        block.children.append(Assignment(key=child_key, value=normalized_value))
 
     def _find_section(
         self,
@@ -1607,6 +1770,24 @@ class WriteTool(BaseTool):
                         else:
                             # I1 (Syntactic Fidelity): Normalize values for AST
                             doc.meta[mk] = _normalize_value_for_ast(mv)
+            elif (
+                "." in key
+                and key.count(".") == 1
+                and self._find_block(doc, key.split(".", 1)[0]) is not None
+                and not any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
+            ):
+                # GH#369: PARENT.CHILD where PARENT is a top-level Block and the
+                # literal dotted key does NOT already exist as a flat top-level
+                # Assignment. Route into the Block instead of falling through to
+                # the flat-assignment branch (which would silently append a
+                # duplicate assignment with a dotted key, violating I3).
+                #
+                # The "literal dotted key already exists at top level" check
+                # preserves the GH#347 edge case where a block named e.g. "P1"
+                # coexists with a flat assignment "P1.1::value": we still
+                # modify the flat assignment in that scenario.
+                parent_key, _, child_key = key.partition(".")
+                self._apply_block_change(doc, key, parent_key, child_key, new_value)
             elif _is_delete_sentinel(new_value):
                 # I2: DELETE sentinel - remove field entirely from sections
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
@@ -2179,6 +2360,28 @@ class WriteTool(BaseTool):
                 },
             }
             result["literal_zone_repair_log"] = build_literal_zone_repair_log(zones, doc, "octave_write").to_dict()
+
+        # GH#370: Structural validation (runs regardless of schema).
+        # Detects W_DUPLICATE_TARGET warnings that must surface in default flow.
+        # This is a lightweight check that doesn't require schema binding.
+
+        structural_validator = Validator(schema=None)
+        structural_warnings = structural_validator.validate(doc, strict=False, section_schemas=None)
+
+        # Filter to only warnings (severity='warning') and add them as corrections
+        # so they surface in the result.
+        for warning in structural_warnings:
+            if warning.severity == "warning":
+                result["corrections"].append(
+                    {
+                        "code": warning.code,
+                        "tier": "STRUCTURAL_CHECK",
+                        "message": warning.message,
+                        "field": warning.field_path,
+                        "safe": True,  # W_DUPLICATE_TARGET is a safety net, not data loss
+                        "semantics_changed": False,
+                    }
+                )
 
         # Schema Validation (I5 Schema Sovereignty)
         if schema_name:
