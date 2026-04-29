@@ -137,6 +137,13 @@ class Validator:
         if doc.meta:
             self._check_meta_warnings(doc.meta)
 
+        # GH#369: structural duplicate-target safety net.
+        # If the AST contains both Block(K) and a flat Assignment("K.X", ...)
+        # at the same level, that is the silent-corruption fingerprint left by
+        # a regressed writer (or by hand-edited input). Surface it under
+        # STANDARD profile so I5 (Schema Sovereignty) does not stay silent.
+        self._check_duplicate_semantic_targets(doc.sections)
+
         # Validate sections
         # Issue #325: Walk document tree recursively so nested blocks (e.g., NATURE:
         # inside §1::COGNITIVE_IDENTITY) are also validated against section_schemas.
@@ -226,6 +233,57 @@ class Validator:
                     severity="warning",
                 )
             )
+
+    def _check_duplicate_semantic_targets(self, nodes: list[ASTNode]) -> None:
+        """Emit W_DUPLICATE_TARGET when a Block(K) coexists with a flat
+        Assignment("K.X", ...) at the same nesting level.
+
+        GH#369: Structural safety net. The writer-side fix prevents new
+        duplicates from being created, but pre-existing files (or any future
+        writer regression) can still contain this corruption fingerprint.
+        Surfacing it as a warning fulfils I5 (Schema Sovereignty: validation
+        status visible) and I3 (Mirror Constraint: do not silently accept
+        fabricated structure).
+
+        Walks the given nodes list and recurses into Block.children and
+        Section.children so the check fires at every nesting level.
+        """
+        # Collect Block keys and flat dotted Assignment keys at this level.
+        block_keys: set[str] = set()
+        dotted_assignments: list[Assignment] = []
+        for node in nodes:
+            if isinstance(node, Block):
+                block_keys.add(node.key)
+            elif isinstance(node, Assignment) and "." in node.key:
+                dotted_assignments.append(node)
+
+        for assignment in dotted_assignments:
+            parent_key, _, child_key = assignment.key.partition(".")
+            # Only flag if PARENT collides with an actual Block at the same
+            # level. Single-identifier dotted keys like "P1.1" without a
+            # corresponding Block remain valid (GH#347 carve-out).
+            if parent_key in block_keys:
+                self.errors.append(
+                    ValidationError(
+                        code="W_DUPLICATE_TARGET",
+                        message=(
+                            f"Duplicate semantic target: Block '{parent_key}' coexists with "
+                            f"flat assignment '{assignment.key}' at the same level. This is "
+                            f"the corruption fingerprint of a writer that failed to resolve "
+                            f"a nested path (GH#369). Modify '{child_key}' inside block "
+                            f"'{parent_key}' or remove one of the two."
+                        ),
+                        field_path=assignment.key,
+                        severity="warning",
+                    )
+                )
+
+        # Recurse into block/section children.
+        for node in nodes:
+            if isinstance(node, Block):
+                self._check_duplicate_semantic_targets(node.children)
+            elif isinstance(node, Section):
+                self._check_duplicate_semantic_targets(node.children)
 
     def _validate_unknown_fields(
         self,

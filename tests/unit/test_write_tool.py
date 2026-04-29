@@ -5234,3 +5234,43 @@ class TestGH369NestedBlockChangePathResolution:
             assert result["status"] == "success", (
                 f"GH#347 single-identifier dotted key must remain accepted, got: " f"{result.get('errors')}"
             )
+
+    def test_deliverable_c_validator_warns_on_duplicate_semantic_target(self):
+        """Deliverable C: the validator emits a structural warning when the
+        AST contains both Block(K) and a flat Assignment("K.X", ...) at the
+        same level. This is the safety net against any future writer regression
+        and supports I5 (Schema Sovereignty: validation status visible).
+        """
+        from octave_mcp.core.ast_nodes import Assignment, Block, Document, ListValue
+        from octave_mcp.core.validator import Validator
+
+        # Construct an AST representing the corruption pattern directly so the
+        # test is independent of writer behaviour.
+        doc = Document(
+            name="NAV_TEST",
+            meta={"TYPE": "TEST"},
+            sections=[
+                Block(
+                    key="NAV",
+                    children=[
+                        Assignment(key="OPERATIONAL_CONVENTIONS", value=ListValue(items=["A"])),
+                    ],
+                ),
+                Assignment(
+                    key="NAV.OPERATIONAL_CONVENTIONS",
+                    value=ListValue(items=["A", "B"]),
+                ),
+            ],
+        )
+
+        validator = Validator()
+        errors = validator.validate(doc)
+
+        codes = {e.code for e in errors}
+        assert (
+            "W_DUPLICATE_TARGET" in codes
+        ), f"Expected W_DUPLICATE_TARGET warning in validator output, got codes: {codes}"
+        # And it must be classified as a warning (not a hard error), so it
+        # surfaces under STANDARD profile without breaking parsing flows.
+        dup = [e for e in errors if e.code == "W_DUPLICATE_TARGET"][0]
+        assert dup.severity == "warning"
