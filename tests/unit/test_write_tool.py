@@ -5274,3 +5274,108 @@ class TestGH369NestedBlockChangePathResolution:
         # surfaces under STANDARD profile without breaking parsing flows.
         dup = [e for e in errors if e.code == "W_DUPLICATE_TARGET"][0]
         assert dup.severity == "warning"
+
+    @pytest.mark.asyncio
+    async def test_gh370_conflicted_document_block_plus_flat_dotted_allowed(self):
+        """GH#370: A document with both Block(K) and flat Assignment(K.X) is
+        conflicted but should be editable via changes-mode. The validator must
+        tolerate this because the applier will handle it via the flat assignment.
+        This happens when a writer regression created the corruption pattern but
+        the file still needs cleanup."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            # Corrupted document: Block P1 + flat P1.1
+            initial = (
+                "===TEST===\n" "META:\n" '  TYPE::"TEST"\n' "P1:\n" "  CHILD::value\n" "P1.1::original\n" "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Should allow editing the flat assignment
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"P1.1": "updated"},
+            )
+
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            # Verify the W_DUPLICATE_TARGET warning surfaces
+            correction_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert (
+                "W_DUPLICATE_TARGET" in correction_codes
+            ), f"Expected W_DUPLICATE_TARGET warning in corrections, got: {correction_codes}"
+            with open(target_path) as f:
+                final = f.read()
+            assert "P1.1::updated" in final
+
+    @pytest.mark.asyncio
+    async def test_gh370_duplicate_target_warning_surfaces_in_default_flow(self):
+        """GH#370: W_DUPLICATE_TARGET warning must surface in default changes-mode
+        flow without requiring schema validation. This is Problem 2: the warning
+        only fired when schema_name was set, so corrupted files couldn't be
+        detected during normal editing."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            # Corrupted document: Block NAV + flat NAV.OPERATIONAL_CONVENTIONS
+            initial = (
+                "===NAV_TEST===\n"
+                "META:\n"
+                '  TYPE::"TEST"\n'
+                "NAV:\n"
+                "  FOUNDATIONAL::[A,B]\n"
+                "NAV.OPERATIONAL_CONVENTIONS::[SEARCH_PATH_CONVENTION]\n"
+                "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            # Execute without schema (default flow)
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+            )
+
+            assert result["status"] == "success"
+            # W_DUPLICATE_TARGET must surface in corrections
+            correction_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert (
+                "W_DUPLICATE_TARGET" in correction_codes
+            ), f"Expected W_DUPLICATE_TARGET in default flow, got: {correction_codes}"
+
+    @pytest.mark.asyncio
+    async def test_gh370_delete_sentinel_on_conflicted_document(self):
+        """GH#370: DELETE sentinel on a flat K.X assignment in a conflicted
+        document (where Block(K) also exists) should work. This ensures both
+        reading and writing operations can handle the corruption pattern."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            # Corrupted document: Block P1 + flat P1.1
+            initial = (
+                "===TEST===\n" "META:\n" '  TYPE::"TEST"\n' "P1:\n" "  CHILD::value\n" "P1.1::to_delete\n" "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"P1.1": {"$op": "DELETE"}},
+            )
+
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            with open(target_path) as f:
+                final = f.read()
+            # P1.1 should be deleted but P1 block remains
+            assert "P1.1" not in final
+            assert "P1:" in final
+            assert "CHILD" in final

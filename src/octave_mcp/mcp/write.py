@@ -1447,6 +1447,17 @@ class WriteTool(BaseTool):
                         # PARENT exists as a top-level Block. Treat dot as path
                         # separator; CHILD must resolve inside the Block.
                         if not any(isinstance(c, Assignment) and c.key == child_key for c in parent_block.children):
+                            # GH#370: Before rejecting, check if the literal dotted key
+                            # exists as a flat assignment (conflict scenario from GH#369).
+                            # If the flat key exists, applier will handle it; validator
+                            # must not reject to maintain contract with applier.
+                            flat_match = any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
+                            if flat_match:
+                                # Conflicted document: Block + flat dotted assignment coexist.
+                                # Applier will route to flat assignment (GH#347 carve-out).
+                                # Tolerate here for consistency; validator will emit W_DUPLICATE_TARGET.
+                                continue
+                            # No flat fallback; reject the unresolvable path.
                             errors.append(
                                 {
                                     "code": "E_UNRESOLVABLE_PATH",
@@ -2349,6 +2360,28 @@ class WriteTool(BaseTool):
                 },
             }
             result["literal_zone_repair_log"] = build_literal_zone_repair_log(zones, doc, "octave_write").to_dict()
+
+        # GH#370: Structural validation (runs regardless of schema).
+        # Detects W_DUPLICATE_TARGET warnings that must surface in default flow.
+        # This is a lightweight check that doesn't require schema binding.
+
+        structural_validator = Validator(schema=None)
+        structural_warnings = structural_validator.validate(doc, strict=False, section_schemas=None)
+
+        # Filter to only warnings (severity='warning') and add them as corrections
+        # so they surface in the result.
+        for warning in structural_warnings:
+            if warning.severity == "warning":
+                result["corrections"].append(
+                    {
+                        "code": warning.code,
+                        "tier": "STRUCTURAL_CHECK",
+                        "message": warning.message,
+                        "field": warning.field_path,
+                        "safe": True,  # W_DUPLICATE_TARGET is a safety net, not data loss
+                        "semantics_changed": False,
+                    }
+                )
 
         # Schema Validation (I5 Schema Sovereignty)
         if schema_name:
