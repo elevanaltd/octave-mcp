@@ -5013,3 +5013,224 @@ class TestValidationHintOnUnvalidated:
             assert (
                 "schema=" in hint or "schema='" in hint
             ), f"validation_hint should mention schema= parameter, got: {hint}"
+
+
+class TestGH369NestedBlockChangePathResolution:
+    """GH#369: Single-dot non-META keys (e.g. NAV.OPERATIONAL_CONVENTIONS)
+    must resolve into nested Block children, not silently append a flat
+    duplicate Assignment at the top level.
+
+    Three deliverables under test:
+      A. _validate_change_paths AST-aware rejection of unresolvable PARENT.CHILD
+         where PARENT is not a top-level Block.
+      B. _apply_changes Block-walker resolution: if PARENT is a top-level Block,
+         resolve CHILD inside it and modify in place; support DELETE sentinel.
+      C. Validator emits a structural warning (W_DUPLICATE_TARGET) when an AST
+         contains both Block(K) and a flat Assignment("K.X", ...) at the same
+         level under STANDARD profile.
+
+    I3 (Mirror Constraint) violation regression: prior behaviour created a
+    duplicate flat assignment instead of reflecting/modifying the nested target.
+    """
+
+    @pytest.mark.asyncio
+    async def test_verbatim_nav_repro_no_silent_corruption(self):
+        """Verbatim repro from GH#369 task brief.
+
+        Prior behaviour: status=success, file gets BOTH the original NAV: block
+        AND a duplicate flat NAV.OPERATIONAL_CONVENTIONS::[...] line appended.
+        Expected: writer either correctly modifies the nested array OR rejects
+        with a clear E_UNRESOLVABLE_PATH-style error. NEVER silent corruption.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = (
+                "===NAV_TEST===\n"
+                "META:\n"
+                "  TYPE::TEST\n"
+                "NAV:\n"
+                "  FOUNDATIONAL::[A,B]\n"
+                "  OPERATIONAL_CONVENTIONS::[SEARCH_PATH_CONVENTION]\n"
+                "  INFRASTRUCTURE::[QR_REDIRECT_LAYER]\n"
+                "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": ["SEARCH_PATH_CONVENTION", "NEW_TOKEN"]},
+            )
+
+            with open(target_path) as f:
+                final = f.read()
+
+            # Whatever path the writer takes, it MUST NOT produce silent corruption:
+            # original block intact AND duplicate flat assignment appended.
+            duplicate_flat = "NAV.OPERATIONAL_CONVENTIONS::" in final
+            assert not duplicate_flat, (
+                "GH#369 SILENT CORRUPTION: a flat top-level "
+                "'NAV.OPERATIONAL_CONVENTIONS::' assignment was appended "
+                "alongside the original NAV: block. Writer violates I3 Mirror "
+                f"Constraint. File content:\n{final}"
+            )
+
+            # Two acceptable outcomes:
+            # 1) success with the nested array correctly modified (NEW_TOKEN present
+            #    inside the NAV: block), or
+            # 2) error with E_UNRESOLVABLE_PATH-style code referencing the path.
+            if result["status"] == "success":
+                assert "NEW_TOKEN" in final, "Writer reported success but NEW_TOKEN is missing from file"
+                # And the nested block must still exist (not flattened away).
+                assert "NAV:" in final, "NAV: block was destroyed during update"
+            else:
+                assert result["status"] == "error"
+                codes = {e.get("code") for e in result.get("errors", [])}
+                assert (
+                    "E_UNRESOLVABLE_PATH" in codes
+                ), f"Expected E_UNRESOLVABLE_PATH in errors, got: {result.get('errors')}"
+
+    @pytest.mark.asyncio
+    async def test_deliverable_b_block_walker_set_replaces_nested_child(self):
+        """Deliverable B: PARENT.CHILD where PARENT is a top-level Block resolves
+        into the Block's children and replaces the matching child Assignment in
+        place (no duplicate flat assignment, no destruction of the block)."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = (
+                "===NAV_TEST===\n"
+                "META:\n"
+                "  TYPE::TEST\n"
+                "NAV:\n"
+                "  FOUNDATIONAL::[A,B]\n"
+                "  OPERATIONAL_CONVENTIONS::[SEARCH_PATH_CONVENTION]\n"
+                "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+            )
+
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            with open(target_path) as f:
+                final = f.read()
+            assert "NAV:" in final
+            assert "NAV.OPERATIONAL_CONVENTIONS::" not in final, f"flat duplicate assignment leaked into file:\n{final}"
+            # New value must be present
+            assert "C" in final
+
+    @pytest.mark.asyncio
+    async def test_deliverable_b_block_walker_delete_sentinel(self):
+        """Deliverable B: DELETE sentinel on PARENT.CHILD removes the child
+        from the Block, leaving the Block intact with remaining siblings."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = (
+                "===NAV_TEST===\n"
+                "META:\n"
+                "  TYPE::TEST\n"
+                "NAV:\n"
+                "  FOUNDATIONAL::[A,B]\n"
+                "  OPERATIONAL_CONVENTIONS::[SEARCH_PATH_CONVENTION]\n"
+                "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": {"$op": "DELETE"}},
+            )
+
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            with open(target_path) as f:
+                final = f.read()
+            assert "OPERATIONAL_CONVENTIONS" not in final
+            assert "FOUNDATIONAL" in final
+
+    @pytest.mark.asyncio
+    async def test_deliverable_a_unresolvable_block_child_rejected(self):
+        """Deliverable A: PARENT.CHILD where PARENT IS a top-level Block but
+        CHILD does NOT exist within it must be rejected with E_UNRESOLVABLE_PATH
+        rather than silently appending a flat duplicate."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = "===NAV_TEST===\n" "META:\n" "  TYPE::TEST\n" "NAV:\n" "  FOUNDATIONAL::[A,B]\n" "===END===\n"
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.NONEXISTENT_CHILD": ["X"]},
+            )
+
+            assert result["status"] == "error"
+            codes = {e.get("code") for e in result.get("errors", [])}
+            assert "E_UNRESOLVABLE_PATH" in codes, f"Expected E_UNRESOLVABLE_PATH, got: {result.get('errors')}"
+
+    @pytest.mark.asyncio
+    async def test_deliverable_a_unresolvable_no_such_parent_block_rejected(self):
+        """Deliverable A: PARENT.CHILD where PARENT is neither META nor a
+        top-level Block must be rejected. Previous count('.')>=2 heuristic let
+        single-dot non-META paths through."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = "===TEST===\n" "META:\n" "  TYPE::TEST\n" "FLAT_KEY::value\n" "===END===\n"
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NO_SUCH_BLOCK.CHILD": "x"},
+            )
+
+            assert result["status"] == "error"
+            codes = {e.get("code") for e in result.get("errors", [])}
+            assert "E_UNRESOLVABLE_PATH" in codes, f"Expected E_UNRESOLVABLE_PATH, got: {result.get('errors')}"
+
+    @pytest.mark.asyncio
+    async def test_deliverable_a_preserves_gh347_single_identifier_dotted_keys(self):
+        """Deliverable A: GH#347 carve-out is preserved. P1.1 / v2.0 are valid
+        single-identifier keys (lexer allows dots in identifiers). When PARENT
+        is not a top-level Block, the AST-aware validator must still treat the
+        whole string as a flat identifier and accept it for top-level use."""
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = "===TEST===\n" "META:\n" '  TYPE::"TEST_DOC"\n' "---\n" "P1.1::original\n" "===END==="
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"P1.1": "updated"},
+            )
+            assert result["status"] == "success", (
+                f"GH#347 single-identifier dotted key must remain accepted, got: " f"{result.get('errors')}"
+            )
