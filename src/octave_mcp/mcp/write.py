@@ -12,6 +12,7 @@ Implements octave_write tool - replaces octave_create + octave_amend with:
 - I5 (Schema Sovereignty): Always returns validation_status
 """
 
+import copy
 import hashlib
 import os
 import re
@@ -25,6 +26,7 @@ from octave_mcp.core.ast_nodes import (
     Assignment,
     ASTNode,
     Block,
+    Comment,
     Document,
     InlineMap,
     ListValue,
@@ -63,6 +65,34 @@ W_UNQUOTED_SECTION_IN_VALUE = "W_UNQUOTED_SECTION_IN_VALUE"
 
 # GH#349: Data loss warning for bare lines dropped during lenient parsing (I4)
 W_BARE_LINE_DROPPED = "W_BARE_LINE_DROPPED"
+
+# GH#376 PR-A: format_style parameter constants.
+# Three modes are projections of one canonical AST→bytes function (I1
+# Single-Canon Discipline). They are NOT parallel emitters.
+#
+# - "preserve": Strategy C — if parse(new_content) == parse(baseline_content)
+#   (AST-equality, ignoring whitespace) write baseline bytes verbatim and
+#   short-circuit; otherwise fall through to canonical emit().
+# - "expanded": AST normalisation pre-pass that lifts InlineMap (and ListValue
+#   items that are InlineMap) into Block form before emit(). Output is the
+#   canonical multi-line form.
+# - "compact": AST normalisation pre-pass that collapses eligible Blocks
+#   (atom-only children, no Comments anywhere in subtree, arity-bounded) into
+#   Assignment(value=ListValue([InlineMap{...}, ...])). Subtrees containing a
+#   Comment are vetoed (left untouched) and a W_COMPACT_REFUSED entry surfaces
+#   in the repair log (I3 Mirror Constraint + I4 Auditability).
+#
+# When format_style is omitted (None), today's behaviour is preserved exactly:
+# emit(doc) with no pre-pass and no short-circuit (the "current" sentinel
+# documented in the PR description). This guarantees the 2788 baseline tests
+# remain byte-identical.
+FORMAT_STYLE_VALUES: tuple[str, str, str] = ("preserve", "expanded", "compact")
+E_INVALID_FORMAT_STYLE = "E_INVALID_FORMAT_STYLE"
+W_COMPACT_REFUSED = "W_COMPACT_REFUSED"
+
+# Compact mode arity bound — collapse only "small" Blocks to keep output
+# readable. Values above this stay in Block form.
+_COMPACT_MAX_PAIRS = 8
 
 # GH#352: Guidance hint for UNVALIDATED status (I5)
 # GH#361r3: Base hint text; available schemas appended dynamically at runtime.
@@ -602,6 +632,277 @@ def _normalize_value_for_ast(value: Any) -> Any:
         return InlineMap(pairs=normalized_pairs)
     # Other types (str, int, bool, None, etc.) are handled by emit_value directly
     return value
+
+
+# ---------------------------------------------------------------------------
+# GH#376 PR-A: format_style AST projections (I1 Single-Canon Discipline).
+#
+# These helpers form AST normalisation pre-passes feeding the SAME emit()
+# function used by today's canonical pipeline. They never fork the emitter.
+# ---------------------------------------------------------------------------
+
+
+def _is_atom_value(v: Any) -> bool:
+    """Return True for primitive values safe to put inside an InlineMap pair.
+
+    Excludes structured nodes (ListValue, InlineMap, HolographicValue,
+    LiteralZoneValue) since collapsing those into an inline pair would change
+    semantics.
+    """
+    return v is None or isinstance(v, (bool, int, float, str))
+
+
+def _subtree_has_comment(node: Any) -> bool:
+    """Recursively check whether a subtree contains any Comment node.
+
+    Compact mode MUST NOT collapse any subtree containing a Comment — doing so
+    would erase the comment, violating I3 Mirror Constraint. Comments may live
+    as Comment children, leading_comments, or trailing_comment annotations on
+    any ASTNode.
+    """
+    if isinstance(node, Comment):
+        return True
+    if isinstance(node, ASTNode):
+        if getattr(node, "leading_comments", None):
+            return True
+        if getattr(node, "trailing_comment", None):
+            return True
+    if isinstance(node, (Block, Section)):
+        return any(_subtree_has_comment(c) for c in node.children)
+    if isinstance(node, Document):
+        if node.trailing_comments:
+            return True
+        return any(_subtree_has_comment(c) for c in node.sections)
+    return False
+
+
+def _block_compact_eligible(block: Block) -> bool:
+    """Return True if a Block can safely collapse into an inline-list-of-InlineMap.
+
+    Eligibility requires:
+    - Every child is an Assignment (no nested Blocks/Sections/Comments)
+    - Every Assignment's value is an atom (str/int/float/bool/None)
+    - The Block carries no comments (leading_comments/trailing_comment)
+    - No Assignment child carries comments
+    - The Block has at least one and at most _COMPACT_MAX_PAIRS children
+    - The Block has no target annotation (collapsing would lose it)
+    """
+    if block.target:
+        return False
+    if block.leading_comments or block.trailing_comment:
+        return False
+    if not block.children or len(block.children) > _COMPACT_MAX_PAIRS:
+        return False
+    for child in block.children:
+        if not isinstance(child, Assignment):
+            return False
+        if child.leading_comments or child.trailing_comment:
+            return False
+        if not _is_atom_value(child.value):
+            return False
+    return True
+
+
+def _block_to_compact_assignment(block: Block) -> Assignment:
+    """Convert an eligible Block into Assignment(KEY, ListValue([InlineMap, ...])).
+
+    Each child Assignment becomes a single-pair InlineMap inside the ListValue.
+    This mirrors the parsed shape of bracket-notation inline lists (verified by
+    parser experiment: ``[K::V,L::W]`` parses as ListValue of two InlineMaps,
+    each with one pair) so that re-parsing the emitted form is structurally
+    stable.
+    """
+    items: list[Any] = []
+    for child in block.children:
+        assert isinstance(child, Assignment)  # noqa: S101 -- _block_compact_eligible guarantees
+        items.append(InlineMap(pairs={child.key: child.value}))
+    return Assignment(
+        key=block.key,
+        value=ListValue(items=items),
+        line=block.line,
+        column=block.column,
+    )
+
+
+def _compact_pass(
+    children: list[Any],
+    corrections: list[dict[str, Any]],
+    field_path: str,
+) -> list[Any]:
+    """Walk a list of AST children, collapsing eligible Blocks in place.
+
+    Inelegible Blocks have their children recursively visited (so a Block that
+    can't collapse may still contain a Block deeper down that can). Subtrees
+    containing Comments are vetoed and a W_COMPACT_REFUSED record is appended
+    to ``corrections`` (I4 Audit). Other node types pass through unchanged.
+    """
+    out: list[Any] = []
+    for child in children:
+        if isinstance(child, Block):
+            child_path = f"{field_path}.{child.key}" if field_path else child.key
+            if _subtree_has_comment(child):
+                # I3 veto — leave Block untouched so comments survive.
+                corrections.append(
+                    {
+                        "code": W_COMPACT_REFUSED,
+                        "tier": "FORMAT_STYLE",
+                        "field": child_path,
+                        "message": (
+                            f"Compact mode refused to collapse subtree '{child_path}': "
+                            "contains comment(s) (I3 Mirror Constraint)."
+                        ),
+                        "safe": True,
+                        "semantics_changed": False,
+                    }
+                )
+                # Still recurse into children — deeper Blocks without comments
+                # can still collapse where safe.
+                child.children = _compact_pass(child.children, corrections, child_path)
+                out.append(child)
+                continue
+            if _block_compact_eligible(child):
+                out.append(_block_to_compact_assignment(child))
+                continue
+            # Not eligible (e.g. mixed children) but no comments — recurse.
+            child.children = _compact_pass(child.children, corrections, child_path)
+            out.append(child)
+        elif isinstance(child, Section):
+            child_path = f"{field_path}.§{child.section_id}" if field_path else f"§{child.section_id}"
+            child.children = _compact_pass(child.children, corrections, child_path)
+            out.append(child)
+        else:
+            out.append(child)
+    return out
+
+
+def _expand_pass(children: list[Any]) -> list[Any]:
+    """Walk a list of AST children, lifting InlineMap shapes into Blocks.
+
+    Two patterns are lifted:
+    - ``Assignment(KEY, InlineMap{k1:v1,...})`` → ``Block(KEY, [Assignment(k1,v1),...])``
+    - ``Assignment(KEY, ListValue([InlineMap{k1:v1}, InlineMap{k2:v2}, ...]))``
+      where every list item is an atom-valued InlineMap → ``Block(KEY, [...])``
+
+    Only atom-valued InlineMaps are lifted; structured values stay inline so we
+    do not fabricate semantic content (I3 Mirror Constraint).
+    """
+    out: list[Any] = []
+    for child in children:
+        if isinstance(child, Assignment):
+            lifted = _maybe_lift_assignment_to_block(child)
+            if lifted is not None:
+                out.append(lifted)
+                continue
+            out.append(child)
+        elif isinstance(child, Block):
+            child.children = _expand_pass(child.children)
+            out.append(child)
+        elif isinstance(child, Section):
+            child.children = _expand_pass(child.children)
+            out.append(child)
+        else:
+            out.append(child)
+    return out
+
+
+def _maybe_lift_assignment_to_block(assignment: Assignment) -> Block | None:
+    """Return a Block lifted from an InlineMap-shaped Assignment, or None.
+
+    Returns None when the value is not an InlineMap shape eligible for lifting.
+    """
+    value = assignment.value
+    pairs: list[tuple[str, Any]] = []
+
+    if isinstance(value, InlineMap):
+        for k, v in value.pairs.items():
+            if not _is_atom_value(v):
+                return None
+            pairs.append((k, v))
+    elif isinstance(value, ListValue):
+        if not value.items or not all(isinstance(it, InlineMap) for it in value.items):
+            return None
+        for item in value.items:
+            assert isinstance(item, InlineMap)  # noqa: S101
+            for k, v in item.pairs.items():
+                if not _is_atom_value(v):
+                    return None
+                pairs.append((k, v))
+    else:
+        return None
+
+    if not pairs:
+        return None
+
+    block_children: list[Any] = [
+        Assignment(key=k, value=v, line=assignment.line, column=assignment.column) for k, v in pairs
+    ]
+    return Block(
+        key=assignment.key,
+        children=block_children,
+        line=assignment.line,
+        column=assignment.column,
+        leading_comments=list(assignment.leading_comments),
+        trailing_comment=assignment.trailing_comment,
+    )
+
+
+def _apply_format_style(doc: Document, format_style: str | None, corrections: list[dict[str, Any]]) -> Document:
+    """Return a Document transformed for the given format_style mode.
+
+    Operates on a deep copy so the caller's AST is never mutated. For
+    'expanded' / 'compact' applies the corresponding pre-pass; for any other
+    value (including None and 'preserve') returns the deep copy unchanged.
+    """
+    new_doc = copy.deepcopy(doc)
+    if format_style == "expanded":
+        new_doc.sections = _expand_pass(new_doc.sections)
+    elif format_style == "compact":
+        new_doc.sections = _compact_pass(new_doc.sections, corrections, field_path="")
+    return new_doc
+
+
+def _emit_with_style(
+    doc: Document,
+    *,
+    baseline_bytes: str | None = None,
+    new_bytes: str | None = None,  # noqa: ARG001 -- reserved for future preserve variants (#377)
+    format_style: str | None,
+    corrections: list[dict[str, Any]],
+) -> str:
+    """Single canon orchestrator: produce canonical bytes for ``doc`` under
+    ``format_style``.
+
+    Strategy:
+    - 'expanded' / 'compact' → apply AST pre-pass and emit().
+    - 'preserve' (Strategy C short-circuit): emit canonically; if
+      ``baseline_bytes`` is provided AND its canonical form equals the new
+      canonical form, return ``baseline_bytes`` verbatim (zero diff for
+      whitespace-only edits). Otherwise return the canonical bytes.
+    - Anything else (including None) → emit(doc) (today's behaviour preserved
+      byte-for-byte; this is the documented "current" sentinel).
+
+    All non-shortcut paths route through one and only one ``emit()`` call on
+    the doc (or its pre-pass projection), satisfying I1 Single-Canon Discipline.
+
+    The ``new_bytes`` parameter is reserved for future preserve-mode variants
+    (full Strategy A in #377) where source-span infrastructure may need access
+    to the original input bytes; PR-A uses canonical-form comparison only.
+    """
+    if format_style in ("expanded", "compact"):
+        projected = _apply_format_style(doc, format_style, corrections)
+        canonical = emit(projected)
+    else:
+        canonical = emit(doc)
+
+    if format_style == "preserve" and baseline_bytes is not None:
+        try:
+            baseline_canonical = emit(parse(baseline_bytes))
+        except (LexerError, ParserError):
+            return canonical
+        if baseline_canonical == canonical:
+            return baseline_bytes
+
+    return canonical
 
 
 # GH#263: Regex pattern for detecting NAME{qualifier} curly-brace annotations
@@ -1317,6 +1618,26 @@ class WriteTool(BaseTool):
             required=False,
             description='Policy when tokenization/parsing fails in lenient mode: "error" (default) or "salvage".',
             enum=["error", "salvage"],
+        )
+
+        # GH#376 PR-A: format_style toggle. Three modes are AST projections
+        # of one canonical emit() (I1 Single-Canon Discipline).
+        schema.add_parameter(
+            "format_style",
+            "string",
+            required=False,
+            description=(
+                "Output formatting style for canonical emission. "
+                "'preserve' (Strategy C): if new content is AST-equal to the existing file, "
+                "write the baseline bytes verbatim — zero diff for whitespace-only edits. "
+                "'expanded': lift inline-map shapes (KEY::[K::V,...]) into Block form before emit. "
+                "'compact': collapse atom-only Blocks (no comments, arity-bounded) into "
+                "inline-list-of-InlineMap form. Comment-bearing subtrees are vetoed and a "
+                f"{W_COMPACT_REFUSED} record surfaces in corrections (I3 Mirror Constraint, "
+                "I4 Auditability). When omitted, today's canonical behaviour is preserved exactly. "
+                "(GH#376 PR-A — full preserve-mode strategy A is tracked separately as #377.)"
+            ),
+            enum=list(FORMAT_STYLE_VALUES),
         )
 
         return schema.build()
@@ -2389,11 +2710,26 @@ class WriteTool(BaseTool):
         # GH#354: Accept dry_run as alias for corrections_only (either triggers dry-run)
         corrections_only = params.get("corrections_only", False) or params.get("dry_run", False)
         parse_error_policy = params.get("parse_error_policy", "error")
+        # GH#376 PR-A: format_style is optional; None preserves today's behaviour.
+        format_style = params.get("format_style")
 
         if parse_error_policy not in ("error", "salvage"):
             return self._error_envelope(
                 target_path,
                 [{"code": "E_INPUT", "message": f"Invalid parse_error_policy: {parse_error_policy}"}],
+            )
+
+        if format_style is not None and format_style not in FORMAT_STYLE_VALUES:
+            return self._error_envelope(
+                target_path,
+                [
+                    {
+                        "code": E_INVALID_FORMAT_STYLE,
+                        "message": (
+                            f"Invalid format_style: {format_style!r}. " f"Expected one of {list(FORMAT_STYLE_VALUES)}."
+                        ),
+                    }
+                ],
             )
 
         # Initialize result with unified envelope per D2 design
@@ -2738,9 +3074,19 @@ class WriteTool(BaseTool):
                         }
                     )
 
-        # Emit canonical form (may be re-emitted after schema repair)
+        # Emit canonical form (may be re-emitted after schema repair).
+        # GH#376 PR-A: format_style routes through _emit_with_style — a single
+        # canonical AST→bytes orchestrator that applies expanded/compact AST
+        # pre-passes or the preserve Strategy C short-circuit, all via the
+        # SAME emit() call (I1 Single-Canon Discipline).
         try:
-            canonical_content = emit(doc)
+            canonical_content = _emit_with_style(
+                doc,
+                baseline_bytes=baseline_content_for_diff or None,
+                new_bytes=content,
+                format_style=format_style,
+                corrections=corrections,
+            )
             canonical_metrics = extract_structural_metrics(doc)
         except Exception as e:
             return self._error_envelope(
@@ -2934,7 +3280,15 @@ class WriteTool(BaseTool):
                         )
 
                     if did_repair:
-                        canonical_content = emit(doc)
+                        # GH#376 PR-A: re-emit through the single-canon orchestrator
+                        # so format_style applies to schema-repaired output too.
+                        canonical_content = _emit_with_style(
+                            doc,
+                            baseline_bytes=baseline_content_for_diff or None,
+                            new_bytes=content,
+                            format_style=format_style,
+                            corrections=result["corrections"],
+                        )
                         canonical_metrics = extract_structural_metrics(doc)
                         validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
 
@@ -2954,8 +3308,15 @@ class WriteTool(BaseTool):
                                     "message": f"Schema repair: {entry.rule_id}",
                                 }
                             )
-                        # Re-emit canonical after repairs
-                        canonical_content = emit(doc)
+                        # Re-emit canonical after repairs (GH#376 PR-A: single-canon
+                        # orchestrator so format_style applies to repaired output).
+                        canonical_content = _emit_with_style(
+                            doc,
+                            baseline_bytes=baseline_content_for_diff or None,
+                            new_bytes=content,
+                            format_style=format_style,
+                            corrections=result["corrections"],
+                        )
                         canonical_metrics = extract_structural_metrics(doc)
                         # Revalidate
                         validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
