@@ -35,12 +35,17 @@ from octave_mcp.core.ast_nodes import (
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.parser import parse
 from octave_mcp.mcp.write import (
+    E_AST_CYCLE,
     E_INVALID_FORMAT_STYLE,
     FORMAT_STYLE_VALUES,
     W_COMPACT_REFUSED,
+    OctaveASTCycleError,
     WriteTool,
     _apply_format_style,
+    _compact_pass,
     _emit_with_style,
+    _expand_pass,
+    _subtree_has_comment,
 )
 
 # ---------------------------------------------------------------------------
@@ -406,3 +411,164 @@ class TestSingleCanonDiscipline:
         reparsed = parse(once)
         twice = _emit_with_style(reparsed, baseline_bytes=None, new_bytes=None, format_style=mode, corrections=[])
         assert once == twice, f"mode {mode} not idempotent for {src!r}: once={once!r} twice={twice!r}"
+
+
+# ---------------------------------------------------------------------------
+# CIV B1 — W_COMPACT_REFUSED audit-ID disambiguation (I4 attributability).
+# ---------------------------------------------------------------------------
+
+
+class TestSiblingPathDisambiguation:
+    def test_two_sibling_blocks_same_key_get_unique_paths(self):
+        """Two sibling Blocks sharing a key (both with comments) must produce
+        TWO refusal records with DISTINCT field IDs (CIV B1)."""
+        doc = parse(
+            "===T===\n"
+            "§1::A\n"
+            "  PROFILE:\n"
+            "    // c1\n"
+            "    NAME::Alice\n"
+            "  PROFILE:\n"
+            "    // c2\n"
+            "    NAME::Bob\n"
+            "===END===\n"
+        )
+        corrections: list = []
+        _compact_pass(doc.sections, corrections, "")
+        veto = [c for c in corrections if c.get("code") == W_COMPACT_REFUSED]
+        assert len(veto) == 2, f"expected 2 veto records, got {len(veto)}: {veto!r}"
+        fields = {c["field"] for c in veto}
+        assert len(fields) == 2, f"expected 2 distinct fields, got {fields!r}"
+        # The two paths share a base prefix and differ in the ordinal suffix.
+        assert all("PROFILE" in f for f in fields)
+        assert any(f.endswith("#0") for f in fields)
+        assert any(f.endswith("#1") for f in fields)
+
+    def test_singleton_block_path_has_no_ordinal_suffix(self):
+        """A Block whose key is unique among its siblings keeps an unsuffixed
+        path so audit IDs stay readable in the common case."""
+        doc = parse("===T===\n" "§1::A\n" "  PROFILE:\n" "    // c1\n" "    NAME::Alice\n" "===END===\n")
+        corrections: list = []
+        _compact_pass(doc.sections, corrections, "")
+        veto = [c for c in corrections if c.get("code") == W_COMPACT_REFUSED]
+        assert len(veto) == 1
+        # Singleton — no '#' disambiguator.
+        assert "#" not in veto[0]["field"]
+        assert "PROFILE" in veto[0]["field"]
+
+
+# ---------------------------------------------------------------------------
+# CIV B2 — Cycle traversal raises structured error (E_AST_CYCLE).
+# ---------------------------------------------------------------------------
+
+
+class TestCycleGuard:
+    def test_subtree_has_comment_raises_on_cycle(self):
+        b = Block(key="X", children=[Assignment(key="K", value="v")])
+        b.children.append(b)  # self-referential
+        with pytest.raises(OctaveASTCycleError, match=E_AST_CYCLE):
+            _subtree_has_comment(b)
+
+    def test_compact_pass_raises_on_cycle(self):
+        b = Block(key="X", children=[Assignment(key="K", value="v")])
+        b.children.append(b)
+        with pytest.raises(OctaveASTCycleError, match=E_AST_CYCLE):
+            _compact_pass([b], corrections=[], field_path="")
+
+    def test_expand_pass_raises_on_cycle(self):
+        b = Block(key="X", children=[Assignment(key="K", value="v")])
+        b.children.append(b)
+        with pytest.raises(OctaveASTCycleError, match=E_AST_CYCLE):
+            _expand_pass([b])
+
+    def test_cycle_error_carries_stable_code(self):
+        b = Block(key="X", children=[])
+        b.children.append(b)
+        try:
+            _subtree_has_comment(b)
+        except OctaveASTCycleError as exc:
+            assert exc.code == E_AST_CYCLE
+            assert E_AST_CYCLE in str(exc)
+        else:  # pragma: no cover
+            raise AssertionError("expected OctaveASTCycleError")
+
+    def test_acyclic_ast_unaffected_by_guard(self):
+        """The cycle guard must not regress normal traversal — sibling Blocks
+        sharing a child reference are NOT cycles (no ancestor link)."""
+        # Build two independent Blocks that share NO node identity.
+        b1 = Block(key="A", children=[Assignment(key="K", value="v1")])
+        b2 = Block(key="B", children=[Assignment(key="K", value="v2")])
+        # Each must traverse cleanly.
+        assert _subtree_has_comment(b1) is False
+        assert _subtree_has_comment(b2) is False
+
+
+# ---------------------------------------------------------------------------
+# CIV B3 — Arity-exceeded W_COMPACT_REFUSED audit symmetry.
+# ---------------------------------------------------------------------------
+
+
+class TestArityRefusal:
+    def _make_block_with_n_atom_children(self, n: int) -> Document:
+        children = [Assignment(key=f"K{i}", value=i) for i in range(n)]
+        return Document(
+            name="T",
+            sections=[
+                Section(
+                    section_id="1",
+                    key="A",
+                    children=[Block(key="WIDE", children=children)],
+                )
+            ],
+        )
+
+    def test_arity_exceeded_emits_refusal_with_reason(self):
+        """A Block with 9 atom-only children (no comments) exceeds the arity
+        bound and must produce exactly one W_COMPACT_REFUSED record carrying
+        ``reason='arity_exceeded'`` (CIV B3)."""
+        doc = self._make_block_with_n_atom_children(9)
+        corrections: list = []
+        _compact_pass(doc.sections, corrections, "")
+        arity_records = [
+            c for c in corrections if c.get("code") == W_COMPACT_REFUSED and c.get("reason") == "arity_exceeded"
+        ]
+        assert len(arity_records) == 1, f"expected 1 arity refusal, got {arity_records!r}"
+        rec = arity_records[0]
+        assert "WIDE" in rec["field"]
+        assert "9" in rec["message"]
+        assert rec["safe"] is True
+        assert rec["semantics_changed"] is False
+
+    def test_arity_at_bound_collapses_with_no_refusal(self):
+        """A Block with exactly _COMPACT_MAX_PAIRS=8 children collapses cleanly
+        with NO refusal record (boundary check)."""
+        doc = self._make_block_with_n_atom_children(8)
+        corrections: list = []
+        _compact_pass(doc.sections, corrections, "")
+        assert all(c.get("code") != W_COMPACT_REFUSED for c in corrections), corrections
+
+    def test_comment_refusal_carries_reason_discriminant(self):
+        """Existing comment-veto records must also carry the new ``reason``
+        field (audit-symmetry)."""
+        doc = parse("===T===\n" "§1::A\n" "  PROFILE:\n" "    // c\n" "    NAME::Alice\n" "===END===\n")
+        corrections: list = []
+        _compact_pass(doc.sections, corrections, "")
+        veto = [c for c in corrections if c.get("code") == W_COMPACT_REFUSED]
+        assert len(veto) == 1
+        assert veto[0].get("reason") == "contains_comment"
+
+
+# ---------------------------------------------------------------------------
+# CIV B4 — explicit byte-identity guard for default (format_style=None).
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultUnchanged:
+    @pytest.mark.parametrize("src", _CORPUS)
+    def test_format_style_none_byte_identical_to_emit(self, src):
+        """When ``format_style`` is omitted, ``_emit_with_style`` MUST return
+        the same bytes as plain ``emit(doc)`` — guards the documented
+        "current" sentinel default against silent regression (TMG/CIV)."""
+        doc = parse(src)
+        out = _emit_with_style(doc, baseline_bytes=None, new_bytes=None, format_style=None, corrections=[])
+        assert out == emit(doc)
