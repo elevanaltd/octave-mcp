@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/elevanaltd-octave-mcp-badge.png)](https://mseep.ai/app/elevanaltd-octave-mcp)
+
 # OCTAVE MCP Server
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
