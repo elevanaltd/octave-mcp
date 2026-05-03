@@ -572,3 +572,179 @@ class TestDefaultUnchanged:
         doc = parse(src)
         out = _emit_with_style(doc, baseline_bytes=None, new_bytes=None, format_style=None, corrections=[])
         assert out == emit(doc)
+
+
+# ---------------------------------------------------------------------------
+# Cubic C1 — preserve-mode CLI degrades gracefully on invalid-UTF-8 baseline.
+# ---------------------------------------------------------------------------
+
+
+class TestPreserveInvalidUTF8Baseline:
+    def test_cli_preserve_invalid_utf8_baseline_does_not_crash(self):
+        """When the on-disk baseline contains invalid UTF-8, ``--format-style
+        preserve`` must NOT crash; the preserve short-circuit simply cannot
+        fire and the canonical write proceeds (cubic C1)."""
+        from click.testing import CliRunner
+
+        from octave_mcp.cli.main import cli
+
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "doc.oct.md")
+            # Write invalid UTF-8 directly to bypass any encoder normalisation.
+            with open(target, "wb") as f:
+                f.write(b"\xff\xfe invalid utf-8 baseline bytes")
+
+            new_content = "===T===\n§1::A\n  K::value\n===END===\n"
+            result = runner.invoke(
+                cli,
+                [
+                    "write",
+                    target,
+                    "--content",
+                    new_content,
+                    "--format-style",
+                    "preserve",
+                ],
+            )
+            assert result.exit_code == 0, (
+                f"expected exit 0 (graceful degrade), got {result.exit_code}; "
+                f"stdout={result.output!r}; exc={result.exception!r}"
+            )
+            # File must now hold the canonical form (preserve fell through).
+            with open(target, encoding="utf-8") as f:
+                on_disk = f.read()
+            assert "K::value" in on_disk
+
+
+# ---------------------------------------------------------------------------
+# Cubic C2 — DFS path-stack: shared-acyclic refs do NOT raise E_AST_CYCLE.
+# ---------------------------------------------------------------------------
+
+
+class TestSharedAcyclicReferences:
+    def _shared_child_doc(self) -> Document:
+        """Build an acyclic AST where two distinct Block parents reference
+        the SAME atom-valued Assignment instance (same id())."""
+        shared_child = Assignment(key="K", value="v")
+        b1 = Block(key="A", children=[shared_child])
+        b2 = Block(key="B", children=[shared_child])  # same instance, different parent
+        return Document(
+            name="T",
+            sections=[Section(section_id="1", key="S", children=[b1, b2])],
+        )
+
+    def test_subtree_has_comment_handles_shared_acyclic_node(self):
+        """Two Blocks sharing an Assignment by reference is acyclic — the
+        traversal must NOT raise (cubic C2)."""
+        doc = self._shared_child_doc()
+        # Each Block independently traverses the shared child; with the DFS
+        # path-stack pattern, the id() is discarded on frame exit.
+        for block in doc.sections[0].children:
+            assert _subtree_has_comment(block) is False
+
+    def test_compact_pass_handles_shared_acyclic_node(self):
+        """_compact_pass must traverse a shared-acyclic AST without raising."""
+        doc = self._shared_child_doc()
+        corrections: list = []
+        # Should not raise OctaveASTCycleError.
+        out = _compact_pass(doc.sections, corrections, "")
+        assert len(out) == 1  # one Section back
+
+    def test_expand_pass_handles_shared_acyclic_node(self):
+        """_expand_pass must traverse a shared-acyclic AST without raising."""
+        doc = self._shared_child_doc()
+        out = _expand_pass(doc.sections)
+        assert len(out) == 1
+
+    def test_true_cycles_still_raise(self):
+        """Regression guard for cubic C2 fix: genuine self-reference is still
+        caught even with the path-stack discard semantics."""
+        b = Block(key="X", children=[])
+        b.children.append(b)  # true cycle: b is its own descendant
+        with pytest.raises(OctaveASTCycleError, match=E_AST_CYCLE):
+            _subtree_has_comment(b)
+        with pytest.raises(OctaveASTCycleError, match=E_AST_CYCLE):
+            _compact_pass([b], corrections=[], field_path="")
+        with pytest.raises(OctaveASTCycleError, match=E_AST_CYCLE):
+            _expand_pass([b])
+
+
+# ---------------------------------------------------------------------------
+# Cubic C3 — OctaveASTCycleError surfaced as structured envelope/CLI error.
+# ---------------------------------------------------------------------------
+
+
+class TestCycleErrorStructuredSurface:
+    @pytest.mark.asyncio
+    async def test_execute_surfaces_e_ast_cycle_envelope(self, monkeypatch):
+        """End-to-end MCP path: a cyclic AST inside the pre-pass MUST produce
+        an error envelope with ``code='E_AST_CYCLE'``, NOT a generic
+        ``E_EMIT`` (cubic C3)."""
+        import octave_mcp.mcp.write as write_mod
+
+        original_apply = write_mod._apply_format_style
+
+        def cyclic_apply(doc, style, corrections):
+            # Inject a cycle into the parsed doc, then exercise the real
+            # _expand_pass via _apply_format_style — this raises
+            # OctaveASTCycleError from inside _emit_with_style, which is
+            # the integration boundary cubic C3 targets.
+            if doc.sections:
+                first = doc.sections[0]
+                if isinstance(first, Section) and first.children:
+                    first.children.append(first)  # cycle
+            return original_apply(doc, style, corrections)
+
+        monkeypatch.setattr(write_mod, "_apply_format_style", cyclic_apply)
+
+        tool = WriteTool()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "doc.oct.md")
+            result = await tool.execute(
+                target_path=target,
+                content="===T===\n§1::A\n  K::value\n===END===\n",
+                format_style="expanded",
+            )
+            assert result["status"] == "error"
+            codes = [e["code"] for e in result["errors"]]
+            assert E_AST_CYCLE in codes, f"expected E_AST_CYCLE in error codes, got {codes!r}"
+            assert "E_EMIT" not in codes, f"E_AST_CYCLE was swallowed into generic E_EMIT: {codes!r}"
+
+    def test_cli_surfaces_e_ast_cycle_message(self, monkeypatch):
+        """CLI path: a cyclic AST inside the pre-pass MUST produce a stderr
+        message containing ``E_AST_CYCLE`` and exit non-zero (cubic C3)."""
+        from click.testing import CliRunner
+
+        import octave_mcp.mcp.write as write_mod
+        from octave_mcp.cli.main import cli
+
+        original_apply = write_mod._apply_format_style
+
+        def cyclic_apply(doc, style, corrections):
+            if doc.sections:
+                first = doc.sections[0]
+                if isinstance(first, Section) and first.children:
+                    first.children.append(first)
+            return original_apply(doc, style, corrections)
+
+        monkeypatch.setattr(write_mod, "_apply_format_style", cyclic_apply)
+
+        # click 8.3+ keeps stdout/stderr separate by default; ``result.stderr``
+        # captures the OctaveASTCycleError surface.
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target = os.path.join(tmpdir, "doc.oct.md")
+            result = runner.invoke(
+                cli,
+                [
+                    "write",
+                    target,
+                    "--content",
+                    "===T===\n§1::A\n  K::value\n===END===\n",
+                    "--format-style",
+                    "expanded",
+                ],
+            )
+            assert result.exit_code == 1, f"expected exit 1, got {result.exit_code}"
+            assert E_AST_CYCLE in (result.stderr or ""), f"expected E_AST_CYCLE in stderr, got stderr={result.stderr!r}"

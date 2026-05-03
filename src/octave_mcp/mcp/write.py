@@ -699,6 +699,12 @@ def _subtree_has_comment(node: Any, _seen: set[int] | None = None) -> bool:
     ``OctaveASTCycleError`` (``code = E_AST_CYCLE``) instead of escaping as a
     bare ``RecursionError``. Keys on ``id(node)`` because AST nodes are
     mutable dataclasses and therefore unhashable.
+
+    Cubic C2 (#376 PR-A rework): the visited-set is a DFS *path stack*, not a
+    permanent visited record — entries are discarded on frame exit via the
+    ``finally`` block. This distinguishes a true cycle (same node reachable
+    from itself along the current ancestry) from a shared-acyclic reference
+    (same node reached via two distinct paths under different parents).
     """
     if _seen is None:
         _seen = set()
@@ -706,21 +712,23 @@ def _subtree_has_comment(node: Any, _seen: set[int] | None = None) -> bool:
     if nid in _seen:
         raise OctaveASTCycleError(node, where="_subtree_has_comment")
     _seen.add(nid)
-
-    if isinstance(node, Comment):
-        return True
-    if isinstance(node, ASTNode):
-        if getattr(node, "leading_comments", None):
+    try:
+        if isinstance(node, Comment):
             return True
-        if getattr(node, "trailing_comment", None):
-            return True
-    if isinstance(node, (Block, Section)):
-        return any(_subtree_has_comment(c, _seen) for c in node.children)
-    if isinstance(node, Document):
-        if node.trailing_comments:
-            return True
-        return any(_subtree_has_comment(c, _seen) for c in node.sections)
-    return False
+        if isinstance(node, ASTNode):
+            if getattr(node, "leading_comments", None):
+                return True
+            if getattr(node, "trailing_comment", None):
+                return True
+        if isinstance(node, (Block, Section)):
+            return any(_subtree_has_comment(c, _seen) for c in node.children)
+        if isinstance(node, Document):
+            if node.trailing_comments:
+                return True
+            return any(_subtree_has_comment(c, _seen) for c in node.sections)
+        return False
+    finally:
+        _seen.discard(nid)
 
 
 def _block_compact_eligible(block: Block) -> bool:
@@ -821,6 +829,12 @@ def _compact_pass(
     CIV B2: traversal carries an id-keyed visited-set; a self-referential AST
     raises ``OctaveASTCycleError`` (``E_AST_CYCLE``) instead of escaping as a
     ``RecursionError``.
+
+    Cubic C2 (#376 PR-A rework): the visited-set is a DFS *path stack*. Each
+    frame discards its own id() on exit via ``finally``, so two distinct
+    parents may legally share an acyclic child by reference without the guard
+    misfiring. A genuine cycle is still caught — the offending node remains on
+    the stack along its own ancestry.
     """
     if _seen is None:
         _seen = set()
@@ -843,79 +857,75 @@ def _compact_pass(
         nid = id(child)
         if nid in _seen:
             raise OctaveASTCycleError(child, where="_compact_pass")
+        _seen.add(nid)
+        try:
+            if isinstance(child, Block):
+                key: str = child.key
+                n = ordinals.get(key, 0)
+                ordinals[key] = n + 1
+                suffix = f"#{n}" if key_counts[key] > 1 else ""
+                base = f"{field_path}.{key}" if field_path else key
+                child_path = base + suffix
 
-        if isinstance(child, Block):
-            key: str = child.key
-            n = ordinals.get(key, 0)
-            ordinals[key] = n + 1
-            suffix = f"#{n}" if key_counts[key] > 1 else ""
-            base = f"{field_path}.{key}" if field_path else key
-            child_path = base + suffix
-
-            # Mark this Block visited before descending.
-            _seen.add(nid)
-
-            if _subtree_has_comment(child):
-                # I3 veto — leave Block untouched so comments survive (I4 audit).
-                corrections.append(
-                    {
-                        "code": W_COMPACT_REFUSED,
-                        "tier": "FORMAT_STYLE",
-                        "field": child_path,
-                        "reason": _REFUSE_REASON_COMMENT,
-                        "message": (
-                            f"Compact mode refused to collapse subtree '{child_path}': "
-                            "contains comment(s) (I3 Mirror Constraint)."
-                        ),
-                        "safe": True,
-                        "semantics_changed": False,
-                    }
-                )
-                # Still recurse into children — deeper Blocks without comments
-                # can still collapse where safe.
+                if _subtree_has_comment(child):
+                    # I3 veto — leave Block untouched so comments survive (I4 audit).
+                    corrections.append(
+                        {
+                            "code": W_COMPACT_REFUSED,
+                            "tier": "FORMAT_STYLE",
+                            "field": child_path,
+                            "reason": _REFUSE_REASON_COMMENT,
+                            "message": (
+                                f"Compact mode refused to collapse subtree '{child_path}': "
+                                "contains comment(s) (I3 Mirror Constraint)."
+                            ),
+                            "safe": True,
+                            "semantics_changed": False,
+                        }
+                    )
+                    # Still recurse into children — deeper Blocks without comments
+                    # can still collapse where safe.
+                    child.children = _compact_pass(child.children, corrections, child_path, _seen)
+                    out.append(child)
+                elif _block_compact_eligible(child):
+                    out.append(_block_to_compact_assignment(child))
+                elif _block_would_collapse_but_for_arity(child):
+                    # CIV B3 — eligible-but-too-large block, surface receipt.
+                    corrections.append(
+                        {
+                            "code": W_COMPACT_REFUSED,
+                            "tier": "FORMAT_STYLE",
+                            "field": child_path,
+                            "reason": _REFUSE_REASON_ARITY,
+                            "message": (
+                                f"Compact mode refused to collapse subtree '{child_path}': "
+                                f"{len(child.children)} children exceed _COMPACT_MAX_PAIRS="
+                                f"{_COMPACT_MAX_PAIRS}."
+                            ),
+                            "safe": True,
+                            "semantics_changed": False,
+                        }
+                    )
+                    # Even though we won't collapse, recurse to honour deeper opportunities.
+                    child.children = _compact_pass(child.children, corrections, child_path, _seen)
+                    out.append(child)
+                else:
+                    # Not eligible (e.g. mixed children) but no comments — recurse.
+                    child.children = _compact_pass(child.children, corrections, child_path, _seen)
+                    out.append(child)
+            elif isinstance(child, Section):
+                sk = f"§{child.section_id}"
+                n = ordinals.get(sk, 0)
+                ordinals[sk] = n + 1
+                suffix = f"#{n}" if key_counts[sk] > 1 else ""
+                base = f"{field_path}.{sk}" if field_path else sk
+                child_path = base + suffix
                 child.children = _compact_pass(child.children, corrections, child_path, _seen)
                 out.append(child)
-                continue
-            if _block_compact_eligible(child):
-                out.append(_block_to_compact_assignment(child))
-                continue
-            if _block_would_collapse_but_for_arity(child):
-                # CIV B3 — eligible-but-too-large block, surface receipt.
-                corrections.append(
-                    {
-                        "code": W_COMPACT_REFUSED,
-                        "tier": "FORMAT_STYLE",
-                        "field": child_path,
-                        "reason": _REFUSE_REASON_ARITY,
-                        "message": (
-                            f"Compact mode refused to collapse subtree '{child_path}': "
-                            f"{len(child.children)} children exceed _COMPACT_MAX_PAIRS="
-                            f"{_COMPACT_MAX_PAIRS}."
-                        ),
-                        "safe": True,
-                        "semantics_changed": False,
-                    }
-                )
-                # Even though we won't collapse, recurse to honour deeper opportunities.
-                child.children = _compact_pass(child.children, corrections, child_path, _seen)
+            else:
                 out.append(child)
-                continue
-            # Not eligible (e.g. mixed children) but no comments — recurse.
-            child.children = _compact_pass(child.children, corrections, child_path, _seen)
-            out.append(child)
-        elif isinstance(child, Section):
-            sk = f"§{child.section_id}"
-            n = ordinals.get(sk, 0)
-            ordinals[sk] = n + 1
-            suffix = f"#{n}" if key_counts[sk] > 1 else ""
-            base = f"{field_path}.{sk}" if field_path else sk
-            child_path = base + suffix
-            _seen.add(nid)
-            child.children = _compact_pass(child.children, corrections, child_path, _seen)
-            out.append(child)
-        else:
-            _seen.add(nid)
-            out.append(child)
+        finally:
+            _seen.discard(nid)
     return out
 
 
@@ -933,6 +943,11 @@ def _expand_pass(children: list[Any], _seen: set[int] | None = None) -> list[Any
     CIV B2 (#376 PR-A rework): traversal carries an id-keyed visited-set so a
     self-referential AST raises ``OctaveASTCycleError`` (``E_AST_CYCLE``)
     instead of escaping as a bare ``RecursionError``.
+
+    Cubic C2 (#376 PR-A rework): the visited-set is a DFS *path stack*; each
+    frame discards its id() on exit so shared-acyclic references (the same
+    child instance under two parents) traverse cleanly. True cycles still
+    raise because the offending node remains on its own ancestry path.
     """
     if _seen is None:
         _seen = set()
@@ -942,21 +957,23 @@ def _expand_pass(children: list[Any], _seen: set[int] | None = None) -> list[Any
         if nid in _seen:
             raise OctaveASTCycleError(child, where="_expand_pass")
         _seen.add(nid)
-
-        if isinstance(child, Assignment):
-            lifted = _maybe_lift_assignment_to_block(child)
-            if lifted is not None:
-                out.append(lifted)
-                continue
-            out.append(child)
-        elif isinstance(child, Block):
-            child.children = _expand_pass(child.children, _seen)
-            out.append(child)
-        elif isinstance(child, Section):
-            child.children = _expand_pass(child.children, _seen)
-            out.append(child)
-        else:
-            out.append(child)
+        try:
+            if isinstance(child, Assignment):
+                lifted = _maybe_lift_assignment_to_block(child)
+                if lifted is not None:
+                    out.append(lifted)
+                else:
+                    out.append(child)
+            elif isinstance(child, Block):
+                child.children = _expand_pass(child.children, _seen)
+                out.append(child)
+            elif isinstance(child, Section):
+                child.children = _expand_pass(child.children, _seen)
+                out.append(child)
+            else:
+                out.append(child)
+        finally:
+            _seen.discard(nid)
     return out
 
 
@@ -3246,6 +3263,17 @@ class WriteTool(BaseTool):
                 corrections=corrections,
             )
             canonical_metrics = extract_structural_metrics(doc)
+        except OctaveASTCycleError as cyc:
+            # Cubic C3 (#376 PR-A): preserve the structured E_AST_CYCLE code
+            # so clients can discriminate cycle errors from generic emit
+            # failures. MUST appear BEFORE the broad ``except Exception``
+            # below — OctaveASTCycleError is a ValueError subclass and would
+            # otherwise be swallowed into the generic E_EMIT envelope.
+            return self._error_envelope(
+                target_path,
+                [{"code": OctaveASTCycleError.code, "message": str(cyc)}],
+                corrections,
+            )
         except Exception as e:
             return self._error_envelope(
                 target_path,

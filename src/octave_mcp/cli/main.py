@@ -438,7 +438,7 @@ def write(
     from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
     from octave_mcp.core.parser import parse
     from octave_mcp.core.validator import Validator
-    from octave_mcp.mcp.write import _emit_with_style
+    from octave_mcp.mcp.write import OctaveASTCycleError, _emit_with_style
     from octave_mcp.schemas.loader import get_builtin_schema
 
     # CRS-FIX #3: XOR enforcement - exactly ONE input source
@@ -486,7 +486,12 @@ def write(
                 if _existing.exists():
                     try:
                         baseline_for_preserve = _existing.read_text(encoding="utf-8")
-                    except OSError:
+                    except (OSError, UnicodeError):
+                        # Cubic C1 (#376 PR-A): UnicodeDecodeError is a
+                        # ValueError, not an OSError, so a baseline file
+                        # with invalid UTF-8 previously aborted the write.
+                        # Degrade gracefully — preserve short-circuit just
+                        # cannot fire, and we fall through to canonical emit.
                         baseline_for_preserve = None
             canonical_content = _emit_with_style(
                 doc,
@@ -579,6 +584,14 @@ def write(
     except json_module.JSONDecodeError as e:
         click.echo(f"Error: Invalid JSON in --changes: {e}", err=True)
         raise SystemExit(1) from e
+    except OctaveASTCycleError as cyc:
+        # Cubic C3 (#376 PR-A): surface the structured E_AST_CYCLE code on
+        # stderr so CLI consumers can discriminate cycle errors from generic
+        # exit-1 failures. MUST appear BEFORE the broad ``except Exception``
+        # below — OctaveASTCycleError is a ValueError subclass and would
+        # otherwise be swallowed into the generic error path.
+        click.echo(f"Error: {OctaveASTCycleError.code} {cyc}", err=True)
+        raise SystemExit(1) from cyc
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1) from e
