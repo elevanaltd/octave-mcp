@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`format_style` parameter on `octave_write`** (#376, PR-A) — New optional parameter on the MCP tool (`format_style`) and CLI command (`--format-style`) accepting `"preserve"`, `"expanded"`, or `"compact"`. The three modes are AST-level pre-passes that funnel into the single canonical `emit()` (I1 Single-Canon Discipline), not parallel emitters:
+  - `"preserve"` — Strategy C narrow short-circuit: when `parse(new_content) == parse(baseline_content)`, write baseline bytes verbatim and skip canonical re-emission.
+  - `"expanded"` — Lift `InlineMap` (and `ListValue` items that are `InlineMap`) into `Block` form before `emit()`.
+  - `"compact"` — Collapse atom-only Blocks (no comments anywhere in subtree, arity ≤ 8) into `inline-list-of-InlineMap` form. Comment-bearing subtrees are vetoed and a new `W_COMPACT_REFUSED` correction is appended to the repair log (I3 Mirror Constraint + I4 Auditability). The CLI surfaces these records on stderr.
+  - Unknown values are rejected with `E_INVALID_FORMAT_STYLE` (I5 Schema Sovereignty).
+
+  This is **purely additive**: when the parameter is omitted, today's canonical behaviour is preserved byte-for-byte and all baseline tests pass unchanged. Default behaviour is **not** changed in this release. Richer per-key dirty tracking (Strategy A), deep changes-mode paths, and the SemVer-staged default flip are deferred to [#377](https://github.com/elevanaltd/octave-mcp/issues/377).
+
 ## [1.11.0] - 2026-04-17 - "Lexer Safety & Skill Upgrades" Release
 
 This release fixes silent data loss from `#` characters in values and `://` in URLs (W002 warning), hardens the lexer against trailing `#` edge cases, and fixes E005 false positives on digit-prefix hash values. On the skills side, three major version upgrades ship: `octave-literacy` v3.0 (LLM-consumption paradigm), `octave-mastery` v3.0, and `octave-compression` v3.0 with the new ULTRA_MYTHIC compression tier.

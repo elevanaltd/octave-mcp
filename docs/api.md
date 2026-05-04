@@ -124,6 +124,7 @@ Unified entry point for writing OCTAVE files. Handles creation (new files) and m
 | `schema` | string | No | - | Schema name for validation |
 | `mutations` | object | No | - | META field overrides (applies to both modes) |
 | `base_hash` | string | No | - | Expected SHA-256 hash of existing file for consistency check (CAS) |
+| `format_style` | string | No | _(unset)_ | Output formatting projection — one of `"preserve"`, `"expanded"`, `"compact"`. When omitted, today's canonical emit behaviour is preserved exactly. See [Format-style modes](#format-style-modes-gh376-pr-a) below. |
 
 #### Returns
 
@@ -219,6 +220,58 @@ if any descriptor is invalid, none are applied (fail-fast atomicity).
 > diff is not yet guaranteed to be byte-stable outside the changed region — the
 > renderer canonicalises the whole document. Renderer stability is tracked
 > separately in [GH#371](https://github.com/elevanaltd/octave-mcp/issues/371).
+
+#### Format-style modes (GH#376 PR-A)
+
+`format_style` is an optional output-formatting projection. The three accepted
+values are **AST-level pre-passes that all funnel into the single canonical
+`emit()`** — they are projections of one canon, not parallel emitters
+(I1 Single-Canon Discipline). Unknown values are rejected with
+`E_INVALID_FORMAT_STYLE` (I5 Schema Sovereignty).
+
+| Mode | Semantics | When to use |
+|---|---|---|
+| _(unset / `null`)_ | Today's canonical behaviour byte-for-byte. No pre-pass, no short-circuit. | Default — preserves existing call-site behaviour. All baseline tests pass unchanged. |
+| `"preserve"` | **Strategy C narrow short-circuit.** If `parse(new_content) == parse(baseline_content)` (AST-equality, ignoring whitespace), write the baseline file's bytes verbatim and skip canonical re-emission entirely. Otherwise fall through to canonical `emit()`. | Governance / context files where whitespace-only or no-op edits should produce a zero-byte diff. **Note:** richer per-key dirty tracking (Strategy A) is intentionally deferred to [GH#377](https://github.com/elevanaltd/octave-mcp/issues/377). |
+| `"expanded"` | AST normalisation pre-pass that lifts `InlineMap` (and `ListValue` items that are `InlineMap`) into `Block` form before `emit()`. Materially changes on-disk shape vs default. | Canonicalisation pipelines where compact inline shapes must be normalised to multi-line Blocks for diff stability or downstream tooling. |
+| `"compact"` | AST pre-pass that collapses atom-only Blocks (no `Comment` anywhere in subtree, arity ≤ 8) into `Assignment(value=ListValue([InlineMap{...}, ...]))` form. Subtrees containing **any** `Comment` are vetoed and a `W_COMPACT_REFUSED` correction is appended to the repair log. | Token-minimised outputs for LLM consumption — but mind the comment veto. |
+
+##### `W_COMPACT_REFUSED` repair record
+
+When `format_style="compact"` encounters a Block whose subtree contains any
+`Comment` node, the collapse is **refused for that subtree** (the Block is
+left in its multi-line form) and a structured correction is appended to the
+response's repair log:
+
+```typescript
+{
+  code: "W_COMPACT_REFUSED",
+  field: "<dotted.path.to.block>",
+  message: "Compact projection refused: comment(s) present in subtree (I3 Mirror Constraint)."
+}
+```
+
+This record IS the I4 Auditability expression of compact-mode — every
+attempted-and-refused collapse leaves a receipt. The MCP tool surfaces it in
+the `corrections` field of the standard response; the CLI surfaces each entry
+on **stderr** after the write completes:
+
+```
+correction: W_COMPACT_REFUSED <field> -- <message>
+```
+
+Rationale: comments are I3 first-class content. Collapsing a Block to inline
+form would silently drop them. The veto + audit-log pattern preserves both
+the source content and a transparent record of where compact-mode could not
+be applied.
+
+##### Forward reference
+
+Strategy A (per-key dirty tracking, deep changes-mode paths, source-span
+infrastructure, and the `_normalize_value_for_ast` Block-shape preservation
+fix) is tracked in [GH#377](https://github.com/elevanaltd/octave-mcp/issues/377).
+The default value of `format_style` may flip from unset to `"preserve"` at
+that point; today's PR-A ships the toggle as purely additive.
 
 ---
 
@@ -705,6 +758,31 @@ octave validate document.oct.md --schema DECISION_LOG --strict
 
 - `0`: Valid (no errors)
 - `1`: Invalid (validation errors found)
+
+---
+
+### octave write — `--format-style` flag (GH#376 PR-A)
+
+The `octave write` CLI command (which mirrors the `octave_write` MCP tool)
+accepts a `--format-style` option with the same three modes documented in
+[Format-style modes](#format-style-modes-gh376-pr-a) above:
+
+```bash
+octave write FILE --content '...' [--format-style {preserve|expanded|compact}]
+octave write FILE --changes '{...}' [--format-style {preserve|expanded|compact}]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--format-style` | choice | _(unset)_ | One of `preserve`, `expanded`, `compact`. Unset preserves today's canonical behaviour. See [Format-style modes](#format-style-modes-gh376-pr-a). |
+
+When `--format-style=compact` is used, any `W_COMPACT_REFUSED` records are
+surfaced on **stderr** (one line per refused collapse), in addition to the
+normal stdout success information:
+
+```
+correction: W_COMPACT_REFUSED <field> -- <message>
+```
 
 ---
 

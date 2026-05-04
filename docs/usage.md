@@ -252,6 +252,7 @@ asyncio.run(main())
 - `changes` (optional): Dictionary of field updates for existing files
 - `schema` (optional): Schema name for validation
 - `mutations` (optional): META field overrides
+- `format_style` (optional, GH#376 PR-A): Output projection — `"preserve"`, `"expanded"`, or `"compact"`. Unset preserves today's canonical behaviour. See [API reference](api.md#format-style-modes-gh376-pr-a) for full mode semantics and the `W_COMPACT_REFUSED` audit record.
 
 **Example:**
 
