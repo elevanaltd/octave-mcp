@@ -35,11 +35,15 @@ classifiers = [
     "Typing :: Typed"
 ]
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=1.27.0",
     "click>=8.1.0",
     "pydantic>=2.12.0",
-    "python-dotenv>=1.2.0",
+    "python-dotenv>=1.2.2",
     "PyYAML>=6.0.3",
+    "PyJWT>=2.12.1",  # CVE-2025-61726: crit header validation
+    "python-multipart>=0.0.27",  # CVE-2025-48074, CVE-2025-48075: DoS and path traversal
+    "cryptography>=47.0.0",  # CVE-2025-61727, CVE-2025-50635, CVE-2025-50636: buffer overflow and subgroup validation
+    "filelock>=3.29.0",  # CVE-2025-68146: TOCTOU symlink vulnerability
 ]
 
 [project.urls]
@@ -57,7 +61,7 @@ http = [
     "sse-starlette>=2.2.0",  # SSE support for streaming
 ]
 dev = [
-    "pytest>=8.0.0",
+    "pytest>=9.0.3",
     "pytest-cov>=6.0.0",
     "pytest-asyncio>=0.24.0",
     "pytest-timeout>=2.3.0",
@@ -66,8 +70,10 @@ dev = [
     "ruff>=0.9.0",
     "black>=26.0.0",
     "hypothesis>=6.122.0",
-    "pre-commit>=4.0.0",
+    "pre-commit>=4.1.0",
     "httpx>=0.28.0",  # For testing HTTP transport
+    "Pygments>=2.20.0",  # CVE-2025-61833: ReDoS vulnerability
+    "virtualenv>=20.36.2",  # CVE-2025-68147: TOCTOU vulnerabilities
 ]
 
 [project.scripts]
