@@ -396,6 +396,21 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool, v
 @click.option("--changes", help="JSON string of field changes for existing files")
 @click.option("--base-hash", help="Expected SHA-256 hash for CAS consistency check")
 @click.option("--schema", help="Schema name for validation before write")
+@click.option(
+    "--format-style",
+    "format_style",
+    type=click.Choice(["preserve", "expanded", "compact"]),
+    default=None,
+    help=(
+        "Output formatting style (GH#376 PR-A). "
+        "'preserve' = Strategy C no-op shortcut (write baseline bytes verbatim "
+        "when new content is AST-equal to existing file). "
+        "'expanded' = lift inline-map shapes into Block form. "
+        "'compact' = collapse atom-only Blocks to inline-list form (vetoed on "
+        "comment-bearing subtrees, W_COMPACT_REFUSED logged). "
+        "Default: today's canonical behaviour."
+    ),
+)
 def write(
     file: str,
     content: str | None,
@@ -403,6 +418,7 @@ def write(
     changes: str | None,
     base_hash: str | None,
     schema: str | None,
+    format_style: str | None,
 ):
     """Write OCTAVE file with validation.
 
@@ -418,10 +434,11 @@ def write(
     import sys
 
     from octave_mcp.core.ast_nodes import Assignment
-    from octave_mcp.core.emitter import emit
+    from octave_mcp.core.emitter import emit  # noqa: F401 -- kept for backwards-compatible imports
     from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
     from octave_mcp.core.parser import parse
     from octave_mcp.core.validator import Validator
+    from octave_mcp.mcp.write import OctaveASTCycleError, _emit_with_style
     from octave_mcp.schemas.loader import get_builtin_schema
 
     # CRS-FIX #3: XOR enforcement - exactly ONE input source
@@ -449,12 +466,40 @@ def write(
     if use_stdin:
         content = sys.stdin.read()
 
+    # GH#376 PR-A: corrections collector for CLI W_COMPACT_REFUSED entries.
+    # Surfaced via stderr after write completes when format_style="compact".
+    cli_corrections: list[dict] = []
+    baseline_for_preserve: str | None = None
+
     try:
         # Handle content mode (create/overwrite)
         if content is not None:
             # Parse and emit canonical form
             doc = parse(content)
-            canonical_content = emit(doc)
+            # GH#376 PR-A: when --format-style=preserve, read existing baseline
+            # bytes (if any) so the Strategy C short-circuit can return them
+            # verbatim on AST-equality.
+            if format_style == "preserve":
+                from pathlib import Path as _Path
+
+                _existing = _Path(file)
+                if _existing.exists():
+                    try:
+                        baseline_for_preserve = _existing.read_text(encoding="utf-8")
+                    except (OSError, UnicodeError):
+                        # Cubic C1 (#376 PR-A): UnicodeDecodeError is a
+                        # ValueError, not an OSError, so a baseline file
+                        # with invalid UTF-8 previously aborted the write.
+                        # Degrade gracefully — preserve short-circuit just
+                        # cannot fire, and we fall through to canonical emit.
+                        baseline_for_preserve = None
+            canonical_content = _emit_with_style(
+                doc,
+                baseline_bytes=baseline_for_preserve,
+                new_bytes=content,
+                format_style=format_style,
+                corrections=cli_corrections,
+            )
 
         else:
             # Handle changes mode (delta update)
@@ -468,6 +513,7 @@ def write(
 
             # Read existing file
             original_content = target_path.read_text(encoding="utf-8")
+            baseline_for_preserve = original_content
 
             # Parse existing content
             doc = parse(original_content)
@@ -492,7 +538,13 @@ def write(
                     if not found:
                         doc.sections.append(Assignment(key=key, value=value))
 
-            canonical_content = emit(doc)
+            canonical_content = _emit_with_style(
+                doc,
+                baseline_bytes=baseline_for_preserve,
+                new_bytes=None,
+                format_style=format_style,
+                corrections=cli_corrections,
+            )
 
         # Schema validation if requested
         validation_status = "UNVALIDATED"
@@ -518,11 +570,28 @@ def write(
         click.echo(f"canonical_hash: {write_result['canonical_hash']}")
         click.echo(f"validation_status: {validation_status}")
 
+        # GH#376 PR-A: surface compact-mode veto records (I4 Auditability)
+        for correction in cli_corrections:
+            if correction.get("code"):
+                click.echo(
+                    f"correction: {correction['code']} {correction.get('field') or ''} "
+                    f"-- {correction.get('message') or ''}".rstrip(),
+                    err=True,
+                )
+
     except SystemExit:
         raise
     except json_module.JSONDecodeError as e:
         click.echo(f"Error: Invalid JSON in --changes: {e}", err=True)
         raise SystemExit(1) from e
+    except OctaveASTCycleError as cyc:
+        # Cubic C3 (#376 PR-A): surface the structured E_AST_CYCLE code on
+        # stderr so CLI consumers can discriminate cycle errors from generic
+        # exit-1 failures. MUST appear BEFORE the broad ``except Exception``
+        # below — OctaveASTCycleError is a ValueError subclass and would
+        # otherwise be swallowed into the generic error path.
+        click.echo(f"Error: {OctaveASTCycleError.code} {cyc}", err=True)
+        raise SystemExit(1) from cyc
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1) from e
