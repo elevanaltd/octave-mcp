@@ -63,9 +63,7 @@ def _fixture_id(path: Path) -> str:
 FIXTURES = _discover_fixtures()
 
 
-def _assert_correction_after_non_empty(
-    correction: dict[str, Any], fixture_id: str
-) -> None:
+def _assert_correction_after_non_empty(correction: dict[str, Any], fixture_id: str) -> None:
     """A correction emitted under the before/after schema must have a
     non-empty `after`.
 
@@ -120,9 +118,7 @@ async def test_hard_symmetry_roundtrip(fixture_path: Path) -> None:
         )
 
     # Step 2: round-trip via dry-run write.
-    with tempfile.NamedTemporaryFile(
-        suffix=".oct.md", delete=False, mode="wb"
-    ) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=".oct.md", delete=False, mode="wb") as tmp:
         tmp.write(content_bytes)
         tmp_path = tmp.name
     try:

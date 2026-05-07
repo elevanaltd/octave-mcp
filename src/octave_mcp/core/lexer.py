@@ -1186,7 +1186,13 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                         )
                     bracket_stack.pop()
 
-                if normalized_from:
+                # ADR-0006 SR0-T2 (GH#381): only emit a normalization repair when
+                # both the original lexeme and the post-normalization value are
+                # non-empty. An empty `value` means we have no replacement to
+                # render, so emitting the repair fabricates a destructive
+                # correction (empty `after` downstream) — violates I1
+                # SYNTACTIC_FIDELITY and I3 MIRROR_CONSTRAINT.
+                if normalized_from and value:
                     repairs.append(
                         {
                             "type": "normalization",
