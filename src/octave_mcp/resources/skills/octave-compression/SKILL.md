@@ -123,7 +123,7 @@ META:
     FIDELITY::"Are all causal chains intact?"
     LOSS_RECEIPT::"Does META carry COMPRESSION_TIER and LOSS_PROFILE?"
     GROUNDING::"Is there at least one concrete example per major abstraction?"
-    WARNINGS::"Check octave_write warnings[] — W_BARE_LINE_DROPPED and W_NUMERIC_KEY_DROPPED are silent data loss"
+    WARNINGS::"Check octave_write warnings[] — W_BARE_LINE_DROPPED and W_NUMERIC_KEY_DROPPED are silent data loss. NOTE: warnings[] semantics change post ADR-0006 SR1-T4 (no-op normalisation default) and SR3-T2 (octave_fmt bifurcation) — see octave-literacy §6::FORTHCOMING_BEHAVIOR."
 §4::COMPRESSION_RULES
   R1::"Preserve CAUSALITY — X→Y because Z. Never flatten to X→Y alone."
   R2::"Preserve CONDITIONAL QUALIFIERS — when X, if Y, unless Z carry material risk info"
