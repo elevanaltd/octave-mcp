@@ -40,6 +40,7 @@ from octave_mcp.core.lexer import ENVELOPE_ID_PATTERN, LexerError, tokenize
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.parser import ParserError, parse, parse_with_warnings
 from octave_mcp.core.repair import repair
+from octave_mcp.core.repair_log import is_destructive_normalization_repair
 from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
@@ -1520,15 +1521,31 @@ class WriteTool(BaseTool):
         for w in warnings:
             w_type = w.get("type", "")
             if w_type == "normalization":
+                # ADR-0006 SR0-T2 (GH#381): suppress destructive empty-`after`
+                # corrections via the shared discriminant in core.repair_log.
+                # Boundary guard: lexer should never produce these post-fix,
+                # but enforcing here too prevents drift if any future repair
+                # source emits an empty-normalised record.
+                #
+                # Cubic P2 follow-up to #383: the helper deliberately narrows
+                # to normalization-shaped records (type=="normalization" OR
+                # has `normalized` key). A malformed record dispatched into
+                # this branch on the strength of `w_type=="normalization"`
+                # alone but lacking the `normalized` key would slip past the
+                # helper. Belt-and-braces: also gate on a non-empty
+                # normalized_value so neither defect class can land.
+                normalized_value = w.get("normalized", "")
+                if is_destructive_normalization_repair(w) or not normalized_value:
+                    continue
                 corrections.append(
                     {
                         "code": "W002",
                         "tier": "NORMALIZATION",
-                        "message": f"ASCII operator -> Unicode: {w.get('original', '')} -> {w.get('normalized', '')}",
+                        "message": f"ASCII operator -> Unicode: {w.get('original', '')} -> {normalized_value}",
                         "line": w.get("line", 0),
                         "column": w.get("column", 0),
                         "before": w.get("original", ""),
-                        "after": w.get("normalized", ""),
+                        "after": normalized_value,
                         "safe": True,
                         "semantics_changed": False,
                     }
@@ -1961,15 +1978,30 @@ class WriteTool(BaseTool):
         corrections = []
 
         # Map tokenize repairs to W002 (ASCII operator -> Unicode)
+        # ADR-0006 SR0-T2 (GH#381): skip destructive empty-`after` corrections
+        # via the shared discriminant in core.repair_log. Boundary guard so a
+        # defensive caller cannot land an I3-violating normalisation even if
+        # the lexer guard is bypassed.
+        #
+        # Cubic P2 follow-up to #383: the helper deliberately narrows to
+        # normalization-shaped records (type=="normalization" OR has
+        # `normalized` key). A malformed token_repair lacking BOTH would
+        # slip past the helper (helper returns False for not-normalization-
+        # shaped) and emit W002 with empty `after`. Belt-and-braces: also
+        # gate on a non-empty normalized_value so the malformed case is
+        # suppressed too. The helper's narrow semantics are preserved.
         for token_repair in tokenize_repairs:
+            normalized_value = token_repair.get("normalized", "")
+            if is_destructive_normalization_repair(token_repair) or not normalized_value:
+                continue
             corrections.append(
                 {
                     "code": "W002",
-                    "message": f"ASCII operator -> Unicode: {token_repair.get('original', '')} -> {token_repair.get('normalized', '')}",
+                    "message": f"ASCII operator -> Unicode: {token_repair.get('original', '')} -> {normalized_value}",
                     "line": token_repair.get("line", 0),
                     "column": token_repair.get("column", 0),
                     "before": token_repair.get("original", ""),
-                    "after": token_repair.get("normalized", ""),
+                    "after": normalized_value,
                 }
             )
 
