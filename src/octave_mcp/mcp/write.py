@@ -1526,9 +1526,17 @@ class WriteTool(BaseTool):
                 # Boundary guard: lexer should never produce these post-fix,
                 # but enforcing here too prevents drift if any future repair
                 # source emits an empty-normalised record.
-                if is_destructive_normalization_repair(w):
-                    continue
+                #
+                # Cubic P2 follow-up to #383: the helper deliberately narrows
+                # to normalization-shaped records (type=="normalization" OR
+                # has `normalized` key). A malformed record dispatched into
+                # this branch on the strength of `w_type=="normalization"`
+                # alone but lacking the `normalized` key would slip past the
+                # helper. Belt-and-braces: also gate on a non-empty
+                # normalized_value so neither defect class can land.
                 normalized_value = w.get("normalized", "")
+                if is_destructive_normalization_repair(w) or not normalized_value:
+                    continue
                 corrections.append(
                     {
                         "code": "W002",
@@ -1974,10 +1982,18 @@ class WriteTool(BaseTool):
         # via the shared discriminant in core.repair_log. Boundary guard so a
         # defensive caller cannot land an I3-violating normalisation even if
         # the lexer guard is bypassed.
+        #
+        # Cubic P2 follow-up to #383: the helper deliberately narrows to
+        # normalization-shaped records (type=="normalization" OR has
+        # `normalized` key). A malformed token_repair lacking BOTH would
+        # slip past the helper (helper returns False for not-normalization-
+        # shaped) and emit W002 with empty `after`. Belt-and-braces: also
+        # gate on a non-empty normalized_value so the malformed case is
+        # suppressed too. The helper's narrow semantics are preserved.
         for token_repair in tokenize_repairs:
-            if is_destructive_normalization_repair(token_repair):
-                continue
             normalized_value = token_repair.get("normalized", "")
+            if is_destructive_normalization_repair(token_repair) or not normalized_value:
+                continue
             corrections.append(
                 {
                     "code": "W002",
