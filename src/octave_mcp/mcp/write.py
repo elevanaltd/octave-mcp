@@ -40,6 +40,7 @@ from octave_mcp.core.lexer import ENVELOPE_ID_PATTERN, LexerError, tokenize
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.parser import ParserError, parse, parse_with_warnings
 from octave_mcp.core.repair import repair
+from octave_mcp.core.repair_log import is_destructive_normalization_repair
 from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
@@ -1521,16 +1522,13 @@ class WriteTool(BaseTool):
             w_type = w.get("type", "")
             if w_type == "normalization":
                 # ADR-0006 SR0-T2 (GH#381): suppress destructive empty-`after`
-                # corrections. Lexer should never produce these post-fix, but
-                # guard at the boundary too — emitting a W002 with empty
-                # `after` claims a normalisation while supplying no replacement,
-                # violating I1 SYNTACTIC_FIDELITY (semantic-altering normalisation),
-                # I3 MIRROR_CONSTRAINT (fabricating a deletion not present in
-                # source intent), and I4 TRANSFORM_AUDITABILITY (the diff
-                # cannot reflect a phantom correction).
-                normalized_value = w.get("normalized", "")
-                if not normalized_value:
+                # corrections via the shared discriminant in core.repair_log.
+                # Boundary guard: lexer should never produce these post-fix,
+                # but enforcing here too prevents drift if any future repair
+                # source emits an empty-normalised record.
+                if is_destructive_normalization_repair(w):
                     continue
+                normalized_value = w.get("normalized", "")
                 corrections.append(
                     {
                         "code": "W002",
@@ -1973,12 +1971,13 @@ class WriteTool(BaseTool):
 
         # Map tokenize repairs to W002 (ASCII operator -> Unicode)
         # ADR-0006 SR0-T2 (GH#381): skip destructive empty-`after` corrections
-        # at the boundary so a defensive caller cannot land an I3-violating
-        # normalisation even if the lexer guard is bypassed.
+        # via the shared discriminant in core.repair_log. Boundary guard so a
+        # defensive caller cannot land an I3-violating normalisation even if
+        # the lexer guard is bypassed.
         for token_repair in tokenize_repairs:
-            normalized_value = token_repair.get("normalized", "")
-            if not normalized_value:
+            if is_destructive_normalization_repair(token_repair):
                 continue
+            normalized_value = token_repair.get("normalized", "")
             corrections.append(
                 {
                     "code": "W002",

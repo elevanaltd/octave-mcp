@@ -2,6 +2,47 @@
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
+
+
+def is_destructive_normalization_repair(repair: dict[str, Any]) -> bool:
+    """Return True iff `repair` is a normalization-shaped record whose
+    post-normalization output is missing or empty.
+
+    ADR-0006 SR0-T2 (GH#381): a normalization repair with an empty
+    `normalized` value would render downstream as a W002 correction with
+    `after=""` — claiming a normalisation while supplying no replacement.
+    That fabricates a deletion not present in source intent, violating
+    I1 (SYNTACTIC_FIDELITY) and I3 (MIRROR_CONSTRAINT), and breaks the
+    HARD_SYMMETRY invariant by emitting a correction the rendered diff
+    cannot reflect.
+
+    A record is "normalization-shaped" if either:
+      * ``type == "normalization"`` (lexer/parser warning shape), or
+      * the record carries a ``normalized`` field (tokenize_repair shape
+        used by `_track_corrections`, which has no `type` discriminator).
+
+    The helper centralises the discriminant so all three SR0-T2 guard
+    sites (core/lexer.py emit, mcp/write.py:_map_parse_warnings_to_corrections,
+    mcp/write.py:_track_corrections) share one definition and cannot drift.
+
+    Scope is intentionally narrow: it does NOT classify other warning
+    codes (e.g. W_UNQUOTED_SECTION_IN_VALUE uses original/repaired and
+    is out of scope; broader audit-cardinality discriminants are tracked
+    at #386 for SR1).
+
+    Args:
+        repair: A repair / warning candidate dict.
+
+    Returns:
+        True iff the record is a destructive (empty-normalised)
+        normalization repair that callers must suppress.
+    """
+    is_normalization_shaped = repair.get("type") == "normalization" or "normalized" in repair
+    if not is_normalization_shaped:
+        return False
+    normalized = repair.get("normalized")
+    return not normalized
 
 
 class RepairTier(Enum):

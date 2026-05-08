@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any
 
+from octave_mcp.core.repair_log import is_destructive_normalization_repair
+
 
 class TokenType(Enum):
     """OCTAVE token types."""
@@ -1186,22 +1188,20 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                         )
                     bracket_stack.pop()
 
-                # ADR-0006 SR0-T2 (GH#381): only emit a normalization repair when
-                # both the original lexeme and the post-normalization value are
-                # non-empty. An empty `value` means we have no replacement to
-                # render, so emitting the repair fabricates a destructive
-                # correction (empty `after` downstream) — violates I1
-                # SYNTACTIC_FIDELITY and I3 MIRROR_CONSTRAINT.
-                if normalized_from and value:
-                    repairs.append(
-                        {
-                            "type": "normalization",
-                            "original": normalized_from,
-                            "normalized": value,
-                            "line": line,
-                            "column": column,
-                        }
-                    )
+                # ADR-0006 SR0-T2 (GH#381): suppress destructive empty-`after`
+                # normalisations via the shared discriminant in core.repair_log.
+                # See is_destructive_normalization_repair docstring for the I1/I3
+                # rationale.
+                if normalized_from:
+                    candidate = {
+                        "type": "normalization",
+                        "original": normalized_from,
+                        "normalized": value,
+                        "line": line,
+                        "column": column,
+                    }
+                    if not is_destructive_normalization_repair(candidate):
+                        repairs.append(candidate)
 
                 # Update position - count embedded newlines in matched text
                 newline_count = matched_text.count("\n")
