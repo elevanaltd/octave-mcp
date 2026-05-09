@@ -17,7 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from octave_mcp.core.parser import parse
+from octave_mcp.core.lexer import LexerError
+from octave_mcp.core.parser import ParserError, parse
 from octave_mcp.core.validator import Validator
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +37,27 @@ EXCLUDED_PARTS = {
     ".pytest_cache",
 }
 
+# Allowlist for intentional negative fixtures: relative paths (POSIX-style,
+# relative to REPO_ROOT) of `.oct.md` files that are EXPECTED to trip
+# W_DUPLICATE_TARGET — e.g. fixtures backing tests that exercise the
+# corruption-detection path itself. The corpus invariant skips these.
+#
+# Add entries here only when a new test deliberately needs a duplicate-target
+# fixture as input. Each addition should be justified in the commit message
+# and ideally paired with a test that consumes the fixture so its presence
+# is auditable.
+INTENTIONAL_NEGATIVE_FIXTURES: frozenset[str] = frozenset()
+
+# Exception types that may legitimately be raised by `parse()` on
+# unrelated lexer/parser malformations. Any OTHER exception type surfacing
+# from the parse path is treated as a real bug and surfaced as a test
+# failure rather than silently skipped (CE follow-up to PR #389).
+_TOLERATED_PARSE_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    LexerError,
+    ParserError,
+    UnicodeDecodeError,
+)
+
 
 def _iter_corpus_files() -> list[Path]:
     files: list[Path] = []
@@ -48,22 +70,28 @@ def _iter_corpus_files() -> list[Path]:
 
 def test_corpus_has_no_duplicate_target_collisions() -> None:
     """Every parseable .oct.md in the in-tree corpus must validate without
-    emitting W_DUPLICATE_TARGET. Files that fail to parse for unrelated reasons
-    (lexer-side errors out of scope for this invariant) are skipped, not
-    asserted against — this test exclusively guards the duplicate-target
-    structural invariant.
+    emitting W_DUPLICATE_TARGET. Files in INTENTIONAL_NEGATIVE_FIXTURES are
+    skipped (they exist to exercise the corruption-detection path). Files
+    that fail to parse with a tolerated lexer/parser exception type are also
+    skipped — those malformations are out of scope for this invariant. Any
+    OTHER exception type surfaces as a test failure rather than being
+    silently swallowed.
     """
     files = _iter_corpus_files()
     assert files, "Corpus scan found zero .oct.md files; check REPO_ROOT resolution."
 
     hits: list[tuple[str, str]] = []
     for path in files:
+        rel_posix = path.relative_to(REPO_ROOT).as_posix()
+        if rel_posix in INTENTIONAL_NEGATIVE_FIXTURES:
+            continue
         try:
             doc = parse(path.read_text(encoding="utf-8"))
-        except Exception:
-            # Parse failures are out of scope for this invariant. Other tests
-            # cover lexer/parser correctness; this test only checks the
-            # post-parse structural collision.
+        except _TOLERATED_PARSE_EXCEPTIONS:
+            # Lexer/parser malformations and encoding errors are out of
+            # scope for this invariant. Other tests cover those failure
+            # modes; this test exclusively guards the post-parse
+            # duplicate-target structural collision.
             continue
         validator = Validator(schema=None)
         for err in validator.validate(doc):
