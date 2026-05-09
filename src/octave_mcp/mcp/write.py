@@ -2153,17 +2153,50 @@ class WriteTool(BaseTool):
                     if parent_block is not None:
                         # PARENT exists as a top-level Block. Treat dot as path
                         # separator; CHILD must resolve inside the Block.
-                        if not any(isinstance(c, Assignment) and c.key == child_key for c in parent_block.children):
-                            # GH#370: Before rejecting, check if the literal dotted key
-                            # exists as a flat assignment (conflict scenario from GH#369).
-                            # If the flat key exists, applier will handle it; validator
-                            # must not reject to maintain contract with applier.
-                            flat_match = any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
-                            if flat_match:
-                                # Conflicted document: Block + flat dotted assignment coexist.
-                                # Applier will route to flat assignment (GH#347 carve-out).
-                                # Tolerate here for consistency; validator will emit W_DUPLICATE_TARGET.
-                                continue
+                        flat_match = any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
+                        block_child_match = any(
+                            isinstance(c, Assignment) and c.key == child_key for c in parent_block.children
+                        )
+                        if flat_match:
+                            # ADR-0006 SR1-T3 (closes GH#369): conflicted source
+                            # document — both Block(parent) and a flat top-level
+                            # Assignment(parent.child) exist. The change key is
+                            # genuinely ambiguous: should the update land inside
+                            # the Block, or on the flat assignment? Either choice
+                            # fabricates intent the caller did not declare, which
+                            # violates PROD-I3 (Mirror Constraint: reflect only
+                            # present, create nothing). Prior behaviour
+                            # (PR#370) silently routed to the flat assignment
+                            # and surfaced a W_DUPLICATE_TARGET warning; ADR-0006
+                            # supersedes that contract with a hard-fail so the
+                            # caller must disambiguate before the writer commits
+                            # to a target.
+                            candidates = [
+                                f"flat top-level Assignment('{key}')",
+                                (
+                                    f"child '{child_key}' inside top-level Block('{parent_key}')"
+                                    if block_child_match
+                                    else f"top-level Block('{parent_key}') (no child '{child_key}' present)"
+                                ),
+                            ]
+                            errors.append(
+                                {
+                                    "code": "E_AMBIGUOUS_PATH",
+                                    "message": (
+                                        f"Ambiguous change path '{key}': source document contains "
+                                        f"both a top-level Block('{parent_key}') and a flat "
+                                        f"top-level Assignment('{key}'). Candidate targets: "
+                                        f"{candidates[0]}; {candidates[1]}. Refusing to guess "
+                                        f"which to update. To resolve: (a) use the content= "
+                                        f"parameter with the full document to rewrite verbatim, "
+                                        f"or (b) clean up the source so only one of the two "
+                                        f"targets remains (this conflict is the W_DUPLICATE_TARGET "
+                                        f"corruption pattern tracked by GH#372 SR1-T2)."
+                                    ),
+                                }
+                            )
+                            continue
+                        if not block_child_match:
                             # No flat fallback; reject the unresolvable path.
                             errors.append(
                                 {
@@ -2177,8 +2210,8 @@ class WriteTool(BaseTool):
                                 }
                             )
                             continue
-                        # PARENT.CHILD resolves inside the block. _apply_changes
-                        # will route to _apply_block_change.
+                        # PARENT.CHILD resolves unambiguously inside the block.
+                        # _apply_changes will route to _apply_block_change.
                         continue
                     # PARENT is not a top-level Block. The key is acceptable
                     # only if it already exists as a flat top-level Assignment
