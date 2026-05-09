@@ -5841,3 +5841,67 @@ class TestSR1T3aChangeWarningsBufferIsPerCall:
                     f"Unambiguous call #{i} picked up W_AMBIGUOUS_PATH from a "
                     f"sibling — singleton-race regression. Codes: {codes}"
                 )
+
+    @pytest.mark.asyncio
+    async def test_w_ambiguous_path_survives_emit_failure(self, monkeypatch):
+        """CE follow-up to PR #392: change_warnings (W_AMBIGUOUS_PATH) captured
+        by _validate_change_paths during the changes-mode pass MUST survive a
+        downstream emit failure. The success-path drain at the bottom of
+        execute() never runs when _emit_with_style raises; without explicit
+        per-error-site draining the deprecation warning would be silently
+        dropped on E_EMIT / E_AST_CYCLE returns.
+
+        Reproduces the medium-severity finding by monkeypatching
+        ``octave_mcp.mcp.write._emit_with_style`` to raise, then asserts the
+        E_EMIT error envelope still carries W_AMBIGUOUS_PATH in corrections.
+        """
+        from octave_mcp.mcp import write as write_module
+        from octave_mcp.mcp.write import WriteTool
+
+        original_emit = write_module._emit_with_style
+
+        def _raising_emit(*args, **kwargs):
+            raise RuntimeError("forced emit failure for CE regression test")
+
+        monkeypatch.setattr(write_module, "_emit_with_style", _raising_emit)
+
+        tool = WriteTool()
+
+        # Conflicted source: triggers W_AMBIGUOUS_PATH during validation.
+        conflicted = (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "NAV.OPERATIONAL_CONVENTIONS::[X,Y]\n"
+            "===END===\n"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(conflicted)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+            )
+
+            # Sanity: the emit-failure error is what we forced, not something
+            # else upstream that would mask the test's intent.
+            assert result["status"] == "error", f"Expected error, got: {result}"
+            err_codes = {e.get("code") for e in result.get("errors", [])}
+            assert "E_EMIT" in err_codes, f"Expected E_EMIT from forced emit failure, got: {result.get('errors')}"
+
+            # The actual contract under test: deprecation warning survives.
+            corr_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in corr_codes, (
+                f"W_AMBIGUOUS_PATH was dropped on emit failure path — CE "
+                f"follow-up regression. Got corrections: {result.get('corrections')}"
+            )
+
+        # Restore for hygiene (monkeypatch already does this on teardown,
+        # but the assignment makes the intent explicit if the fixture is
+        # ever refactored).
+        monkeypatch.setattr(write_module, "_emit_with_style", original_emit)

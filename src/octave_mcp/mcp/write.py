@@ -3407,16 +3407,25 @@ class WriteTool(BaseTool):
             # failures. MUST appear BEFORE the broad ``except Exception``
             # below — OctaveASTCycleError is a ValueError subclass and would
             # otherwise be swallowed into the generic E_EMIT envelope.
+            #
+            # CE follow-up to #392: change_warnings (e.g. W_AMBIGUOUS_PATH)
+            # captured by _validate_change_paths during the changes-mode pass
+            # are merged into the error envelope here. Without this drain the
+            # success-path drain at line ~3519 would never run on emit failure
+            # and the deprecation signal would be silently dropped.
             return self._error_envelope(
                 target_path,
                 [{"code": OctaveASTCycleError.code, "message": str(cyc)}],
-                corrections,
+                corrections + list(change_warnings),
             )
         except Exception as e:
+            # CE follow-up to #392: same change_warnings drain as the
+            # E_AST_CYCLE branch above — emit failure must not lose
+            # W_AMBIGUOUS_PATH (or any future change-path warning).
             return self._error_envelope(
                 target_path,
                 [{"code": "E_EMIT", "message": f"Emit error: {str(e)}"}],
-                corrections,
+                corrections + list(change_warnings),
             )
 
         result["corrections"] = corrections
