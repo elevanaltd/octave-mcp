@@ -594,8 +594,9 @@ class TestGBNFCompilerFromMeta:
 
     def test_compile_from_meta_dict(self):
         """compile_document_grammar should use GBNFCompiler."""
-        # This tests the integration point with grammar.py
-        from octave_mcp.core.grammar import compile_document_grammar
+        # This tests the integration point with grammar_compiler.gbnf
+        # (renamed from grammar.py per ADR-0006 SR1-T1 Step 1)
+        from octave_mcp.core.grammar_compiler import compile_document_grammar
 
         meta = {
             "TYPE": "TEST_SCHEMA",
