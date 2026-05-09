@@ -5276,12 +5276,18 @@ class TestGH369NestedBlockChangePathResolution:
         assert dup.severity == "warning"
 
     @pytest.mark.asyncio
-    async def test_gh370_conflicted_document_block_plus_flat_dotted_allowed(self):
-        """GH#370: A document with both Block(K) and flat Assignment(K.X) is
-        conflicted but should be editable via changes-mode. The validator must
-        tolerate this because the applier will handle it via the flat assignment.
-        This happens when a writer regression created the corruption pattern but
-        the file still needs cleanup."""
+    async def test_gh370_conflicted_document_block_plus_flat_dotted_hard_fails(self):
+        """ADR-0006 SR1-T3 (GH#369): document containing both Block(K) and
+        flat Assignment(K.X) is conflicted; changes-mode targeting K.X must
+        hard-fail with E_AMBIGUOUS_PATH instead of routing to the flat
+        assignment.
+
+        Supersedes the prior PR#370 "tolerate-and-warn" contract: warning
+        was insufficient because the writer still committed an edit to one
+        of two candidate targets without the caller's consent. Cleanup of
+        such documents is tracked by GH#372 SR1-T2 migration sweep using
+        ``content=`` mode.
+        """
         from octave_mcp.mcp.write import WriteTool
 
         tool = WriteTool()
@@ -5295,35 +5301,136 @@ class TestGH369NestedBlockChangePathResolution:
             with open(target_path, "w") as f:
                 f.write(initial)
 
-            # Should allow editing the flat assignment
             result = await tool.execute(
                 target_path=target_path,
                 changes={"P1.1": "updated"},
             )
 
-            assert result["status"] == "success", f"errors: {result.get('errors')}"
-            # Verify the W_DUPLICATE_TARGET warning surfaces
-            correction_codes = {c.get("code") for c in result.get("corrections", [])}
-            assert (
-                "W_DUPLICATE_TARGET" in correction_codes
-            ), f"Expected W_DUPLICATE_TARGET warning in corrections, got: {correction_codes}"
+            assert result["status"] == "error", (
+                f"Conflicted Block(P1)+flat P1.1 must hard-fail per ADR-0006 "
+                f"SR1-T3, got status={result.get('status')}"
+            )
+            codes = {e.get("code") for e in result.get("errors", [])}
+            assert "E_AMBIGUOUS_PATH" in codes, (
+                f"Expected E_AMBIGUOUS_PATH, got: {result.get('errors')}"
+            )
+            # File on disk must be untouched (fail-fast precludes partial write).
             with open(target_path) as f:
                 final = f.read()
-            assert "P1.1::updated" in final
+            assert "P1.1::original" in final
 
     @pytest.mark.asyncio
-    async def test_gh370_duplicate_target_warning_surfaces_in_default_flow(self):
-        """GH#370: W_DUPLICATE_TARGET warning must surface in default changes-mode
-        flow without requiring schema validation. This is Problem 2: the warning
-        only fired when schema_name was set, so corrupted files couldn't be
-        detected during normal editing."""
+    async def test_gh370_duplicate_target_warning_surfaces_on_validate_only(self):
+        """ADR-0006 SR1-T3: changes-mode against a conflicted document hard-
+        fails (see test_gh370_conflicted_document_block_plus_flat_dotted_hard_fails),
+        but the W_DUPLICATE_TARGET validator warning still serves as the
+        diagnostic tripwire when the document is read or validated without
+        an active changes payload (covers the migration-sweep visibility
+        path of GH#372).
+        """
+        from octave_mcp.core.ast_nodes import Assignment, Block, Document, ListValue
+        from octave_mcp.core.validator import Validator
+
+        doc = Document(
+            name="NAV_TEST",
+            meta={"TYPE": "TEST"},
+            sections=[
+                Block(
+                    key="NAV",
+                    children=[
+                        Assignment(key="FOUNDATIONAL", value=ListValue(items=["A", "B"])),
+                    ],
+                ),
+                Assignment(
+                    key="NAV.OPERATIONAL_CONVENTIONS",
+                    value=ListValue(items=["SEARCH_PATH_CONVENTION"]),
+                ),
+            ],
+        )
+
+        validator = Validator()
+        errors = validator.validate(doc)
+        codes = {e.code for e in errors}
+        assert (
+            "W_DUPLICATE_TARGET" in codes
+        ), f"Expected W_DUPLICATE_TARGET in validator output, got: {codes}"
+
+    @pytest.mark.asyncio
+    async def test_gh370_delete_sentinel_on_conflicted_document_hard_fails(self):
+        """ADR-0006 SR1-T3 (GH#369): even DELETE on a flat K.X in a conflicted
+        document is ambiguous (delete which target?). Must hard-fail with
+        E_AMBIGUOUS_PATH; cleanup must use ``content=`` mode (or the
+        forthcoming GH#372 migration sweep tooling).
+        """
         from octave_mcp.mcp.write import WriteTool
 
         tool = WriteTool()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "test.oct.md")
-            # Corrupted document: Block NAV + flat NAV.OPERATIONAL_CONVENTIONS
+            initial = (
+                "===TEST===\n" "META:\n" '  TYPE::"TEST"\n' "P1:\n" "  CHILD::value\n" "P1.1::to_delete\n" "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"P1.1": {"$op": "DELETE"}},
+            )
+
+            assert result["status"] == "error"
+            codes = {e.get("code") for e in result.get("errors", [])}
+            assert "E_AMBIGUOUS_PATH" in codes, (
+                f"Expected E_AMBIGUOUS_PATH on DELETE against conflicted source, "
+                f"got: {result.get('errors')}"
+            )
+            # File untouched.
+            with open(target_path) as f:
+                final = f.read()
+            assert "P1.1::to_delete" in final
+            assert "P1:" in final
+
+
+class TestSR1T3BlockChildAmbiguousPathHardFail:
+    """ADR-0006 SR1-T3 (closes GH#369): when a single-dot change key K.X is
+    ambiguous between (a) a child of top-level Block(K) and (b) a flat
+    top-level Assignment("K.X") that already coexists with Block(K), the
+    writer MUST hard-fail with E_AMBIGUOUS_PATH rather than silently route
+    the update to one candidate.
+
+    PROD-I3 (Mirror Constraint): reflect only present, create nothing.
+    Routing an ambiguous reference picks one of two extant targets, which
+    is itself a fabrication of intent — the agent did not declare which
+    target it meant. Hard-fail forces the caller to disambiguate.
+
+    Disambiguation guidance surfaced by the error message:
+      * Use ``content=`` mode with the full document to rewrite verbatim,
+        OR
+      * Resolve the source document so that only one of {Block(K),
+        flat K.X} remains (cleanup of the corruption pattern detected
+        and tracked by GH#372 SR1-T2 migration sweep).
+
+    NOTE: Unambiguous Block.child paths (Block(K) present without a
+    coexisting flat K.X) MUST continue to resolve into the Block — that
+    is the GH#369/PR#370 fix preserved here.
+    """
+
+    @pytest.mark.asyncio
+    async def test_conflicted_document_hard_fails_with_ambiguous_path(self):
+        """Conflicted source document (Block(K) + flat K.X coexisting) plus
+        a changes={K.X: ...} request must hard-fail with E_AMBIGUOUS_PATH.
+
+        This replaces the prior GH#370 "tolerate-and-warn" behaviour. The
+        warning was insufficient because the writer still committed an edit
+        to one of two candidate targets without the caller's consent.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
             initial = (
                 "===NAV_TEST===\n"
                 "META:\n"
@@ -5336,46 +5443,136 @@ class TestGH369NestedBlockChangePathResolution:
             with open(target_path, "w") as f:
                 f.write(initial)
 
-            # Execute without schema (default flow)
             result = await tool.execute(
                 target_path=target_path,
                 changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
             )
 
-            assert result["status"] == "success"
-            # W_DUPLICATE_TARGET must surface in corrections
-            correction_codes = {c.get("code") for c in result.get("corrections", [])}
-            assert (
-                "W_DUPLICATE_TARGET" in correction_codes
-            ), f"Expected W_DUPLICATE_TARGET in default flow, got: {correction_codes}"
+            assert result["status"] == "error", (
+                f"Conflicted Block(NAV) + flat NAV.OPERATIONAL_CONVENTIONS source "
+                f"must hard-fail under ADR-0006 SR1-T3, got status="
+                f"{result.get('status')} errors={result.get('errors')}"
+            )
+            codes = {e.get("code") for e in result.get("errors", [])}
+            assert "E_AMBIGUOUS_PATH" in codes, (
+                f"Expected E_AMBIGUOUS_PATH in errors, got: {result.get('errors')}"
+            )
 
     @pytest.mark.asyncio
-    async def test_gh370_delete_sentinel_on_conflicted_document(self):
-        """GH#370: DELETE sentinel on a flat K.X assignment in a conflicted
-        document (where Block(K) also exists) should work. This ensures both
-        reading and writing operations can handle the corruption pattern."""
+    async def test_ambiguous_path_error_message_lists_both_candidates(self):
+        """E_AMBIGUOUS_PATH message must enumerate the conflicting targets
+        (the Block-child and the flat assignment) so the agent can act on
+        the diagnosis without re-reading the source.
+        """
         from octave_mcp.mcp.write import WriteTool
 
         tool = WriteTool()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "test.oct.md")
-            # Corrupted document: Block P1 + flat P1.1
             initial = (
-                "===TEST===\n" "META:\n" '  TYPE::"TEST"\n' "P1:\n" "  CHILD::value\n" "P1.1::to_delete\n" "===END===\n"
+                "===TEST===\n"
+                "META:\n"
+                '  TYPE::"TEST"\n'
+                "P1:\n"
+                "  CHILD::value\n"
+                "P1.1::original\n"
+                "===END===\n"
             )
             with open(target_path, "w") as f:
                 f.write(initial)
 
             result = await tool.execute(
                 target_path=target_path,
-                changes={"P1.1": {"$op": "DELETE"}},
+                changes={"P1.1": "updated"},
             )
 
-            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            assert result["status"] == "error"
+            ambig = [
+                e for e in result.get("errors", []) if e.get("code") == "E_AMBIGUOUS_PATH"
+            ]
+            assert ambig, f"Expected E_AMBIGUOUS_PATH error, got: {result.get('errors')}"
+            msg = ambig[0].get("message", "")
+            assert "P1" in msg, f"Error message must name the parent block: {msg}"
+            assert "P1.1" in msg, f"Error message must name the flat key: {msg}"
+
+    @pytest.mark.asyncio
+    async def test_ambiguous_path_error_message_guides_disambiguation(self):
+        """The error message must point the caller at the disambiguating
+        workaround (``content=`` mode and/or source cleanup), so the agent
+        is not stranded after the hard-fail.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = (
+                "===TEST===\n"
+                "META:\n"
+                '  TYPE::"TEST"\n'
+                "P1:\n"
+                "  CHILD::value\n"
+                "P1.1::original\n"
+                "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"P1.1": "updated"},
+            )
+
+            ambig = [
+                e for e in result.get("errors", []) if e.get("code") == "E_AMBIGUOUS_PATH"
+            ]
+            assert ambig
+            msg = ambig[0].get("message", "")
+            # Must mention the content= escape hatch so the caller has a path
+            # forward without guessing.
+            assert "content=" in msg or "content parameter" in msg, (
+                f"Error message must guide caller to content= disambiguation, "
+                f"got: {msg}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_unambiguous_block_child_still_resolves(self):
+        """Regression guard: when Block(K) exists WITHOUT a coexisting flat
+        K.X, K.X is unambiguous and must continue to resolve into the Block
+        (GH#369/PR#370 behaviour preserved).
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = (
+                "===NAV_TEST===\n"
+                "META:\n"
+                '  TYPE::"TEST"\n'
+                "NAV:\n"
+                "  FOUNDATIONAL::[A,B]\n"
+                "  OPERATIONAL_CONVENTIONS::[OLD]\n"
+                "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+            )
+
+            assert result["status"] == "success", (
+                f"Unambiguous Block.child must still succeed, got errors: "
+                f"{result.get('errors')}"
+            )
             with open(target_path) as f:
                 final = f.read()
-            # P1.1 should be deleted but P1 block remains
-            assert "P1.1" not in final
-            assert "P1:" in final
-            assert "CHILD" in final
+            assert "NAV:" in final
+            assert "NAV.OPERATIONAL_CONVENTIONS::" not in final, (
+                f"flat duplicate leaked into file:\n{final}"
+            )
