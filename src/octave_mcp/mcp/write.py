@@ -67,6 +67,17 @@ W_UNQUOTED_SECTION_IN_VALUE = "W_UNQUOTED_SECTION_IN_VALUE"
 # GH#349: Data loss warning for bare lines dropped during lenient parsing (I4)
 W_BARE_LINE_DROPPED = "W_BARE_LINE_DROPPED"
 
+# ADR-0006 SR1-T3a (#391, split from #369): deprecation warning for the
+# conflicted-document case where a single-dot change key K.X resolves to
+# BOTH a top-level Block(K) and a coexisting flat top-level Assignment("K.X").
+# Surfaces as a non-fatal correction so the PR#370 tolerate-and-warn applier
+# path is preserved (existing GH#372 migration sweep + repair-corridor traffic
+# remain unaffected). The companion E_AMBIGUOUS_PATH constant below is
+# scaffolding for the SR1-T3 hard-fail conversion that lands after SR1-T1
+# grammar core (#382) provides unambiguous block-scoped accessor syntax.
+W_AMBIGUOUS_PATH = "W_AMBIGUOUS_PATH"
+E_AMBIGUOUS_PATH = "E_AMBIGUOUS_PATH"
+
 # GH#376 PR-A: format_style parameter constants.
 # Three modes are projections of one canonical AST→bytes function (I1
 # Single-Canon Discipline). They are NOT parallel emitters.
@@ -1113,6 +1124,13 @@ class WriteTool(BaseTool):
     # Security: allowed file extensions
     ALLOWED_EXTENSIONS = {".oct.md", ".octave", ".md"}
 
+    # ADR-0006 SR1-T3a (#391): per-invocation buffer for non-fatal change-path
+    # warnings emitted by _validate_change_paths and drained into corrections
+    # by execute(). Declared at class scope so mypy treats reassignments in
+    # execute() and the defensive guard inside _validate_change_paths as the
+    # same attribute (no-redef silenced).
+    _pending_change_warnings: list[dict[str, Any]]
+
     def _repair_curly_brace_annotations(self, content: str) -> tuple[str, list[dict[str, Any]]]:
         """GH#263: Pre-process content to repair NAME{qualifier} -> NAME<qualifier>.
 
@@ -2153,17 +2171,59 @@ class WriteTool(BaseTool):
                     if parent_block is not None:
                         # PARENT exists as a top-level Block. Treat dot as path
                         # separator; CHILD must resolve inside the Block.
-                        if not any(isinstance(c, Assignment) and c.key == child_key for c in parent_block.children):
-                            # GH#370: Before rejecting, check if the literal dotted key
-                            # exists as a flat assignment (conflict scenario from GH#369).
-                            # If the flat key exists, applier will handle it; validator
-                            # must not reject to maintain contract with applier.
-                            flat_match = any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
-                            if flat_match:
-                                # Conflicted document: Block + flat dotted assignment coexist.
-                                # Applier will route to flat assignment (GH#347 carve-out).
-                                # Tolerate here for consistency; validator will emit W_DUPLICATE_TARGET.
-                                continue
+                        flat_match = any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
+                        block_child_match = any(
+                            isinstance(c, Assignment) and c.key == child_key for c in parent_block.children
+                        )
+                        if flat_match:
+                            # ADR-0006 SR1-T3a (#391, split from #369):
+                            # conflicted source document — both Block(parent) and a
+                            # flat top-level Assignment(parent.child) coexist. The
+                            # change key is genuinely ambiguous (which target should
+                            # the update land on?). PR#370 tolerate-and-warn applier
+                            # path is preserved (status=success; the existing
+                            # GH#347 carve-out routes to the flat assignment), but
+                            # we additionally surface a deprecation warning so
+                            # callers can migrate ahead of the post-SR1-T1 hard-fail
+                            # conversion (E_AMBIGUOUS_PATH).
+                            block_candidate_desc = (
+                                f"child '{child_key}' inside top-level Block('{parent_key}')"
+                                if block_child_match
+                                else (f"top-level Block('{parent_key}') (no child " f"'{child_key}' present)")
+                            )
+                            # Defensive: _validate_change_paths may be invoked
+                            # outside execute() in tests; ensure the buffer exists.
+                            buffer = getattr(self, "_pending_change_warnings", None)
+                            if buffer is None:
+                                buffer = []
+                                self._pending_change_warnings = buffer
+                            buffer.append(
+                                {
+                                    "code": W_AMBIGUOUS_PATH,
+                                    "tier": "STRUCTURAL_CHECK",
+                                    "message": (
+                                        f"Ambiguous change path '{key}': source document contains "
+                                        f"both a top-level Block('{parent_key}') and a flat "
+                                        f"top-level Assignment('{key}'). Candidate targets: "
+                                        f"flat top-level Assignment('{key}'); "
+                                        f"{block_candidate_desc}. Applier currently routes to the "
+                                        f"flat assignment per the PR#370 repair-corridor contract; "
+                                        f"this case will hard-fail with E_AMBIGUOUS_PATH after the "
+                                        f"SR1-T1 grammar core lands. To resolve now: (a) use the "
+                                        f"content= parameter with the full document to rewrite "
+                                        f"verbatim, or (b) clean up the source so only one of the "
+                                        f"two targets remains (this is the W_DUPLICATE_TARGET "
+                                        f"corruption pattern tracked by GH#372 SR1-T2)."
+                                    ),
+                                    "field": key,
+                                    "safe": True,
+                                    "semantics_changed": False,
+                                }
+                            )
+                            # Tolerate here per PR#370 contract; applier handles the
+                            # flat assignment via the GH#347 carve-out.
+                            continue
+                        if not block_child_match:
                             # No flat fallback; reject the unresolvable path.
                             errors.append(
                                 {
@@ -2177,8 +2237,8 @@ class WriteTool(BaseTool):
                                 }
                             )
                             continue
-                        # PARENT.CHILD resolves inside the block. _apply_changes
-                        # will route to _apply_block_change.
+                        # PARENT.CHILD resolves unambiguously inside the block.
+                        # _apply_changes will route to _apply_block_change.
                         continue
                     # PARENT is not a top-level Block. The key is acceptable
                     # only if it already exists as a flat top-level Assignment
@@ -2903,6 +2963,13 @@ class WriteTool(BaseTool):
             - validation_errors: List of schema validation errors (when INVALID)
             - debug_info: Constraint grammar debug information (when debug_grammar=True)
         """
+        # ADR-0006 SR1-T3a (#391): per-invocation buffer for non-fatal change-path
+        # warnings (currently only W_AMBIGUOUS_PATH) emitted by
+        # _validate_change_paths. Drained into result["corrections"] after
+        # _apply_changes returns so the warnings ride out alongside the
+        # structural-validator corrections (W_DUPLICATE_TARGET et al.).
+        self._pending_change_warnings: list[dict[str, Any]] = []
+
         # Validate and extract parameters
         params = self.validate_parameters(kwargs)
         target_path = params["target_path"]
@@ -3404,6 +3471,14 @@ class WriteTool(BaseTool):
                         "semantics_changed": False,
                     }
                 )
+
+        # ADR-0006 SR1-T3a (#391): drain non-fatal change-path warnings
+        # captured during _validate_change_paths (currently W_AMBIGUOUS_PATH on
+        # the conflicted-document case). These ride alongside the structural
+        # validator warnings above so callers see one unified corrections list.
+        if self._pending_change_warnings:
+            result["corrections"].extend(self._pending_change_warnings)
+            self._pending_change_warnings = []
 
         # Schema Validation (I5 Schema Sovereignty)
         if schema_name:
