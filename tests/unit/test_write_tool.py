@@ -5311,9 +5311,7 @@ class TestGH369NestedBlockChangePathResolution:
                 f"SR1-T3, got status={result.get('status')}"
             )
             codes = {e.get("code") for e in result.get("errors", [])}
-            assert "E_AMBIGUOUS_PATH" in codes, (
-                f"Expected E_AMBIGUOUS_PATH, got: {result.get('errors')}"
-            )
+            assert "E_AMBIGUOUS_PATH" in codes, f"Expected E_AMBIGUOUS_PATH, got: {result.get('errors')}"
             # File on disk must be untouched (fail-fast precludes partial write).
             with open(target_path) as f:
                 final = f.read()
@@ -5351,9 +5349,7 @@ class TestGH369NestedBlockChangePathResolution:
         validator = Validator()
         errors = validator.validate(doc)
         codes = {e.code for e in errors}
-        assert (
-            "W_DUPLICATE_TARGET" in codes
-        ), f"Expected W_DUPLICATE_TARGET in validator output, got: {codes}"
+        assert "W_DUPLICATE_TARGET" in codes, f"Expected W_DUPLICATE_TARGET in validator output, got: {codes}"
 
     @pytest.mark.asyncio
     async def test_gh370_delete_sentinel_on_conflicted_document_hard_fails(self):
@@ -5382,8 +5378,7 @@ class TestGH369NestedBlockChangePathResolution:
             assert result["status"] == "error"
             codes = {e.get("code") for e in result.get("errors", [])}
             assert "E_AMBIGUOUS_PATH" in codes, (
-                f"Expected E_AMBIGUOUS_PATH on DELETE against conflicted source, "
-                f"got: {result.get('errors')}"
+                f"Expected E_AMBIGUOUS_PATH on DELETE against conflicted source, " f"got: {result.get('errors')}"
             )
             # File untouched.
             with open(target_path) as f:
@@ -5454,9 +5449,7 @@ class TestSR1T3BlockChildAmbiguousPathHardFail:
                 f"{result.get('status')} errors={result.get('errors')}"
             )
             codes = {e.get("code") for e in result.get("errors", [])}
-            assert "E_AMBIGUOUS_PATH" in codes, (
-                f"Expected E_AMBIGUOUS_PATH in errors, got: {result.get('errors')}"
-            )
+            assert "E_AMBIGUOUS_PATH" in codes, f"Expected E_AMBIGUOUS_PATH in errors, got: {result.get('errors')}"
 
     @pytest.mark.asyncio
     async def test_ambiguous_path_error_message_lists_both_candidates(self):
@@ -5471,13 +5464,7 @@ class TestSR1T3BlockChildAmbiguousPathHardFail:
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "test.oct.md")
             initial = (
-                "===TEST===\n"
-                "META:\n"
-                '  TYPE::"TEST"\n'
-                "P1:\n"
-                "  CHILD::value\n"
-                "P1.1::original\n"
-                "===END===\n"
+                "===TEST===\n" "META:\n" '  TYPE::"TEST"\n' "P1:\n" "  CHILD::value\n" "P1.1::original\n" "===END===\n"
             )
             with open(target_path, "w") as f:
                 f.write(initial)
@@ -5488,9 +5475,7 @@ class TestSR1T3BlockChildAmbiguousPathHardFail:
             )
 
             assert result["status"] == "error"
-            ambig = [
-                e for e in result.get("errors", []) if e.get("code") == "E_AMBIGUOUS_PATH"
-            ]
+            ambig = [e for e in result.get("errors", []) if e.get("code") == "E_AMBIGUOUS_PATH"]
             assert ambig, f"Expected E_AMBIGUOUS_PATH error, got: {result.get('errors')}"
             msg = ambig[0].get("message", "")
             assert "P1" in msg, f"Error message must name the parent block: {msg}"
@@ -5509,13 +5494,7 @@ class TestSR1T3BlockChildAmbiguousPathHardFail:
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "test.oct.md")
             initial = (
-                "===TEST===\n"
-                "META:\n"
-                '  TYPE::"TEST"\n'
-                "P1:\n"
-                "  CHILD::value\n"
-                "P1.1::original\n"
-                "===END===\n"
+                "===TEST===\n" "META:\n" '  TYPE::"TEST"\n' "P1:\n" "  CHILD::value\n" "P1.1::original\n" "===END===\n"
             )
             with open(target_path, "w") as f:
                 f.write(initial)
@@ -5525,16 +5504,13 @@ class TestSR1T3BlockChildAmbiguousPathHardFail:
                 changes={"P1.1": "updated"},
             )
 
-            ambig = [
-                e for e in result.get("errors", []) if e.get("code") == "E_AMBIGUOUS_PATH"
-            ]
+            ambig = [e for e in result.get("errors", []) if e.get("code") == "E_AMBIGUOUS_PATH"]
             assert ambig
             msg = ambig[0].get("message", "")
             # Must mention the content= escape hatch so the caller has a path
             # forward without guessing.
             assert "content=" in msg or "content parameter" in msg, (
-                f"Error message must guide caller to content= disambiguation, "
-                f"got: {msg}"
+                f"Error message must guide caller to content= disambiguation, " f"got: {msg}"
             )
 
     @pytest.mark.asyncio
@@ -5567,12 +5543,9 @@ class TestSR1T3BlockChildAmbiguousPathHardFail:
             )
 
             assert result["status"] == "success", (
-                f"Unambiguous Block.child must still succeed, got errors: "
-                f"{result.get('errors')}"
+                f"Unambiguous Block.child must still succeed, got errors: " f"{result.get('errors')}"
             )
             with open(target_path) as f:
                 final = f.read()
             assert "NAV:" in final
-            assert "NAV.OPERATIONAL_CONVENTIONS::" not in final, (
-                f"flat duplicate leaked into file:\n{final}"
-            )
+            assert "NAV.OPERATIONAL_CONVENTIONS::" not in final, f"flat duplicate leaked into file:\n{final}"
