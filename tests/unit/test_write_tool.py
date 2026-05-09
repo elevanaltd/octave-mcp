@@ -5567,3 +5567,277 @@ class TestSR1T3aAmbiguousPathDeprecationWarning:
 
         assert hasattr(write_module, "W_AMBIGUOUS_PATH")
         assert write_module.W_AMBIGUOUS_PATH == "W_AMBIGUOUS_PATH"
+
+
+class TestSR1T3aDollarOpsOnAmbiguousPaths:
+    """CRS follow-up to PR #392: pin the actual $op behaviour on conflicted
+    documents (Block(K) coexisting with flat top-level Assignment(K.X)).
+
+    Findings empirically verified and now codified:
+    - bare replacement → modifies the FLAT assignment in place
+      (PR#370 contract preserved). W_AMBIGUOUS_PATH always surfaces;
+      W_DUPLICATE_TARGET surfaces when the conflict survives the edit.
+    - DELETE sentinel → removes the FLAT assignment; the Block child (if
+      any) is left untouched. W_AMBIGUOUS_PATH always surfaces.
+    - APPEND/PREPEND → validator now resolves to the FLAT target (CRS
+      follow-up: _resolve_target_type prefers the flat assignment in the
+      conflict, matching what _apply_changes will modify). Succeeds when
+      the flat is array-valued; rejected with E_OP_TARGET_MISMATCH when
+      the flat is non-array — the historical bug was that the validator
+      consulted the block child and let mismatches through to the
+      applier's defensive raise. W_AMBIGUOUS_PATH surfaces in both
+      success and error envelopes.
+    - MERGE → rejected with E_OP_TARGET_MISMATCH because the flat target
+      is an Assignment (array/scalar/map value), never a Block/Section/
+      META. W_AMBIGUOUS_PATH surfaces in the error envelope.
+
+    These tests pin the actual contract so any future regression that
+    diverges validator and applier resolution surfaces immediately.
+    """
+
+    @staticmethod
+    def _conflicted_array_doc() -> str:
+        """Block has no OPERATIONAL_CONVENTIONS child; flat is array."""
+        return (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "NAV.OPERATIONAL_CONVENTIONS::[X,Y]\n"
+            "===END===\n"
+        )
+
+    @staticmethod
+    def _conflicted_typemix_doc() -> str:
+        """Block child FOUNDATIONAL is array; flat NAV.FOUNDATIONAL is scalar.
+        Pre-fix this would mis-validate $op against the block child's array
+        type and reach the applier's defensive raise."""
+        return (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "NAV.FOUNDATIONAL::scalar_value\n"
+            "===END===\n"
+        )
+
+    @pytest.mark.asyncio
+    async def test_append_on_array_flat_succeeds_and_mutates_flat(self):
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_array_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": {"$op": "APPEND", "value": ["Z"]}},
+            )
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in codes
+            with open(target_path) as f:
+                final = f.read()
+            # Flat assignment was mutated; Block left intact.
+            assert "FOUNDATIONAL::[A,B]" in final
+            assert "Z" in final
+
+    @pytest.mark.asyncio
+    async def test_prepend_on_array_flat_succeeds_and_mutates_flat(self):
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_array_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": {"$op": "PREPEND", "value": ["Z"]}},
+            )
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in codes
+            with open(target_path) as f:
+                final = f.read()
+            assert "FOUNDATIONAL::[A,B]" in final
+            assert "Z" in final
+
+    @pytest.mark.asyncio
+    async def test_append_on_scalar_flat_rejected_at_validate(self):
+        """Block child is array but flat is scalar. Validator must consult
+        the FLAT (the target the applier will modify) and reject with
+        E_OP_TARGET_MISMATCH at validate time, not let the request reach
+        the applier's defensive raise.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_typemix_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.FOUNDATIONAL": {"$op": "APPEND", "value": ["Z"]}},
+            )
+            assert result["status"] == "error"
+            err_codes = {e.get("code") for e in result.get("errors", [])}
+            assert "E_OP_TARGET_MISMATCH" in err_codes, (
+                f"Expected E_OP_TARGET_MISMATCH at validate time (validator must "
+                f"resolve to flat scalar, not block array), got: {result.get('errors')}"
+            )
+            # Deprecation warning still surfaces on the error envelope (CE
+            # follow-up to #392 ensures change_warnings drain on the error path).
+            corr_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in corr_codes, (
+                f"W_AMBIGUOUS_PATH must surface even when validation fails, " f"got: {result.get('corrections')}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_merge_on_conflicted_path_rejected(self):
+        """MERGE requires block/section/meta target. The flat assignment is
+        always an Assignment value — MERGE on it must always be rejected.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_array_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": {"$op": "MERGE", "value": {"k": "v"}}},
+            )
+            assert result["status"] == "error"
+            err_codes = {e.get("code") for e in result.get("errors", [])}
+            assert (
+                "E_OP_TARGET_MISMATCH" in err_codes
+            ), f"MERGE on conflicted flat must reject; got: {result.get('errors')}"
+            corr_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in corr_codes
+
+    @pytest.mark.asyncio
+    async def test_delete_on_conflicted_path_removes_flat_only(self):
+        """DELETE sentinel removes the flat assignment; the Block child (if
+        any) is preserved. PR#370 contract intact.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_typemix_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.FOUNDATIONAL": {"$op": "DELETE"}},
+            )
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            with open(target_path) as f:
+                final = f.read()
+            # Flat NAV.FOUNDATIONAL gone; Block's FOUNDATIONAL child remains.
+            assert "NAV.FOUNDATIONAL::scalar_value" not in final
+            assert "FOUNDATIONAL::[A,B]" in final
+            corr_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in corr_codes
+
+
+class TestSR1T3aChangeWarningsBufferIsPerCall:
+    """CE follow-up to PR #392: the W_AMBIGUOUS_PATH warning buffer must be
+    per-call local state, not a class/instance attribute on the shared
+    WriteTool() singleton (server.py / http_transport.py instantiate once).
+
+    These tests pin the no-singleton-race contract so any future refactor
+    that re-introduces shared mutable state surfaces immediately.
+    """
+
+    def test_no_pending_change_warnings_attribute_on_instance(self):
+        """The legacy ``_pending_change_warnings`` instance attribute MUST NOT
+        exist on a fresh WriteTool() — its presence would indicate the
+        singleton-race regression has returned.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        assert not hasattr(tool, "_pending_change_warnings"), (
+            "WriteTool must not carry a _pending_change_warnings instance "
+            "buffer; warnings are per-call locals (CE follow-up to #392)."
+        )
+
+    @pytest.mark.asyncio
+    async def test_concurrent_executes_do_not_leak_warnings(self):
+        """Two concurrent execute() calls on the SAME WriteTool() instance,
+        one against a conflicted doc (W_AMBIGUOUS_PATH expected) and one
+        against an unambiguous doc (no warning expected), must not
+        cross-pollinate warnings via shared state.
+        """
+        import asyncio as _asyncio
+
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()  # SAME singleton across both calls.
+
+        conflicted = (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "NAV.OPERATIONAL_CONVENTIONS::[X,Y]\n"
+            "===END===\n"
+        )
+        unambiguous = (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "  OPERATIONAL_CONVENTIONS::[OLD]\n"
+            "===END===\n"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            p_conf = os.path.join(tmpdir, "conflicted.oct.md")
+            p_unamb = os.path.join(tmpdir, "unambiguous.oct.md")
+            with open(p_conf, "w") as f:
+                f.write(conflicted)
+            with open(p_unamb, "w") as f:
+                f.write(unambiguous)
+
+            # Run a batch where the unambiguous call is interleaved with
+            # several conflicted calls, then assert each result envelope only
+            # reports warnings appropriate to its own input.
+            async def call_conflicted():
+                return await tool.execute(
+                    target_path=p_conf,
+                    changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+                )
+
+            async def call_unambiguous():
+                return await tool.execute(
+                    target_path=p_unamb,
+                    changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+                )
+
+            results = await _asyncio.gather(
+                call_conflicted(),
+                call_unambiguous(),
+                call_conflicted(),
+                call_unambiguous(),
+                call_conflicted(),
+            )
+
+        for i, r in enumerate(results):
+            codes = {c.get("code") for c in r.get("corrections", [])}
+            if i % 2 == 0:
+                # Conflicted calls: must carry W_AMBIGUOUS_PATH.
+                assert "W_AMBIGUOUS_PATH" in codes, (
+                    f"Conflicted call #{i} lost its W_AMBIGUOUS_PATH " f"(possible buffer race), got: {codes}"
+                )
+            else:
+                # Unambiguous calls: must NOT carry W_AMBIGUOUS_PATH (would
+                # indicate leakage from a sibling conflicted call).
+                assert "W_AMBIGUOUS_PATH" not in codes, (
+                    f"Unambiguous call #{i} picked up W_AMBIGUOUS_PATH from a "
+                    f"sibling — singleton-race regression. Codes: {codes}"
+                )
