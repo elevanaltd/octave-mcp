@@ -5,45 +5,53 @@ All notable changes to OCTAVE-MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.12.0] - 2026-05-11 - "Validator Collapse & Audit-Completeness Closure" Release (ADR-0006 SR1-T1)
 
-### Added — ADR-0006 SR1-T1 Step 6 (validator surface collapse; closes R2)
+This release completes the full ADR-0006 SR1-T1 writer/reader symmetry programme (six steps merged across PRs #393, #394, #395, #396, #397, #398, #399, #400, #401). It single-sources the validator surface (closing North Star Risk **R2**) and enforces I4 (TRANSFORM_AUDITABILITY) at boundary cases by routing every canonical re-emit transformation through a `TIER_NORMALIZATION` receipt.
+
+### ⚠️ Breaking Changes — direct importers of internal API
+
+The MCP tool surface (`octave_validate`, `octave_write`, `octave_eject`, `octave_compile_grammar`) and the CLI are **unchanged**. The break is for Python code that imported internal validator symbols directly.
+
+| Old (≤ 1.11.0) | New (1.12.0+) |
+|---|---|
+| `from octave_mcp.core.schema import validate` | **deleted** — use `Validator(schema).validate(doc)` |
+| `from octave_mcp.core.schema import Schema` | `from octave_mcp.schemas.repository import Schema` |
+| `from octave_mcp.core.validator import validate` *(module-level)* | `Validator(schema).validate(doc, strict=...)` |
+| `from octave_mcp.core.validator import validate_frontmatter` | `from octave_mcp.core.grammar.entry import validate_frontmatter` *(also re-exported from `octave_mcp.core.grammar`)* |
+| `from octave_mcp.core.grammar import compile_grammar` *(legacy module)* | unchanged shim retained — grammar compiler now lives at `octave_mcp.core.grammar_compiler.gbnf`; the old import path emits a DeprecationWarning |
+| `from octave_mcp.core.ast_nodes import …` *(internal node types)* | `from octave_mcp.core.grammar.cst import …` — new `NodeKind`, `Visitor[T]`, and reserved fields (`was_quoted`, `leading_trivia`, `trailing_trivia`) |
+
+Code example:
+
+```python
+# Before (≤ 1.11.0)
+from octave_mcp.core.validator import validate
+errors = validate(doc, schema, strict=True)
+
+# After (1.12.0+)
+from octave_mcp.core.validator import Validator
+errors = Validator(schema).validate(doc, strict=True)
+```
+
+### ⚠️ Breaking Behaviour — RepairLog volume shift (I4 enforcement)
+
+`RepairLog` now records all TIER_NORMALIZATION events. Documents containing trivia normalisation (blank-line stripping, triple-quote collapse, identifier dequoting) that previously produced an empty repair log now produce one or more entries. **This reflects correct behaviour per I4 — pre-1.12.0 silent canonical mutation was an under-reporting bug.**
+
+If your tests or downstream consumers assert `len(repair_log.entries) == 0` (or `len(corrections) == 0`) on such documents, they will now fail. Migration:
+
+- To detect **content normalisation**, filter `corrections` by `tier == "NORMALIZATION"`.
+- To detect **schema repairs**, filter by `tier == "REPAIR"`.
+
+See `docs/adr/adr-0006-sr1-t1-grammar-core-design.md` §3 row 6 + §2.2 (module boundaries) + §3a (Reconciler bridge pattern) + §4.4 (drift-elimination evidence).
+
+### Added — ADR-0006 SR1-T1 Step 6 (validator surface collapse; closes R2) — #401
 - **`core/grammar/entry.py`** now hosts `validate_frontmatter()` as a parse-stage hook. The legacy location `octave_mcp.core.validator.validate_frontmatter` is intentionally absent — no shim retained (design §3 row 6, §2.2).
 - **`octave_mcp.core.grammar` package** re-exports `validate_frontmatter` for convenience (`from octave_mcp.core.grammar import validate_frontmatter`).
 - **`class Validator`** is now a structural `visitor.Visitor[None]` — it exposes `visit_document`, `visit_section`, `visit_block`, `visit_assignment`, and the `visit` dispatcher. The orchestrating `Validator.validate(doc, ...)` method remains the canonical entry point; the visit methods are the protocol surface that future visitors compose against.
 - **`tests/unit/test_validator_surface_collapse.py`** — R2 closure witness asserting schema.py is unimportable, module-level `validate()` is gone, `validate_frontmatter` lives at the new location, and `Validator` satisfies `Visitor[None]` structurally.
 
-### Removed — ADR-0006 SR1-T1 Step 6 (BREAKING for direct importers of internal API)
-- **`octave_mcp.core.schema`** — module deleted. Its `validate()` function was a thin delegator to `octave_mcp.core.validator.validate()` (which is also removed; see below). Its `Schema` container class has been relocated to `octave_mcp.schemas.repository` (co-located with its sole consumer, `SchemaRepository`).
-- **`octave_mcp.core.validator.validate`** — module-level function removed. The canonical surface is the class-based API:
-
-  ```python
-  # Before (pre-1.12.0)
-  from octave_mcp.core.validator import validate
-  errors = validate(doc, schema, strict=True)
-
-  # After (1.12.0+)
-  from octave_mcp.core.validator import Validator
-  errors = Validator(schema).validate(doc, strict=True)
-  ```
-
-- **`octave_mcp.core.validator.validate_frontmatter`** — relocated to `octave_mcp.core.grammar.entry.validate_frontmatter`. Importers must update.
-
-### Changed
-- **`mcp/validate.py`, `mcp/write.py`, `cli/main.py`** — no public API change. These call sites already used the class-based `Validator(schema).validate(doc, ...)` surface; Step 6 only deletes the legacy shims they did not use.
-- **Test files** that imported the module-level `validate()` have been updated to the class-based API (`tests/unit/test_schema.py`, `tests/integration/test_e2e.py`, `tests/vectors/test_vectors.py`, `tests/unit/test_unknown_fields.py`, `tests/unit/test_repair.py`, `tests/unit/test_crs_review_schema.py`, `tests/unit/test_forbidden_repairs.py`, `tests/unit/test_gh344_meta_field_false_positive.py`, `tests/unit/test_gh358_meta_id_field.py`). Tests using `validate_frontmatter` (`tests/unit/test_frontmatter_validation.py`) and tests using the `Schema` container (`tests/unit/test_schema_repository.py`) have been updated to the new import paths. No test assertions were weakened.
-
-### Migration note
-Public consumers of `octave_mcp.core.validator.validate()` or `octave_mcp.core.schema.*` must migrate to the class-based API: `Validator(schema).validate(document)`. The MCP tool surface (`octave_validate`, `octave_write`) is unchanged. See `docs/adr/adr-0006-sr1-t1-grammar-core-design.md` §3 row 6 + §2.2 (module boundaries) + §4.4 (drift-elimination evidence).
-
-### Risk closure
-This release retires **R2 — `validator_drift_multiple_validators`** from the OCTAVE-MCP North Star Risks. Validator surface is now single-sourced on `class Validator`; there is no second validation path. **SR1-T1 is complete** — all six steps (1 → 2 → 4 → 5 → 3 → 6 per design v1.3 §3a execution order) are now merged.
-
-## [1.12.0] - "Audit-Completeness Closure" Release (ADR-0006 SR1-T1 Step 3)
-
-This release completes I4 (TRANSFORM_AUDITABILITY) enforcement per ADR-0006 SR1-T1 Step 3. Every canonical re-emit transformation now produces a `TIER_NORMALIZATION` receipt in the `RepairLog` and surfaces through `octave_write`'s `corrections` list. The third HARD_SYMMETRY conjunct (`corrections non-empty IFF diff_unified non-empty`) now holds at boundary cases that previously generated silent canonical mutations.
-
-### Added
+### Added — ADR-0006 SR1-T1 Step 3 (audit-completeness closure) — #399, #400
 - **`core/grammar/tier_normalize.py`** — Centralised TIER_NORMALIZATION audit channel. Public surface:
   - `log_repair(log, rule_id, before, after, *, safe=True, semantics_changed=False)` — single precise entry point for normalisation receipts.
   - `active(log)` context manager — ContextVar-scoped sink so pipeline-internal sites (notably emitter identifier-dequoting) can record receipts without RepairLog threading through `emit()`'s public signature.
@@ -51,6 +59,13 @@ This release completes I4 (TRANSFORM_AUDITABILITY) enforcement per ADR-0006 SR1-
   - Stable rule IDs: `TN_IDENTIFIER_DEQUOTE` (precise was_quoted-driven), `TN_RECONCILE_CANONICAL` (reconciler bridge).
 - **Precise instrumentation in `core/emitter.py`** — `emit_assignment` now logs `TN_IDENTIFIER_DEQUOTE` via `tier_normalize.log_repair_if_active` whenever `assignment.was_quoted is True` AND the emitter chose to emit bare. The hook is no-op outside the active context (preserves today's behaviour for callers that do not opt in).
 - **Additive consumer wiring in `mcp/write.py`** — Each `_emit_with_style` invocation is now wrapped with `tier_normalize.active(tier_normalize_log)`. After final emit, `reconcile_canonical_emission` runs and the log drains into `result["corrections"]` mirroring the existing schema-repair loop. The edit is purely additive (~30 lines including comments; no envelope / public API change).
+
+### Added — ADR-0006 SR1-T1 Steps 1, 2, 4, 5 (grammar core seams) — #393, #394, #396, #397, #398
+- **Step 1 (#393)** — `core/grammar.py` renamed to `core/grammar_compiler/gbnf.py`; a deprecation shim retained at `core/grammar.py` re-exports the public surface and emits a DeprecationWarning. Internal call sites switched to the new path.
+- **Step 2 (#394)** — `core/grammar/` package installed as the parse-stage seam. `core/grammar/entry.py::parse()` is currently an identity wrapper around `core/parser.py::parse`, ready to host CST construction in Sprint 2.
+- **Step 4 (#397)** — `core/ast_nodes` promoted to `core/grammar/cst.py`. Introduces `NodeKind` discriminator, `Visitor[T]` protocol, and reserved fields (`was_quoted`, `leading_trivia`, `trailing_trivia`) on CST nodes. Internal import sites switched (#396).
+- **Step 5 (#398)** — `core/emitter.py` rewritten as a CST visitor. `was_quoted` is populated on `Assignment` nodes during parsing and consumed at emit time. META-dict values are not yet covered by `was_quoted` propagation — deferred to Sprint 3+ work (see Implementation note below).
+- **Test corpus expansion (#395)** — HARD_SYMMETRY corpus extended with corner-case fixtures (deeply nested keys, trailing whitespace, multi-byte identifiers).
 
 ### Changed
 - **`tests/unit/test_writer_reader_symmetry.py`** — `_AUDIT_CARDINALITY_XFAILS` and `_GH385_DEEP_NESTING_XFAILS` are now empty frozensets. The 10 previously strict-xfailed fixtures flip to expected pass:
@@ -66,8 +81,11 @@ This release completes I4 (TRANSFORM_AUDITABILITY) enforcement per ADR-0006 SR1-
   - `tests/fixtures/symmetry/deeply_nested_keys.oct.md` (GH#385 corpus expansion)
 - **`octave-literacy` and `octave-mastery` skills** — New §7 sections document the `tier_normalize` audit channel, RepairLog completeness semantics, and reconciler-bridge self-deprecation pattern.
 
-### Consumer note (BREAKING for tests that asserted empty RepairLog)
-- `RepairLog` now records all TIER_NORMALIZATION events. Tests asserting `len(repair_log.entries) == 0` (or `len(corrections) == 0`) on documents containing trivia normalisation (blank-line stripping, triple-quote collapse) will see entries. **This reflects correct behaviour per I4 — pre-1.12.0 silent canonical mutation was an under-reporting bug.** To detect content normalisation, filter `corrections` by `tier == "NORMALIZATION"`; to detect schema repairs filter by `tier == "REPAIR"`.
+### Changed — internal API migration map (test files updated)
+- Test files that imported the module-level `validate()` were migrated to the class-based API (`tests/unit/test_schema.py`, `tests/integration/test_e2e.py`, `tests/vectors/test_vectors.py`, `tests/unit/test_unknown_fields.py`, `tests/unit/test_repair.py`, `tests/unit/test_crs_review_schema.py`, `tests/unit/test_forbidden_repairs.py`, `tests/unit/test_gh344_meta_field_false_positive.py`, `tests/unit/test_gh358_meta_id_field.py`). Tests using `validate_frontmatter` (`tests/unit/test_frontmatter_validation.py`) and the `Schema` container (`tests/unit/test_schema_repository.py`) were updated to the new import paths. No test assertions were weakened. The MCP and CLI call sites (`mcp/validate.py`, `mcp/write.py`, `cli/main.py`) already used the class-based `Validator(schema).validate(doc, ...)` surface and required no change.
+
+### Risk closure
+This release retires **R2 — `validator_drift_multiple_validators`** from the OCTAVE-MCP North Star Risks. Validator surface is now single-sourced on `class Validator`; there is no second validation path. **SR1-T1 is complete** — all six steps (1 → 2 → 4 → 5 → 3 → 6 per design v1.3 §3a execution order) are now merged.
 
 ### Implementation note (reconciler self-deprecation, design §3a)
 - The reconciler bridge is a **temporary, self-deprecating mechanism**. The 8 hydration / `deeply_nested_keys` fixtures and the 2 (`spec_full`, `empty_triple_quoted`) fixtures are currently all covered by the bridge because META-side dequoting is not threaded through `was_quoted` (META values live in `Document.meta: dict[str, Any]`, not Assignment nodes). When Sprint 3+ populates `leading_trivia` / `trailing_trivia` (per design §4.5 G1) and the new triple-quote-collapse lexer W-code lands, precise upstream loggers will cover their respective diffs, the de-duplication precondition will fail, and the reconciler will no-op — **no code change required**. See `docs/adr/adr-0006-sr1-t1-grammar-core-design.md` §3a ("Reconciler bridge pattern") for the full rationale.
@@ -75,15 +93,16 @@ This release completes I4 (TRANSFORM_AUDITABILITY) enforcement per ADR-0006 SR1-
 ### Deviation from HO 8/2 split directive
 - The HO directive anticipated 8 fixtures flipping via precise `was_quoted` instrumentation and 2 via the reconciler bridge. Empirically, all 10 flip via the reconciler bridge because META-key dequoting (where `TYPE::"SPEC"` → `TYPE::SPEC` happens) operates on `Document.meta: dict[str, Any]` values, not on `Assignment` nodes — the parser does not currently carry `was_quoted` for META values. The precise `TN_IDENTIFIER_DEQUOTE` hook is wired and active for Assignment-shaped values (`§N::CONTENT` body assignments); it simply does not fire on these specific fixtures because their dequoting targets are in META. The reconciler bridge correctly absorbs the gap and self-deprecates the same way once META-side `was_quoted` (or trivia population) lands.
 
-### Quality Gates
-- pytest: 2991 passing (+20 from 2971: 10 xfails flipped to expected pass + 10 new tier_normalize unit tests), 11 skipped, 0 xfailed, 0 failures.
+### Quality Gates (at v1.12.0 release HEAD)
+- pytest: **3003 passing, 11 skipped, 0 xfailed, 0 failures** (Python 3.11/3.12/3.13 matrix; CI run 25699798578 on c7660ac).
+- Property-based tests: 14 passing.
 - mypy --strict: clean.
 - ruff check / black --check: clean.
 - Smoke parity: `canonical_hash` unchanged for both ground-truth fixtures (`3f680a6b…` for `hydration/source.oct.md`; `fc758a43…` for `symmetry/empty_triple_quoted.oct.md`).
 - Constitutional compliance: I1, I2, I3, I4 (now fully enforced at boundary cases), I5.
 
-### Added (carried over from Unreleased)
-- **`format_style` parameter on `octave_write`** (#376, PR-A) — New optional parameter on the MCP tool (`format_style`) and CLI command (`--format-style`) accepting `"preserve"`, `"expanded"`, or `"compact"`. The three modes are AST-level pre-passes that funnel into the single canonical `emit()` (I1 Single-Canon Discipline), not parallel emitters:
+### Added — `format_style` parameter on `octave_write` — #376 PR-A
+- **`format_style` parameter on `octave_write`** — New optional parameter on the MCP tool (`format_style`) and CLI command (`--format-style`) accepting `"preserve"`, `"expanded"`, or `"compact"`. The three modes are AST-level pre-passes that funnel into the single canonical `emit()` (I1 Single-Canon Discipline), not parallel emitters:
   - `"preserve"` — Strategy C narrow short-circuit: when `parse(new_content) == parse(baseline_content)`, write baseline bytes verbatim and skip canonical re-emission.
   - `"expanded"` — Lift `InlineMap` (and `ListValue` items that are `InlineMap`) into `Block` form before `emit()`.
   - `"compact"` — Collapse atom-only Blocks (no comments anywhere in subtree, arity ≤ 8) into `inline-list-of-InlineMap` form. Comment-bearing subtrees are vetoed and a new `W_COMPACT_REFUSED` correction is appended to the repair log (I3 Mirror Constraint + I4 Auditability). The CLI surfaces these records on stderr.
