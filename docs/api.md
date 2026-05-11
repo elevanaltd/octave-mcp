@@ -56,7 +56,7 @@ Schema validation and parsing of OCTAVE content.
   code: string;         // Error code (e.g., "UNKNOWN_FIELD", "TYPE_MISMATCH")
   message: string;      // Human-readable description
   path: string;         // Location in document (e.g., "DECISION.STATUS")
-  severity: "ERROR" | "WARNING";  // Error severity
+  severity: "error" | "warning";  // Error severity (default: "error")
 }
 ```
 
@@ -608,7 +608,7 @@ class ValidationError:
     message: str      # Human-readable description
     field_path: str   # Location in document (e.g., "DECISION.STATUS")
     line: int         # Source line number (0 if not available)
-    severity: str     # "ERROR" or "WARNING"
+    severity: str     # "error" or "warning" (default: "error")
 ```
 
 #### Common Error Codes
