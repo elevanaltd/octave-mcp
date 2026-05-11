@@ -3715,19 +3715,37 @@ class WriteTool(BaseTool):
         # ADR-0006 SR1-T1 Step 3 §3a: drain the centralised TIER_NORMALIZATION
         # log into ``corrections``. Mirrors the schema-repair drain pattern
         # immediately above (the lenient-mode ``repair_log.repairs`` loop).
+        #
         # The reconciler bridge runs AFTER precise loggers have had their
-        # chance — if the final ``canonical_content`` differs from baseline
-        # AND no precise NORMALIZATION entries account for the diff, a
-        # single coarse-grained TIER_RECONCILE_CANONICAL receipt is emitted
-        # (closes the audit-cardinality gap for blank-line stripping and
-        # triple-quote collapse until Sprint 3+ trivia + new lexer W-code).
-        # Per §3a the reconciler self-deprecates without code change when
-        # precise upstream instrumentation lands.
-        tier_normalize.reconcile_canonical_emission(
-            tier_normalize_log,
-            baseline_bytes=baseline_content_for_diff,
-            canonical_bytes=canonical_content,
-        )
+        # chance — if the final ``canonical_content`` differs from the
+        # user's submitted bytes AND no precise NORMALIZATION entries
+        # account for the diff, a single coarse-grained
+        # TIER_RECONCILE_CANONICAL receipt is emitted (closes the audit-
+        # cardinality gap for blank-line stripping and triple-quote
+        # collapse until Sprint 3+ trivia + new lexer W-code).
+        #
+        # Cubic AI P2 fix (PR #399 review 4265564132): reconcile against
+        # the USER-SUBMITTED bytes (``content``), not the OLD on-disk
+        # baseline (``baseline_content_for_diff``). The bridge exists to
+        # catch transformations the parse→canonical-emit pipeline applied
+        # to user intent; conflating "user changed the file's content"
+        # with "canonical normaliser altered bytes" produced false-
+        # positive entries in changes-mode and content-mode overwrites.
+        #
+        # In ``changes`` and ``normalize_mode`` the user did NOT submit
+        # raw bytes (they submitted a delta, or asked for in-place
+        # normalisation), so there are no "pre-emit intended bytes"
+        # against which a coarse-grained bridge can correctly reconcile.
+        # The precise was_quoted logger still fires in those modes —
+        # only the bridge is suppressed. Per §3a the reconciler
+        # self-deprecates without code change when precise upstream
+        # instrumentation lands.
+        if not normalize_mode and changes is None and content is not None:
+            tier_normalize.reconcile_canonical_emission(
+                tier_normalize_log,
+                baseline_bytes=content,
+                canonical_bytes=canonical_content,
+            )
         for entry in tier_normalize_log.repairs:
             result["corrections"].append(
                 {
