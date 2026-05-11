@@ -89,6 +89,29 @@ _AUDIT_CARDINALITY_XFAIL_REASON = (
     "flip to expected pass when SR1-T4 lands"
 )
 
+# GH#385 corpus expansion (ADR-0006 SR1): explicit corner-case fixtures
+# enlarging the surface SR1-T1 Step 3 must clear. Each fixture is the minimal
+# input isolating exactly one HARD_SYMMETRY axis. The deeply-nested fixture
+# triggers the SAME audit-cardinality breach class as the existing nine, but
+# via a different normalisation path (deep KEY-chain re-emit). It is tracked
+# separately so Step 3's audit-completeness fix is validated against deep
+# nesting explicitly, not as a side-effect of the shallow corpus.
+_GH385_DEEP_NESTING_XFAILS: frozenset[str] = frozenset(
+    {
+        "tests/fixtures/symmetry/deeply_nested_keys.oct.md",
+    }
+)
+
+_GH385_DEEP_NESTING_XFAIL_REASON = (
+    "audit-cardinality breach on deep KEY::KEY::KEY re-emit: canonical "
+    "writer mutates whitespace/structure beyond one level of nesting but "
+    "emits zero corrections, so diff_unified is non-empty while the "
+    "corrections list is empty (I4 / HARD_SYMMETRY conjunct 3). "
+    "Tracked at GH#385 corpus expansion; SR1-T1 Step 3 (TIER_NORMALIZATION "
+    "centralisation) will fix the audit-completeness gap. Flip to expected "
+    "pass when Step 3 lands."
+)
+
 
 def _build_fixture_params() -> list[Any]:
     """Build the parametrize argument list, applying strict xfail to the
@@ -105,6 +128,17 @@ def _build_fixture_params() -> list[Any]:
                     marks=pytest.mark.xfail(
                         strict=True,
                         reason=_AUDIT_CARDINALITY_XFAIL_REASON,
+                    ),
+                )
+            )
+        elif fid in _GH385_DEEP_NESTING_XFAILS:
+            params.append(
+                pytest.param(
+                    path,
+                    id=fid,
+                    marks=pytest.mark.xfail(
+                        strict=True,
+                        reason=_GH385_DEEP_NESTING_XFAIL_REASON,
                     ),
                 )
             )
