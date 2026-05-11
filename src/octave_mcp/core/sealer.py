@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Document, Section
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import Assignment, ASTNode, Document, Section
 
 
 class SealStatus(Enum):

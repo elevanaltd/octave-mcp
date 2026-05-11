@@ -10,7 +10,7 @@ Test Strategy:
 3. Create foundation for multi-word value tests (issues #63, #66)
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block
+from octave_mcp.core.grammar.cst import Assignment, Block
 from octave_mcp.core.parser import parse, parse_with_warnings
 
 

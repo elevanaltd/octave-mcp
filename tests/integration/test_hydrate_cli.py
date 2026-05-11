@@ -334,7 +334,7 @@ class TestHydrateEndToEnd:
         assert doc.meta.get("VERSION") == "1.0.0"
 
         # Check SNAPSHOT section exists
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
 
         snapshot_sections = [s for s in doc.sections if isinstance(s, Section) and "SNAPSHOT" in s.key]
         assert len(snapshot_sections) >= 1

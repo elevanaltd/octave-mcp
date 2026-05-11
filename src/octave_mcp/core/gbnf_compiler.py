@@ -61,7 +61,7 @@ def _extract_contract_field_specs(contract: object) -> list[str]:
     Returns:
         List of field spec strings like "FIELD[STATUS]::REQ∧ENUM[A,B]"
     """
-    from octave_mcp.core.ast_nodes import ListValue
+    from octave_mcp.core.grammar.cst import ListValue
 
     # Handle plain list of strings
     if isinstance(contract, list):

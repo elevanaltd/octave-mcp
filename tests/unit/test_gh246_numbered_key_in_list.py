@@ -8,8 +8,8 @@ This is a violation of I1 (Syntactic Fidelity) and I3 (Mirror Constraint) when
 the canonicaliser splits numbered-key items into separate tokens.
 """
 
-from octave_mcp.core.ast_nodes import InlineMap, ListValue
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import InlineMap, ListValue
 from octave_mcp.core.parser import parse
 
 

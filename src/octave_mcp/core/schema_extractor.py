@@ -18,8 +18,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, HolographicValue, Section
 from octave_mcp.core.constraints import RequiredConstraint
+from octave_mcp.core.grammar.cst import Assignment, ASTNode, Block, Document, HolographicValue, Section
 from octave_mcp.core.holographic import (
     HolographicPattern,
     HolographicPatternError,

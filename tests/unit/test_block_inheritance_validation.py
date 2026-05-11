@@ -9,7 +9,7 @@ are used during validation to route fields without explicit targets.
 TDD RED phase: Tests should FAIL until fixes are implemented.
 """
 
-from octave_mcp.core.ast_nodes import Block
+from octave_mcp.core.grammar.cst import Block
 from octave_mcp.core.holographic import parse_holographic_pattern
 from octave_mcp.core.parser import parse
 from octave_mcp.core.schema_extractor import (

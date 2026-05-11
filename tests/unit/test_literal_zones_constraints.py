@@ -12,13 +12,13 @@ Tests cover:
 - Existing constraint parsing regressions still pass
 """
 
-from octave_mcp.core.ast_nodes import LiteralZoneValue
 from octave_mcp.core.constraints import (
     ConstraintChain,
     LangConstraint,
     LiteralConstraint,
     RequiredConstraint,
 )
+from octave_mcp.core.grammar.cst import LiteralZoneValue
 
 # ---------------------------------------------------------------------------
 # LiteralConstraint tests

@@ -14,7 +14,7 @@ import os
 
 import pytest
 
-from octave_mcp.core.ast_nodes import Comment
+from octave_mcp.core.grammar.cst import Comment
 from octave_mcp.core.parser import parse_with_warnings
 from octave_mcp.mcp.write import WriteTool, _all_section_marks_quoted, _auto_quote_section_refs_in_values
 

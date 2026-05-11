@@ -19,9 +19,9 @@ from typing import Any
 
 import yaml
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue, Section
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.gbnf_compiler import GBNFCompiler, compile_gbnf_from_meta
+from octave_mcp.core.grammar.cst import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue, Section
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.parser import parse
 from octave_mcp.core.projector import project

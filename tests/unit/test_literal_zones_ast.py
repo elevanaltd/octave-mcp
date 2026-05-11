@@ -7,7 +7,7 @@ T01: Verifies dataclass construction, field access, equality, and the D1
 constraint that LiteralZoneValue is NOT an ASTNode subclass.
 """
 
-from octave_mcp.core.ast_nodes import ASTNode, LiteralZoneValue
+from octave_mcp.core.grammar.cst import ASTNode, LiteralZoneValue
 
 
 class TestLiteralZoneValueConstruction:

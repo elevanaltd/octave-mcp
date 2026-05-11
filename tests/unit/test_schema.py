@@ -90,7 +90,7 @@ META:
         In Python, isinstance(True, (int, float)) returns True because bool inherits from int.
         This test ensures the validator explicitly rejects booleans for NUMBER type.
         """
-        from octave_mcp.core.ast_nodes import Document
+        from octave_mcp.core.grammar.cst import Document
 
         schema = {"META": {"fields": {"COUNT": {"type": "NUMBER"}}}}
 

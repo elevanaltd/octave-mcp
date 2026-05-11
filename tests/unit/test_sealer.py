@@ -114,7 +114,7 @@ META:
 
     def test_seal_document_seal_has_required_fields(self):
         """SEAL section should have SCOPE, ALGORITHM, HASH."""
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
         from octave_mcp.core.parser import parse
         from octave_mcp.core.sealer import seal_document
 
@@ -142,7 +142,7 @@ META:
 
     def test_seal_document_preserves_grammar_version(self):
         """Sealed document should include GRAMMAR if source has grammar_version."""
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
         from octave_mcp.core.parser import parse
         from octave_mcp.core.sealer import seal_document
 
@@ -211,7 +211,7 @@ META:
 
     def test_verify_seal_returns_invalid_for_tampered(self):
         """verify_seal should return INVALID for tampered document."""
-        from octave_mcp.core.ast_nodes import Assignment
+        from octave_mcp.core.grammar.cst import Assignment
         from octave_mcp.core.parser import parse
         from octave_mcp.core.sealer import SealStatus, seal_document, verify_seal
 

@@ -15,10 +15,10 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import Any
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.gbnf_compiler import GBNFCompiler
 from octave_mcp.core.grammar import parse_with_warnings
+from octave_mcp.core.grammar.cst import Assignment, ASTNode
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.repair import repair
 from octave_mcp.core.schema_extractor import SchemaDefinition

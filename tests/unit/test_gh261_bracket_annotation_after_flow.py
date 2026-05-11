@@ -9,7 +9,7 @@ ROOT CAUSE:
 TDD: RED phase — tests define expected behavior before the fix is applied.
 """
 
-from octave_mcp.core.ast_nodes import Assignment, ListValue
+from octave_mcp.core.grammar.cst import Assignment, ListValue
 from octave_mcp.core.parser import parse
 
 

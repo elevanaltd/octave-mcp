@@ -9,8 +9,8 @@ from B0-S1 (A8 assumption validation).
 
 import pytest
 
-from octave_mcp.core.ast_nodes import LiteralZoneValue
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import LiteralZoneValue
 from octave_mcp.core.lexer import LexerError
 from octave_mcp.core.parser import parse
 

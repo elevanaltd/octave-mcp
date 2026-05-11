@@ -10,8 +10,8 @@ I4 (TRANSFORM_AUDITABILITY): Auto-quoting bare values must be logged.
 TDD: RED phase - these tests define the expected behavior before implementation.
 """
 
-from octave_mcp.core.ast_nodes import Assignment
 from octave_mcp.core.emitter import emit, emit_assignment
+from octave_mcp.core.grammar.cst import Assignment
 from octave_mcp.core.parser import parse, parse_with_warnings
 
 

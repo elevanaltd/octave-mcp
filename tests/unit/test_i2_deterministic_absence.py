@@ -14,8 +14,8 @@ This test module verifies the tri-state distinction:
 TDD Phase: RED - These tests should fail until I2 is implemented.
 """
 
-from octave_mcp.core.ast_nodes import Absent, Assignment, Document, ListValue
 from octave_mcp.core.emitter import emit, emit_value
+from octave_mcp.core.grammar.cst import Absent, Assignment, Document, ListValue
 from octave_mcp.core.parser import parse
 
 

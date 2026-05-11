@@ -11,8 +11,8 @@ This enables:
 - Schema version binding
 """
 
-from octave_mcp.core.ast_nodes import Document
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import Document
 from octave_mcp.core.parser import parse
 
 

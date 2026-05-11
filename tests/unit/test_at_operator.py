@@ -105,7 +105,7 @@ class TestAtOperatorParser:
         assignment = doc.sections[0]
         assert assignment.key == "REFS"
         # List should contain @ expressions
-        from octave_mcp.core.ast_nodes import ListValue
+        from octave_mcp.core.grammar.cst import ListValue
 
         assert isinstance(assignment.value, ListValue)
         assert len(assignment.value.items) == 2

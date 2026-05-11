@@ -5,7 +5,7 @@ _ast_to_markdown, and _block_to_markdown functions.
 Targets coverage of eject.py lines 40-41, 58, 72-80, 111-114, 127-133.
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue
+from octave_mcp.core.grammar.cst import Assignment, Block, Document, InlineMap, ListValue
 from octave_mcp.mcp.eject import (
     _ast_to_dict,
     _ast_to_markdown,

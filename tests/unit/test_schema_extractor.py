@@ -579,7 +579,7 @@ FIELDS:
         2. SchemaDefinition.default_target set
         3. Validator uses default_target for fields without explicit target
         """
-        from octave_mcp.core.ast_nodes import Assignment, Block, Document
+        from octave_mcp.core.grammar.cst import Assignment, Block, Document
         from octave_mcp.core.schema_extractor import extract_schema_from_document
         from octave_mcp.core.validator import Validator
 

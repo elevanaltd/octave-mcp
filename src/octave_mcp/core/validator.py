@@ -16,7 +16,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from octave_mcp.core.ast_nodes import (
+from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
+from octave_mcp.core.grammar.cst import (
     Assignment,
     ASTNode,
     Block,
@@ -26,7 +27,6 @@ from octave_mcp.core.ast_nodes import (
     LiteralZoneValue,
     Section,
 )
-from octave_mcp.core.constraints import EnumConstraint, RequiredConstraint
 from octave_mcp.core.routing import InvalidTargetError, RoutingLog, TargetRegistry, TargetRouter
 from octave_mcp.core.schema_extractor import (
     InheritanceResolver,

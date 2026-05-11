@@ -17,7 +17,7 @@ def cli():
 
 def _ast_to_dict(doc):
     """Convert AST Document to dictionary for JSON/YAML export."""
-    from octave_mcp.core.ast_nodes import Assignment, Block, InlineMap, ListValue
+    from octave_mcp.core.grammar.cst import Assignment, Block, InlineMap, ListValue
 
     def convert_value(value):
         if isinstance(value, ListValue):
@@ -56,7 +56,7 @@ def _block_to_markdown(block, lines, level=3):
         lines: Output lines list (mutated)
         level: Heading level
     """
-    from octave_mcp.core.ast_nodes import Assignment, Block
+    from octave_mcp.core.grammar.cst import Assignment, Block
 
     for child in block.children:
         if isinstance(child, Assignment):
@@ -73,7 +73,7 @@ def _ast_to_markdown(doc):
     CRS-FIX #2: Complete implementation that processes nested block children,
     matching the MCP octave_eject tool behavior.
     """
-    from octave_mcp.core.ast_nodes import Assignment, Block
+    from octave_mcp.core.grammar.cst import Assignment, Block
 
     lines = [f"# {doc.name}", ""]
 
@@ -125,7 +125,7 @@ def _compute_allowed_root_for_check(doc, base_path):
     """
     from pathlib import Path
 
-    from octave_mcp.core.ast_nodes import Assignment, Section
+    from octave_mcp.core.grammar.cst import Assignment, Section
 
     # Collect all resolved SOURCE_URI paths
     resolved_paths = [base_path]  # Start with document's directory
@@ -433,9 +433,9 @@ def write(
     import json as json_module
     import sys
 
-    from octave_mcp.core.ast_nodes import Assignment
     from octave_mcp.core.emitter import emit  # noqa: F401 -- kept for backwards-compatible imports
     from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
+    from octave_mcp.core.grammar.cst import Assignment
     from octave_mcp.core.parser import parse
     from octave_mcp.core.validator import Validator
     from octave_mcp.mcp.write import OctaveASTCycleError, _emit_with_style
@@ -1133,7 +1133,7 @@ def _extract_vocabulary_entries_from_registry(doc) -> list[dict]:
     Returns:
         List of vocabulary entry dictionaries
     """
-    from octave_mcp.core.ast_nodes import Assignment, ListValue, Section
+    from octave_mcp.core.grammar.cst import Assignment, ListValue, Section
 
     vocabularies = []
 

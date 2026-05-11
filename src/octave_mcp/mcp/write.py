@@ -22,7 +22,10 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import Any
 
-from octave_mcp.core.ast_nodes import (
+from octave_mcp.core.emitter import emit
+from octave_mcp.core.gbnf_compiler import GBNFCompiler
+from octave_mcp.core.grammar import ParserError, parse, parse_with_warnings
+from octave_mcp.core.grammar.cst import (
     Assignment,
     ASTNode,
     Block,
@@ -33,9 +36,6 @@ from octave_mcp.core.ast_nodes import (
     LiteralZoneValue,
     Section,
 )
-from octave_mcp.core.emitter import emit
-from octave_mcp.core.gbnf_compiler import GBNFCompiler
-from octave_mcp.core.grammar import ParserError, parse, parse_with_warnings
 from octave_mcp.core.hydrator import resolve_hermetic_standard
 from octave_mcp.core.lexer import ENVELOPE_ID_PATTERN, LexerError, tokenize
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log

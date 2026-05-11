@@ -381,7 +381,7 @@ META:
         reparsed = parse(output)
 
         # Find SNAPSHOT in reparsed doc
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
 
         reparsed_snapshot = None
         for section in reparsed.sections:
@@ -552,7 +552,7 @@ class TestPrunedGeneration:
         terms = _get_field_value(pruned, "TERMS")
         # Should be empty list when all terms are used
         if terms is not None:
-            from octave_mcp.core.ast_nodes import ListValue
+            from octave_mcp.core.grammar.cst import ListValue
 
             if isinstance(terms, ListValue):
                 assert len(terms.items) == 0
@@ -574,7 +574,7 @@ class TestHydrationOutput:
         result = hydrate(source_path, registry, policy)
 
         # §1::CONTENT should still exist
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
 
         content_section = None
         for section in result.sections:
@@ -1980,7 +1980,7 @@ def _create_test_registry():
 
 def _find_snapshot_section(doc):
     """Find §CONTEXT::SNAPSHOT section in document."""
-    from octave_mcp.core.ast_nodes import Section
+    from octave_mcp.core.grammar.cst import Section
 
     for section in doc.sections:
         if isinstance(section, Section):
@@ -1991,7 +1991,7 @@ def _find_snapshot_section(doc):
 
 def _find_manifest_section(doc):
     """Find §SNAPSHOT::MANIFEST section in document."""
-    from octave_mcp.core.ast_nodes import Section
+    from octave_mcp.core.grammar.cst import Section
 
     for section in doc.sections:
         if isinstance(section, Section):
@@ -2002,7 +2002,7 @@ def _find_manifest_section(doc):
 
 def _find_pruned_section(doc):
     """Find §SNAPSHOT::PRUNED section in document."""
-    from octave_mcp.core.ast_nodes import Section
+    from octave_mcp.core.grammar.cst import Section
 
     for section in doc.sections:
         if isinstance(section, Section):
@@ -2013,7 +2013,7 @@ def _find_pruned_section(doc):
 
 def _find_child_block(section, name: str):
     """Find a child block within a section."""
-    from octave_mcp.core.ast_nodes import Block
+    from octave_mcp.core.grammar.cst import Block
 
     for child in section.children:
         if isinstance(child, Block) and child.key == name:
@@ -2023,7 +2023,7 @@ def _find_child_block(section, name: str):
 
 def _get_snapshot_terms(snapshot_section) -> dict:
     """Get terms from a SNAPSHOT section."""
-    from octave_mcp.core.ast_nodes import Assignment
+    from octave_mcp.core.grammar.cst import Assignment
 
     terms = {}
     for child in snapshot_section.children:
@@ -2040,7 +2040,7 @@ def _get_term_definition(snapshot_section, term_name: str):
 
 def _get_field_value(section_or_block, field_name: str):
     """Get a field value from section or block."""
-    from octave_mcp.core.ast_nodes import Assignment
+    from octave_mcp.core.grammar.cst import Assignment
 
     for child in section_or_block.children:
         if isinstance(child, Assignment) and child.key == field_name:

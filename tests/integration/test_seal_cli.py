@@ -223,7 +223,7 @@ META:
             assert result.exit_code == 0
 
             # Parse output and check SEAL section structure
-            from octave_mcp.core.ast_nodes import Section
+            from octave_mcp.core.grammar.cst import Section
             from octave_mcp.core.parser import parse
 
             doc = parse(result.output)
