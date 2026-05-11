@@ -22,6 +22,7 @@ See ``docs/adr/adr-0006-sr1-t1-grammar-core-design.md`` §2.2, §4.5.
 
 from __future__ import annotations
 
+import re
 from typing import (
     TYPE_CHECKING,
     Generic,
@@ -38,6 +39,90 @@ if TYPE_CHECKING:
         Document,
         Section,
     )
+
+
+# ---------------------------------------------------------------------------
+# Shape predicates (ADR-0006 SR1-T1 Step 5 §4.5 G2)
+# ---------------------------------------------------------------------------
+#
+# These predicates answer "is this string's textual shape dequotable
+# without losing type information?". They were previously module-level
+# regex constants inside ``emitter.py`` (IDENTIFIER_PATTERN /
+# ANNOTATION_PATTERN / EXPRESSION_PATTERN). Per §4.5 they have been
+# relocated to the visitor module so the emitter consults a single
+# canonical surface — they are NOT a "fallback path" for missing
+# ``was_quoted`` provenance; they are permanent type-safety helpers
+# that apply to any string value (regardless of was_quoted state).
+#
+# The emitter's decision rule (see ``emitter.needs_quotes``):
+#
+# * ``was_quoted is True``  → preserve quotes UNLESS dequoting is
+#   type-safe (i.e. shape predicate matches). The Step-5 canonical
+#   preference is to dequote identifier-shaped strings even when
+#   ``was_quoted=True``; Step 3 will log that decision via
+#   ``tier_normalize.log_repair`` (per HO directive — the canonical
+#   output is preserved at Step 5 so the 10 strict-xfails REMAIN
+#   xfailed at this PR).
+# * ``was_quoted is False`` → emit bare when shape is identifier-like,
+#   quoted otherwise (same as ``None``).
+# * ``was_quoted is None``  → no source provenance (programmatic
+#   construction by hydrator / sealer / validator); shape predicate is
+#   the sole decision source. This is NOT a fallback to a deleted regex;
+#   the shape predicate is the canonical helper for this case.
+#
+# See ``docs/adr/adr-0006-sr1-t1-grammar-core-design.md`` §3 row 5,
+# §4.5 G2 ("fallback discipline").
+
+
+# GH#299: Include hyphens to match lexer's _is_valid_identifier_char which
+# allows '-'. Negative lookbehind (?<!-) prevents trailing hyphen
+# (mirrors lexer's trailing-hyphen strip).
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)\Z")
+
+# Issue #248, GH#300: NAME<qualifier> annotation syntax (§2c).
+# Must match lexer rules: qualifier starts with letter/underscore, body is
+# identifier chars. GH#300: Extended to support multi-arg qualifiers
+# (comma-separated) like NEVER<A,B,C> and empty qualifiers like FOO<>.
+_ANNOTATION_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)<([A-Za-z_]([A-Za-z0-9_,]*[A-Za-z0-9_])?)?>\Z")
+
+# GH#301: Expression values containing spec-defined Unicode operators.
+# Per §3b::QUOTING_RULES, defined operators in expressions (A->B, X|Y,
+# P&Q) are exempt from quoting. Unicode operators: ⊕ (U+2295), ⧺ (U+29FA),
+# ⇌ (U+21CC), ∧ (U+2227), ∨ (U+2228), → (U+2192), and @ for location
+# context. Matches: identifier segments connected by one or more Unicode
+# operators.
+_UNICODE_OPS = "⊕⧺⇌∧∨→@"
+_EXPRESSION_RE = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)" r"([" + _UNICODE_OPS + r"][A-Za-z_][A-Za-z0-9_.\-]*(?<!-))+\Z"
+)
+
+
+def is_identifier_shape(value: str) -> bool:
+    """True iff ``value`` is a bare-identifier-shaped string.
+
+    Identifier shape mirrors the lexer's ``_is_valid_identifier_char``
+    discipline (alpha/digit/underscore/dot/hyphen, leading non-digit,
+    trailing non-hyphen). When this returns True, dequoting is
+    type-safe: the value will round-trip through the lexer as a single
+    IDENTIFIER token.
+    """
+    if not isinstance(value, str) or not value:
+        return False
+    return _IDENTIFIER_RE.match(value) is not None
+
+
+def is_annotation_shape(value: str) -> bool:
+    """True iff ``value`` has NAME<qualifier> annotation shape (§2c)."""
+    if not isinstance(value, str) or not value:
+        return False
+    return _ANNOTATION_RE.match(value) is not None
+
+
+def is_expression_shape(value: str) -> bool:
+    """True iff ``value`` is an expression with Unicode operators (§3b)."""
+    if not isinstance(value, str) or not value:
+        return False
+    return _EXPRESSION_RE.match(value) is not None
 
 
 T = TypeVar("T")
@@ -159,4 +244,7 @@ class SymmetricVisitor(Generic[T]):
 __all__ = [
     "SymmetricVisitor",
     "Visitor",
+    "is_annotation_shape",
+    "is_expression_shape",
+    "is_identifier_shape",
 ]

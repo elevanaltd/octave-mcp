@@ -1107,6 +1107,12 @@ class Parser:
                 leading_comments=leading_comments or [],
                 trailing_comment=trailing_comment,
             )
+            # ADR-0006 SR1-T1 Step 5 §4.5 G2: record source-quoting provenance.
+            # value_is_quoted is True iff the consumed value token was a STRING
+            # (i.e. the user wrote KEY::"..."). False otherwise (bare IDENTIFIER,
+            # NUMBER, BOOLEAN, NULL, list, inline-map, etc.). Step 3 will read
+            # this to log identifier-dequoting decisions via tier_normalize.
+            assignment.was_quoted = value_is_quoted
             return assignment
 
         elif self.current().type == TokenType.BLOCK:

@@ -28,6 +28,7 @@ from typing import Any, Literal
 from octave_mcp.core.grammar.cst import (
     Absent,
     Assignment,
+    ASTNode,
     Block,
     Comment,
     Document,
@@ -35,7 +36,14 @@ from octave_mcp.core.grammar.cst import (
     InlineMap,
     ListValue,
     LiteralZoneValue,
+    NodeKind,
     Section,
+)
+from octave_mcp.core.grammar.visitor import (
+    SymmetricVisitor,
+    is_annotation_shape,
+    is_expression_shape,
+    is_identifier_shape,
 )
 
 
@@ -69,15 +77,16 @@ class FormatOptions:
     strip_comments: bool = False
 
 
-# GH#299: Include hyphens to match lexer's _is_valid_identifier_char which allows '-'.
-# Negative lookbehind (?<!-) prevents trailing hyphen (mirrors lexer's trailing-hyphen strip).
-IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)\Z")
-
-# Issue #248, GH#300: Pattern for NAME<qualifier> annotation syntax (§2c)
-# Must match lexer rules: qualifier starts with letter/underscore, body is identifier chars.
-# GH#300: Extended to support multi-arg qualifiers (comma-separated) like NEVER<A,B,C>
-# and empty qualifiers like FOO<> (produced by parser for empty constructor brackets).
-ANNOTATION_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)<([A-Za-z_]([A-Za-z0-9_,]*[A-Za-z0-9_])?)?>\Z")
+# ADR-0006 SR1-T1 Step 5 §4.5: identifier/annotation/expression shape
+# predicates relocated to ``core/grammar/visitor.py`` (imported above as
+# ``is_identifier_shape`` / ``is_annotation_shape`` / ``is_expression_shape``).
+# The module-level regex constants used pre-Step-5 for the dequoting
+# decision have been deleted from this module per the §4.5 fallback-
+# discipline rule ("no PR ships a 'deleted regex' claim while a
+# was_quoted-driven path remains in the visitor"). The shape helpers are
+# NOT a fallback for missing ``was_quoted``; they are permanent
+# type-safety guards (a value like ``"42"`` must stay quoted regardless
+# of was_quoted state to avoid integer round-trip drift on I1).
 
 # GH#310: Keys whose values must always be quoted (string literals for lexical matching).
 # PATTERN and REGEX values are match targets in §4::INTERACTION_RULES GRAMMAR context.
@@ -94,10 +103,8 @@ VARIABLE_PATTERN = re.compile(r"^\$[A-Za-z0-9_:]+\Z")
 # from quoting. Unicode operators: ⊕ (U+2295), ⧺ (U+29FA), ⇌ (U+21CC), ∧ (U+2227),
 # ∨ (U+2228), → (U+2192), and @ for location context.
 # Matches: identifier segments connected by one or more Unicode operators.
-_UNICODE_OPS = "\u2295\u29fa\u21cc\u2227\u2228\u2192@"
-EXPRESSION_PATTERN = re.compile(
-    r"^[A-Za-z_][A-Za-z0-9_.\-]*(?<!-)([" + _UNICODE_OPS + r"][A-Za-z_][A-Za-z0-9_.\-]*(?<!-))+\Z"
-)
+# GH#301 expression-shape predicate is exported from visitor.py
+# (``is_expression_shape``). See \u00a74.5 note above on the relocation.
 
 
 def _sort_children_by_key(children: list[Any]) -> list[Any]:
@@ -123,8 +130,32 @@ def _sort_children_by_key(children: list[Any]) -> list[Any]:
     return sorted_assignments + non_assignments
 
 
-def needs_quotes(value: Any) -> bool:
-    """Check if a string value needs quotes."""
+def needs_quotes(value: Any, was_quoted: bool | None = None) -> bool:
+    """Check if a string value needs quotes.
+
+    ADR-0006 SR1-T1 Step 5 §4.5 G2: ``was_quoted`` is the source-quoting
+    provenance recorded by the parser at Assignment construction. It is
+    threaded through here so future audit-logging steps (Step 3) can
+    consult the same decision rule the emitter uses.
+
+    Decision rule (this PR preserves CURRENT canonical output — Step 3
+    will log the dequoting choice via ``tier_normalize.log_repair``):
+
+    * ``was_quoted is True``  → preserve quotes UNLESS dequoting is
+      type-safe (shape predicate matches). HO directive: identifier-
+      shaped strings still dequote ("TYPE::SPEC" canonical preference)
+      so the 10 strict-xfails REMAIN xfailed at this PR.
+    * ``was_quoted is False`` → identical to current behaviour (shape
+      predicate decides).
+    * ``was_quoted is None``  → no source provenance (programmatic
+      construction); shape predicate decides. This is NOT a fallback
+      for a deleted regex; the shape predicate is the canonical helper.
+
+    Behavioural invariant: for every fixture parsed at main HEAD
+    6adf13a, ``needs_quotes(value, was_quoted=<parser_signal>)`` returns
+    the same boolean it returned at HEAD. This guarantees canonical
+    output is byte-identical to baseline (smoke-test parity check).
+    """
     if not isinstance(value, str):
         return False
 
@@ -133,8 +164,8 @@ def needs_quotes(value: Any) -> bool:
         return True
 
     # Newlines/tabs must be escaped, so they must be quoted.
-    # NOTE: Regex `$` matches before a trailing newline; IDENTIFIER_PATTERN uses `\\Z`
-    # to avoid treating "A\\n" as a bare identifier.
+    # NOTE: Regex `$` matches before a trailing newline; the identifier
+    # shape predicate uses `\\Z` to avoid treating "A\\n" as a bare identifier.
     if "\n" in value or "\t" in value or "\r" in value:
         return True
 
@@ -149,11 +180,11 @@ def needs_quotes(value: Any) -> bool:
         return False
 
     # Issue #248: NAME<qualifier> annotations don't need quotes (§2c)
-    if ANNOTATION_PATTERN.match(value):
+    if is_annotation_shape(value):
         return False
 
     # GH#301: Expression values with Unicode operators don't need quotes (§3b)
-    if EXPRESSION_PATTERN.match(value):
+    if is_expression_shape(value):
         return False
 
     # If it's not a valid identifier, it needs quotes
@@ -161,7 +192,7 @@ def needs_quotes(value: Any) -> bool:
     # - Numbers (start with digit)
     # - Dashes (not allowed in identifiers)
     # - Special chars (spaces, colons, brackets, etc.)
-    if not IDENTIFIER_PATTERN.match(value):
+    if not is_identifier_shape(value):
         return True
 
     return False
@@ -205,7 +236,7 @@ def _needs_multiline(value: ListValue) -> bool:
         # that should always trigger multi-line emission, regardless of count.
         # This fixes inconsistency where 2-item annotation lists stayed single-line
         # while 3-item ones went multi-line.
-        if isinstance(item, str) and ANNOTATION_PATTERN.match(item):
+        if isinstance(item, str) and is_annotation_shape(item):
             return True
         non_absent_count += 1
     # GH#273: Any array with 3+ non-Absent plain items goes multi-line
@@ -292,7 +323,7 @@ def _emit_multiline_list(value: ListValue, indent: int = 0) -> str:
     return "\n".join(lines)
 
 
-def emit_value(value: Any, indent: int = 0) -> str:
+def emit_value(value: Any, indent: int = 0, was_quoted: bool | None = None) -> str:
     """Emit a value in canonical form.
 
     I2 Compliance:
@@ -304,9 +335,19 @@ def emit_value(value: Any, indent: int = 0) -> str:
     Arrays containing KEY::VALUE pairs or nested arrays emit multi-line
     with 2-space indentation. Simple flat arrays remain single-line.
 
+    ADR-0006 SR1-T1 Step 5 §4.5 G2: ``was_quoted`` carries the source-
+    quoting provenance from the parser. Threaded into ``needs_quotes``
+    so Step 3 can wire a single ``tier_normalize.log_repair`` call at
+    this seam. Current PR preserves canonical output (HO directive:
+    10 strict-xfails REMAIN xfailed). For value types other than ``str``
+    the parameter has no effect.
+
     Args:
         value: The AST value to emit.
         indent: Current indentation level (used for multi-line arrays).
+        was_quoted: Source-quoting provenance for the value (parser-
+            populated on Assignment; None for programmatic constructions
+            or recursive descent into nested value types).
 
     Raises:
         ValueError: If passed an Absent value directly. This catches
@@ -323,7 +364,7 @@ def emit_value(value: Any, indent: int = 0) -> str:
     elif isinstance(value, int | float):
         return str(value)
     elif isinstance(value, str):
-        if needs_quotes(value):
+        if needs_quotes(value, was_quoted=was_quoted):
             # Escape special characters
             escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
             return f'"{escaped}"'
@@ -461,7 +502,10 @@ def emit_assignment(assignment: Assignment, indent: int = 0, format_options: For
         lines.append(f"{indent_str}{lzv.fence_marker}")
         return "\n".join(lines)
 
-    value_str = emit_value(assignment.value, indent)
+    # ADR-0006 SR1-T1 Step 5 §4.5 G2: thread the parser-recorded source-
+    # quoting provenance into emit_value. Behaviour preserved at this
+    # PR — Step 3 will wire tier_normalize.log_repair at the same seam.
+    value_str = emit_value(assignment.value, indent, was_quoted=assignment.was_quoted)
 
     # GH#310: PATTERN/REGEX values must always be quoted for lexical matching fidelity (I1).
     # The needs_quotes() heuristic returns False for single bare-word identifiers, but
@@ -802,3 +846,84 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
         output += "\n"
 
     return output
+
+
+# ---------------------------------------------------------------------------
+# CanonicalEmitter — CST visitor seam (ADR-0006 SR1-T1 Step 5)
+# ---------------------------------------------------------------------------
+#
+# Per design §2.2 the emitter is a ``Visitor[str]`` consumer of the CST.
+# The class below is the structural seam: it subclasses
+# ``SymmetricVisitor[str]`` (which is the visit_T mixin landed at Step 4)
+# and dispatches each node kind through the existing module-level
+# ``emit_*`` helpers. The wire output is byte-identical to the
+# pre-Step-5 ``emit()`` function — Step 5 is a structural change, NOT a
+# canonical-output change. The 10 strict-xfails REMAIN xfailed; Step 3
+# is the step that flips them via ``tier_normalize.log_repair``.
+#
+# Why a thin class over a full re-implementation: the existing emit_*
+# helpers carry years of issue-numbered branches (LiteralZoneValue,
+# YAML frontmatter, META, comments, multi-line lists, etc.). Re-
+# implementing them in visit_* methods would multiply review risk and
+# canonical-output drift surface for zero behaviour change. The class
+# provides the seam Step 3 needs (a single point that consumes
+# ``assignment.was_quoted`` from CST nodes); the per-node text is still
+# produced by the proven helpers.
+#
+# Future steps may inline the helpers into visit_* methods once Step 3's
+# audit-log wiring has settled.
+
+
+class CanonicalEmitter(SymmetricVisitor[str]):
+    """Visitor[str] consumer that emits canonical OCTAVE bytes from a CST.
+
+    Each ``visit_<node>`` method delegates to the matching module-level
+    ``emit_*`` helper, preserving the canonical-output guarantees of the
+    pre-Step-5 emitter. ``visit()`` is the fallback dispatcher used when
+    the caller has an unknown-kind ``ASTNode``.
+
+    Attributes:
+        format_options: Optional ``FormatOptions`` applied to the final
+            output (post-emission transformations such as trailing-
+            whitespace strip and blank-line normalisation). Passed to
+            each ``emit_*`` helper.
+    """
+
+    def __init__(self, format_options: FormatOptions | None = None) -> None:
+        self.format_options = format_options
+
+    def visit_assignment(self, node: Assignment, /) -> str:
+        return emit_assignment(node, 0, self.format_options)
+
+    def visit_block(self, node: Block, /) -> str:
+        return emit_block(node, 0, self.format_options)
+
+    def visit_section(self, node: Section, /) -> str:
+        return emit_section(node, 0, self.format_options)
+
+    def visit_document(self, node: Document, /) -> str:
+        return emit(node, self.format_options)
+
+    def visit_comment(self, node: Comment, /) -> str:
+        return emit_comment(node, 0, self.format_options)
+
+    def visit(self, node: ASTNode, /) -> str:
+        """Dispatch on ``node.kind`` to the matching visit_<node> method.
+
+        Per design §2.2 the visitor dispatches on the structural
+        ``NodeKind`` discriminator rather than ``isinstance`` chains.
+        Unknown kinds fall through to ``str(node)`` (defensive — should
+        never occur in well-formed CSTs).
+        """
+        kind = getattr(node, "kind", None)
+        if kind is NodeKind.DOCUMENT:
+            return self.visit_document(node)  # type: ignore[arg-type]
+        if kind is NodeKind.SECTION:
+            return self.visit_section(node)  # type: ignore[arg-type]
+        if kind is NodeKind.BLOCK:
+            return self.visit_block(node)  # type: ignore[arg-type]
+        if kind is NodeKind.ASSIGNMENT:
+            return self.visit_assignment(node)  # type: ignore[arg-type]
+        if kind is NodeKind.COMMENT:
+            return self.visit_comment(node)  # type: ignore[arg-type]
+        return str(node)
