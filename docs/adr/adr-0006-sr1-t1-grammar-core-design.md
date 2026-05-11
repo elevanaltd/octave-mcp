@@ -1,11 +1,16 @@
 # ADR-0006 SR1-T1: Unified Grammar Core — Design Pass
 
-**Status:** Proposed (design-only; implementation deferred to follow-up IL delegation)
-**Date:** 2026-05-09
+**Status:** Proposed (design-only; implementation in progress — Steps 1, 2 merged)
+**Date:** 2026-05-09 (original) · **Updated:** 2026-05-11 (re-sequencing amendment — see §3a)
+**Version:** 1.1 (semver: minor — re-sequencing is non-breaking to architecture; only execution order changes)
 **Parent:** [ADR-0006 Writer/Reader Symmetry](./adr-0006-writer-reader-symmetry.md) §70-84
 **Tracks:** GH#382 (SR1-T1)
 **Retires:** North Star Risk **R2** — `validator_drift_multiple_validators`
 **Out of scope (separate IL agents):** SR1-T2 (#372 W_DUPLICATE_TARGET hard-fail), SR1-T3 (#369 path-resolver), SR1-T4 (no-op normalize default), Sprint 3 cursor-CST.
+
+**Changelog:**
+- **1.1 (2026-05-11):** Re-sequence migration steps after IL empirical audit (permit SID `4fa2f2f1-85ff-4cfc-89c6-206ab9f8b048`) surfaced that the original Step 3 (TIER_NORMALIZATION centralisation) could not flip the 10 audit-cardinality xfails until structural fields reserved by the original Step 4 (CST promotion) and populated by the original Step 5 (emitter rewrite + `was_quoted`) had landed. Step IDs remain stable; execution order becomes 1 → 2 → 4 → 5 → 3 → 6. See new §3a for full rationale.
+- **1.0 (2026-05-09):** Original design pass.
 
 ---
 
@@ -131,12 +136,49 @@ Each step is a bounded PR. None of them require touching SR1-T2 (#372), SR1-T3 (
 |---|----------|---------|------|----------------------|
 | 1 | **Rename `core/grammar.py` → `core/grammar_compiler/gbnf.py`** with re-export shim. Pure refactor; no behaviour change. | ~12 import sites (`mcp/compile_grammar.py`, `mcp/grammar_resources.py`, tests) | Low — covered by import-graph tests. | No effect (no parse path touched). |
 | 2 | **Create `core/grammar/` package** with `entry.py::parse()` as a thin wrapper that calls `lexer.tokenize()` then `parser.parse()` and returns the existing AST cast as CST. | New package only; `mcp/validate.py` and `mcp/write.py` switch their `from octave_mcp.core.parser import parse` to `from octave_mcp.core.grammar import parse`. | Low — wrapper is identity. | No effect (same pipeline). |
-| 3 | **Centralise TIER_NORMALIZATION logging in `core/grammar/tier_normalize.py`**. Lexer's W002 path + parser's whitespace normalisation + emitter's `FormatOptions` strip/blank-line repairs all emit through one `log_repair()` call. | `lexer.py`, `parser.py`, `emitter.py` — additive instrumentation only. | Medium — every TIER_NORMALIZATION event now appears in `RepairLog`. **This is the step that flips the audit-cardinality xfails.** | Flips xfail set 1 (see §4). |
+| 3 | **Centralise TIER_NORMALIZATION logging in `core/grammar/tier_normalize.py`**. Lexer's W002 path + parser's whitespace normalisation + emitter's `FormatOptions` strip/blank-line repairs all emit through one `log_repair()` call. **Per 2026-05-11 re-sequence (§3a), this step now executes AFTER Steps 4 and 5** so the emitter has access to `was_quoted` and reserved trivia fields for precise instrumentation. | `core/grammar/tier_normalize.py` (new), `lexer.py`, `parser.py`, `emitter.py`, `repair.py`, **plus additive wiring in `src/octave_mcp/mcp/write.py` to consume `RepairLog` tier_normalize entries into the `corrections` list (pre-authorised scope expansion per 2026-05-11 user decision; mirrors the existing schema-repair loop at `write.py:3640`)**. | Medium — every TIER_NORMALIZATION event now appears in `RepairLog`. **This is the step that flips the audit-cardinality xfails (10 total: 9 original + 1 added by #385).** | Flips xfail set 1 (see §4). |
 | 4 | **Promote `ast_nodes.py` to `core/grammar/cst.py`** with `NodeKind` enum and visitor protocol. Existing dataclasses unchanged; Section/Block/Assignment/Document gain `kind: NodeKind` field defaulted from `__class_getitem__`. **Reserve fidelity-preservation field shapes on the base node (defaulted `None`):** `leading_trivia: Optional[str] = None`, `trailing_trivia: Optional[str] = None`, `was_quoted: Optional[bool] = None`. Population is deferred to Sprint 3 / future steps; reserving the slots now prevents a second schema migration touching every node and every visitor signature. See §4.5 for rationale. | `ast_nodes.py` → moved; ~30 import sites rewritten by ruff codemod. | Medium — broad import churn; mypy gates catch breakage. | No effect (structural only). |
 | 5 | **Rewrite emitter as CST visitor**. Transition identifier/annotation/expression shape handling from `IDENTIFIER_PATTERN`, `ANNOTATION_PATTERN`, and `EXPRESSION_PATTERN` to CST metadata (`node.kind` + `node.was_quoted`). `node.kind` is a structural marker (Assignment/Block/String/Identifier), NOT a presentation-aware quoting decision; `was_quoted` is what prevents `KEY::"42"` (string) from re-emitting as `KEY::42` (integer) on round-trip — direct I1 type-fidelity guard. Keep a temporary regex fallback ONLY while `was_quoted` may be `None`, and delete the heuristic in the same PR that guarantees lexer/parser population (either folded into Step 5 scope, or sequenced as Step 4.5 if scope dictates separation). Identifier-shape decisions become single-sourced once fallback is removed. See §4.5. | `emitter.py` only (plus lexer/parser instrumentation if folded in). | Medium-high — emitter is hot path; rely on existing 2788-test gate + HARD_SYMMETRY. | Should not regress; may flip 1-2 additional fixtures. |
 | 6 | **Collapse validator surface**. Delete `core/schema.py`; delete module-level `validate()` in `validator.py`; promote `class Validator` to `visitor.Visitor[None]`; move `validate_frontmatter()` into `grammar/entry.py` as a parse-stage hook. | `validator.py`, `schema.py` (delete), `mcp/validate.py`, `mcp/write.py`, ~8 internal call sites. | High — biggest blast radius. Land last. CE review mandatory per AUTHORITY_MANDATE. | Closes R2 (named risk). |
 
-**Sequencing rationale:** Steps 1-2 are pure refactor (no semantics change) — land first to establish the package skeleton. Step 3 is the **load-bearing audit-completeness fix** that flips the xfail set; it must land before SR1-T4 because T4 (no-op normalize default) depends on knowing what "no repairs occurred" actually means. Steps 4-5 are structural simplifications enabled by step 3. Step 6 is the R2-retiring change and absorbs CE review per the design integrity gate.
+**Sequencing rationale (amended 2026-05-11; superseded by §3a):**
+
+> **Original (1.0) rationale, preserved for audit trail:** Steps 1-2 are pure refactor (no semantics change) — land first to establish the package skeleton. Step 3 is the **load-bearing audit-completeness fix** that flips the xfail set; it must land before SR1-T4 because T4 (no-op normalize default) depends on knowing what "no repairs occurred" actually means. Steps 4-5 are structural simplifications enabled by step 3. Step 6 is the R2-retiring change and absorbs CE review per the design integrity gate.
+
+> **Revised (1.1) rationale:** Steps 1-2 remain pure refactor and land first (both merged at PR #393 and PR #394). The **execution order then becomes 4 → 5 → 3 → 6** rather than 3 → 4 → 5 → 6. The reason: precise emit-time audit instrumentation for the three normalisation classes (identifier dequoting, blank-line stripping, triple-quote collapse) requires structural fields (`was_quoted`, `leading_trivia`, `trailing_trivia`) that Step 4 reserves and Step 5 populates. Without those fields landed first, the original Step 3 could only flip xfails via post-hoc baseline-vs-canonical reconciliation — a coarse-grained workaround that constitutes design drift from I4 (TRANSFORM_AUDITABILITY: every transformation logged with stable IDs). Landing CST + populated fields first allows the now-final Step 3 (executed as the 5th step) to do precise instrumentation as originally designed. Step IDs are retained for traceability with already-merged work (#393, #394, #395 and the xfail reasons in `tests/unit/test_writer_reader_symmetry.py`); only the execution order changes. Step 6 (validator collapse) remains last, unchanged. Step 3 still lands before SR1-T4 in the cross-task timeline, satisfying T4's "no repairs occurred" precondition.
+
+### 3a. 2026-05-11 Re-sequencing Note
+
+**Trigger.** During implementation-lead (IL) preparation for the original Step 3, an empirical audit (anchor permit SID `4fa2f2f1-85ff-4cfc-89c6-206ab9f8b048`) of the 10 audit-cardinality xfailing fixtures in `tests/unit/test_writer_reader_symmetry.py` surfaced a structural gap: every one of the three normalisation classes that the original Step 3 promised to flip originates at the emitter but the emitter lacks the upstream information needed to log them precisely.
+
+**Empirical finding (three normalisation classes and their structural dependencies):**
+
+| # | Normalisation class | Example | Where information is lost | Required structural field | Reserved by | Populated by |
+|---|---------------------|---------|---------------------------|---------------------------|-------------|--------------|
+| 1 | **Identifier dequoting** | `TYPE::"SPEC"` → `TYPE::SPEC` | `emitter.py:326` `needs_quotes()` has no knowledge the value was originally quoted | `was_quoted: Optional[bool]` on Identifier/String nodes | Step 4 (CST promotion — see §4.5 G2) | Step 5 (emitter rewrite + lexer/parser instrumentation) |
+| 2 | **Blank-line stripping** | extra blank line → single blank | Blank lines are parser-discarded; never present in AST; `emit()` cannot re-emit them | `leading_trivia: Optional[str]`, `trailing_trivia: Optional[str]` on every node | Step 4 (CST promotion — see §4.5 G1) | Sprint 3+ (SR3-T1 cursor-CST populates trivia alongside spans) |
+| 3 | **Triple-quote collapse** | `""""""` → `""` | Lexer-side information loss before tokens reach the AST | Lexer-side preservation hook (out of immediate scope; documented for completeness) | Future step | Future step |
+
+For classes 1 and 2, precise emit-time logging is structurally impossible until the fields land. For class 3, the current centralised W002 destructive-repair guard in `repair_log.py:8` plus the Step 3 logger does suffice once invoked from the emitter rewrite path — but invocation requires the Step 5 visitor to exist.
+
+**Consumer-side gap.** During the same audit, IL identified that `src/octave_mcp/mcp/write.py` is the only surface that builds the `corrections` list consumed by `octave_write` callers. The original Step 3 scope fence — written before the audit — forbade touching `write.py`. That fence was over-tight: a purely additive ~15-line wiring edit (read from `tier_normalize` `RepairLog` entries; append to `corrections`; mirror the existing schema-repair loop at `write.py:3640`) is not a contract change and is required for the audit-cardinality xfails to actually flip end-to-end (the data must reach the consumer, not just exist in the log).
+
+**User decision (Option C — re-sequence).** Pause original Step 3. Proceed immediately with original Step 4 (CST + reserved fields) and original Step 5 (emitter rewrite + populate `was_quoted`). Once the data structurally exists, return to original Step 3 to wire up the logging and flip the 10 xfails. The pre-authorised scope expansion for `mcp/write.py` applies when original Step 3 returns.
+
+**Renumbering convention chosen.** Stable Step IDs with explicit execution-order annotation (HO-recommended option (b)). Rationale: already-merged PRs (#393, #394, #395) and the xfail-reason strings inside `tests/unit/test_writer_reader_symmetry.py` reference "SR1-T1 Step 3" as a stable identifier. Renumbering the IDs (strict-renumber option (a)) would orphan those references and trigger an audit-trail break that violates ATLAS<historical_burden> discipline and I3 (SOURCE_FIDELITY: modify in-place, no versioned copies of meaning). Option (b) preserves the IDs and adds the execution-order disambiguation everywhere references occur.
+
+**New execution order (step-by-step rationale):**
+
+| Execution # | Step ID | Status | Rationale for position |
+|-------------|---------|--------|------------------------|
+| 1 | Step 1 | Merged at PR #393 | Pure refactor; no dependency. |
+| 2 | Step 2 | Merged at PR #394 | Pure refactor; depends only on Step 1. |
+| 3 | Step 4 | **NEXT** | Reserves `was_quoted`, `leading_trivia`, `trailing_trivia` field shapes on CST nodes. Must precede emitter rewrite so visitor signatures land once. |
+| 4 | Step 5 | After Step 4 | Rewrites emitter as CST visitor; populates `was_quoted` via lexer/parser instrumentation (or via Step 4.5 if scope dictates separation per §4.5 fallback discipline). After this step, the emitter has the structural information needed for precise audit logging. |
+| 5 | Step 3 | After Step 5 | Centralises TIER_NORMALIZATION logging in `core/grammar/tier_normalize.py`; instruments lexer + parser + the now-rewritten emitter; consumes log into `corrections` via the pre-authorised `mcp/write.py` additive wiring. **This is the step that flips the 10 audit-cardinality xfails.** |
+| 6 | Step 6 | Last (unchanged) | Validator surface collapse; closes R2. Highest blast radius; lands last with mandatory CE review per AUTHORITY_MANDATE. |
+
+**Traceability.** This re-sequencing was recorded in commit SHA (to be filled by the merging PR; see `docs/adr-0006-resequence-design-doc` branch) and the corresponding PR. The IL audit that surfaced the gap is bound to anchor permit SID `4fa2f2f1-85ff-4cfc-89c6-206ab9f8b048`. Predecessor merged work: PR #393 (Step 1), PR #394 (Step 2), PR #395 (issue #385 HARD_SYMMETRY corpus expansion adding the 10th xfail `deeply_nested_keys`).
 
 ---
 
@@ -155,21 +197,22 @@ Each step is a bounded PR. None of them require touching SR1-T2 (#372), SR1-T3 (
 
 ### 4.3 Expected xfail flips
 
-The nine xfails (`#382` set) split by which migration step flips them:
+The ten xfails (`#382` original set of 9 + `#385` corpus expansion adding `deeply_nested_keys`) all flip when **Step 3** lands. Per the 2026-05-11 re-sequence (§3a), Step 3 is now the **5th step executed**, after Steps 1, 2, 4, 5. The fixture-to-step mapping below uses **Step IDs (stable)**; for execution order see §3a.
 
-| Fixture | Flips at | Why |
-|---------|----------|-----|
-| `tests/fixtures/symmetry/empty_triple_quoted.oct.md` | Step 3 | Triple-quote collapse currently invisible to repair log; centralised logger captures it. |
-| `tests/fixtures/coverage/spec_full.oct.md` | Step 3 | Blank-line stripping by emitter `FormatOptions` becomes a logged repair. |
-| `tests/fixtures/hydration/collision_source.oct.md` | Step 3 | Identifier dequoting by emitter regex becomes a logged repair. |
-| `tests/fixtures/hydration/expected.oct.md` | Step 3 | Same. |
-| `tests/fixtures/hydration/source.oct.md` | Step 3 | Same. |
-| `tests/fixtures/hydration/source_all_terms.oct.md` | Step 3 | Same. |
-| `tests/fixtures/hydration/source_with_version.oct.md` | Step 3 | Same. |
-| `tests/fixtures/hydration/source_with_wrong_version.oct.md` | Step 3 | Same. |
-| `tests/fixtures/hydration/vocabulary.oct.md` | Step 3 | Same. |
+| Fixture | Flips at Step ID (executes 5th per §3a) | Why |
+|---------|------------------------------------------|-----|
+| `tests/fixtures/symmetry/empty_triple_quoted.oct.md` | Step 3 (legacy ID — executes 5th) | Triple-quote collapse currently invisible to repair log; centralised logger captures it. |
+| `tests/fixtures/coverage/spec_full.oct.md` | Step 3 (legacy ID — executes 5th) | Blank-line stripping by emitter `FormatOptions` becomes a logged repair (consults Step 4 trivia reservations; populated for Sprint 3 alignment). |
+| `tests/fixtures/hydration/collision_source.oct.md` | Step 3 (legacy ID — executes 5th) | Identifier dequoting by emitter regex becomes a logged repair (consults Step 5 `was_quoted` population). |
+| `tests/fixtures/hydration/expected.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
+| `tests/fixtures/hydration/source.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
+| `tests/fixtures/hydration/source_all_terms.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
+| `tests/fixtures/hydration/source_with_version.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
+| `tests/fixtures/hydration/source_with_wrong_version.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
+| `tests/fixtures/hydration/vocabulary.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
+| `tests/fixtures/symmetry/deeply_nested_keys.oct.md` (added by #385) | Step 3 (legacy ID — executes 5th) | Identifier dequoting across deeply-nested keys; depends on `was_quoted` from Step 5. |
 
-**All nine flip at step 3** (audit-completeness fix). Step 5 (emitter as visitor) may reduce the *frequency* of repairs (single-sourced identifier rules → fewer requote events) but does not change the audit-cardinality-conjunct logic.
+**All ten flip at Step 3 (legacy ID — executes 5th per §3a re-sequence).** Steps 4 and 5 (executed 3rd and 4th) supply the structural dependencies (CST reserved fields and emitter `was_quoted` population respectively) that make precise emit-time audit logging possible at Step 3. Steps 4 and 5 are not themselves expected to flip xfails — they are enablers. The xfail-reason strings in `tests/unit/test_writer_reader_symmetry.py` (currently "#382 SR1-T4" and "SR1-T1 Step 3") will be updated inside the future Step 3 PR (legacy ID), not by this design-doc amendment.
 
 **No fixtures require SR1-T4** to flip — SR1-T4 (no-op normalize default) is a separate quality-of-life change that prevents the writer from running normalisation when no edit was requested. The HARD_SYMMETRY suite asserts symmetry *given* normalisation; it does not require normalisation to be skipped.
 
@@ -192,6 +235,8 @@ Two fidelity-preservation gaps were identified in the original design after tech
 These bugs would not be caught by the HARD_SYMMETRY suite's audit-cardinality conjunct alone — they pass through type and round-trip parse-equally despite changing semantics. The lexer/parser must record `was_quoted: bool` on Identifier and String nodes (Step 4 reserves the field shape; Step 5 emitter visitor consults it; lexer/parser instrumentation lands in Step 5 as part of the emitter rewrite scope, OR as an explicit Step 4.5 if scope dictates separation).
 
 **Fallback discipline during transition.** Step 5 keeps a temporary regex fallback ONLY while `was_quoted` may be `None`. The fallback and the regex constants must be deleted in the SAME PR that guarantees lexer/parser populate the field — there is no release where both the regex constants AND the `was_quoted`-driven path coexist as live decision sources. Two acceptable shapes for Step 5: (a) fold lexer/parser instrumentation into Step 5 scope so the deletion is atomic; (b) sequence as a Step 4.5 (lexer/parser instrumentation) followed by Step 5 (visitor switch + regex deletion). Step 5 PR reviewer chain (CE + CRS) MUST verify the chosen shape: no PR ships a "deleted regex" claim while a `was_quoted is None` fallback path remains in the visitor.
+
+**Clarification (2026-05-11 amendment).** The original §4.5 wording "Population is deferred to Sprint 3 / future steps" (G1) and "Step 4 reserves the field shape; Step 5 emitter visitor consults it" (G2) was technically correct as a field-population schedule but was misread during early IL planning of the original Step 3 as "Step 3 can still flip the audit-cardinality xfails through alternative means." It cannot. **Emit-time precise audit instrumentation depends on Step 5's `was_quoted` population (G2) and on the reserved trivia fields (G1).** Until Step 4 and Step 5 land, audit completion for the three normalisation classes (identifier dequoting, blank-line stripping, triple-quote collapse) is structurally impossible without resort to post-hoc baseline-vs-canonical reconciliation — an approach that was considered and rejected as design drift from I4 (TRANSFORM_AUDITABILITY) during the 2026-05-11 user-decision review. The re-sequence in §3a is the principled response: land the structural prerequisites first, then do precise instrumentation as originally designed.
 
 ---
 
