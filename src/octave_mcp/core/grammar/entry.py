@@ -8,13 +8,14 @@ visitors) reach the parse pipeline. Later SR1-T1 steps inject
 and emitter unification (Step 5) at this same seam without touching call
 sites.
 
-**Identity contract.** ``entry.parse`` and ``entry.parse_with_warnings``
-are the *same callable objects* as ``octave_mcp.core.parser.parse`` and
-``octave_mcp.core.parser.parse_with_warnings`` respectively. Re-exporting
-the callable (rather than wrapping it in a new function body) preserves
-``functools`` decorations, monkey-patches, and ``is``-identity checks
-across the seam. This is asserted by
-``tests/unit/core/grammar/test_entry.py``.
+**Identity contract.** ``entry.parse``, ``entry.parse_with_warnings``,
+and ``entry.ParserError`` are the *same objects* as their counterparts in
+:mod:`octave_mcp.core.parser`. Re-exporting (rather than wrapping or
+subclassing) preserves :mod:`functools` decorations, monkey-patches,
+``is``-identity checks, and ``except``-clause matching across the seam.
+This is asserted by ``tests/unit/core/grammar/test_entry.py``. The
+re-export of :class:`ParserError` co-locates the call surface with its
+error surface so consumers never need to pierce the seam.
 
 **No behaviour change.** Step 2 is a pure refactor. No logging,
 normalization, or error-handling additions live here — those land at
@@ -24,6 +25,6 @@ later, gated steps in the migration plan
 
 from __future__ import annotations
 
-from octave_mcp.core.parser import parse, parse_with_warnings
+from octave_mcp.core.parser import ParserError, parse, parse_with_warnings
 
-__all__ = ["parse", "parse_with_warnings"]
+__all__ = ["ParserError", "parse", "parse_with_warnings"]

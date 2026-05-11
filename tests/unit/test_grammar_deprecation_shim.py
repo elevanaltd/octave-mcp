@@ -78,6 +78,39 @@ def test_accessing_deprecated_gbnf_symbol_emits_deprecation_warning() -> None:
     assert "#382" in message, "Deprecation message must reference issue #382"
 
 
+def test_from_import_of_deprecated_gbnf_symbol_emits_warning() -> None:
+    """``from octave_mcp.core.grammar import compile_document_grammar`` MUST warn.
+
+    The ``from ... import name`` statement resolves ``name`` via the same
+    attribute-lookup machinery that triggers PEP 562 ``__getattr__`` when
+    ``name`` is not bound at module-load time. This test explicitly pins
+    that the legacy GBNF symbols emit a ``DeprecationWarning`` whether
+    they are reached via attribute access or via a ``from ... import``
+    statement. (TMG review of PR #394 requested this coverage.)
+    """
+    import importlib
+    import sys
+
+    # Force a fresh resolution by evicting any cached symbol bindings.
+    sys.modules.pop("octave_mcp.core.grammar", None)
+    importlib.import_module("octave_mcp.core.grammar")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        from octave_mcp.core.grammar import (  # noqa: F401
+            compile_document_grammar,
+        )
+
+    deprecation = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert deprecation, (
+        "`from octave_mcp.core.grammar import compile_document_grammar` must emit "
+        f"a DeprecationWarning, got: {[str(w.message) for w in caught]}"
+    )
+    message = str(deprecation[0].message)
+    assert "octave_mcp.core.grammar_compiler.gbnf" in message
+    assert "#382" in message
+
+
 def test_deprecated_symbols_are_identical_to_new_path() -> None:
     """The package shim must re-export, not re-implement (identity preserved)."""
     with warnings.catch_warnings():

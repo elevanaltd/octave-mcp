@@ -1,9 +1,11 @@
 """Unified grammar front-door package (ADR-0006 SR1-T1 Step 2).
 
 This package is the single entry surface for the OCTAVE-MCP parse
-pipeline. Its legitimate, encouraged exports are :func:`parse` and
-:func:`parse_with_warnings` — re-exported identity-wrapped from
-:mod:`octave_mcp.core.grammar.entry`.
+pipeline. Its legitimate, encouraged exports are :func:`parse`,
+:func:`parse_with_warnings`, and :class:`ParserError` — re-exported
+identity-preserved from :mod:`octave_mcp.core.grammar.entry`. The call
+surface and its error surface are co-located here so consumers never
+have to pierce the seam to catch parse failures.
 
 Backward-compatibility shim
 ---------------------------
@@ -27,9 +29,9 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any
 
-from octave_mcp.core.grammar.entry import parse, parse_with_warnings
+from octave_mcp.core.grammar.entry import ParserError, parse, parse_with_warnings
 
-__all__ = ["parse", "parse_with_warnings"]
+__all__ = ["ParserError", "parse", "parse_with_warnings"]
 
 # Names re-exported from grammar_compiler.gbnf for backward compatibility.
 # Listed here rather than in __all__ so they remain reachable but are not
@@ -45,8 +47,9 @@ _DEPRECATED_GBNF_EXPORTS: frozenset[str] = frozenset(
 def __getattr__(name: str) -> Any:
     """PEP 562 lazy resolver for legacy ``octave_mcp.core.grammar`` symbols.
 
-    Emits a single :class:`DeprecationWarning` per attribute access for any
-    legacy GBNF symbol, then returns the canonical object from
+    Emits a :class:`DeprecationWarning` on each attribute access for any
+    legacy GBNF symbol (the caller's :mod:`warnings` filter controls
+    deduplication), then returns the canonical object from
     :mod:`octave_mcp.core.grammar_compiler.gbnf`. Unknown names raise
     :class:`AttributeError` per the standard module attribute protocol.
     """

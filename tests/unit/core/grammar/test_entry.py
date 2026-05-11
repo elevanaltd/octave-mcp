@@ -18,6 +18,7 @@ from __future__ import annotations
 import pytest
 
 from octave_mcp.core import parser as legacy_parser
+from octave_mcp.core.grammar import ParserError as new_parser_error
 from octave_mcp.core.grammar import parse as new_parse
 from octave_mcp.core.grammar import parse_with_warnings as new_parse_with_warnings
 
@@ -67,3 +68,16 @@ def test_grammar_parse_is_identical_callable_to_parser_parse() -> None:
     """
     assert new_parse is legacy_parser.parse
     assert new_parse_with_warnings is legacy_parser.parse_with_warnings
+
+
+def test_grammar_parser_error_is_identical_to_legacy() -> None:
+    """``ParserError`` MUST also be reachable via the grammar front-door.
+
+    CRS review of PR #394 surfaced an abstraction-boundary leak: consumers
+    that catch parse failures had to pierce ``core.grammar`` and import
+    ``ParserError`` from ``core.parser``. Re-exporting it at the front
+    door seals the seam so the parse call surface and its error surface
+    are co-located. Identity is preserved so ``except`` blocks elsewhere
+    in the codebase continue to match.
+    """
+    assert new_parser_error is legacy_parser.ParserError
