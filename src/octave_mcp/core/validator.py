@@ -229,12 +229,17 @@ class Validator:
     def visit_document(self, node: Document, /) -> None:
         """Visit a Document node — orchestrates the full validation walk.
 
-        This is the visitor-protocol entry point. It performs the same
-        work as :meth:`validate` (META, duplicate-target check, recursive
-        section walk, frontmatter) but does NOT reset ``self.errors``;
-        composition with other visitors that share the same accumulator
-        is therefore safe. Callers wanting the legacy "reset + return"
-        semantics should use :meth:`validate` instead.
+        This is the visitor-protocol entry point. It performs the
+        schema-aware work that does NOT require a ``section_schemas`` map
+        (META validation, loss-accounting warnings, duplicate-target
+        check, recursive section walk) but does NOT reset
+        ``self.errors``; composition with other visitors that share the
+        same accumulator is therefore safe. Frontmatter validation is
+        performed only by :meth:`validate`, because it requires the
+        ``section_schemas`` argument which is not part of the bare
+        ``Visitor[None]`` contract. Callers wanting the legacy "reset +
+        return" semantics, frontmatter validation, or schema-aware
+        section recursion should use :meth:`validate` instead.
         """
         # Delegate shared setup to ``_prepare_document_validation`` so the
         # two entry points (``validate`` and ``visit_document``) cannot

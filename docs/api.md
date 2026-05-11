@@ -604,11 +604,11 @@ errors = validate_frontmatter(doc.raw_frontmatter, schema_def)
 
 ```python
 class ValidationError:
-    code: str               # Error code (e.g., "UNKNOWN_FIELD")
-    message: str            # Human-readable description
-    path: str               # Location in document (e.g., "DECISION.STATUS")
-    severity: str           # "ERROR" or "WARNING"
-    line_number: int | None # Source line number (if available)
+    code: str         # Error code (e.g., "UNKNOWN_FIELD")
+    message: str      # Human-readable description
+    field_path: str   # Location in document (e.g., "DECISION.STATUS")
+    line: int         # Source line number (0 if not available)
+    severity: str     # "ERROR" or "WARNING"
 ```
 
 #### Common Error Codes
