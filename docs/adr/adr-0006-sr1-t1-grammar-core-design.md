@@ -1,14 +1,15 @@
 # ADR-0006 SR1-T1: Unified Grammar Core — Design Pass
 
 **Status:** Proposed (design-only; implementation in progress — Steps 1, 2 merged)
-**Date:** 2026-05-09 (original) · **Updated:** 2026-05-11 (re-sequencing amendment — see §3a)
-**Version:** 1.1 (semver: minor — re-sequencing is non-breaking to architecture; only execution order changes)
+**Date:** 2026-05-09 (original) · **Updated:** 2026-05-11 (cubic P2 resolution — see §3a "Reconciler bridge pattern")
+**Version:** 1.2 (semver: patch — clarifies internal inconsistency between §3a class-2 dependency schedule and §4.3 xfail-flip schedule; no architectural change)
 **Parent:** [ADR-0006 Writer/Reader Symmetry](./adr-0006-writer-reader-symmetry.md) §70-84
 **Tracks:** GH#382 (SR1-T1)
 **Retires:** North Star Risk **R2** — `validator_drift_multiple_validators`
 **Out of scope (separate IL agents):** SR1-T2 (#372 W_DUPLICATE_TARGET hard-fail), SR1-T3 (#369 path-resolver), SR1-T4 (no-op normalize default), Sprint 3 cursor-CST.
 
 **Changelog:**
+- **1.2 (2026-05-11):** Resolve internal inconsistency identified by cubic AI (PR #396 review id `4263620972`): the §3a class-2 (blank-line stripping) and class-3 (triple-quote collapse) rows say structural support is not delivered until Sprint 3+ / future lexer W-code, yet §4.3 claimed all 10 xfails flip at logical-Step 3. Clarified that 8 fixtures flip via **precise `was_quoted`-based instrumentation** enabled by logical-Step 5, and 2 fixtures (`spec_full.oct.md`, `empty_triple_quoted.oct.md`) flip via a **reconciler bridge** in `mcp/write.py` — a temporary, self-deprecating mechanism that goes dormant when trivia population (Sprint 3+) and a new triple-quote lexer W-code (separate task) land.
 - **1.1 (2026-05-11):** Re-sequence migration steps after IL empirical audit (permit SID `4fa2f2f1-85ff-4cfc-89c6-206ab9f8b048`) surfaced that the original Step 3 (TIER_NORMALIZATION centralisation) could not flip the 10 audit-cardinality xfails until structural fields reserved by the original Step 4 (CST promotion) and populated by the original Step 5 (emitter rewrite + `was_quoted`) had landed. Step IDs remain stable; execution order becomes 1 → 2 → 4 → 5 → 3 → 6. See new §3a for full rationale.
 - **1.0 (2026-05-09):** Original design pass.
 
@@ -151,19 +152,32 @@ Each step is a bounded PR. None of them require touching SR1-T2 (#372), SR1-T3 (
 
 **Trigger.** During implementation-lead (IL) preparation for the original Step 3, an empirical audit (anchor permit SID `4fa2f2f1-85ff-4cfc-89c6-206ab9f8b048`) of the 10 audit-cardinality xfailing fixtures in `tests/unit/test_writer_reader_symmetry.py` surfaced a structural gap: every one of the three normalisation classes that the original Step 3 promised to flip originates at the emitter but the emitter lacks the upstream information needed to log them precisely.
 
-**Empirical finding (three normalisation classes and their structural dependencies):**
+**Empirical finding (three normalisation classes, structural dependencies, and Step-3 flip mechanism):**
 
-| # | Normalisation class | Example | Where information is lost | Required structural field | Reserved by | Populated by |
-|---|---------------------|---------|---------------------------|---------------------------|-------------|--------------|
-| 1 | **Identifier dequoting** | `TYPE::"SPEC"` → `TYPE::SPEC` | `emitter.py:326` `needs_quotes()` has no knowledge the value was originally quoted | `was_quoted: Optional[bool]` on Identifier/String nodes | Step 4 (CST promotion — see §4.5 G2) | Step 5 (emitter rewrite + lexer/parser instrumentation) |
-| 2 | **Blank-line stripping** | extra blank line → single blank | Blank lines are parser-discarded; never present in AST; `emit()` cannot re-emit them | `leading_trivia: Optional[str]`, `trailing_trivia: Optional[str]` on every node | Step 4 (CST promotion — see §4.5 G1) | Sprint 3+ (SR3-T1 cursor-CST populates trivia alongside spans) |
-| 3 | **Triple-quote collapse** | `""""""` → `""` | Lexer-side information loss before tokens reach the AST | Lexer-side preservation hook (out of immediate scope; documented for completeness) | Future step | Future step |
+| # | Normalisation class | Example | Where information is lost | Required structural field | Reserved by | Populated by (precise) | Flip mechanism at logical-Step 3 (executes 5th) |
+|---|---------------------|---------|---------------------------|---------------------------|-------------|------------------------|--------------------------------------------------|
+| 1 | **Identifier dequoting** | `TYPE::"SPEC"` → `TYPE::SPEC` | `emitter.py:326` `needs_quotes()` has no knowledge the value was originally quoted | `was_quoted: Optional[bool]` on Identifier/String nodes | Step 4 (CST promotion — see §4.5 G2) | Step 5 (emitter rewrite + lexer/parser instrumentation) | **Precise (was_quoted)** — emitter consults `node.was_quoted`; `tier_normalize.log_repair()` records each dequoting decision. |
+| 2 | **Blank-line stripping** | extra blank line → single blank | Blank lines are parser-discarded; never present in AST; `emit()` cannot re-emit them | `leading_trivia: Optional[str]`, `trailing_trivia: Optional[str]` on every node | Step 4 (CST promotion — see §4.5 G1) | **Sprint 3+** (SR3-T1 cursor-CST populates trivia alongside spans) | **Reconciler bridge** — precise logging not yet available; logical-Step 3 bridges via the reconciler in `mcp/write.py` (see "Reconciler bridge pattern" below) until Sprint 3+ trivia population enables precise emit-time logging. |
+| 3 | **Triple-quote collapse** | `""""""` → `""` | Lexer-side information loss before tokens reach the AST | New lexer W-code for triple-quote-collapse preservation (separate Sprint task; out of immediate SR1-T1 scope) | **Separate task** (not delivered by logical-Step 5) | **Separate task** (not delivered by logical-Step 5) | **Reconciler bridge** — precise logging not yet available; logical-Step 3 bridges via the reconciler in `mcp/write.py` until the new lexer W-code lands. |
 
-For classes 1 and 2, precise emit-time logging is structurally impossible until the fields land. For class 3, the current centralised W002 destructive-repair guard in `repair_log.py:8` plus the Step 3 logger does suffice once invoked from the emitter rewrite path — but invocation requires the Step 5 visitor to exist.
+**Summary of the 8/2 split.** Of the 10 audit-cardinality xfails, **8 fixtures (the hydration/identifier-dequoting cluster + `deeply_nested_keys`)** flip via precise was_quoted-based instrumentation at logical-Step 3. **2 fixtures (`coverage/spec_full.oct.md` blank-line stripping, `symmetry/empty_triple_quoted.oct.md` triple-quote collapse)** flip via the reconciler bridge at the same logical-Step 3. The reconciler is a temporary, self-deprecating mechanism — see "Reconciler bridge pattern" immediately below.
+
+### Reconciler bridge pattern (logical-Step 3, executes 5th)
+
+**Mechanism.** Post-emit (inside `mcp/write.py`, after the canonical bytes have been produced), if `baseline != canonical` AND no `TIER_NORMALIZATION` entries in the current `RepairLog` account for the diff, a single coarse-grained `TIER_NORMALIZATION` entry is appended to `RepairLog` with the diff (or a stable summary of it) as receipt. That entry then flows through the same additive wiring at `write.py:3640`-style consumer loop into the `corrections` list returned to callers. The reconciler runs after all precise loggers have had their chance; it does not preempt them.
+
+**Scope.** Applies at the renumbered logical-Step 3 (5th execution per §3a). It is part of the pre-authorised `mcp/write.py` additive scope expansion documented in §3 migration table's Step 3 "Touches" column. It is purely additive (~10-20 lines of post-emit comparison + RepairLog append) and does not change the `octave_write` contract — callers see one more `corrections` entry when the underlying transformation would otherwise be silent, which is exactly the I4 (TRANSFORM_AUDITABILITY) requirement.
+
+**Self-deprecation (no code change required to retire).**
+- When **Sprint 3+ trivia population** lands (`leading_trivia` / `trailing_trivia` populated by SR3-T1 cursor-CST), the emitter visitor will log blank-line stripping as a precise `TIER_NORMALIZATION` entry via `tier_normalize.log_repair()`. The reconciler's "no `TIER_NORMALIZATION` entries account for the diff" precondition fails → reconciler no-ops for `spec_full.oct.md`.
+- When the **new lexer W-code for triple-quote-collapse preservation** lands (separate Sprint task), the lexer will emit a precise `TIER_NORMALIZATION` entry on collapse. The reconciler's precondition fails → reconciler no-ops for `empty_triple_quoted.oct.md`.
+- The reconciler does not need to be deleted at that point. It remains dormant for any remaining edge case where post-emit diff exists but no precise log entry has been produced — a safety net consistent with I4.
+
+**Not design drift.** The reconciler bridge is the same coarse-grained baseline-vs-canonical mechanism that the §3 "Revised (1.1) rationale" paragraph identified as the workaround originally rejected as drift. The difference: under v1.1's re-sequence, it operates as a documented **bridge for 2 of 10 fixtures only**, with explicit self-deprecation paths via Sprint 3+ trivia and a new lexer W-code. Under v1.0's original sequencing it would have been the **sole mechanism for all 10**, with no documented self-deprecation. The v1.2 framing honours the user's 2026-05-11 authorisation ("additive non-contract-breaking edits to `mcp/write.py` permitted") by deploying the reconciler as a narrow, time-bounded bridge rather than a permanent emit-time substitute.
 
 **Consumer-side gap.** During the same audit, IL identified that `src/octave_mcp/mcp/write.py` is the only surface that builds the `corrections` list consumed by `octave_write` callers. The original Step 3 scope fence — written before the audit — forbade touching `write.py`. That fence was over-tight: a purely additive ~15-line wiring edit (read from `tier_normalize` `RepairLog` entries; append to `corrections`; mirror the existing schema-repair loop at `write.py:3640`) is not a contract change and is required for the audit-cardinality xfails to actually flip end-to-end (the data must reach the consumer, not just exist in the log).
 
-**User decision (Option C — re-sequence).** Pause original Step 3. Proceed immediately with original Step 4 (CST + reserved fields) and original Step 5 (emitter rewrite + populate `was_quoted`). Once the data structurally exists, return to original Step 3 to wire up the logging and flip the 10 xfails. The pre-authorised scope expansion for `mcp/write.py` applies when original Step 3 returns.
+**User decision (Option C — re-sequence).** Pause original Step 3. Proceed immediately with original Step 4 (CST + reserved fields) and original Step 5 (emitter rewrite + populate `was_quoted`). Once the data structurally exists, return to original Step 3 to wire up the logging and flip the 10 xfails. The pre-authorised scope expansion for `mcp/write.py` applies when original Step 3 returns. **Clarified at v1.2 (per cubic P2 review):** the "data exists" precondition is partially met by logical-Step 5 — `was_quoted` covers 8 of 10 fixtures via precise instrumentation. The remaining 2 (`spec_full.oct.md` blank-line stripping, `empty_triple_quoted.oct.md` triple-quote collapse) are bridged at logical-Step 3 by the reconciler in `mcp/write.py` (see "Reconciler bridge pattern" above). Full precision (all 10 via precise emit-time instrumentation) arrives when Sprint 3+ trivia population and the new triple-quote-collapse lexer W-code land; at that point the reconciler self-deprecates without code change.
 
 **Renumbering convention chosen.** Stable Step IDs with explicit execution-order annotation (HO-recommended option (b)). Rationale: already-merged PRs (#393, #394, #395) and the xfail-reason strings inside `tests/unit/test_writer_reader_symmetry.py` reference "SR1-T1 Step 3" as a stable identifier. Renumbering the IDs (strict-renumber option (a)) would orphan those references and trigger an audit-trail break that violates ATLAS<historical_burden> discipline and I3 (SOURCE_FIDELITY: modify in-place, no versioned copies of meaning). Option (b) preserves the IDs and adds the execution-order disambiguation everywhere references occur.
 
@@ -197,22 +211,22 @@ For classes 1 and 2, precise emit-time logging is structurally impossible until 
 
 ### 4.3 Expected xfail flips
 
-The ten xfails (`#382` original set of 9 + `#385` corpus expansion adding `deeply_nested_keys`) all flip when **Step 3** lands. Per the 2026-05-11 re-sequence (§3a), Step 3 is now the **5th step executed**, after Steps 1, 2, 4, 5. The fixture-to-step mapping below uses **Step IDs (stable)**; for execution order see §3a.
+The ten xfails (`#382` original set of 9 + `#385` corpus expansion adding `deeply_nested_keys`) all flip when **Step 3** lands. Per the 2026-05-11 re-sequence (§3a), Step 3 is now the **5th step executed**, after Steps 1, 2, 4, 5. The fixture-to-step mapping below uses **Step IDs (stable)**; for execution order see §3a. Per v1.2 (cubic P2 resolution), the table now includes an explicit **flip-mechanism column** that distinguishes precise was_quoted-based instrumentation (8 fixtures) from the reconciler bridge (2 fixtures); see §3a "Reconciler bridge pattern" for the bridge mechanism.
 
-| Fixture | Flips at Step ID (executes 5th per §3a) | Why |
-|---------|------------------------------------------|-----|
-| `tests/fixtures/symmetry/empty_triple_quoted.oct.md` | Step 3 (legacy ID — executes 5th) | Triple-quote collapse currently invisible to repair log; centralised logger captures it. |
-| `tests/fixtures/coverage/spec_full.oct.md` | Step 3 (legacy ID — executes 5th) | Blank-line stripping by emitter `FormatOptions` becomes a logged repair (consults Step 4 trivia reservations; populated for Sprint 3 alignment). |
-| `tests/fixtures/hydration/collision_source.oct.md` | Step 3 (legacy ID — executes 5th) | Identifier dequoting by emitter regex becomes a logged repair (consults Step 5 `was_quoted` population). |
-| `tests/fixtures/hydration/expected.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
-| `tests/fixtures/hydration/source.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
-| `tests/fixtures/hydration/source_all_terms.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
-| `tests/fixtures/hydration/source_with_version.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
-| `tests/fixtures/hydration/source_with_wrong_version.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
-| `tests/fixtures/hydration/vocabulary.oct.md` | Step 3 (legacy ID — executes 5th) | Same. |
-| `tests/fixtures/symmetry/deeply_nested_keys.oct.md` (added by #385) | Step 3 (legacy ID — executes 5th) | Identifier dequoting across deeply-nested keys; depends on `was_quoted` from Step 5. |
+| Fixture | Flips at Step ID (executes 5th per §3a) | Flip mechanism at Step 3 | Why |
+|---------|------------------------------------------|--------------------------|-----|
+| `tests/fixtures/symmetry/empty_triple_quoted.oct.md` | Step 3 (legacy ID — executes 5th) | **Reconciler bridge** (until new triple-quote-collapse lexer W-code lands) | Triple-quote collapse is lexer-side info loss; logical-Step 5 does not deliver a lexer hook for it. Reconciler in `mcp/write.py` records a single coarse-grained `TIER_NORMALIZATION` entry sourced from baseline-vs-canonical diff. Self-deprecates when the new lexer W-code lands. |
+| `tests/fixtures/coverage/spec_full.oct.md` | Step 3 (legacy ID — executes 5th) | **Reconciler bridge** (until Sprint 3+ trivia population) | Blank-line stripping requires `leading_trivia` / `trailing_trivia` populated; logical-Step 5 reserves the field shapes (via Step 4) but population is deferred to Sprint 3+ SR3-T1. Reconciler in `mcp/write.py` until trivia population enables precise emit-time logging. Self-deprecates when Sprint 3+ lands. |
+| `tests/fixtures/hydration/collision_source.oct.md` | Step 3 (legacy ID — executes 5th) | **Precise (was_quoted)** | Identifier dequoting; emitter visitor consults `node.was_quoted` populated by logical-Step 5 lexer/parser instrumentation. |
+| `tests/fixtures/hydration/expected.oct.md` | Step 3 (legacy ID — executes 5th) | **Precise (was_quoted)** | Same. |
+| `tests/fixtures/hydration/source.oct.md` | Step 3 (legacy ID — executes 5th) | **Precise (was_quoted)** | Same. |
+| `tests/fixtures/hydration/source_all_terms.oct.md` | Step 3 (legacy ID — executes 5th) | **Precise (was_quoted)** | Same. |
+| `tests/fixtures/hydration/source_with_version.oct.md` | Step 3 (legacy ID — executes 5th) | **Precise (was_quoted)** | Same. |
+| `tests/fixtures/hydration/source_with_wrong_version.oct.md` | Step 3 (legacy ID — executes 5th) | **Precise (was_quoted)** | Same. |
+| `tests/fixtures/hydration/vocabulary.oct.md` | Step 3 (legacy ID — executes 5th) | **Precise (was_quoted)** | Same. |
+| `tests/fixtures/symmetry/deeply_nested_keys.oct.md` (added by #385) | Step 3 (legacy ID — executes 5th) | **Precise (was_quoted)** | Identifier dequoting across deeply-nested keys; depends on `was_quoted` from Step 5. |
 
-**All ten flip at Step 3 (legacy ID — executes 5th per §3a re-sequence).** Steps 4 and 5 (executed 3rd and 4th) supply the structural dependencies (CST reserved fields and emitter `was_quoted` population respectively) that make precise emit-time audit logging possible at Step 3. Steps 4 and 5 are not themselves expected to flip xfails — they are enablers. The xfail-reason strings in `tests/unit/test_writer_reader_symmetry.py` (currently "#382 SR1-T4" and "SR1-T1 Step 3") will be updated inside the future Step 3 PR (legacy ID), not by this design-doc amendment.
+**All ten flip at Step 3 (legacy ID — executes 5th per §3a re-sequence): 8 via precise `was_quoted`-based instrumentation, 2 via the reconciler bridge documented in §3a.** The reconciler becomes dormant when Sprint 3+ trivia population and a new lexer W-code (separate task) land; at that point all 10 flip via precise instrumentation and the reconciler self-deprecates without code change. Steps 4 and 5 (executed 3rd and 4th) supply the structural dependencies — CST reserved fields and emitter `was_quoted` population respectively — that make precise emit-time audit logging possible for the 8 fixtures at Step 3. Steps 4 and 5 are not themselves expected to flip xfails — they are enablers. The xfail-reason strings in `tests/unit/test_writer_reader_symmetry.py` (currently "#382 SR1-T4" and "SR1-T1 Step 3") will be updated inside the future Step 3 PR (legacy ID), not by this design-doc amendment.
 
 **No fixtures require SR1-T4** to flip — SR1-T4 (no-op normalize default) is a separate quality-of-life change that prevents the writer from running normalisation when no edit was requested. The HARD_SYMMETRY suite asserts symmetry *given* normalisation; it does not require normalisation to be skipped.
 
