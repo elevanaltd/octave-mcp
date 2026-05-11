@@ -111,7 +111,7 @@ The tool returns errors in the `validation_errors` array rather than throwing ex
 result = await client.call_tool("octave_validate", {...})
 if result["validation_errors"]:
     for error in result["validation_errors"]:
-        print(f"{error['severity']}: {error['message']} at {error['path']}")
+        print(f"{error['code']}: {error['message']} at {error['field']}")
 ```
 
 ---
