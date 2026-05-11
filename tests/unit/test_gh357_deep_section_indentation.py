@@ -13,8 +13,8 @@ coverage gap: prior to GH#357, zero tests covered Section nodes with deeply
 nested blocks, leaving the codebase vulnerable to silent regressions.
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, Section
 from octave_mcp.core.emitter import emit, emit_section
+from octave_mcp.core.grammar.cst import Assignment, Block, Document, Section
 from octave_mcp.core.parser import parse
 
 

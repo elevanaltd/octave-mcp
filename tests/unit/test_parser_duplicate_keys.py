@@ -161,7 +161,7 @@ PATTERNS::[PATTERN::"first", PATTERN::"second"]
         assert len(items) == 2, f"Both items must be preserved, got {len(items)}"
 
         # Verify each item has the correct value
-        from octave_mcp.core.ast_nodes import InlineMap
+        from octave_mcp.core.grammar.cst import InlineMap
 
         assert isinstance(items[0], InlineMap)
         assert isinstance(items[1], InlineMap)

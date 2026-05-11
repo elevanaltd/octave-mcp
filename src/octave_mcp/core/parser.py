@@ -13,7 +13,7 @@ Parses lexer tokens into AST with:
 
 from typing import Any
 
-from octave_mcp.core.ast_nodes import (
+from octave_mcp.core.grammar.cst import (
     Assignment,
     ASTNode,
     Block,

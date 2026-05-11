@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from octave_mcp.core.ast_nodes import LiteralZoneValue
+from octave_mcp.core.grammar.cst import LiteralZoneValue
 from octave_mcp.core.lexer import LexerError
 from octave_mcp.core.parser import ParserError, parse
 

@@ -3,7 +3,7 @@
 Provides Schema class and validation function that delegates to validator.py.
 """
 
-from octave_mcp.core.ast_nodes import Document
+from octave_mcp.core.grammar.cst import Document
 from octave_mcp.core.validator import ValidationError
 from octave_mcp.core.validator import validate as validate_impl
 

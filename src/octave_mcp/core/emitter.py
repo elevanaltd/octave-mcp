@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from octave_mcp.core.ast_nodes import (
+from octave_mcp.core.grammar.cst import (
     Absent,
     Assignment,
     Block,

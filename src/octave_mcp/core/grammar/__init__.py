@@ -29,9 +29,44 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any
 
+from octave_mcp.core.grammar.cst import (
+    ABSENT,
+    Absent,
+    Assignment,
+    ASTNode,
+    Block,
+    Comment,
+    Document,
+    HolographicValue,
+    InlineMap,
+    ListValue,
+    LiteralZoneValue,
+    NodeKind,
+    Section,
+)
 from octave_mcp.core.grammar.entry import ParserError, parse, parse_with_warnings
+from octave_mcp.core.grammar.visitor import SymmetricVisitor, Visitor
 
-__all__ = ["ParserError", "parse", "parse_with_warnings"]
+__all__ = [
+    "ABSENT",
+    "ASTNode",
+    "Absent",
+    "Assignment",
+    "Block",
+    "Comment",
+    "Document",
+    "HolographicValue",
+    "InlineMap",
+    "ListValue",
+    "LiteralZoneValue",
+    "NodeKind",
+    "ParserError",
+    "Section",
+    "SymmetricVisitor",
+    "Visitor",
+    "parse",
+    "parse_with_warnings",
+]
 
 # Names re-exported from grammar_compiler.gbnf for backward compatibility.
 # Listed here rather than in __all__ so they remain reachable but are not

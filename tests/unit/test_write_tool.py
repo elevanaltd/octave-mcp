@@ -2088,7 +2088,7 @@ KEY::value
         This directly tests the normalization function to verify it converts
         dicts to proper AST structures.
         """
-        from octave_mcp.core.ast_nodes import Block, InlineMap
+        from octave_mcp.core.grammar.cst import Block, InlineMap
         from octave_mcp.mcp.write import _normalize_value_for_ast
 
         # Test simple nested dict
@@ -5241,7 +5241,7 @@ class TestGH369NestedBlockChangePathResolution:
         same level. This is the safety net against any future writer regression
         and supports I5 (Schema Sovereignty: validation status visible).
         """
-        from octave_mcp.core.ast_nodes import Assignment, Block, Document, ListValue
+        from octave_mcp.core.grammar.cst import Assignment, Block, Document, ListValue
         from octave_mcp.core.validator import Validator
 
         # Construct an AST representing the corruption pattern directly so the

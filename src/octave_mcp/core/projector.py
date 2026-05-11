@@ -9,8 +9,8 @@ Implements eject() projection modes:
 
 from dataclasses import dataclass, replace
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import Assignment, Block, Document
 
 
 @dataclass

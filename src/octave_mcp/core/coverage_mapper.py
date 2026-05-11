@@ -16,7 +16,7 @@ Output format per spec:
 
 from dataclasses import dataclass
 
-from octave_mcp.core.ast_nodes import Document, Section
+from octave_mcp.core.grammar.cst import Document, Section
 
 
 @dataclass

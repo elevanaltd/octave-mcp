@@ -6,8 +6,8 @@ including round-trip fidelity with the parser.
 GH#346: Tests for literal zone fence indentation in emit_meta().
 """
 
-from octave_mcp.core.ast_nodes import Assignment, LiteralZoneValue
 from octave_mcp.core.emitter import emit, emit_assignment, emit_meta, emit_value
+from octave_mcp.core.grammar.cst import Assignment, LiteralZoneValue
 from octave_mcp.core.parser import parse
 
 

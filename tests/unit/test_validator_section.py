@@ -15,7 +15,7 @@ PHASE 2 (Bug fix): Wire section_schemas through Validator.validate()
 - Pass to _validate_section
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document
+from octave_mcp.core.grammar.cst import Assignment, Block, Document
 from octave_mcp.core.holographic import parse_holographic_pattern
 from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
 from octave_mcp.core.validator import Validator

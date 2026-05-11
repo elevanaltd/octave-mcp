@@ -7,12 +7,12 @@ unchanged) in all value-type dispatch paths:
 - repair.py: _repair_ast_node() logs literal zone in audit but never modifies
 """
 
-from octave_mcp.core.ast_nodes import (
+from octave_mcp.core.constraints import ConstraintChain, EnumConstraint
+from octave_mcp.core.grammar.cst import (
     Assignment,
     Document,
     LiteralZoneValue,
 )
-from octave_mcp.core.constraints import ConstraintChain, EnumConstraint
 from octave_mcp.core.holographic import HolographicPattern
 from octave_mcp.core.projector import project
 from octave_mcp.core.repair import _repair_ast_node, repair, repair_value

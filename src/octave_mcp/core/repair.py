@@ -15,8 +15,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, LiteralZoneValue, Section
 from octave_mcp.core.constraints import EnumConstraint, TypeConstraint
+from octave_mcp.core.grammar.cst import Assignment, Block, Document, LiteralZoneValue, Section
 from octave_mcp.core.repair_log import RepairLog, RepairTier
 from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
 from octave_mcp.core.validator import ValidationError

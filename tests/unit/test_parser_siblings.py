@@ -11,8 +11,8 @@ the innermost block.
 TDD: RED phase - these tests must FAIL before implementation.
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import Assignment, Block
 from octave_mcp.core.parser import parse
 
 
@@ -248,7 +248,7 @@ SIBLING_BLOCK:
         )
 
         # First should be Section marker
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
 
         assert isinstance(doc.sections[0], Section), f"Expected Section, got {type(doc.sections[0])}"
         assert doc.sections[0].key == "info" or doc.sections[0].section_id == "CONTEXT"
@@ -272,7 +272,7 @@ SIBLING_ASSIGNMENT::at_root
         ), f"Expected 2 sections, got {len(doc.sections)}: {[getattr(s, 'key', str(s)) for s in doc.sections]}"
 
         # First is Section marker
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
 
         assert isinstance(doc.sections[0], Section)
         assert doc.sections[0].section_id == "1"
@@ -295,7 +295,7 @@ SIBLING_BLOCK:
         # Should have 2 top-level sections
         assert len(doc.sections) == 2, f"Expected 2 sections, got {len(doc.sections)}"
 
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
 
         assert isinstance(doc.sections[0], Section)
         assert isinstance(doc.sections[1], Block)
@@ -316,7 +316,7 @@ SIBLING_BLOCK:
         # Should have 3 top-level section markers
         assert len(doc.sections) == 3, f"Expected 3 sections, got {len(doc.sections)}"
 
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
 
         for i, section in enumerate(doc.sections, start=1):
             assert isinstance(section, Section), f"Section {i} should be Section, got {type(section)}"

@@ -16,8 +16,8 @@ import tempfile
 
 import pytest
 
-from octave_mcp.core.ast_nodes import LiteralZoneValue
 from octave_mcp.core.emitter import is_absent, needs_quotes
+from octave_mcp.core.grammar.cst import LiteralZoneValue
 from octave_mcp.core.parser import parse
 from octave_mcp.core.validator import _count_literal_zones
 from octave_mcp.mcp.write import WriteTool, _normalize_value_for_ast
@@ -392,12 +392,12 @@ def _find_literal_zone_content(doc_text: str, key: str = "CODE") -> str:
     assert matching, f"No literal zone with key={key!r} found in parsed document"
     # Re-extract the LiteralZoneValue from the parsed document directly.
     # Walk the AST to find the assignment with the given key.
-    from octave_mcp.core.ast_nodes import Assignment, Block
+    from octave_mcp.core.grammar.cst import Assignment, Block
 
     def _find(nodes: list) -> str | None:
         for node in nodes:
             if isinstance(node, Assignment) and node.key == key:
-                from octave_mcp.core.ast_nodes import LiteralZoneValue as LZV
+                from octave_mcp.core.grammar.cst import LiteralZoneValue as LZV
 
                 if isinstance(node.value, LZV):
                     return node.value.content
@@ -574,7 +574,7 @@ class TestIssue259LiteralZoneInBlockValue:
         Issue #259 RED: TEMPLATE: followed by a fence currently produces an
         empty Block node (children=[]) — the LiteralZoneValue is never parsed.
         """
-        from octave_mcp.core.ast_nodes import Assignment, Block, Section
+        from octave_mcp.core.grammar.cst import Assignment, Block, Section
         from octave_mcp.core.parser import parse as octave_parse
 
         doc = octave_parse(_DOC_BLOCK_WITH_LITERAL_ZONE)

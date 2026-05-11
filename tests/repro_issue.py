@@ -1,7 +1,7 @@
 import unittest
 
-from octave_mcp.core.ast_nodes import Assignment, Document
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import Assignment, Document
 from octave_mcp.core.parser import ParserError, parse
 
 

@@ -14,7 +14,7 @@ Design decisions from debate-hall synthesis:
 import hashlib
 from datetime import datetime
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document
+from octave_mcp.core.grammar.cst import Assignment, Block, Document
 from octave_mcp.core.holographic import parse_holographic_pattern
 from octave_mcp.core.routing import RoutingEntry, RoutingLog
 from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition

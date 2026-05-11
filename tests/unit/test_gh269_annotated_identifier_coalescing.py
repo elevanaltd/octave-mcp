@@ -7,7 +7,7 @@ It should produce two separate values (ListValue), NOT one coalesced string.
 This preserves I1::SYNTACTIC_FIDELITY — normalization must not alter semantics.
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block, ListValue
+from octave_mcp.core.grammar.cst import Assignment, Block, ListValue
 from octave_mcp.core.parser import parse, parse_with_warnings
 
 

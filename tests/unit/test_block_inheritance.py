@@ -23,7 +23,7 @@ class TestBlockTargetParsing:
         Input: RISKS[->RISK_LOG]:
         Expected: Block node with key="RISKS" and target="RISK_LOG"
         """
-        from octave_mcp.core.ast_nodes import Block
+        from octave_mcp.core.grammar.cst import Block
 
         doc = parse("""
 ===TEST===
@@ -51,7 +51,7 @@ RISKS[->RISK_LOG]:
         Input: DATA[->INDEXER]:  (section marker implicit in -> syntax)
         Expected: Block.target == "INDEXER"
         """
-        from octave_mcp.core.ast_nodes import Block
+        from octave_mcp.core.grammar.cst import Block
 
         doc = parse("""
 ===TEST===
@@ -77,7 +77,7 @@ DATA[->INDEXER]:
         Input: SIMPLE:
         Expected: Block.target is None
         """
-        from octave_mcp.core.ast_nodes import Block
+        from octave_mcp.core.grammar.cst import Block
 
         doc = parse("""
 ===TEST===
@@ -109,7 +109,7 @@ SIMPLE:
           - OUTER.target == "OUTER_TARGET"
           - INNER.target == "INNER_TARGET"
         """
-        from octave_mcp.core.ast_nodes import Block
+        from octave_mcp.core.grammar.cst import Block
 
         doc = parse("""
 ===TEST===
@@ -241,7 +241,7 @@ class TestBlockInheritanceIntegration:
 
         Expected: CRITICAL field routes to RISK_LOG
         """
-        from octave_mcp.core.ast_nodes import Assignment, Block
+        from octave_mcp.core.grammar.cst import Assignment, Block
         from octave_mcp.core.schema_extractor import (
             InheritanceResolver,
         )

@@ -474,7 +474,7 @@ class TestParserHolographicIntegration:
 
     def test_parser_returns_holographic_value_for_simple_pattern(self):
         """Parser should return HolographicValue for ["example"∧REQ→§SELF]."""
-        from octave_mcp.core.ast_nodes import Assignment, HolographicValue
+        from octave_mcp.core.grammar.cst import Assignment, HolographicValue
         from octave_mcp.core.parser import parse
 
         doc = parse('===TEST===\nID::["abc123"∧REQ→§INDEXER]\n===END===')
@@ -486,7 +486,7 @@ class TestParserHolographicIntegration:
 
     def test_parser_returns_holographic_value_with_constraint_chain(self):
         """Parser should return HolographicValue with constraint chain."""
-        from octave_mcp.core.ast_nodes import Assignment, HolographicValue
+        from octave_mcp.core.grammar.cst import Assignment, HolographicValue
         from octave_mcp.core.parser import parse
 
         doc = parse('===TEST===\nSTATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,DRAFT]→§INDEXER]\n===END===')
@@ -501,7 +501,7 @@ class TestParserHolographicIntegration:
 
     def test_parser_returns_holographic_value_without_target(self):
         """Parser should return HolographicValue without target (target optional)."""
-        from octave_mcp.core.ast_nodes import Assignment, HolographicValue
+        from octave_mcp.core.grammar.cst import Assignment, HolographicValue
         from octave_mcp.core.parser import parse
 
         doc = parse('===TEST===\nVALUE::["test"∧REQ]\n===END===')
@@ -514,7 +514,7 @@ class TestParserHolographicIntegration:
 
     def test_parser_returns_list_value_for_non_holographic(self):
         """Parser should return ListValue for regular lists without holographic operators."""
-        from octave_mcp.core.ast_nodes import Assignment, ListValue
+        from octave_mcp.core.grammar.cst import Assignment, ListValue
         from octave_mcp.core.parser import parse
 
         doc = parse("===TEST===\nITEMS::[a, b, c]\n===END===")
@@ -526,7 +526,7 @@ class TestParserHolographicIntegration:
 
     def test_parser_holographic_with_numeric_example(self):
         """Parser should handle holographic pattern with numeric example."""
-        from octave_mcp.core.ast_nodes import HolographicValue
+        from octave_mcp.core.grammar.cst import HolographicValue
         from octave_mcp.core.parser import parse
 
         doc = parse("===TEST===\nCOUNT::[42∧REQ∧RANGE[0,100]→§SELF]\n===END===")
@@ -540,7 +540,7 @@ class TestParserHolographicIntegration:
         Note: TYPE(X) constraints use parentheses which the lexer doesn't support.
         Using simpler constraints that the lexer understands.
         """
-        from octave_mcp.core.ast_nodes import HolographicValue
+        from octave_mcp.core.grammar.cst import HolographicValue
         from octave_mcp.core.parser import parse
 
         # Simplified pattern without TYPE(LIST) since lexer doesn't support parentheses
@@ -551,7 +551,7 @@ class TestParserHolographicIntegration:
 
     def test_parser_holographic_preserves_raw_pattern(self):
         """Parser should preserve raw pattern string for I1 fidelity."""
-        from octave_mcp.core.ast_nodes import HolographicValue
+        from octave_mcp.core.grammar.cst import HolographicValue
         from octave_mcp.core.parser import parse
 
         doc = parse('===TEST===\nID::["abc123"∧REQ→§INDEXER]\n===END===')
@@ -563,7 +563,7 @@ class TestParserHolographicIntegration:
 
     def test_parser_holographic_in_block_context(self):
         """Parser should recognize holographic patterns inside blocks."""
-        from octave_mcp.core.ast_nodes import Assignment, Block, HolographicValue
+        from octave_mcp.core.grammar.cst import Assignment, Block, HolographicValue
         from octave_mcp.core.parser import parse
 
         content = """===TEST===
@@ -589,7 +589,7 @@ FIELDS:
 
     def test_parser_holographic_with_ascii_arrow(self):
         """Parser should handle ASCII arrow variant (->§) in holographic patterns."""
-        from octave_mcp.core.ast_nodes import HolographicValue
+        from octave_mcp.core.grammar.cst import HolographicValue
         from octave_mcp.core.parser import parse
 
         doc = parse('===TEST===\nID::["abc123"∧REQ->§INDEXER]\n===END===')
@@ -599,7 +599,7 @@ FIELDS:
 
     def test_parser_distinguishes_holographic_from_inline_map(self):
         """Parser should distinguish holographic from inline map [k::v]."""
-        from octave_mcp.core.ast_nodes import InlineMap, ListValue
+        from octave_mcp.core.grammar.cst import InlineMap, ListValue
         from octave_mcp.core.parser import parse
 
         # Inline map pattern: [k::v]

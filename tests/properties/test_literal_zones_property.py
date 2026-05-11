@@ -11,8 +11,8 @@ then dynamically scales the fence length to wrap them safely.
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from octave_mcp.core.ast_nodes import LiteralZoneValue
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import LiteralZoneValue
 from octave_mcp.core.parser import parse
 
 # ---------------------------------------------------------------------------

@@ -29,7 +29,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from octave_mcp.core.ast_nodes import Assignment, ASTNode, Block, Document, ListValue, Section
+from octave_mcp.core.grammar.cst import Assignment, ASTNode, Block, Document, ListValue, Section
 from octave_mcp.core.parser import parse
 
 

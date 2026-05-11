@@ -11,8 +11,8 @@ Tests AST → canonical OCTAVE string emission with:
 
 import pytest
 
-from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue
 from octave_mcp.core.emitter import FormatOptions, emit, emit_meta, emit_value, needs_quotes
+from octave_mcp.core.grammar.cst import Absent, Assignment, Block, Document, InlineMap, ListValue
 from octave_mcp.core.parser import parse
 
 

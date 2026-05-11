@@ -9,8 +9,8 @@ Tests cover:
 4. key_sorting - Optionally sort keys alphabetically within blocks
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, Section
 from octave_mcp.core.emitter import FormatOptions, emit
+from octave_mcp.core.grammar.cst import Assignment, Block, Document, Section
 
 
 class TestFormatOptionsDataclass:

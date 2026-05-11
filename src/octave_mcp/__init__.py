@@ -19,8 +19,8 @@ Public API exports:
 
 from importlib.metadata import version
 
-from octave_mcp.core.ast_nodes import Absent, Assignment, Block, Document, InlineMap, ListValue, Section
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import Absent, Assignment, Block, Document, InlineMap, ListValue, Section
 from octave_mcp.core.hydrator import (
     CollisionError,
     CycleDetectionError,

@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, ListValue, Section
+from octave_mcp.core.grammar.cst import Assignment, Block, Document, ListValue, Section
 from octave_mcp.mcp.eject import EjectTool, _ast_to_dict, _convert_section
 
 # --- Unit tests for _convert_section ---

@@ -23,7 +23,8 @@ import tempfile
 
 import pytest
 
-from octave_mcp.core.ast_nodes import (
+from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import (
     Assignment,
     Block,
     Comment,
@@ -32,7 +33,6 @@ from octave_mcp.core.ast_nodes import (
     ListValue,
     Section,
 )
-from octave_mcp.core.emitter import emit
 from octave_mcp.core.parser import parse
 from octave_mcp.mcp.write import (
     E_AST_CYCLE,

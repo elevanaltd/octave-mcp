@@ -13,8 +13,8 @@ TDD: These tests are written FIRST (RED phase) before implementation.
 
 import pytest
 
-from octave_mcp.core.ast_nodes import Assignment, ListValue
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import Assignment, ListValue
 from octave_mcp.core.lexer import LexerError, TokenType, tokenize
 from octave_mcp.core.parser import parse, parse_with_warnings
 

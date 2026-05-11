@@ -11,7 +11,7 @@ Tests cover:
 - I5 compliance: literal_zones_validated is always False in validator output
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue
+from octave_mcp.core.grammar.cst import Assignment, Block, Document, InlineMap, ListValue, LiteralZoneValue
 from octave_mcp.core.validator import Validator, _count_literal_zones
 
 # ---------------------------------------------------------------------------
@@ -111,7 +111,7 @@ class TestToPythonValueLiteralZone:
 
     def test_to_python_value_existing_list_value_still_works(self):
         """_to_python_value still converts ListValue to list (regression)."""
-        from octave_mcp.core.ast_nodes import ListValue
+        from octave_mcp.core.grammar.cst import ListValue
 
         validator = Validator()
         lv = ListValue(items=["a", "b"])

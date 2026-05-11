@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from octave_mcp.core.ast_nodes import LiteralZoneValue
+from octave_mcp.core.grammar.cst import LiteralZoneValue
 
 
 @dataclass

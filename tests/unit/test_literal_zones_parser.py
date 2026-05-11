@@ -7,7 +7,7 @@ import unicodedata
 
 import pytest
 
-from octave_mcp.core.ast_nodes import Assignment, LiteralZoneValue
+from octave_mcp.core.grammar.cst import Assignment, LiteralZoneValue
 from octave_mcp.core.parser import parse
 
 

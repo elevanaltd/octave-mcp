@@ -6,7 +6,7 @@ and nested block structure.
 
 import pytest
 
-from octave_mcp.core.ast_nodes import Assignment, Block, ListValue
+from octave_mcp.core.grammar.cst import Assignment, Block, ListValue
 from octave_mcp.core.lexer import LexerError
 from octave_mcp.core.parser import ParserError, parse, parse_with_warnings
 

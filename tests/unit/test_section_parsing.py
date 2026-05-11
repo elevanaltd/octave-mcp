@@ -4,8 +4,8 @@ Tests that § section markers are preserved during parsing and emission,
 maintaining document hierarchy structure.
 """
 
-from octave_mcp.core.ast_nodes import Assignment, Block
 from octave_mcp.core.emitter import emit
+from octave_mcp.core.grammar.cst import Assignment, Block
 from octave_mcp.core.parser import parse
 
 
@@ -262,7 +262,7 @@ SIBLING::value
 
         # Second child: nested §1.1 section
         child_section = parent.children[1]
-        from octave_mcp.core.ast_nodes import Section
+        from octave_mcp.core.grammar.cst import Section
 
         assert isinstance(child_section, Section)
         assert child_section.section_id == "1.1"
