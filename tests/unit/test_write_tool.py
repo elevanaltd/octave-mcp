@@ -5379,3 +5379,529 @@ class TestGH369NestedBlockChangePathResolution:
             assert "P1.1" not in final
             assert "P1:" in final
             assert "CHILD" in final
+
+
+class TestSR1T3aAmbiguousPathDeprecationWarning:
+    """ADR-0006 SR1-T3a (issue #391, split from #369): when a single-dot
+    change key K.X is ambiguous between (a) a child of top-level Block(K)
+    and (b) a coexisting flat top-level Assignment("K.X"), the writer
+    emits a non-fatal W_AMBIGUOUS_PATH deprecation warning that names
+    both candidate targets and references the future hard-fail.
+
+    Scope contract for this sprint:
+    - PR#370 tolerate-and-warn applier path is PRESERVED (the existing
+      test_gh370_* tests in TestGH369NestedBlockChangePathResolution
+      continue to pass unchanged) so corrupted documents in the wild
+      remain repairable through changes-mode while the GH#372 SR1-T2
+      migration sweep proceeds.
+    - W_AMBIGUOUS_PATH surfaces as a correction (severity=warning) in
+      the result envelope alongside (or in lieu of) W_DUPLICATE_TARGET.
+    - E_AMBIGUOUS_PATH error code is scaffolded as an exported symbol
+      with no emit site yet. Conversion of the warning to a hard-fail
+      via E_AMBIGUOUS_PATH lands after SR1-T1 grammar core (#382)
+      provides unambiguous block-scoped accessor syntax.
+    """
+
+    @pytest.mark.asyncio
+    async def test_w_ambiguous_path_warning_surfaces_on_conflicted_source(self):
+        """Conflicted source document (Block(K) + flat K.X coexisting)
+        targeted by changes={K.X: ...} must surface a W_AMBIGUOUS_PATH
+        correction. The applier still completes (status=success) per the
+        preserved PR#370 contract; the warning is purely diagnostic.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = (
+                "===NAV_TEST===\n"
+                "META:\n"
+                '  TYPE::"TEST"\n'
+                "NAV:\n"
+                "  FOUNDATIONAL::[A,B]\n"
+                "NAV.OPERATIONAL_CONVENTIONS::[SEARCH_PATH_CONVENTION]\n"
+                "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+            )
+
+            # PR#370 contract preserved: applier completes successfully.
+            assert result["status"] == "success", (
+                f"PR#370 tolerate-and-warn contract must be preserved under "
+                f"SR1-T3a; got status={result.get('status')} errors={result.get('errors')}"
+            )
+            correction_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in correction_codes, (
+                f"Expected W_AMBIGUOUS_PATH deprecation warning in corrections, " f"got: {correction_codes}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_w_ambiguous_path_message_lists_both_candidates(self):
+        """W_AMBIGUOUS_PATH message must enumerate both candidate targets
+        (the Block-child slot and the flat assignment) so the agent can
+        diagnose without re-reading the source.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = (
+                "===TEST===\n" "META:\n" '  TYPE::"TEST"\n' "P1:\n" "  CHILD::value\n" "P1.1::original\n" "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"P1.1": "updated"},
+            )
+
+            warns = [c for c in result.get("corrections", []) if c.get("code") == "W_AMBIGUOUS_PATH"]
+            assert warns, f"Expected W_AMBIGUOUS_PATH correction, got: {result.get('corrections')}"
+            msg = warns[0].get("message", "")
+            assert "P1" in msg, f"Warning must name parent block, got: {msg}"
+            assert "P1.1" in msg, f"Warning must name flat key, got: {msg}"
+
+    @pytest.mark.asyncio
+    async def test_w_ambiguous_path_message_announces_future_hard_fail(self):
+        """W_AMBIGUOUS_PATH is a deprecation warning: the message must
+        signpost that this case will hard-fail in a future release once
+        SR1-T1 grammar core lands. This gives agents lead time to migrate
+        to ``content=`` mode or unambiguous syntax.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = (
+                "===TEST===\n" "META:\n" '  TYPE::"TEST"\n' "P1:\n" "  CHILD::value\n" "P1.1::original\n" "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"P1.1": "updated"},
+            )
+
+            warns = [c for c in result.get("corrections", []) if c.get("code") == "W_AMBIGUOUS_PATH"]
+            assert warns
+            msg = warns[0].get("message", "")
+            # Deprecation signposting: caller must learn the warning will
+            # become a hard-fail post-SR1-T1.
+            assert "E_AMBIGUOUS_PATH" in msg, f"Warning must announce future E_AMBIGUOUS_PATH hard-fail, got: {msg}"
+            # Must point at content= disambiguation hatch.
+            assert (
+                "content=" in msg or "content parameter" in msg
+            ), f"Warning must guide caller to content= disambiguation, got: {msg}"
+
+    @pytest.mark.asyncio
+    async def test_unambiguous_block_child_emits_no_w_ambiguous_path(self):
+        """Regression guard: when Block(K) exists WITHOUT a coexisting flat
+        K.X, K.X is unambiguous and W_AMBIGUOUS_PATH must NOT fire (the
+        warning is reserved for the genuine conflict pattern only).
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "test.oct.md")
+            initial = (
+                "===NAV_TEST===\n"
+                "META:\n"
+                '  TYPE::"TEST"\n'
+                "NAV:\n"
+                "  FOUNDATIONAL::[A,B]\n"
+                "  OPERATIONAL_CONVENTIONS::[OLD]\n"
+                "===END===\n"
+            )
+            with open(target_path, "w") as f:
+                f.write(initial)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+            )
+
+            assert result["status"] == "success"
+            correction_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert (
+                "W_AMBIGUOUS_PATH" not in correction_codes
+            ), f"W_AMBIGUOUS_PATH must not fire on unambiguous path, got: {correction_codes}"
+
+    def test_e_ambiguous_path_symbol_is_scaffolded(self):
+        """E_AMBIGUOUS_PATH error code symbol must exist as an exported
+        constant on octave_mcp.mcp.write so the future SR1-T3 hard-fail
+        wiring (post-SR1-T1) has a stable target without breaking the
+        public error-code vocabulary at conversion time.
+
+        No emit site is required yet; this test only asserts the symbol
+        is defined and equals the canonical "E_AMBIGUOUS_PATH" string.
+        """
+        from octave_mcp.mcp import write as write_module
+
+        assert hasattr(write_module, "E_AMBIGUOUS_PATH"), (
+            "E_AMBIGUOUS_PATH constant must be exported from octave_mcp.mcp.write "
+            "as scaffolding for the SR1-T3 hard-fail conversion (post-SR1-T1)."
+        )
+        assert write_module.E_AMBIGUOUS_PATH == "E_AMBIGUOUS_PATH"
+
+    def test_w_ambiguous_path_symbol_is_exported(self):
+        """W_AMBIGUOUS_PATH constant must also be exported so callers and
+        downstream tooling can reference the warning code by symbol rather
+        than literal string.
+        """
+        from octave_mcp.mcp import write as write_module
+
+        assert hasattr(write_module, "W_AMBIGUOUS_PATH")
+        assert write_module.W_AMBIGUOUS_PATH == "W_AMBIGUOUS_PATH"
+
+
+class TestSR1T3aDollarOpsOnAmbiguousPaths:
+    """CRS follow-up to PR #392: pin the actual $op behaviour on conflicted
+    documents (Block(K) coexisting with flat top-level Assignment(K.X)).
+
+    Findings empirically verified and now codified:
+    - bare replacement → modifies the FLAT assignment in place
+      (PR#370 contract preserved). W_AMBIGUOUS_PATH always surfaces;
+      W_DUPLICATE_TARGET surfaces when the conflict survives the edit.
+    - DELETE sentinel → removes the FLAT assignment; the Block child (if
+      any) is left untouched. W_AMBIGUOUS_PATH always surfaces.
+    - APPEND/PREPEND → validator now resolves to the FLAT target (CRS
+      follow-up: _resolve_target_type prefers the flat assignment in the
+      conflict, matching what _apply_changes will modify). Succeeds when
+      the flat is array-valued; rejected with E_OP_TARGET_MISMATCH when
+      the flat is non-array — the historical bug was that the validator
+      consulted the block child and let mismatches through to the
+      applier's defensive raise. W_AMBIGUOUS_PATH surfaces in both
+      success and error envelopes.
+    - MERGE → rejected with E_OP_TARGET_MISMATCH because the flat target
+      is an Assignment (array/scalar/map value), never a Block/Section/
+      META. W_AMBIGUOUS_PATH surfaces in the error envelope.
+
+    These tests pin the actual contract so any future regression that
+    diverges validator and applier resolution surfaces immediately.
+    """
+
+    @staticmethod
+    def _conflicted_array_doc() -> str:
+        """Block has no OPERATIONAL_CONVENTIONS child; flat is array."""
+        return (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "NAV.OPERATIONAL_CONVENTIONS::[X,Y]\n"
+            "===END===\n"
+        )
+
+    @staticmethod
+    def _conflicted_typemix_doc() -> str:
+        """Block child FOUNDATIONAL is array; flat NAV.FOUNDATIONAL is scalar.
+        Pre-fix this would mis-validate $op against the block child's array
+        type and reach the applier's defensive raise."""
+        return (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "NAV.FOUNDATIONAL::scalar_value\n"
+            "===END===\n"
+        )
+
+    @pytest.mark.asyncio
+    async def test_append_on_array_flat_succeeds_and_mutates_flat(self):
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_array_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": {"$op": "APPEND", "value": ["Z"]}},
+            )
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in codes
+            with open(target_path) as f:
+                final = f.read()
+            # Flat assignment was mutated; Block left intact.
+            assert "FOUNDATIONAL::[A,B]" in final
+            assert "Z" in final
+
+    @pytest.mark.asyncio
+    async def test_prepend_on_array_flat_succeeds_and_mutates_flat(self):
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_array_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": {"$op": "PREPEND", "value": ["Z"]}},
+            )
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in codes
+            with open(target_path) as f:
+                final = f.read()
+            assert "FOUNDATIONAL::[A,B]" in final
+            assert "Z" in final
+
+    @pytest.mark.asyncio
+    async def test_append_on_scalar_flat_rejected_at_validate(self):
+        """Block child is array but flat is scalar. Validator must consult
+        the FLAT (the target the applier will modify) and reject with
+        E_OP_TARGET_MISMATCH at validate time, not let the request reach
+        the applier's defensive raise.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_typemix_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.FOUNDATIONAL": {"$op": "APPEND", "value": ["Z"]}},
+            )
+            assert result["status"] == "error"
+            err_codes = {e.get("code") for e in result.get("errors", [])}
+            assert "E_OP_TARGET_MISMATCH" in err_codes, (
+                f"Expected E_OP_TARGET_MISMATCH at validate time (validator must "
+                f"resolve to flat scalar, not block array), got: {result.get('errors')}"
+            )
+            # Deprecation warning still surfaces on the error envelope (CE
+            # follow-up to #392 ensures change_warnings drain on the error path).
+            corr_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in corr_codes, (
+                f"W_AMBIGUOUS_PATH must surface even when validation fails, " f"got: {result.get('corrections')}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_merge_on_conflicted_path_rejected(self):
+        """MERGE requires block/section/meta target. The flat assignment is
+        always an Assignment value — MERGE on it must always be rejected.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_array_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": {"$op": "MERGE", "value": {"k": "v"}}},
+            )
+            assert result["status"] == "error"
+            err_codes = {e.get("code") for e in result.get("errors", [])}
+            assert (
+                "E_OP_TARGET_MISMATCH" in err_codes
+            ), f"MERGE on conflicted flat must reject; got: {result.get('errors')}"
+            corr_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in corr_codes
+
+    @pytest.mark.asyncio
+    async def test_delete_on_conflicted_path_removes_flat_only(self):
+        """DELETE sentinel removes the flat assignment; the Block child (if
+        any) is preserved. PR#370 contract intact.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(self._conflicted_typemix_doc())
+            result = await WriteTool().execute(
+                target_path=target_path,
+                changes={"NAV.FOUNDATIONAL": {"$op": "DELETE"}},
+            )
+            assert result["status"] == "success", f"errors: {result.get('errors')}"
+            with open(target_path) as f:
+                final = f.read()
+            # Flat NAV.FOUNDATIONAL gone; Block's FOUNDATIONAL child remains.
+            assert "NAV.FOUNDATIONAL::scalar_value" not in final
+            assert "FOUNDATIONAL::[A,B]" in final
+            corr_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in corr_codes
+
+
+class TestSR1T3aChangeWarningsBufferIsPerCall:
+    """CE follow-up to PR #392: the W_AMBIGUOUS_PATH warning buffer must be
+    per-call local state, not a class/instance attribute on the shared
+    WriteTool() singleton (server.py / http_transport.py instantiate once).
+
+    These tests pin the no-singleton-race contract so any future refactor
+    that re-introduces shared mutable state surfaces immediately.
+    """
+
+    def test_no_pending_change_warnings_attribute_on_instance(self):
+        """The legacy ``_pending_change_warnings`` instance attribute MUST NOT
+        exist on a fresh WriteTool() — its presence would indicate the
+        singleton-race regression has returned.
+        """
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()
+        assert not hasattr(tool, "_pending_change_warnings"), (
+            "WriteTool must not carry a _pending_change_warnings instance "
+            "buffer; warnings are per-call locals (CE follow-up to #392)."
+        )
+
+    @pytest.mark.asyncio
+    async def test_concurrent_executes_do_not_leak_warnings(self):
+        """Two concurrent execute() calls on the SAME WriteTool() instance,
+        one against a conflicted doc (W_AMBIGUOUS_PATH expected) and one
+        against an unambiguous doc (no warning expected), must not
+        cross-pollinate warnings via shared state.
+        """
+        import asyncio as _asyncio
+
+        from octave_mcp.mcp.write import WriteTool
+
+        tool = WriteTool()  # SAME singleton across both calls.
+
+        conflicted = (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "NAV.OPERATIONAL_CONVENTIONS::[X,Y]\n"
+            "===END===\n"
+        )
+        unambiguous = (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "  OPERATIONAL_CONVENTIONS::[OLD]\n"
+            "===END===\n"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            p_conf = os.path.join(tmpdir, "conflicted.oct.md")
+            p_unamb = os.path.join(tmpdir, "unambiguous.oct.md")
+            with open(p_conf, "w") as f:
+                f.write(conflicted)
+            with open(p_unamb, "w") as f:
+                f.write(unambiguous)
+
+            # Run a batch where the unambiguous call is interleaved with
+            # several conflicted calls, then assert each result envelope only
+            # reports warnings appropriate to its own input.
+            async def call_conflicted():
+                return await tool.execute(
+                    target_path=p_conf,
+                    changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+                )
+
+            async def call_unambiguous():
+                return await tool.execute(
+                    target_path=p_unamb,
+                    changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+                )
+
+            results = await _asyncio.gather(
+                call_conflicted(),
+                call_unambiguous(),
+                call_conflicted(),
+                call_unambiguous(),
+                call_conflicted(),
+            )
+
+        for i, r in enumerate(results):
+            codes = {c.get("code") for c in r.get("corrections", [])}
+            if i % 2 == 0:
+                # Conflicted calls: must carry W_AMBIGUOUS_PATH.
+                assert "W_AMBIGUOUS_PATH" in codes, (
+                    f"Conflicted call #{i} lost its W_AMBIGUOUS_PATH " f"(possible buffer race), got: {codes}"
+                )
+            else:
+                # Unambiguous calls: must NOT carry W_AMBIGUOUS_PATH (would
+                # indicate leakage from a sibling conflicted call).
+                assert "W_AMBIGUOUS_PATH" not in codes, (
+                    f"Unambiguous call #{i} picked up W_AMBIGUOUS_PATH from a "
+                    f"sibling — singleton-race regression. Codes: {codes}"
+                )
+
+    @pytest.mark.asyncio
+    async def test_w_ambiguous_path_survives_emit_failure(self, monkeypatch):
+        """CE follow-up to PR #392: change_warnings (W_AMBIGUOUS_PATH) captured
+        by _validate_change_paths during the changes-mode pass MUST survive a
+        downstream emit failure. The success-path drain at the bottom of
+        execute() never runs when _emit_with_style raises; without explicit
+        per-error-site draining the deprecation warning would be silently
+        dropped on E_EMIT / E_AST_CYCLE returns.
+
+        Reproduces the medium-severity finding by monkeypatching
+        ``octave_mcp.mcp.write._emit_with_style`` to raise, then asserts the
+        E_EMIT error envelope still carries W_AMBIGUOUS_PATH in corrections.
+        """
+        from octave_mcp.mcp import write as write_module
+        from octave_mcp.mcp.write import WriteTool
+
+        original_emit = write_module._emit_with_style
+
+        def _raising_emit(*args, **kwargs):
+            raise RuntimeError("forced emit failure for CE regression test")
+
+        monkeypatch.setattr(write_module, "_emit_with_style", _raising_emit)
+
+        tool = WriteTool()
+
+        # Conflicted source: triggers W_AMBIGUOUS_PATH during validation.
+        conflicted = (
+            "===NAV_TEST===\n"
+            "META:\n"
+            '  TYPE::"TEST"\n'
+            "NAV:\n"
+            "  FOUNDATIONAL::[A,B]\n"
+            "NAV.OPERATIONAL_CONVENTIONS::[X,Y]\n"
+            "===END===\n"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = os.path.join(tmpdir, "t.oct.md")
+            with open(target_path, "w") as f:
+                f.write(conflicted)
+
+            result = await tool.execute(
+                target_path=target_path,
+                changes={"NAV.OPERATIONAL_CONVENTIONS": ["A", "B", "C"]},
+            )
+
+            # Sanity: the emit-failure error is what we forced, not something
+            # else upstream that would mask the test's intent.
+            assert result["status"] == "error", f"Expected error, got: {result}"
+            err_codes = {e.get("code") for e in result.get("errors", [])}
+            assert "E_EMIT" in err_codes, f"Expected E_EMIT from forced emit failure, got: {result.get('errors')}"
+
+            # The actual contract under test: deprecation warning survives.
+            corr_codes = {c.get("code") for c in result.get("corrections", [])}
+            assert "W_AMBIGUOUS_PATH" in corr_codes, (
+                f"W_AMBIGUOUS_PATH was dropped on emit failure path — CE "
+                f"follow-up regression. Got corrections: {result.get('corrections')}"
+            )
+
+        # Restore for hygiene (monkeypatch already does this on teardown,
+        # but the assignment makes the intent explicit if the fixture is
+        # ever refactored).
+        monkeypatch.setattr(write_module, "_emit_with_style", original_emit)
