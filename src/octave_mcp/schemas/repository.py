@@ -1,9 +1,43 @@
 """Schema repository with builtin and custom schema support (P2.5).
 
 Provides centralized schema storage and retrieval.
+
+ADR-0006 SR1-T1 Step 6 (R2 closure)
+-----------------------------------
+The ``Schema`` container class previously lived at
+``octave_mcp.core.schema`` alongside a thin delegator ``validate()``
+function. ``core/schema.py`` has been deleted in Step 6 (design §2.2);
+the ``Schema`` container has been relocated here, co-located with its
+sole consumer (``SchemaRepository``). The ``validate()`` delegator was
+removed entirely — callers must use the class-based ``Validator``
+surface from ``octave_mcp.core.validator``.
+
+See ``docs/adr/adr-0006-sr1-t1-grammar-core-design.md`` §3 row 6, §2.2.
 """
 
-from octave_mcp.core.schema import Schema
+
+class Schema:
+    """OCTAVE schema definition (container).
+
+    A lightweight container used by :class:`SchemaRepository` to register
+    and retrieve named schemas. Validation is performed by
+    :class:`octave_mcp.core.validator.Validator`, which accepts the
+    schema as a dict (see :attr:`Schema._data`).
+    """
+
+    def __init__(self, name: str, version: str, fields: dict, schema_data: dict | None = None):
+        """Initialize schema from parsed data.
+
+        Args:
+            name: Schema name
+            version: Schema version
+            fields: Schema field definitions
+            schema_data: Optional parsed schema structure
+        """
+        self.name = name
+        self.version = version
+        self.fields = fields
+        self._data = schema_data or {}
 
 
 class SchemaRepository:

@@ -139,8 +139,8 @@ class TestValidatorFrontmatter:
 
     def test_validate_frontmatter_valid(self):
         """Valid frontmatter should produce no errors."""
+        from octave_mcp.core.grammar.entry import validate_frontmatter
         from octave_mcp.core.schema_extractor import FrontmatterFieldDef, SchemaDefinition
-        from octave_mcp.core.validator import validate_frontmatter
 
         schema = SchemaDefinition(
             name="SKILL",
@@ -158,8 +158,8 @@ class TestValidatorFrontmatter:
 
     def test_validate_frontmatter_missing_required_field(self):
         """Missing required frontmatter field should produce E_FM_REQUIRED error."""
+        from octave_mcp.core.grammar.entry import validate_frontmatter
         from octave_mcp.core.schema_extractor import FrontmatterFieldDef, SchemaDefinition
-        from octave_mcp.core.validator import validate_frontmatter
 
         schema = SchemaDefinition(
             name="SKILL",
@@ -180,8 +180,8 @@ class TestValidatorFrontmatter:
 
     def test_validate_frontmatter_multiple_missing_fields(self):
         """Multiple missing required fields should produce multiple errors."""
+        from octave_mcp.core.grammar.entry import validate_frontmatter
         from octave_mcp.core.schema_extractor import FrontmatterFieldDef, SchemaDefinition
-        from octave_mcp.core.validator import validate_frontmatter
 
         schema = SchemaDefinition(
             name="SKILL",
@@ -204,8 +204,8 @@ class TestValidatorFrontmatter:
 
     def test_validate_frontmatter_wrong_type_expects_list(self):
         """Frontmatter field with wrong type should produce E_FM_TYPE error."""
+        from octave_mcp.core.grammar.entry import validate_frontmatter
         from octave_mcp.core.schema_extractor import FrontmatterFieldDef, SchemaDefinition
-        from octave_mcp.core.validator import validate_frontmatter
 
         schema = SchemaDefinition(
             name="SKILL",
@@ -225,8 +225,8 @@ class TestValidatorFrontmatter:
 
     def test_validate_frontmatter_wrong_type_expects_string(self):
         """Frontmatter field expecting STRING but got list should produce E_FM_TYPE."""
+        from octave_mcp.core.grammar.entry import validate_frontmatter
         from octave_mcp.core.schema_extractor import FrontmatterFieldDef, SchemaDefinition
-        from octave_mcp.core.validator import validate_frontmatter
 
         schema = SchemaDefinition(
             name="SKILL",
@@ -243,8 +243,8 @@ class TestValidatorFrontmatter:
 
     def test_validate_frontmatter_none_raw(self):
         """None raw_frontmatter with required fields should produce errors."""
+        from octave_mcp.core.grammar.entry import validate_frontmatter
         from octave_mcp.core.schema_extractor import FrontmatterFieldDef, SchemaDefinition
-        from octave_mcp.core.validator import validate_frontmatter
 
         schema = SchemaDefinition(
             name="SKILL",
@@ -259,8 +259,8 @@ class TestValidatorFrontmatter:
 
     def test_validate_frontmatter_no_schema_frontmatter(self):
         """Schema without frontmatter defs should return empty errors."""
+        from octave_mcp.core.grammar.entry import validate_frontmatter
         from octave_mcp.core.schema_extractor import SchemaDefinition
-        from octave_mcp.core.validator import validate_frontmatter
 
         schema = SchemaDefinition(name="META")
 
@@ -269,8 +269,8 @@ class TestValidatorFrontmatter:
 
     def test_validate_frontmatter_optional_field_absent(self):
         """Optional frontmatter field being absent should not produce errors."""
+        from octave_mcp.core.grammar.entry import validate_frontmatter
         from octave_mcp.core.schema_extractor import FrontmatterFieldDef, SchemaDefinition
-        from octave_mcp.core.validator import validate_frontmatter
 
         schema = SchemaDefinition(
             name="SKILL",
@@ -287,8 +287,8 @@ class TestValidatorFrontmatter:
 
     def test_validate_frontmatter_yaml_parse_error(self):
         """Invalid YAML in frontmatter should produce E_FM_PARSE error."""
+        from octave_mcp.core.grammar.entry import validate_frontmatter
         from octave_mcp.core.schema_extractor import FrontmatterFieldDef, SchemaDefinition
-        from octave_mcp.core.validator import validate_frontmatter
 
         schema = SchemaDefinition(
             name="SKILL",

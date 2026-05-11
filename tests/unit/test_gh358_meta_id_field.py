@@ -13,7 +13,7 @@ Tests verify:
 import pytest
 
 from octave_mcp.core.parser import parse
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 from octave_mcp.schemas.loader import BUILTIN_SCHEMA_DEFINITIONS
 
 
@@ -38,7 +38,7 @@ CONTENT::value
         ast = parse(doc)
         schema = BUILTIN_SCHEMA_DEFINITIONS.get("META")
 
-        errors = validate(ast, schema=schema, strict=True)
+        errors = Validator(schema).validate(ast, strict=True)
 
         # Filter to only E007 errors about ID
         id_errors = [e for e in errors if e.code == "E007" and "ID" in e.field_path]
@@ -62,7 +62,7 @@ BODY::content
         ast = parse(doc)
         schema = BUILTIN_SCHEMA_DEFINITIONS.get("META")
 
-        errors = validate(ast, schema=schema, strict=True)
+        errors = Validator(schema).validate(ast, strict=True)
 
         # No E007 errors at all (all fields are known)
         e007_errors = [e for e in errors if e.code == "E007"]
@@ -88,7 +88,7 @@ CONTENT::value
         ast = parse(doc)
         schema = BUILTIN_SCHEMA_DEFINITIONS.get("META")
 
-        errors = validate(ast, schema=schema, strict=True)
+        errors = Validator(schema).validate(ast, strict=True)
 
         # No required-field errors for ID
         id_required_errors = [e for e in errors if e.code == "E003" and "ID" in e.message]
@@ -105,7 +105,7 @@ META:
         ast = parse(doc)
         schema = BUILTIN_SCHEMA_DEFINITIONS.get("META")
 
-        errors = validate(ast, schema=schema, strict=True)
+        errors = Validator(schema).validate(ast, strict=True)
 
         # Should have zero errors
         assert len(errors) == 0, (

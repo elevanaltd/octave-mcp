@@ -1,7 +1,7 @@
 """Tests for schema validation (P1.5)."""
 
 from octave_mcp.core.parser import parse
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 
 
 class TestRequiredFields:
@@ -25,7 +25,7 @@ META:
 ===END===
 """
         doc = parse(content)
-        errors = validate(doc, schema)
+        errors = Validator(schema).validate(doc)
         assert len(errors) > 0
         assert any("VERSION" in e.message for e in errors)
         assert any(e.code == "E003" for e in errors)
@@ -45,7 +45,7 @@ META:
 ===END===
 """
         doc = parse(content)
-        errors = validate(doc, schema, strict=True)
+        errors = Validator(schema).validate(doc, strict=True)
         assert len(errors) > 0
         assert any("UNKNOWN_FIELD" in e.message for e in errors)
         assert any(e.code == "E007" for e in errors)
@@ -61,7 +61,7 @@ META:
 ===END===
 """
         doc = parse(content)
-        errors = validate(doc, schema, strict=False)
+        errors = Validator(schema).validate(doc, strict=False)
         unknown_errors = [e for e in errors if "UNKNOWN_FIELD" in e.message]
         assert len(unknown_errors) == 0  # Lenient mode allows unknown fields
 
@@ -79,7 +79,7 @@ META:
 ===END===
 """
         doc = parse(content)
-        errors = validate(doc, schema)
+        errors = Validator(schema).validate(doc)
         # TYPE is a string, should pass
         type_errors = [e for e in errors if "TYPE" in e.field_path and "expected" in e.message]
         assert len(type_errors) == 0
@@ -97,7 +97,7 @@ META:
         # Create document with direct boolean value (not parsed from text)
         doc = Document(name="TEST", meta={"TYPE": "TEST_DOC", "COUNT": True}, sections=[])  # Direct boolean
 
-        errors = validate(doc, schema)
+        errors = Validator(schema).validate(doc)
         # Should error because True is boolean, not number
         count_errors = [e for e in errors if "COUNT" in e.field_path]
         assert len(count_errors) > 0
@@ -128,7 +128,7 @@ META:
 ===END===
 """
         doc = parse(content)
-        errors = validate(doc, schema)
+        errors = Validator(schema).validate(doc)
         # Should error because "ACTIV" matches both "ACTIVE" and "ACTIVATING"
         assert len(errors) > 0
         assert any(e.code == "E006" for e in errors)
@@ -154,7 +154,7 @@ META:
 ===END===
 """
         doc = parse(content)
-        errors = validate(doc, schema)
+        errors = Validator(schema).validate(doc)
         # Should succeed because "ACT" only matches "ACTIVE"
         status_errors = [e for e in errors if "STATUS" in e.field_path]
         assert len(status_errors) == 0

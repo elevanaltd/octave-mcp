@@ -44,7 +44,7 @@ from octave_mcp.core.grammar.cst import (
     NodeKind,
     Section,
 )
-from octave_mcp.core.grammar.entry import ParserError, parse, parse_with_warnings
+from octave_mcp.core.grammar.entry import ParserError, parse, parse_with_warnings, validate_frontmatter
 from octave_mcp.core.grammar.visitor import SymmetricVisitor, Visitor
 
 __all__ = [
@@ -66,6 +66,7 @@ __all__ = [
     "Visitor",
     "parse",
     "parse_with_warnings",
+    "validate_frontmatter",
 ]
 
 # Names re-exported from grammar_compiler.gbnf for backward compatibility.

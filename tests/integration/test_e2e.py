@@ -15,7 +15,7 @@ from octave_mcp.core.emitter import emit
 from octave_mcp.core.lexer import tokenize
 from octave_mcp.core.parser import parse
 from octave_mcp.core.projector import project
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 from octave_mcp.schemas.loader import load_builtin_schemas
 
 
@@ -88,7 +88,7 @@ CONTENT::test
 
         # Validate against META schema (if available)
         # Note: validation may pass without specific schema
-        errors = validate(doc, schema=schemas.get("META"))
+        errors = Validator(schemas.get("META")).validate(doc)
         # Just verify validation runs (may or may not have errors)
         assert isinstance(errors, list)
 
@@ -317,7 +317,7 @@ FIELD::value
         doc = parse(source)
 
         # Validate (may not have schema, but should not crash)
-        errors = validate(doc, schema=None)
+        errors = Validator(None).validate(doc)
         assert isinstance(errors, list)
 
     def test_repair_log_integration(self):
@@ -356,7 +356,7 @@ DATA::test
         doc = parse(test_doc)
 
         # Validate with loaded schemas
-        errors = validate(doc, schema=schemas.get("META"))
+        errors = Validator(schemas.get("META")).validate(doc)
         assert isinstance(errors, list)
 
 

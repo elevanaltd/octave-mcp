@@ -18,7 +18,7 @@ import pytest
 from octave_mcp.core.constraints import EnumConstraint
 from octave_mcp.core.parser import parse
 from octave_mcp.core.schema_extractor import SchemaDefinition
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 from octave_mcp.mcp.validate import _build_deep_section_schemas, _check_required_field_coverage
 from octave_mcp.schemas.loader import load_builtin_schemas, load_schema_by_name
 
@@ -396,7 +396,7 @@ class TestCrsReviewValidatorIntegration:
         """A valid BLOCKED review should produce zero validation errors."""
         doc = parse(VALID_CRS_REVIEW_DOC)
         section_schemas = _build_deep_section_schemas(doc, schema)
-        errors = validate(doc, strict=False, section_schemas=section_schemas)
+        errors = Validator().validate(doc, strict=False, section_schemas=section_schemas)
         error_messages = [f"{e.code}: {e.message} ({e.field_path})" for e in errors]
         assert len(errors) == 0, f"Expected no validation errors but got: {error_messages}"
 
@@ -404,7 +404,7 @@ class TestCrsReviewValidatorIntegration:
         """A valid APPROVED review should produce zero validation errors."""
         doc = parse(VALID_CRS_REVIEW_APPROVED)
         section_schemas = _build_deep_section_schemas(doc, schema)
-        errors = validate(doc, strict=False, section_schemas=section_schemas)
+        errors = Validator().validate(doc, strict=False, section_schemas=section_schemas)
         error_messages = [f"{e.code}: {e.message} ({e.field_path})" for e in errors]
         assert len(errors) == 0, f"Expected no validation errors but got: {error_messages}"
 
@@ -488,7 +488,7 @@ class TestCrsReviewNegativeValidation:
         """Helper: parse, build section schemas, validate, return errors."""
         doc = parse(content)
         section_schemas = _build_deep_section_schemas(doc, schema)
-        errors = validate(doc, strict=False, section_schemas=section_schemas)
+        errors = Validator().validate(doc, strict=False, section_schemas=section_schemas)
         # Also run required field coverage check
         coverage_errors = _check_required_field_coverage(schema, section_schemas)
         return errors + coverage_errors

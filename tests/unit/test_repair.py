@@ -13,7 +13,7 @@ from octave_mcp.core.parser import parse
 from octave_mcp.core.repair import repair, repair_value
 from octave_mcp.core.repair_log import RepairLog, RepairTier
 from octave_mcp.core.schema_extractor import FieldDefinition
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 
 
 class TestRepairTiers:
@@ -49,11 +49,11 @@ class TestForbiddenRepairs:
         # This is enforced by validator returning E003 errors
         schema = {"META": {"required": ["TYPE"]}}
         doc = parse("===TEST===\nMETA:\n  VERSION::1.0\n===END===")
-        errors = validate(doc, schema)
+        errors = Validator(schema).validate(doc)
         # Errors should remain, repair shouldn't fix them
         repaired, log = repair(doc, errors, fix=True)
         # Validation errors for missing TYPE should persist
-        errors_after = validate(repaired, schema)
+        errors_after = Validator(schema).validate(repaired)
         assert len(errors_after) > 0  # Still has errors, wasn't auto-fixed
 
 
