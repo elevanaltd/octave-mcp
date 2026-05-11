@@ -62,54 +62,34 @@ def _fixture_id(path: Path) -> str:
 
 FIXTURES = _discover_fixtures()
 
-# Audit-cardinality breach: canonical re-emit (blank-line stripping, identifier
-# dequoting, triple-quote collapse) does not log corrections, so the third
-# HARD_SYMMETRY conjunct (corrections non-empty IFF diff_unified non-empty)
-# fails. Out of scope for SR0-T2 (which targets destructive empty-`after`
-# corrections); tracked at #382 SR1-T4 (no-op normalize default / single
-# grammar core). Flip these back to expected pass when SR1-T4 lands.
-_AUDIT_CARDINALITY_XFAILS: frozenset[str] = frozenset(
-    {
-        "tests/fixtures/coverage/spec_full.oct.md",
-        "tests/fixtures/hydration/collision_source.oct.md",
-        "tests/fixtures/hydration/expected.oct.md",
-        "tests/fixtures/hydration/source.oct.md",
-        "tests/fixtures/hydration/source_all_terms.oct.md",
-        "tests/fixtures/hydration/source_with_version.oct.md",
-        "tests/fixtures/hydration/source_with_wrong_version.oct.md",
-        "tests/fixtures/hydration/vocabulary.oct.md",
-        "tests/fixtures/symmetry/empty_triple_quoted.oct.md",
-    }
-)
+# ADR-0006 SR1-T1 Step 3 closed the audit-cardinality breach: every
+# canonical re-emit transformation (identifier dequoting, blank-line
+# stripping, triple-quote collapse) now emits a TIER_NORMALIZATION
+# receipt into the ``corrections`` list via the centralised
+# ``core/grammar/tier_normalize`` channel (precise was_quoted path on
+# Assignment nodes; reconciler bridge in ``mcp/write.py`` for diffs
+# upstream precise loggers do not yet cover). The 10 previously strict-
+# xfailed fixtures (9 original + 1 from #385 corpus expansion) now flip
+# to expected pass. See design doc §3a (reconciler bridge pattern) and
+# §4.3 (xfail flip table).
+_AUDIT_CARDINALITY_XFAILS: frozenset[str] = frozenset()
 
 _AUDIT_CARDINALITY_XFAIL_REASON = (
-    "audit-cardinality breach: canonical re-emit (blank-line stripping, "
-    "identifier dequoting, triple-quote collapse) does not log corrections — "
-    "tracked at #382 SR1-T4 grammar core / no-op normalize default; "
-    "flip to expected pass when SR1-T4 lands"
+    "historical: audit-cardinality breach closed by ADR-0006 SR1-T1 Step 3 "
+    "(tier_normalize centralisation). Retained as an empty-set sentinel for "
+    "audit-trail readability — see design doc §3a."
 )
 
-# GH#385 corpus expansion (ADR-0006 SR1): explicit corner-case fixtures
-# enlarging the surface SR1-T1 Step 3 must clear. Each fixture is the minimal
-# input isolating exactly one HARD_SYMMETRY axis. The deeply-nested fixture
-# triggers the SAME audit-cardinality breach class as the existing nine, but
-# via a different normalisation path (deep KEY-chain re-emit). It is tracked
-# separately so Step 3's audit-completeness fix is validated against deep
-# nesting explicitly, not as a side-effect of the shallow corpus.
-_GH385_DEEP_NESTING_XFAILS: frozenset[str] = frozenset(
-    {
-        "tests/fixtures/symmetry/deeply_nested_keys.oct.md",
-    }
-)
+# GH#385 corpus expansion (ADR-0006 SR1): the deeply-nested fixture
+# triggered the same audit-cardinality breach as the original nine via a
+# different normalisation path (deep KEY-chain re-emit). ADR-0006 SR1-T1
+# Step 3 closed this gap alongside the original cluster; the set is now
+# empty but retained for audit-trail readability against GH#385.
+_GH385_DEEP_NESTING_XFAILS: frozenset[str] = frozenset()
 
 _GH385_DEEP_NESTING_XFAIL_REASON = (
-    "audit-cardinality breach on deep KEY::KEY::KEY re-emit: canonical "
-    "writer mutates whitespace/structure beyond one level of nesting but "
-    "emits zero corrections, so diff_unified is non-empty while the "
-    "corrections list is empty (I4 / HARD_SYMMETRY conjunct 3). "
-    "Tracked at GH#385 corpus expansion; SR1-T1 Step 3 (TIER_NORMALIZATION "
-    "centralisation) will fix the audit-completeness gap. Flip to expected "
-    "pass when Step 3 lands."
+    "historical: deep KEY::KEY::KEY audit-cardinality breach closed by "
+    "ADR-0006 SR1-T1 Step 3 (tier_normalize centralisation)."
 )
 
 

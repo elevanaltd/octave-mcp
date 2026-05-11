@@ -179,4 +179,13 @@ METRICS:
     // octave_fmt remains bound by I1 (idempotent, bijective on semantic space).
     // octave_write becomes a pure persistence path; canonicalisation is opt-in.
     AUTHORS::"Treat octave_write as 'commit bytes' and octave_fmt as 'canonicalise bytes' — they compose, they do not duplicate."
+§7::REPAIRLOG_AUDIT_COMPLETENESS
+  // ADR-0006 SR1-T1 Step 3 (v1.12.0): RepairLog is the complete I4 record.
+  POST_V1_12_0::"RepairLog is the complete I4 (TRANSFORM_AUDITABILITY) record. All TIER_NORMALIZATION events (whitespace, blank-line, identifier dequoting, triple-quote collapse, W002) emit corrections via the central core/grammar/tier_normalize channel."
+  EMPTY_LOG_SEMANTICS::"An empty RepairLog means no normalisation was applied. Do not assert empty-log on documents containing trivia normalisation (blank-line stripping, triple-quote collapse) — those now produce corrections."
+  CONSUMER_GUIDANCE::[
+    "If your test pre-v1.12.0 asserted len(corrections)==0 on a document that strips blank lines or collapses triple-quoted empties, it will now see corrections — this reflects correct I4 behaviour. The prior empty-list was an under-reporting bug.",
+    "To detect content normalisation: filter corrections by tier=='NORMALIZATION'.",
+    "To detect schema repairs: filter by tier=='REPAIR'."
+  ]
 ===END===

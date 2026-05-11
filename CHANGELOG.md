@@ -7,7 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - "Audit-Completeness Closure" Release (ADR-0006 SR1-T1 Step 3)
+
+This release completes I4 (TRANSFORM_AUDITABILITY) enforcement per ADR-0006 SR1-T1 Step 3. Every canonical re-emit transformation now produces a `TIER_NORMALIZATION` receipt in the `RepairLog` and surfaces through `octave_write`'s `corrections` list. The third HARD_SYMMETRY conjunct (`corrections non-empty IFF diff_unified non-empty`) now holds at boundary cases that previously generated silent canonical mutations.
+
 ### Added
+- **`core/grammar/tier_normalize.py`** — Centralised TIER_NORMALIZATION audit channel. Public surface:
+  - `log_repair(log, rule_id, before, after, *, safe=True, semantics_changed=False)` — single precise entry point for normalisation receipts.
+  - `active(log)` context manager — ContextVar-scoped sink so pipeline-internal sites (notably emitter identifier-dequoting) can record receipts without RepairLog threading through `emit()`'s public signature.
+  - `reconcile_canonical_emission(log, baseline_bytes, canonical_bytes)` — reconciler bridge (per design doc v1.2 §3a) that closes audit-cardinality gaps for diffs upstream precise loggers do not yet cover (blank-line stripping, triple-quote collapse).
+  - Stable rule IDs: `TN_IDENTIFIER_DEQUOTE` (precise was_quoted-driven), `TN_RECONCILE_CANONICAL` (reconciler bridge).
+- **Precise instrumentation in `core/emitter.py`** — `emit_assignment` now logs `TN_IDENTIFIER_DEQUOTE` via `tier_normalize.log_repair_if_active` whenever `assignment.was_quoted is True` AND the emitter chose to emit bare. The hook is no-op outside the active context (preserves today's behaviour for callers that do not opt in).
+- **Additive consumer wiring in `mcp/write.py`** — Each `_emit_with_style` invocation is now wrapped with `tier_normalize.active(tier_normalize_log)`. After final emit, `reconcile_canonical_emission` runs and the log drains into `result["corrections"]` mirroring the existing schema-repair loop. The edit is purely additive (~30 lines including comments; no envelope / public API change).
+
+### Changed
+- **`tests/unit/test_writer_reader_symmetry.py`** — `_AUDIT_CARDINALITY_XFAILS` and `_GH385_DEEP_NESTING_XFAILS` are now empty frozensets. The 10 previously strict-xfailed fixtures flip to expected pass:
+  - `tests/fixtures/coverage/spec_full.oct.md` (reconciler bridge: blank-line stripping)
+  - `tests/fixtures/hydration/collision_source.oct.md`
+  - `tests/fixtures/hydration/expected.oct.md`
+  - `tests/fixtures/hydration/source.oct.md`
+  - `tests/fixtures/hydration/source_all_terms.oct.md`
+  - `tests/fixtures/hydration/source_with_version.oct.md`
+  - `tests/fixtures/hydration/source_with_wrong_version.oct.md`
+  - `tests/fixtures/hydration/vocabulary.oct.md`
+  - `tests/fixtures/symmetry/empty_triple_quoted.oct.md` (reconciler bridge: triple-quote collapse)
+  - `tests/fixtures/symmetry/deeply_nested_keys.oct.md` (GH#385 corpus expansion)
+- **`octave-literacy` and `octave-mastery` skills** — New §7 sections document the `tier_normalize` audit channel, RepairLog completeness semantics, and reconciler-bridge self-deprecation pattern.
+
+### Consumer note (BREAKING for tests that asserted empty RepairLog)
+- `RepairLog` now records all TIER_NORMALIZATION events. Tests asserting `len(repair_log.entries) == 0` (or `len(corrections) == 0`) on documents containing trivia normalisation (blank-line stripping, triple-quote collapse) will see entries. **This reflects correct behaviour per I4 — pre-1.12.0 silent canonical mutation was an under-reporting bug.** To detect content normalisation, filter `corrections` by `tier == "NORMALIZATION"`; to detect schema repairs filter by `tier == "REPAIR"`.
+
+### Implementation note (reconciler self-deprecation, design §3a)
+- The reconciler bridge is a **temporary, self-deprecating mechanism**. The 8 hydration / `deeply_nested_keys` fixtures and the 2 (`spec_full`, `empty_triple_quoted`) fixtures are currently all covered by the bridge because META-side dequoting is not threaded through `was_quoted` (META values live in `Document.meta: dict[str, Any]`, not Assignment nodes). When Sprint 3+ populates `leading_trivia` / `trailing_trivia` (per design §4.5 G1) and the new triple-quote-collapse lexer W-code lands, precise upstream loggers will cover their respective diffs, the de-duplication precondition will fail, and the reconciler will no-op — **no code change required**. See `docs/adr/adr-0006-sr1-t1-grammar-core-design.md` §3a ("Reconciler bridge pattern") for the full rationale.
+
+### Deviation from HO 8/2 split directive
+- The HO directive anticipated 8 fixtures flipping via precise `was_quoted` instrumentation and 2 via the reconciler bridge. Empirically, all 10 flip via the reconciler bridge because META-key dequoting (where `TYPE::"SPEC"` → `TYPE::SPEC` happens) operates on `Document.meta: dict[str, Any]` values, not on `Assignment` nodes — the parser does not currently carry `was_quoted` for META values. The precise `TN_IDENTIFIER_DEQUOTE` hook is wired and active for Assignment-shaped values (`§N::CONTENT` body assignments); it simply does not fire on these specific fixtures because their dequoting targets are in META. The reconciler bridge correctly absorbs the gap and self-deprecates the same way once META-side `was_quoted` (or trivia population) lands.
+
+### Quality Gates
+- pytest: 2991 passing (+20 from 2971: 10 xfails flipped to expected pass + 10 new tier_normalize unit tests), 11 skipped, 0 xfailed, 0 failures.
+- mypy --strict: clean.
+- ruff check / black --check: clean.
+- Smoke parity: `canonical_hash` unchanged for both ground-truth fixtures (`3f680a6b…` for `hydration/source.oct.md`; `fc758a43…` for `symmetry/empty_triple_quoted.oct.md`).
+- Constitutional compliance: I1, I2, I3, I4 (now fully enforced at boundary cases), I5.
+
+### Added (carried over from Unreleased)
 - **`format_style` parameter on `octave_write`** (#376, PR-A) — New optional parameter on the MCP tool (`format_style`) and CLI command (`--format-style`) accepting `"preserve"`, `"expanded"`, or `"compact"`. The three modes are AST-level pre-passes that funnel into the single canonical `emit()` (I1 Single-Canon Discipline), not parallel emitters:
   - `"preserve"` — Strategy C narrow short-circuit: when `parse(new_content) == parse(baseline_content)`, write baseline bytes verbatim and skip canonical re-emission.
   - `"expanded"` — Lift `InlineMap` (and `ListValue` items that are `InlineMap`) into `Block` form before `emit()`.
