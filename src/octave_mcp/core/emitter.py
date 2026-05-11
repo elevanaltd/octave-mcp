@@ -25,6 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from octave_mcp.core.grammar import tier_normalize
 from octave_mcp.core.grammar.cst import (
     Absent,
     Assignment,
@@ -513,6 +514,23 @@ def emit_assignment(assignment: Assignment, indent: int = 0, format_options: For
     if assignment.key in _ALWAYS_QUOTE_KEYS and isinstance(assignment.value, str) and not value_str.startswith('"'):
         escaped = assignment.value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
         value_str = f'"{escaped}"'
+
+    # ADR-0006 SR1-T1 Step 3 §3a: precise was_quoted-driven instrumentation
+    # of identifier-dequoting decisions. When the parser recorded the value
+    # as originally quoted (was_quoted=True) AND the emitter chose to emit
+    # bare (value_str does not start with '"'), the canonical re-emit has
+    # syntactically altered the source — log it via the central
+    # tier_normalize channel so I4 (TRANSFORM_AUDITABILITY) holds.
+    # Logging is conditioned on the ContextVar set by mcp/write.py
+    # (tier_normalize.active(repair_log)); outside that context the call
+    # is a no-op, preserving today's behaviour for callers that do not
+    # opt in to the audit channel.
+    if assignment.was_quoted is True and isinstance(assignment.value, str) and not value_str.startswith('"'):
+        tier_normalize.log_repair_if_active(
+            tier_normalize.RULE_IDENTIFIER_DEQUOTE,
+            before=f'{assignment.key}::"{assignment.value}"',
+            after=f"{assignment.key}::{value_str}",
+        )
 
     # Emit the assignment line with optional trailing comment
     assignment_line = f"{indent_str}{assignment.key}::{value_str}"

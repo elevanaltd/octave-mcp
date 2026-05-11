@@ -24,7 +24,7 @@ from typing import Any
 
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.gbnf_compiler import GBNFCompiler
-from octave_mcp.core.grammar import ParserError, parse, parse_with_warnings
+from octave_mcp.core.grammar import ParserError, parse, parse_with_warnings, tier_normalize
 from octave_mcp.core.grammar.cst import (
     Assignment,
     ASTNode,
@@ -40,7 +40,7 @@ from octave_mcp.core.hydrator import resolve_hermetic_standard
 from octave_mcp.core.lexer import ENVELOPE_ID_PATTERN, LexerError, tokenize
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.repair import repair
-from octave_mcp.core.repair_log import is_destructive_normalization_repair
+from octave_mcp.core.repair_log import RepairLog, is_destructive_normalization_repair
 from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
@@ -3077,6 +3077,15 @@ class WriteTool(BaseTool):
         canonical_content = ""
         corrections: list[dict[str, Any]] = []
 
+        # ADR-0006 SR1-T1 Step 3 §3a: centralised TIER_NORMALIZATION audit
+        # log. Threaded through the canonical emit paths via the
+        # tier_normalize.active() ContextVar so precise instrumentation
+        # sites (notably emitter identifier-dequoting) can record receipts
+        # without the public emit() signature having to grow a RepairLog
+        # parameter. Drained into ``corrections`` after final emit + after
+        # the reconciler bridge has had its chance.
+        tier_normalize_log: RepairLog = RepairLog(repairs=[])
+
         # Determine mode
         normalize_mode = content is None and changes is None
 
@@ -3392,14 +3401,17 @@ class WriteTool(BaseTool):
         # canonical AST→bytes orchestrator that applies expanded/compact AST
         # pre-passes or the preserve Strategy C short-circuit, all via the
         # SAME emit() call (I1 Single-Canon Discipline).
+        # ADR-0006 SR1-T1 Step 3: emit under tier_normalize.active() so
+        # precise instrumentation (identifier dequoting) records its receipts.
         try:
-            canonical_content = _emit_with_style(
-                doc,
-                baseline_bytes=baseline_content_for_diff or None,
-                new_bytes=content,
-                format_style=format_style,
-                corrections=corrections,
-            )
+            with tier_normalize.active(tier_normalize_log):
+                canonical_content = _emit_with_style(
+                    doc,
+                    baseline_bytes=baseline_content_for_diff or None,
+                    new_bytes=content,
+                    format_style=format_style,
+                    corrections=corrections,
+                )
             canonical_metrics = extract_structural_metrics(doc)
         except OctaveASTCycleError as cyc:
             # Cubic C3 (#376 PR-A): preserve the structured E_AST_CYCLE code
@@ -3623,13 +3635,16 @@ class WriteTool(BaseTool):
                     if did_repair:
                         # GH#376 PR-A: re-emit through the single-canon orchestrator
                         # so format_style applies to schema-repaired output too.
-                        canonical_content = _emit_with_style(
-                            doc,
-                            baseline_bytes=baseline_content_for_diff or None,
-                            new_bytes=content,
-                            format_style=format_style,
-                            corrections=result["corrections"],
-                        )
+                        # ADR-0006 SR1-T1 Step 3: re-emit also under
+                        # tier_normalize.active() so post-repair dequoting is logged.
+                        with tier_normalize.active(tier_normalize_log):
+                            canonical_content = _emit_with_style(
+                                doc,
+                                baseline_bytes=baseline_content_for_diff or None,
+                                new_bytes=content,
+                                format_style=format_style,
+                                corrections=result["corrections"],
+                            )
                         canonical_metrics = extract_structural_metrics(doc)
                         validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
 
@@ -3651,13 +3666,16 @@ class WriteTool(BaseTool):
                             )
                         # Re-emit canonical after repairs (GH#376 PR-A: single-canon
                         # orchestrator so format_style applies to repaired output).
-                        canonical_content = _emit_with_style(
-                            doc,
-                            baseline_bytes=baseline_content_for_diff or None,
-                            new_bytes=content,
-                            format_style=format_style,
-                            corrections=result["corrections"],
-                        )
+                        # ADR-0006 SR1-T1 Step 3: re-emit also under
+                        # tier_normalize.active() so post-repair dequoting is logged.
+                        with tier_normalize.active(tier_normalize_log):
+                            canonical_content = _emit_with_style(
+                                doc,
+                                baseline_bytes=baseline_content_for_diff or None,
+                                new_bytes=content,
+                                format_style=format_style,
+                                corrections=result["corrections"],
+                            )
                         canonical_metrics = extract_structural_metrics(doc)
                         # Revalidate
                         validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
@@ -3693,6 +3711,53 @@ class WriteTool(BaseTool):
                 # GH#355: Schema not found - remain UNVALIDATED but list available schemas
                 # I5 (Schema Sovereignty): make available options visible so agents can self-correct
                 result["available_schemas"] = self._list_available_schemas()
+
+        # ADR-0006 SR1-T1 Step 3 §3a: drain the centralised TIER_NORMALIZATION
+        # log into ``corrections``. Mirrors the schema-repair drain pattern
+        # immediately above (the lenient-mode ``repair_log.repairs`` loop).
+        #
+        # The reconciler bridge runs AFTER precise loggers have had their
+        # chance — if the final ``canonical_content`` differs from the
+        # user's submitted bytes AND no precise NORMALIZATION entries
+        # account for the diff, a single coarse-grained
+        # TIER_RECONCILE_CANONICAL receipt is emitted (closes the audit-
+        # cardinality gap for blank-line stripping and triple-quote
+        # collapse until Sprint 3+ trivia + new lexer W-code).
+        #
+        # Cubic AI P2 fix (PR #399 review 4265564132): reconcile against
+        # the USER-SUBMITTED bytes (``content``), not the OLD on-disk
+        # baseline (``baseline_content_for_diff``). The bridge exists to
+        # catch transformations the parse→canonical-emit pipeline applied
+        # to user intent; conflating "user changed the file's content"
+        # with "canonical normaliser altered bytes" produced false-
+        # positive entries in changes-mode and content-mode overwrites.
+        #
+        # In ``changes`` and ``normalize_mode`` the user did NOT submit
+        # raw bytes (they submitted a delta, or asked for in-place
+        # normalisation), so there are no "pre-emit intended bytes"
+        # against which a coarse-grained bridge can correctly reconcile.
+        # The precise was_quoted logger still fires in those modes —
+        # only the bridge is suppressed. Per §3a the reconciler
+        # self-deprecates without code change when precise upstream
+        # instrumentation lands.
+        if not normalize_mode and changes is None and content is not None:
+            tier_normalize.reconcile_canonical_emission(
+                tier_normalize_log,
+                baseline_bytes=content,
+                canonical_bytes=canonical_content,
+            )
+        for entry in tier_normalize_log.repairs:
+            result["corrections"].append(
+                {
+                    "code": entry.rule_id,
+                    "tier": entry.tier.value,
+                    "before": entry.before,
+                    "after": entry.after,
+                    "safe": entry.safe,
+                    "semantics_changed": entry.semantics_changed,
+                    "message": f"Tier normalization: {entry.rule_id}",
+                }
+            )
 
         # GH#349 + GH#361r5: Surface data-loss corrections as top-level warnings (I4).
         # Agents can detect data loss by checking result["warnings"] without
