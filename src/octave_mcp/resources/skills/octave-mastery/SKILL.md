@@ -62,6 +62,9 @@ META:
   // Do NOT use NAME[qualifier] for archetypes — that is constructor syntax, not annotation.
   // Do NOT stack multiple qualifiers: HEPHAESTUS<a,b> is invalid. Use one facet per archetype.
   ANTI_PATTERN::"HEPHAESTUS[faithful_transcription] — wrong bracket form for archetype annotation"
+  CONTENT_DISCIPLINE::"Qualifier content MUST be ≤32 chars and ≤4 underscore-tokens. Longer content is snake_case prose masquerading as an annotation — extract to a sibling field."
+  CONTENT_WRONG::"HEPHAESTUS<faithful_and_precise_transcription_of_all_content_without_loss>"
+  CONTENT_RIGHT::"HEPHAESTUS<faithful_transcription> + PRINCIPLE::\"Transcribe all content without loss.\""
   MULTI_ARCH::"[HEPHAESTUS<faithful_transcription>, ATLAS<reliable_execution>] — list of annotated archetypes"
 §4::HOLOGRAPHIC_CONTRACTS
   // v6: Documents carry their own validation law in META. Two distinct uses:
