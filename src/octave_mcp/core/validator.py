@@ -138,26 +138,12 @@ class Validator:
         self.errors = []
         self.routing_log = RoutingLog()  # Reset routing log for each validation
 
-        # Extract block-level targets from document AST (Issue #189, M3 CE violations)
-        # This enables feudal inheritance: children inherit parent block targets
-        self._block_targets = extract_block_targets(doc)
-
-        # Validate META if schema defines it
-        if "META" in self.schema and doc.meta:
-            self._validate_meta(doc.meta, strict)
-
-        # Loss accounting warnings fire on document content, not schema presence.
-        # PR#315 fix: moved outside the "META" in self.schema guard so that
-        # W_META_001/W_META_002 fire regardless of whether a schema is provided.
-        if doc.meta:
-            self._check_meta_warnings(doc.meta)
-
-        # GH#369: structural duplicate-target safety net.
-        # If the AST contains both Block(K) and a flat Assignment("K.X", ...)
-        # at the same level, that is the silent-corruption fingerprint left by
-        # a regressed writer (or by hand-edited input). Surface it under
-        # STANDARD profile so I5 (Schema Sovereignty) does not stay silent.
-        self._check_duplicate_semantic_targets(doc.sections)
+        # Shared per-document setup (block targets + META + duplicate-target
+        # safety net). Centralised in ``_prepare_document_validation`` so
+        # both ``validate()`` and ``visit_document()`` reach the same checks
+        # — the R2 closure goal extends to internal symmetry between entry
+        # points (per CRS review of PR #401).
+        self._prepare_document_validation(doc, strict=strict)
 
         # Validate sections
         # Issue #325: Walk document tree recursively so nested blocks (e.g., NATURE:
@@ -200,6 +186,46 @@ class Validator:
     # See ``docs/adr/adr-0006-sr1-t1-grammar-core-design.md`` §3 row 6
     # and ``src/octave_mcp/core/grammar/visitor.py`` (``Visitor[T_co]``).
 
+    def _prepare_document_validation(self, doc: Document, *, strict: bool) -> None:
+        """Shared per-document setup for ``validate`` and ``visit_document``.
+
+        Performs the four steps that BOTH entry points need before any
+        section walk: block-target extraction (feudal inheritance),
+        schema-aware META validation, schema-independent loss-accounting
+        warnings, and the GH#369 duplicate-target safety net.
+
+        Centralising the setup is the internal-symmetry guard the PR's R2
+        closure goal demands: a new check added here is automatically
+        consulted by every public entry point, so the two surfaces cannot
+        drift apart over time. (Identified by CRS during PR #401 review.)
+
+        Args:
+            doc: Document AST.
+            strict: If True, ``_validate_meta`` rejects unknown META fields.
+        """
+        # Extract block-level targets from document AST (Issue #189, M3 CE
+        # violations). This enables feudal inheritance: children inherit
+        # parent block targets.
+        self._block_targets = extract_block_targets(doc)
+
+        # Validate META if schema defines it.
+        if "META" in self.schema and doc.meta:
+            self._validate_meta(doc.meta, strict)
+
+        # Loss-accounting warnings fire on document content, not schema
+        # presence. PR#315 fix: moved outside the ``"META" in self.schema``
+        # guard so that W_META_001/W_META_002 fire regardless of whether a
+        # schema is provided.
+        if doc.meta:
+            self._check_meta_warnings(doc.meta)
+
+        # GH#369: structural duplicate-target safety net. If the AST
+        # contains both Block(K) and a flat Assignment("K.X", ...) at the
+        # same level, that is the silent-corruption fingerprint left by a
+        # regressed writer (or by hand-edited input). Surface it under
+        # STANDARD profile so I5 (Schema Sovereignty) does not stay silent.
+        self._check_duplicate_semantic_targets(doc.sections)
+
     def visit_document(self, node: Document, /) -> None:
         """Visit a Document node — orchestrates the full validation walk.
 
@@ -210,19 +236,11 @@ class Validator:
         is therefore safe. Callers wanting the legacy "reset + return"
         semantics should use :meth:`validate` instead.
         """
-        # Block-target extraction is required by section validation below.
-        self._block_targets = extract_block_targets(node)
-
-        # META validation when schema defines it.
-        if "META" in self.schema and node.meta:
-            self._validate_meta(node.meta, strict=False)
-
-        # Loss-accounting warnings — schema-independent (PR#315).
-        if node.meta:
-            self._check_meta_warnings(node.meta)
-
-        # GH#369: structural duplicate-target safety net.
-        self._check_duplicate_semantic_targets(node.sections)
+        # Delegate shared setup to ``_prepare_document_validation`` so the
+        # two entry points (``validate`` and ``visit_document``) cannot
+        # drift apart — internal-symmetry counterpart to the PR's R2
+        # closure (per CRS review of PR #401).
+        self._prepare_document_validation(node, strict=False)
 
         # Recurse into the section tree.
         for child in node.sections:

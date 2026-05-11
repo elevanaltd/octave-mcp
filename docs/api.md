@@ -540,14 +540,34 @@ When `mode="authoring"`:
 
 `octave_mcp.core.validator`
 
-#### `validate(doc: Document, schema_name: str | None = None, strict: bool = False) -> list[ValidationError]`
+> **ADR-0006 SR1-T1 Step 6 (v1.12.0+):** The canonical validation surface is the class
+> `Validator`. The historical module-level `validate()` function and `core.schema`
+> delegator have been removed. See `docs/adr/adr-0006-sr1-t1-grammar-core-design.md`
+> §3 row 6 + §2.2 module boundaries. The class API has been the supported pattern
+> since v1.11.0.
+
+#### `class Validator`
+
+```python
+class Validator:
+    def __init__(self, schema: dict | None = None): ...
+    def validate(
+        self,
+        doc: Document,
+        strict: bool = False,
+        section_schemas: dict[str, SchemaDefinition] | None = None,
+    ) -> list[ValidationError]: ...
+```
 
 Validate a document against schema requirements.
 
-**Parameters:**
-- `doc` (Document): Parsed document to validate
-- `schema_name` (str | None): Schema name (or None to skip schema validation)
-- `strict` (bool): If True, unknown fields are errors; if False, warnings
+**Constructor parameters:**
+- `schema` (dict | None): Top-level schema dict (e.g. `{"META": {...}}`). May be omitted to skip schema-aware META validation.
+
+**`validate()` parameters:**
+- `doc` (Document): Parsed document to validate.
+- `strict` (bool): If True, unknown META fields are errors; if False, warnings.
+- `section_schemas` (dict | None): Optional dict mapping section names to `SchemaDefinition`. When provided, sections with matching keys are validated against their schema's constraints.
 
 **Returns:**
 - `list[ValidationError]`: List of validation errors (empty if valid)
@@ -556,16 +576,28 @@ Validate a document against schema requirements.
 
 ```python
 from octave_mcp.core.parser import parse
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 
+schema = {"META": {"required": ["TYPE", "VERSION"], "fields": {...}}}
 doc = parse(content)
-errors = validate(doc, schema_name="DECISION_LOG", strict=True)
+errors = Validator(schema).validate(doc, strict=True)
 
 if errors:
     for error in errors:
-        print(f"{error.code}: {error.message} at {error.path}")
+        print(f"{error.code}: {error.message} at {error.field_path}")
 else:
     print("Valid")
+```
+
+#### `validate_frontmatter(raw_frontmatter, schema)` — parse-stage hook
+
+Lives at `octave_mcp.core.grammar.entry` (re-exported from
+`octave_mcp.core.grammar`). Validates YAML frontmatter against a
+`SchemaDefinition`'s frontmatter field definitions.
+
+```python
+from octave_mcp.core.grammar.entry import validate_frontmatter
+errors = validate_frontmatter(doc.raw_frontmatter, schema_def)
 ```
 
 #### ValidationError Structure
@@ -591,53 +623,39 @@ class ValidationError:
 
 ### Schema Module
 
-`octave_mcp.core.schema`
+> **ADR-0006 SR1-T1 Step 6 (v1.12.0+):** `octave_mcp.core.schema` has been
+> **deleted**. The `Schema` container class has been relocated to
+> `octave_mcp.schemas.repository` (co-located with its sole consumer
+> `SchemaRepository`). The thin `validate()` delegator that lived in this
+> module has been removed; use the class-based `Validator` API (above).
 
-#### `load_schema(name: str) -> Schema`
+`octave_mcp.schemas.repository`
 
-Load a builtin or custom schema by name.
+#### `class Schema`
 
-**Parameters:**
-- `name` (str): Schema name (e.g., `"DECISION_LOG"`, `"META"`)
-
-**Returns:**
-- `Schema`: Schema definition
-
-**Raises:**
-- `ValueError`: If schema not found
-
-**Example:**
+A lightweight container for schema metadata used by `SchemaRepository`.
+Validation is performed by `octave_mcp.core.validator.Validator`, which
+accepts the schema as a dict.
 
 ```python
-from octave_mcp.core.schema import load_schema
+from octave_mcp.schemas.repository import Schema, SchemaRepository
 
-schema = load_schema("DECISION_LOG")
-print("Required fields:", schema.required_fields)
-print("Field types:", schema.field_types)
+schema = Schema(name="DECISION_LOG", version="1.0", fields={})
+repo = SchemaRepository()
+repo.register("DECISION_LOG", schema)
+retrieved = repo.get("DECISION_LOG")
 ```
 
-#### Schema Structure
+#### Schema field-definition shapes
 
-```python
-class Schema:
-    name: str                       # Schema name
-    version: str                    # Schema version
-    required_fields: set[str]       # Set of required field names
-    field_types: dict[str, Type]    # Field name → expected type
-    enums: dict[str, set[str]]      # Field name → allowed values
-    nested_schemas: dict[str, str]  # Field name → nested schema name
-```
+The rich schema shapes consumed by `Validator` and `validate_frontmatter`
+live in `octave_mcp.core.schema_extractor`:
 
-#### Builtin Schemas
-
-The following schemas are included:
-
-- `META`: OCTAVE document envelope
-- `DECISION_LOG`: Decision records
-- `TASK`: Task definitions
-- `TASK_RESULT`: Task completion records
-
-Custom schemas can be added to `src/octave_mcp/schemas/`.
+- `SchemaDefinition` — full schema with fields, frontmatter, policies, targets.
+- `FieldDefinition` — single field's pattern + constraints + target.
+- `FrontmatterFieldDef` — YAML-frontmatter field definition.
+- `extract_schema_from_document(doc) -> SchemaDefinition` — parse an
+  OCTAVE schema document into the runtime shape.
 
 ---
 
