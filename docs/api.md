@@ -51,14 +51,20 @@ Schema validation and parsing of OCTAVE content.
 
 #### ValidationError Type
 
+Wire-envelope shape emitted by the MCP `octave_validate` tool:
+
 ```typescript
 {
   code: string;         // Error code (e.g., "UNKNOWN_FIELD", "TYPE_MISMATCH")
   message: string;      // Human-readable description
-  path: string;         // Location in document (e.g., "DECISION.STATUS")
-  severity: "error" | "warning";  // Error severity (default: "error")
+  field: string;        // Location in document (e.g., "DECISION.STATUS")
 }
 ```
+
+> The Python `ValidationError` dataclass (returned by direct `Validator`
+> usage) carries additional fields (`field_path`, `line`, `severity`);
+> see the [ValidationError Structure](#validationerror-structure) block
+> below for the Python-API surface.
 
 #### RepairEntry Type
 
