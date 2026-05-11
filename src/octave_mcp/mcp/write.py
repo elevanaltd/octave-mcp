@@ -35,10 +35,11 @@ from octave_mcp.core.ast_nodes import (
 )
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.gbnf_compiler import GBNFCompiler
+from octave_mcp.core.grammar import parse, parse_with_warnings
 from octave_mcp.core.hydrator import resolve_hermetic_standard
 from octave_mcp.core.lexer import ENVELOPE_ID_PATTERN, LexerError, tokenize
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
-from octave_mcp.core.parser import ParserError, parse, parse_with_warnings
+from octave_mcp.core.parser import ParserError
 from octave_mcp.core.repair import repair
 from octave_mcp.core.repair_log import is_destructive_normalization_repair
 from octave_mcp.core.schema_extractor import SchemaDefinition
