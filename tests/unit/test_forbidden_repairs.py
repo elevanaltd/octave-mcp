@@ -12,7 +12,7 @@ import pytest
 
 from octave_mcp.core.lexer import tokenize
 from octave_mcp.core.parser import parse
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 from octave_mcp.schemas.loader import load_builtin_schemas
 
 
@@ -33,7 +33,7 @@ ROUTE::destination
         # This test ensures we DON'T auto-infer targets
         try:
             # Load dummy schema or None
-            errors = validate(ast, schema=None)
+            errors = Validator(None).validate(ast)
             # If validation requires target, should error
             # If not required, that's also acceptable
             assert isinstance(errors, list)
@@ -53,7 +53,7 @@ STATUS::active
 
         # Validation against META schema should error for missing fields
         schemas = load_builtin_schemas()
-        errors = validate(ast, schema=schemas.get("META"))
+        errors = Validator(schemas.get("META")).validate(ast)
 
         # Should have validation errors OR raise exception
         # Key: we should NOT auto-fill missing fields
@@ -123,7 +123,7 @@ STATUS::UNKNOWN_STATUS
         ast = parse(doc)
 
         # Validation may error, but should NOT rewrite value
-        _errors = validate(ast, schema=None)  # Run validation
+        _errors = Validator(None).validate(ast)  # Run validation
 
         # Value should remain unchanged
         from octave_mcp.core.emitter import emit
@@ -148,7 +148,7 @@ TYPE::"second"
             ast = parse(multi_doc)
 
             # If parsing succeeds, validation should require explicit schema
-            errors = validate(ast)  # No schema specified
+            errors = Validator().validate(ast)  # No schema specified
 
             # Should either error or return validation errors
             assert isinstance(errors, list)
@@ -209,7 +209,7 @@ STATUS::active
 
         # If schema has ambiguous enums, validation should error
         # This is a structural test - implementation may vary
-        errors = validate(ast, schema=None)
+        errors = Validator(None).validate(ast)
         assert isinstance(errors, list)
 
     def test_forbidden_repairs_logged_as_errors(self):

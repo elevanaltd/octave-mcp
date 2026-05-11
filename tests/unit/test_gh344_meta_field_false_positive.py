@@ -12,7 +12,7 @@ errors when the schema's FIELDS block defines TYPE/VERSION with REQ constraint.
 import pytest
 
 from octave_mcp.core.parser import parse
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 from octave_mcp.mcp.validate import (
     _build_deep_section_schemas,
     _check_required_field_coverage,
@@ -83,7 +83,7 @@ class TestGH344MetaFieldFalsePositive:
         section_schemas = _build_deep_section_schemas(doc, skill_schema)
 
         # Run validator
-        errors = validate(doc, strict=False, section_schemas=section_schemas)
+        errors = Validator().validate(doc, strict=False, section_schemas=section_schemas)
 
         # Also run coverage check (as validate.py does)
         coverage_errors = _check_required_field_coverage(skill_schema, section_schemas, doc=doc)

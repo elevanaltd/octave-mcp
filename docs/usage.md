@@ -344,10 +344,14 @@ print(canonical)
 
 ### Validation
 
-```python
-from octave_mcp.core.validator import validate
+> **ADR-0006 SR1-T1 Step 6 (v1.12.0+):** the canonical validation surface is the
+> class `Validator`. The module-level `validate()` function has been removed —
+> instantiate `Validator(schema)` and call `.validate(doc, ...)`.
 
-errors = validate(doc, strict=True)
+```python
+from octave_mcp.core.validator import Validator
+
+errors = Validator(schema=None).validate(doc, strict=True)
 if errors:
     for error in errors:
         print(f"{error.code}: {error.message}")
@@ -359,7 +363,7 @@ else:
 
 ```python
 from octave_mcp.core.parser import parse
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 from octave_mcp.core.emitter import emit
 
 # Input
@@ -372,8 +376,8 @@ DECISION:
 # Parse
 doc = parse(lenient_content)
 
-# Validate
-errors = validate(doc, strict=False)
+# Validate (use Validator class API; v1.12.0+)
+errors = Validator(schema=None).validate(doc, strict=False)
 if errors:
     print(f"Validation errors: {errors}")
 

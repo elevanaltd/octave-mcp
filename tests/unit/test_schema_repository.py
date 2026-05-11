@@ -51,7 +51,7 @@ class TestSchemaRepository:
 
     def test_register_and_retrieve(self, repository):
         """Can register and retrieve schema."""
-        from octave_mcp.core.schema import Schema
+        from octave_mcp.schemas.repository import Schema
 
         # Create minimal schema
         test_schema = Schema(name="TEST", version="1.0", fields={})
@@ -64,7 +64,7 @@ class TestSchemaRepository:
 
     def test_multiple_schemas(self, repository):
         """Can register multiple schemas."""
-        from octave_mcp.core.schema import Schema
+        from octave_mcp.schemas.repository import Schema
 
         schema1 = Schema(name="SCHEMA1", version="1.0", fields={})
         schema2 = Schema(name="SCHEMA2", version="1.0", fields={})
@@ -79,7 +79,7 @@ class TestSchemaRepository:
 
     def test_overwrite_schema(self, repository):
         """Can overwrite existing schema."""
-        from octave_mcp.core.schema import Schema
+        from octave_mcp.schemas.repository import Schema
 
         schema_v1 = Schema(name="TEST", version="1.0", fields={})
         schema_v2 = Schema(name="TEST", version="2.0", fields={})

@@ -10,6 +10,20 @@ Validates AST against schema definitions with:
 - Target routing with audit trail (Issue #103)
 - Target validation with registry (Issue #188)
 - Policy enforcement (Issue #190): UNKNOWN_FIELDS policy, custom targets
+
+ADR-0006 SR1-T1 Step 6 (R2 closure)
+-----------------------------------
+This module exposes EXACTLY ONE public validation surface: the class
+``Validator`` (which is a structural ``visitor.Visitor[None]``). The
+historical module-level ``validate()`` function and the thin delegator
+``core/schema.py`` have been removed. Callers MUST use
+``Validator(schema).validate(doc, ...)``.
+
+``validate_frontmatter`` has been relocated to
+``octave_mcp.core.grammar.entry`` as a parse-stage hook. The legacy
+location is intentionally absent — no shim — per design §3 row 6.
+
+See ``docs/adr/adr-0006-sr1-t1-grammar-core-design.md`` §3 row 6, §2.2.
 """
 
 from dataclasses import dataclass, field
@@ -25,6 +39,7 @@ from octave_mcp.core.grammar.cst import (
     InlineMap,
     ListValue,
     LiteralZoneValue,
+    NodeKind,
     Section,
 )
 from octave_mcp.core.routing import InvalidTargetError, RoutingLog, TargetRegistry, TargetRouter
@@ -123,26 +138,12 @@ class Validator:
         self.errors = []
         self.routing_log = RoutingLog()  # Reset routing log for each validation
 
-        # Extract block-level targets from document AST (Issue #189, M3 CE violations)
-        # This enables feudal inheritance: children inherit parent block targets
-        self._block_targets = extract_block_targets(doc)
-
-        # Validate META if schema defines it
-        if "META" in self.schema and doc.meta:
-            self._validate_meta(doc.meta, strict)
-
-        # Loss accounting warnings fire on document content, not schema presence.
-        # PR#315 fix: moved outside the "META" in self.schema guard so that
-        # W_META_001/W_META_002 fire regardless of whether a schema is provided.
-        if doc.meta:
-            self._check_meta_warnings(doc.meta)
-
-        # GH#369: structural duplicate-target safety net.
-        # If the AST contains both Block(K) and a flat Assignment("K.X", ...)
-        # at the same level, that is the silent-corruption fingerprint left by
-        # a regressed writer (or by hand-edited input). Surface it under
-        # STANDARD profile so I5 (Schema Sovereignty) does not stay silent.
-        self._check_duplicate_semantic_targets(doc.sections)
+        # Shared per-document setup (block targets + META + duplicate-target
+        # safety net). Centralised in ``_prepare_document_validation`` so
+        # both ``validate()`` and ``visit_document()`` reach the same checks
+        # — the R2 closure goal extends to internal symmetry between entry
+        # points (per CRS review of PR #401).
+        self._prepare_document_validation(doc, strict=strict)
 
         # Validate sections
         # Issue #325: Walk document tree recursively so nested blocks (e.g., NATURE:
@@ -152,13 +153,160 @@ class Validator:
         # Issue #244: Validate Zone 2 (YAML frontmatter) when schema defines frontmatter
         # This is opt-in: only schemas with frontmatter defs trigger validation.
         # I1: Read-only inspection, never alters Zone 2 content.
+        # ADR-0006 SR1-T1 Step 6: validate_frontmatter now lives at
+        # ``octave_mcp.core.grammar.entry`` (parse-stage hook). Imported
+        # locally to keep the seam crisp and to avoid a circular import
+        # at module load time.
         if section_schemas is not None:
+            from octave_mcp.core.grammar.entry import validate_frontmatter
+
             for schema_def in section_schemas.values():
                 if schema_def.frontmatter:
                     fm_errors = validate_frontmatter(doc.raw_frontmatter, schema_def)
                     self.errors.extend(fm_errors)
 
         return self.errors
+
+    # ------------------------------------------------------------------
+    # ADR-0006 SR1-T1 Step 6: Visitor[None] protocol surface
+    # ------------------------------------------------------------------
+    #
+    # ``Validator`` is a structural ``visitor.Visitor[None]``. The four
+    # typed visit methods plus the ``visit`` dispatcher delegate to the
+    # existing recursive validation machinery so a single canonical
+    # surface — the class — owns ALL grammar-vs-schema decisions. This
+    # is the R2 closure: there is no second validate path.
+    #
+    # Side effects: visit methods APPEND to ``self.errors``. Callers
+    # interested in the accumulated diagnostics should read ``self.errors``
+    # or use the orchestrating ``validate()`` method, which resets state,
+    # walks the document, and returns the accumulated list. The visit
+    # methods themselves return ``None`` (the ``Visitor[None]`` contract).
+    #
+    # See ``docs/adr/adr-0006-sr1-t1-grammar-core-design.md`` §3 row 6
+    # and ``src/octave_mcp/core/grammar/visitor.py`` (``Visitor[T_co]``).
+
+    def _prepare_document_validation(self, doc: Document, *, strict: bool) -> None:
+        """Shared per-document setup for ``validate`` and ``visit_document``.
+
+        Performs the four steps that BOTH entry points need before any
+        section walk: block-target extraction (feudal inheritance),
+        schema-aware META validation, schema-independent loss-accounting
+        warnings, and the GH#369 duplicate-target safety net.
+
+        Centralising the setup is the internal-symmetry guard the PR's R2
+        closure goal demands: a new check added here is automatically
+        consulted by every public entry point, so the two surfaces cannot
+        drift apart over time. (Identified by CRS during PR #401 review.)
+
+        Args:
+            doc: Document AST.
+            strict: If True, ``_validate_meta`` rejects unknown META fields.
+        """
+        # Extract block-level targets from document AST (Issue #189, M3 CE
+        # violations). This enables feudal inheritance: children inherit
+        # parent block targets.
+        self._block_targets = extract_block_targets(doc)
+
+        # Validate META if schema defines it.
+        if "META" in self.schema and doc.meta:
+            self._validate_meta(doc.meta, strict)
+
+        # Loss-accounting warnings fire on document content, not schema
+        # presence. PR#315 fix: moved outside the ``"META" in self.schema``
+        # guard so that W_META_001/W_META_002 fire regardless of whether a
+        # schema is provided.
+        if doc.meta:
+            self._check_meta_warnings(doc.meta)
+
+        # GH#369: structural duplicate-target safety net. If the AST
+        # contains both Block(K) and a flat Assignment("K.X", ...) at the
+        # same level, that is the silent-corruption fingerprint left by a
+        # regressed writer (or by hand-edited input). Surface it under
+        # STANDARD profile so I5 (Schema Sovereignty) does not stay silent.
+        self._check_duplicate_semantic_targets(doc.sections)
+
+    def visit_document(self, node: Document, /) -> None:
+        """Visit a Document node — orchestrates the full validation walk.
+
+        This is the visitor-protocol entry point. It performs the
+        schema-aware work that does NOT require a ``section_schemas`` map
+        (META validation, loss-accounting warnings, duplicate-target
+        check, recursive section walk) but does NOT reset
+        ``self.errors``; composition with other visitors that share the
+        same accumulator is therefore safe. Frontmatter validation is
+        performed only by :meth:`validate`, because it requires the
+        ``section_schemas`` argument which is not part of the bare
+        ``Visitor[None]`` contract. Callers wanting the legacy "reset +
+        return" semantics, frontmatter validation, or schema-aware
+        section recursion should use :meth:`validate` instead.
+        """
+        # Delegate shared setup to ``_prepare_document_validation`` so the
+        # two entry points (``validate`` and ``visit_document``) cannot
+        # drift apart — internal-symmetry counterpart to the PR's R2
+        # closure (per CRS review of PR #401).
+        self._prepare_document_validation(node, strict=False)
+
+        # Recurse into the section tree.
+        for child in node.sections:
+            self.visit(child)
+
+    def visit_section(self, node: Section, /) -> None:
+        """Visit a Section node — schema-less by default at this surface.
+
+        Section validation requires a ``section_schemas`` map, which is
+        not part of the bare ``Visitor[None]`` contract. The dispatcher
+        therefore performs the structural recursion only; callers that
+        need schema-aware section validation should use the orchestrating
+        :meth:`validate` method (which threads the schema map through
+        :meth:`_validate_sections_recursive`).
+        """
+        for child in node.children:
+            self.visit(child)
+
+    def visit_block(self, node: Block, /) -> None:
+        """Visit a Block node — recurse into children.
+
+        Schema-aware block validation lives in :meth:`_validate_section`,
+        invoked by :meth:`_validate_sections_recursive` when a
+        ``section_schemas`` map is supplied. The bare visitor walk only
+        descends the structural tree.
+        """
+        for child in node.children:
+            self.visit(child)
+
+    def visit_assignment(self, node: Assignment, /) -> None:
+        """Visit an Assignment node — terminal leaf at this surface.
+
+        Field-level constraint evaluation happens inside
+        :meth:`_validate_section` (which has the matching schema field
+        definition in context). At the bare visitor surface, an
+        Assignment is a leaf — nothing to recurse into.
+        """
+        # Intentional no-op: leaves are handled by the schema-aware
+        # walk in ``_validate_section``. The structural visit contract
+        # for ``Visitor[None]`` is satisfied by being callable and
+        # returning ``None``.
+        return None
+
+    def visit(self, node: ASTNode, /) -> None:
+        """Fallback dispatcher — routes on ``node.kind`` to a typed visit.
+
+        Per ``grammar/visitor.py``'s ``Visitor`` protocol, ``visit`` is
+        the entry point for unknown-kind nodes. Implementations dispatch
+        on the ``NodeKind`` discriminant to avoid ``isinstance`` chains
+        at the call site.
+        """
+        kind = getattr(node, "kind", None)
+        if kind is NodeKind.DOCUMENT and isinstance(node, Document):
+            self.visit_document(node)
+        elif kind is NodeKind.SECTION and isinstance(node, Section):
+            self.visit_section(node)
+        elif kind is NodeKind.BLOCK and isinstance(node, Block):
+            self.visit_block(node)
+        elif kind is NodeKind.ASSIGNMENT and isinstance(node, Assignment):
+            self.visit_assignment(node)
+        # NodeKind.COMMENT and any future kinds: no-op at validator surface.
 
     def _validate_meta(self, meta: dict[str, Any], strict: bool) -> None:
         """Validate META block."""
@@ -573,127 +721,6 @@ class Validator:
                     field_path=field,
                 )
             )
-
-
-def validate(
-    doc: Document,
-    schema: dict[str, Any] | None = None,
-    strict: bool = False,
-    section_schemas: dict[str, SchemaDefinition] | None = None,
-) -> list[ValidationError]:
-    """Validate document against schema.
-
-    Args:
-        doc: Document AST
-        schema: Schema definition (optional)
-        strict: Reject unknown fields if True
-        section_schemas: Optional dict mapping section names to SchemaDefinition
-
-    Returns:
-        List of validation errors
-    """
-    validator = Validator(schema)
-    return validator.validate(doc, strict, section_schemas)
-
-
-def validate_frontmatter(
-    raw_frontmatter: str | None,
-    schema: SchemaDefinition,
-) -> list[ValidationError]:
-    """Validate YAML frontmatter against schema frontmatter definitions (Issue #244).
-
-    Extends I5 Schema Sovereignty to Zone 2 (YAML frontmatter). This function
-    is opt-in: it only validates when the schema defines frontmatter requirements.
-
-    I1 compliance: This is read-only inspection. Zone 2 content is never altered.
-    I5 compliance: If we can't validate, we say so (E_FM_PARSE for bad YAML).
-
-    Args:
-        raw_frontmatter: Raw YAML frontmatter string from Document.raw_frontmatter.
-                         May be None if no frontmatter is present.
-        schema: SchemaDefinition that may contain frontmatter field definitions.
-
-    Returns:
-        List of ValidationError. Empty if no frontmatter requirements in schema
-        or if all requirements are satisfied.
-    """
-    # No frontmatter definitions in schema = nothing to validate (opt-in)
-    if not schema.frontmatter:
-        return []
-
-    errors: list[ValidationError] = []
-
-    # If frontmatter is absent but schema requires fields, report each required field
-    if raw_frontmatter is None:
-        for field_name, field_def in schema.frontmatter.items():
-            if field_def.required:
-                errors.append(
-                    ValidationError(
-                        code="E_FM_REQUIRED",
-                        message=f"Required frontmatter field '{field_name}' is missing",
-                        field_path=f"frontmatter.{field_name}",
-                    )
-                )
-        return errors
-
-    # Parse YAML frontmatter
-    import yaml
-
-    try:
-        parsed = yaml.safe_load(raw_frontmatter)
-    except yaml.YAMLError as e:
-        errors.append(
-            ValidationError(
-                code="E_FM_PARSE",
-                message=f"Failed to parse YAML frontmatter: {e}",
-                field_path="frontmatter",
-            )
-        )
-        return errors
-
-    # Handle case where YAML parses to non-dict (e.g., scalar string)
-    if not isinstance(parsed, dict):
-        parsed = {}
-
-    # Validate each defined frontmatter field
-    for field_name, field_def in schema.frontmatter.items():
-        value = parsed.get(field_name)
-
-        # Check required fields
-        if field_def.required and value is None:
-            errors.append(
-                ValidationError(
-                    code="E_FM_REQUIRED",
-                    message=f"Required frontmatter field '{field_name}' is missing",
-                    field_path=f"frontmatter.{field_name}",
-                )
-            )
-            continue
-
-        # Skip type validation for absent optional fields
-        if value is None:
-            continue
-
-        # Type validation
-        type_map: dict[str, type | tuple[type, ...]] = {
-            "STRING": str,
-            "LIST": list,
-            "BOOLEAN": bool,
-        }
-        expected_type = type_map.get(field_def.field_type)
-        if expected_type and not isinstance(value, expected_type):
-            errors.append(
-                ValidationError(
-                    code="E_FM_TYPE",
-                    message=(
-                        f"Frontmatter field '{field_name}' expected {field_def.field_type}, "
-                        f"got {type(value).__name__}"
-                    ),
-                    field_path=f"frontmatter.{field_name}",
-                )
-            )
-
-    return errors
 
 
 def _count_literal_zones(doc: Document) -> list[dict[str, Any]]:

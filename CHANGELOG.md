@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — ADR-0006 SR1-T1 Step 6 (validator surface collapse; closes R2)
+- **`core/grammar/entry.py`** now hosts `validate_frontmatter()` as a parse-stage hook. The legacy location `octave_mcp.core.validator.validate_frontmatter` is intentionally absent — no shim retained (design §3 row 6, §2.2).
+- **`octave_mcp.core.grammar` package** re-exports `validate_frontmatter` for convenience (`from octave_mcp.core.grammar import validate_frontmatter`).
+- **`class Validator`** is now a structural `visitor.Visitor[None]` — it exposes `visit_document`, `visit_section`, `visit_block`, `visit_assignment`, and the `visit` dispatcher. The orchestrating `Validator.validate(doc, ...)` method remains the canonical entry point; the visit methods are the protocol surface that future visitors compose against.
+- **`tests/unit/test_validator_surface_collapse.py`** — R2 closure witness asserting schema.py is unimportable, module-level `validate()` is gone, `validate_frontmatter` lives at the new location, and `Validator` satisfies `Visitor[None]` structurally.
+
+### Removed — ADR-0006 SR1-T1 Step 6 (BREAKING for direct importers of internal API)
+- **`octave_mcp.core.schema`** — module deleted. Its `validate()` function was a thin delegator to `octave_mcp.core.validator.validate()` (which is also removed; see below). Its `Schema` container class has been relocated to `octave_mcp.schemas.repository` (co-located with its sole consumer, `SchemaRepository`).
+- **`octave_mcp.core.validator.validate`** — module-level function removed. The canonical surface is the class-based API:
+
+  ```python
+  # Before (pre-1.12.0)
+  from octave_mcp.core.validator import validate
+  errors = validate(doc, schema, strict=True)
+
+  # After (1.12.0+)
+  from octave_mcp.core.validator import Validator
+  errors = Validator(schema).validate(doc, strict=True)
+  ```
+
+- **`octave_mcp.core.validator.validate_frontmatter`** — relocated to `octave_mcp.core.grammar.entry.validate_frontmatter`. Importers must update.
+
+### Changed
+- **`mcp/validate.py`, `mcp/write.py`, `cli/main.py`** — no public API change. These call sites already used the class-based `Validator(schema).validate(doc, ...)` surface; Step 6 only deletes the legacy shims they did not use.
+- **Test files** that imported the module-level `validate()` have been updated to the class-based API (`tests/unit/test_schema.py`, `tests/integration/test_e2e.py`, `tests/vectors/test_vectors.py`, `tests/unit/test_unknown_fields.py`, `tests/unit/test_repair.py`, `tests/unit/test_crs_review_schema.py`, `tests/unit/test_forbidden_repairs.py`, `tests/unit/test_gh344_meta_field_false_positive.py`, `tests/unit/test_gh358_meta_id_field.py`). Tests using `validate_frontmatter` (`tests/unit/test_frontmatter_validation.py`) and tests using the `Schema` container (`tests/unit/test_schema_repository.py`) have been updated to the new import paths. No test assertions were weakened.
+
+### Migration note
+Public consumers of `octave_mcp.core.validator.validate()` or `octave_mcp.core.schema.*` must migrate to the class-based API: `Validator(schema).validate(document)`. The MCP tool surface (`octave_validate`, `octave_write`) is unchanged. See `docs/adr/adr-0006-sr1-t1-grammar-core-design.md` §3 row 6 + §2.2 (module boundaries) + §4.4 (drift-elimination evidence).
+
+### Risk closure
+This release retires **R2 — `validator_drift_multiple_validators`** from the OCTAVE-MCP North Star Risks. Validator surface is now single-sourced on `class Validator`; there is no second validation path. **SR1-T1 is complete** — all six steps (1 → 2 → 4 → 5 → 3 → 6 per design v1.3 §3a execution order) are now merged.
+
 ## [1.12.0] - "Audit-Completeness Closure" Release (ADR-0006 SR1-T1 Step 3)
 
 This release completes I4 (TRANSFORM_AUDITABILITY) enforcement per ADR-0006 SR1-T1 Step 3. Every canonical re-emit transformation now produces a `TIER_NORMALIZATION` receipt in the `RepairLog` and surfaces through `octave_write`'s `corrections` list. The third HARD_SYMMETRY conjunct (`corrections non-empty IFF diff_unified non-empty`) now holds at boundary cases that previously generated silent canonical mutations.

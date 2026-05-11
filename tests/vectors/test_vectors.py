@@ -13,7 +13,7 @@ from octave_mcp.core.emitter import emit
 from octave_mcp.core.lexer import LexerError
 from octave_mcp.core.parser import parse
 from octave_mcp.core.projector import project
-from octave_mcp.core.validator import validate
+from octave_mcp.core.validator import Validator
 from octave_mcp.schemas.loader import load_builtin_schemas
 
 
@@ -54,7 +54,7 @@ STATUS::active
 
         # Validation with case-folding should succeed
         # (if schema supports it)
-        errors = validate(ast, schema=schemas.get("TEST"))
+        errors = Validator(schemas.get("TEST")).validate(ast)
         assert isinstance(errors, list)
 
     # ... (lines 279-282)
@@ -69,7 +69,7 @@ ROUTE::endpoint
 
         # Should NOT auto-infer routing target
         # Validation may error if target required
-        errors = validate(ast, schema=schemas.get("TEST"))
+        errors = Validator(schemas.get("TEST")).validate(ast)
         assert isinstance(errors, list)
 
 
