@@ -5,9 +5,21 @@ All notable changes to OCTAVE-MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.12.0] - 2026-05-11 - "Validator Collapse & Audit-Completeness Closure" Release (ADR-0006 SR1-T1)
+## [1.12.0] - 2026-05-11 - "Writer/Reader Symmetry" Release (ADR-0006 SR0 + SR1-T1)
 
-This release completes the full ADR-0006 SR1-T1 writer/reader symmetry programme (six steps merged across PRs #393, #394, #395, #396, #397, #398, #399, #400, #401). It single-sources the validator surface (closing North Star Risk **R2**) and enforces I4 (TRANSFORM_AUDITABILITY) at boundary cases by routing every canonical re-emit transformation through a `TIER_NORMALIZATION` receipt.
+This release completes the ADR-0006 writer/reader symmetry programme: the SR0 corpus + W002 destructive-correction work (#383) and all six SR1-T1 steps (#393, #394, #395, #396, #397, #398, #399, #400, #401). It single-sources the validator surface (closing North Star Risk **R2**) and enforces I4 (TRANSFORM_AUDITABILITY) at boundary cases by routing every canonical re-emit transformation through a `TIER_NORMALIZATION` receipt.
+
+### Shipped in v1.12.0
+- **`octave_validate` and `octave_write` share a unified grammar core** — validator surface single-sourced on `class Validator` (now a `Visitor[None]`); `core/schema.py` deleted; `core/grammar/entry.py` is the parse-stage seam. Closes **R2 — `validator_drift_multiple_validators`**. (#393, #394, #396, #397, #398, #399, #400, #401)
+- **W002 destructive empty-`after` corrections eliminated** — pre-1.12.0 the W002 normalization repair could emit `after=""` corrections that silently destroyed source content. The discriminant is now centralised and the destructive variant is rejected at write + lexer. (#383)
+- **Ambiguous `Block.child` paths surface as `W_AMBIGUOUS_PATH` warning** — `octave_write` now drains an `E_AMBIGUOUS_PATH`-scaffolded warning into emit error envelopes when a `changes` path is structurally ambiguous (e.g. duplicate child key target). Warning-only in v1.12.0 — does **not** yet hard-fail. (#391, #392)
+- **HARD_SYMMETRY roundtrip suite enforced in CI** — corner-case fixtures (deeply nested keys, trailing whitespace, multi-byte identifiers, blank-line stripping, triple-quote collapse, identifier dequoting) all enforce writer/reader symmetry; 10 previously strict-xfailed fixtures flipped to expected pass via the reconciler bridge. (#385, #395, #399)
+
+### NOT YET in this release (coming in v1.13.0)
+> These are intentional deferrals with named dependencies. They will land **after** ADR-0006 Sprint 2 exit criteria are written.
+- **`format_style="preserve"` as default** — currently opt-in only. Default flip is pending Strategy A (per-key dirty tracking) per **#376** + **#377**. Triggering the default on today's Strategy C narrow short-circuit would cause unsafe writes on byte-identical-but-AST-different inputs.
+- **Single-region diffs on edits** — currently `octave_write` produces full-document canonical re-emits even for one-line edits. Cursor-backed CST + per-key dirty tracking is pending **#377**.
+- **Full hard-fail on ambiguous paths** — currently warning-only via `W_AMBIGUOUS_PATH` (see Shipped). Hard-fail with `E_AMBIGUOUS_PATH` is pending **#369** (Block.child path corruption hard-fail) and downstream consumer migration.
 
 ### ⚠️ Breaking Changes — direct importers of internal API
 
@@ -59,6 +71,13 @@ See `docs/adr/adr-0006-sr1-t1-grammar-core-design.md` §3 row 6 + §2.2 (module 
   - Stable rule IDs: `TN_IDENTIFIER_DEQUOTE` (precise was_quoted-driven), `TN_RECONCILE_CANONICAL` (reconciler bridge).
 - **Precise instrumentation in `core/emitter.py`** — `emit_assignment` now logs `TN_IDENTIFIER_DEQUOTE` via `tier_normalize.log_repair_if_active` whenever `assignment.was_quoted is True` AND the emitter chose to emit bare. The hook is no-op outside the active context (preserves today's behaviour for callers that do not opt in).
 - **Additive consumer wiring in `mcp/write.py`** — Each `_emit_with_style` invocation is now wrapped with `tier_normalize.active(tier_normalize_log)`. After final emit, `reconcile_canonical_emission` runs and the log drains into `result["corrections"]` mirroring the existing schema-repair loop. The edit is purely additive (~30 lines including comments; no envelope / public API change).
+
+### Added — ADR-0006 SR0 (writer/reader symmetry foundation) — #383
+- **SR0-T1 HARD_SYMMETRY roundtrip suite** — `tests/unit/test_writer_reader_symmetry.py` establishes the writer/reader symmetry contract as enforced CI baseline. The suite asserts the three HARD_SYMMETRY conjuncts (parse-equivalence, byte-equivalence under canonical, repair-cardinality correctness).
+- **SR0-T2 W002 destructive-correction elimination** — the W002 normalization repair previously could emit `after=""` corrections that destroyed source content during canonical re-emit. The discriminant for destructive variants is now centralised in the lexer + write path, and destructive variants are rejected before they reach the RepairLog. Follow-up hardening landed via `e16a728` (CE: discriminant centralisation) and `5a9d9af` (cubic P2: defensive guard for malformed normalization repairs).
+
+### Added — ADR-0006 SR1-T3a (ambiguous path warning surface) — #391, #392
+- **`W_AMBIGUOUS_PATH` deprecation warning + `E_AMBIGUOUS_PATH` scaffolding** — `octave_write` now detects structurally ambiguous `changes` paths (e.g. duplicate child-key targets in a Block) and surfaces a `W_AMBIGUOUS_PATH` warning into the emit error envelope. The `E_AMBIGUOUS_PATH` error symbol is scaffolded but not yet emitted — the hard-fail transition is gated behind #369 and downstream consumer migration in v1.13.0+. Follow-up hardening landed via `e360827` (CRS+CE: verify $op behaviour on ambiguous paths + remove singleton race in warning buffer) and `70d5016` (CE: drain `W_AMBIGUOUS_PATH` into emit error envelopes).
 
 ### Added — ADR-0006 SR1-T1 Steps 1, 2, 4, 5 (grammar core seams) — #393, #394, #396, #397, #398
 - **Step 1 (#393)** — `core/grammar.py` renamed to `core/grammar_compiler/gbnf.py`; a deprecation shim retained at `core/grammar.py` re-exports the public surface and emits a DeprecationWarning. Internal call sites switched to the new path.
