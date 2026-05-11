@@ -112,5 +112,5 @@ CONDUCT:
     skipping_rollback_verification,
     approving_outside_deployment_window_without_escalation
   ]
-ROLE.TIER::deep
+ROLE_TIER::deep
 ===END===

@@ -1,51 +1,25 @@
-"""OCTAVE grammar compilation orchestration (Issue #171).
+"""Deprecated: use octave_mcp.core.grammar_compiler.gbnf instead.
 
-Provides JIT grammar compilation from META schema definitions.
-Coordinates constraint compilation into GBNF grammars for llama.cpp
-constrained generation.
-
-v6.0 Generative Holographic Contracts: Documents carry their own validation law.
+This shim re-exports the public API from the new path and emits a
+DeprecationWarning. Scheduled for removal alongside the SR1-T1 grammar
+core unification milestone (post-#382 Step 6).
 """
 
-from typing import Any
+import warnings
 
-from octave_mcp.core.gbnf_compiler import GBNFCompiler, compile_gbnf_from_meta
-from octave_mcp.core.schema_extractor import SchemaDefinition
+from octave_mcp.core.grammar_compiler.gbnf import (
+    compile_document_grammar,
+    emit_grammar_for_schema,
+)
 
+__all__ = [
+    "compile_document_grammar",
+    "emit_grammar_for_schema",
+]
 
-def compile_document_grammar(meta: dict[str, Any]) -> str:
-    """Compile document grammar from META schema definition.
-
-    Takes a META section containing schema information and compiles
-    constraint specifications into a GBNF grammar for llama.cpp.
-
-    Args:
-        meta: META dictionary from parse_meta_only() or full parse
-
-    Returns:
-        Compiled GBNF grammar string
-
-    Example:
-        >>> meta = {"TYPE": "SESSION_LOG", "VERSION": "1.0"}
-        >>> grammar = compile_document_grammar(meta)
-        >>> "::=" in grammar
-        True
-    """
-    return compile_gbnf_from_meta(meta)
-
-
-def emit_grammar_for_schema(schema_name: str) -> str:
-    """Emit GBNF grammar for named schema.
-
-    Creates a minimal schema with the given name and compiles
-    it to GBNF format.
-
-    Args:
-        schema_name: Name of schema to compile grammar for
-
-    Returns:
-        GBNF grammar string
-    """
-    schema = SchemaDefinition(name=schema_name, version="1.0")
-    compiler = GBNFCompiler()
-    return compiler.compile_schema(schema, include_envelope=True)
+warnings.warn(
+    "octave_mcp.core.grammar is deprecated; import from "
+    "octave_mcp.core.grammar_compiler.gbnf instead. Removal tracked at #382.",
+    DeprecationWarning,
+    stacklevel=2,
+)
