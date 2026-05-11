@@ -1,0 +1,4 @@
+===EMPTY_META_ONLY===
+META:
+  TYPE::TEST
+===END===
