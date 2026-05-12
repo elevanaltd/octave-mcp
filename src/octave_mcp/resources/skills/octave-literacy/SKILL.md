@@ -36,6 +36,9 @@ META:
   §1b::BRACKET_FORMS
     CONTAINER::"[a,b,c] — bare brackets = list"
     ANNOTATION::"NAME<qualifier> — semantic facet on identity (ATHENA<strategic_wisdom>, LLM<exclusively>)"
+    ANNOTATION_DISCIPLINE::"Annotations are SHORT qualifiers (1-3 words, ≤32 chars, identifier-only). Multi-word reasoning belongs in a sibling RATIONALE value with quoted prose."
+    ANNOTATION_WRONG::"I6<migration_on_moving_target_is_anti_pattern_for_zero_warnings>"
+    ANNOTATION_RIGHT::"I6<production_grade_quality> + RATIONALE::\"Migration on moving target is anti-pattern for strict typing during data model changes.\""
     CONSTRUCTOR::"NAME[args] — structured arguments on identifier (REGEX[pattern], ENUM[a,b], JIT_GRAMMAR_COMPILATION[META→GBNF])"
     // These are SEPARATE forms. <> qualifies what something IS. [] parameterizes what something DOES.
     // ATHENA<strategic_wisdom> = annotation (identity facet). ENUM[a,b,c] = constructor (validation args).
