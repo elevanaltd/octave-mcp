@@ -130,3 +130,101 @@ class TestFieldAcceptance:
         lv = ListValue(items=[1, 2], start_byte=0, end_byte=10)
         assert lv.start_byte == 0
         assert lv.end_byte == 10
+
+
+# ---------------------------------------------------------------------------
+# PR-2 T5 (ADR-0006 SR2-T2 Strategy A): body_dirty + Document.meta_dirty +
+# Document.trailing_comments byte range.
+#
+# PR-2 introduces refined dirty-bit infrastructure so that Block/Section
+# bodies can be marked re-emittable while keeping their headers spliced,
+# and so that Document META can mark individual keys dirty without
+# blowing the whole META region's diff footprint. The trailing-comments
+# byte range supports the ADR §3 subsection policy (slice unchanged when
+# clean, re-emit when dirty).
+#
+# These fields are infrastructure-only in PR-2 — the emitter consumes
+# them in PR-3 (T8). PR-2 tests only assert presence + default state +
+# kwarg acceptance.
+# ---------------------------------------------------------------------------
+
+
+class TestBlockBodyDirty:
+    """Block.body_dirty is False by default and accepted as a kwarg."""
+
+    def test_body_dirty_default_false(self) -> None:
+        block = Block()
+        assert hasattr(block, "body_dirty")
+        assert block.body_dirty is False
+
+    def test_body_dirty_independent_of_dirty(self) -> None:
+        block = Block()
+        block.body_dirty = True
+        assert block.body_dirty is True
+        # body_dirty is distinct from whole-node dirty
+        assert block.dirty is False
+
+    def test_body_dirty_accepted_as_kwarg(self) -> None:
+        block = Block(key="K", body_dirty=True)
+        assert block.body_dirty is True
+
+
+class TestSectionBodyDirty:
+    """Section.body_dirty mirrors Block — bodies can re-emit while header splices."""
+
+    def test_body_dirty_default_false(self) -> None:
+        section = Section()
+        assert hasattr(section, "body_dirty")
+        assert section.body_dirty is False
+
+    def test_body_dirty_independent_of_dirty(self) -> None:
+        section = Section()
+        section.body_dirty = True
+        assert section.body_dirty is True
+        assert section.dirty is False
+
+    def test_body_dirty_accepted_as_kwarg(self) -> None:
+        section = Section(section_id="1", key="S", body_dirty=True)
+        assert section.body_dirty is True
+
+
+class TestDocumentMetaDirty:
+    """Document.meta_dirty is a per-key dict marking META fields touched."""
+
+    def test_meta_dirty_default_empty_dict(self) -> None:
+        doc = Document()
+        assert hasattr(doc, "meta_dirty")
+        assert doc.meta_dirty == {}
+        assert isinstance(doc.meta_dirty, dict)
+
+    def test_meta_dirty_independent_per_document_instance(self) -> None:
+        """Defaults must not share a mutable dict across instances (default_factory)."""
+        doc_a = Document()
+        doc_b = Document()
+        doc_a.meta_dirty["STATUS"] = True
+        # doc_b's dict must remain empty — no shared mutable default
+        assert doc_b.meta_dirty == {}
+
+    def test_meta_dirty_per_key_set_get(self) -> None:
+        doc = Document()
+        doc.meta_dirty["STATUS"] = True
+        doc.meta_dirty["VERSION"] = True
+        assert doc.meta_dirty["STATUS"] is True
+        assert doc.meta_dirty["VERSION"] is True
+        assert "UPDATED" not in doc.meta_dirty
+
+
+class TestDocumentTrailingCommentsByteRange:
+    """Document.trailing_comments_start_byte/end_byte mark the trailing band."""
+
+    def test_trailing_comments_byte_range_defaults_none(self) -> None:
+        doc = Document()
+        assert hasattr(doc, "trailing_comments_start_byte")
+        assert hasattr(doc, "trailing_comments_end_byte")
+        assert doc.trailing_comments_start_byte is None
+        assert doc.trailing_comments_end_byte is None
+
+    def test_trailing_comments_byte_range_accepts_kwargs(self) -> None:
+        doc = Document(trailing_comments_start_byte=100, trailing_comments_end_byte=120)
+        assert doc.trailing_comments_start_byte == 100
+        assert doc.trailing_comments_end_byte == 120

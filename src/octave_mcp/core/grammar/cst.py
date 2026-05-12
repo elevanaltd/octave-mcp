@@ -231,11 +231,17 @@ class Block(ASTNode):
         target: Optional target for block-level routing inheritance.
                 Syntax: BLOCK[->TARGET]: sets target="TARGET".
                 Children without explicit targets inherit from parent blocks.
+        body_dirty: ADR-0006 SR2-T2 PR-2 (GH#377). When True, the block's
+            children region must be re-emitted (a child was added/removed
+            or one or more child nodes mutated), but the block header line
+            is still byte-spliceable from baseline. Distinct from
+            ``dirty`` which forces a full re-emit (header + body).
     """
 
     key: str = ""
     children: list[ASTNode] = field(default_factory=list)
     target: str | None = None
+    body_dirty: bool = False
     kind: NodeKind = field(default=NodeKind.BLOCK, init=False)
 
 
@@ -251,6 +257,10 @@ class Section(ASTNode):
     key: str = ""
     annotation: str | None = None
     children: list[ASTNode] = field(default_factory=list)
+    # ADR-0006 SR2-T2 PR-2 (GH#377): body re-emission flag — header bytes
+    # may still splice from baseline when ``body_dirty=True`` and
+    # ``dirty=False``. Mirrors ``Block.body_dirty``.
+    body_dirty: bool = False
     kind: NodeKind = field(default=NodeKind.SECTION, init=False)
 
 
@@ -282,6 +292,19 @@ class Document(ASTNode):
     # populated by the parser when a META block is present.
     meta_start_byte: int | None = None
     meta_end_byte: int | None = None
+    # ADR-0006 SR2-T2 PR-2 (GH#377): per-key META dirty map. Setting
+    # ``doc.meta_dirty["STATUS"] = True`` marks only that META key for
+    # re-emission; other META keys slice unchanged from baseline. Keeps
+    # single-META-key edits at ~30 bytes of diff footprint regardless of
+    # META block size. See ADR §4 (per-key dirty) and §7 R5.
+    meta_dirty: dict[str, bool] = field(default_factory=dict)
+    # ADR-0006 SR2-T2 PR-2 (GH#377): byte range of the trailing-comments
+    # band (between last section's end_byte and ``===END===``). When
+    # ``doc.dirty=False`` AND ``trailing_comments`` is structurally
+    # unchanged, the band slices verbatim. See ADR §3 trailing-comments
+    # subsection.
+    trailing_comments_start_byte: int | None = None
+    trailing_comments_end_byte: int | None = None
     kind: NodeKind = field(default=NodeKind.DOCUMENT, init=False)
 
 
