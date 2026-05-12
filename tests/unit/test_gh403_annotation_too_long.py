@@ -184,3 +184,72 @@ ARCHETYPES::[HEPHAESTUS<implementation_craft>,ATLAS<structural_foundation>]
         corrections = result.get("corrections", [])
         codes = [c["code"] for c in corrections]
         assert "W_ANNOTATION_TOO_LONG" not in codes
+
+
+class TestAnnotationTooLongProtectedZones:
+    """Negative-case tests: W_ANNOTATION_TOO_LONG must NOT fire in protected zones.
+
+    GH#403 rework: scanner must protect comment lines, quoted string values,
+    and fenced literal zones from false-positive annotation warnings.
+    """
+
+    # Long enough to trigger the warning if unprotected (>32 chars, 5+ tokens)
+    LONG_QUALIFIER = "migration_on_moving_target_is_anti_pattern_for_something"
+
+    def test_comment_line_no_warning(self):
+        """Annotation-shaped text on a comment line must NOT fire W_ANNOTATION_TOO_LONG.
+
+        CE evidence: '// TODO I6<migration_on_moving_target_is_anti_pattern>'
+        comment lines are not OCTAVE DSL content.
+        """
+        content = f"// TODO I6<{self.LONG_QUALIFIER}>\n"
+        warnings = _detect_annotation_too_long(content)
+        codes = [w["code"] for w in warnings]
+        assert "W_ANNOTATION_TOO_LONG" not in codes, (
+            f"False positive: comment line fired W_ANNOTATION_TOO_LONG for {self.LONG_QUALIFIER!r}"
+        )
+
+    def test_quoted_string_value_no_warning(self):
+        """Annotation-shaped text inside a quoted string value must NOT fire W_ANNOTATION_TOO_LONG.
+
+        CE evidence: 'A::"I6<migration_on_moving_target_is_anti_pattern>"'
+        quoted values are Zone 2 (preserving container), not Zone 1 DSL.
+        """
+        content = f'A::"I6<{self.LONG_QUALIFIER}>"\n'
+        warnings = _detect_annotation_too_long(content)
+        codes = [w["code"] for w in warnings]
+        assert "W_ANNOTATION_TOO_LONG" not in codes, (
+            f"False positive: quoted string value fired W_ANNOTATION_TOO_LONG for {self.LONG_QUALIFIER!r}"
+        )
+
+    def test_literal_zone_content_no_warning(self):
+        """Annotation-shaped text inside a fenced literal zone must NOT fire W_ANNOTATION_TOO_LONG.
+
+        CE evidence: fenced literal-zone content containing annotation-shaped text.
+        Literal zones are Zone 3 (explicit literal), exempt from all normalization.
+        """
+        content = (
+            "===DOC===\n"
+            "EXAMPLE:\n"
+            "```\n"
+            f"FIELD::VALUE[I6<{self.LONG_QUALIFIER}>]\n"
+            "```\n"
+            "===END===\n"
+        )
+        warnings = _detect_annotation_too_long(content)
+        codes = [w["code"] for w in warnings]
+        assert "W_ANNOTATION_TOO_LONG" not in codes, (
+            f"False positive: literal zone content fired W_ANNOTATION_TOO_LONG for {self.LONG_QUALIFIER!r}"
+        )
+
+    def test_unprotected_long_annotation_still_fires(self):
+        """W_ANNOTATION_TOO_LONG must still fire for a genuine long annotation in Zone 1.
+
+        Regression guard: protected-zone logic must not suppress real violations.
+        """
+        content = f"FIELD::VALUE[I6<{self.LONG_QUALIFIER}>]\n"
+        warnings = _detect_annotation_too_long(content)
+        codes = [w["code"] for w in warnings]
+        assert "W_ANNOTATION_TOO_LONG" in codes, (
+            f"Regression: genuine Zone 1 long annotation did NOT fire W_ANNOTATION_TOO_LONG"
+        )
