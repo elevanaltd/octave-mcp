@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import unicodedata
 
+import pytest
+
 from octave_mcp.core.grammar.cst import (
     Assignment,
     Block,
@@ -107,14 +109,22 @@ def test_block_has_span_containing_children() -> None:
         assert child.end_byte <= block.end_byte
 
 
+@pytest.mark.xfail(
+    reason="Comment node span propagation deferred to ADR-0006 SR2-T2 PR-2 (T4). "
+    "Comments are currently leading-attached to their owning Assignment via "
+    "leading_comments/trailing_comment on the parent (cst.py:157-158); standalone "
+    "Comment nodes in section.children are not produced by the parser in this PR, "
+    "and span fields are left as defaults. This test will be unmarked when T4 lands.",
+    strict=False,
+)
 def test_comment_node_has_span() -> None:
     doc = parse(REPRESENTATIVE_DOC)
     section = next(s for s in doc.sections if isinstance(s, Section))
-    # Comment is leading-attached to the next assignment, so search children
     comments = [c for c in section.children if isinstance(c, Comment)]
-    # If comments are attached as leading_comments rather than separate Comment
-    # nodes, the test simply skips — span on Comment node only required if one
-    # is present in the children list.
+    # Honest assertion: this PR does not produce standalone Comment children;
+    # an empty list would silently pass without xfail, hiding the deferral.
+    # Once T4 lands, the parser will emit Comment children with real spans.
+    assert len(comments) > 0, "Comment children not yet produced (deferred to PR-2 T4)"
     for c in comments:
         assert c.start_byte is not None
         assert c.end_byte is not None

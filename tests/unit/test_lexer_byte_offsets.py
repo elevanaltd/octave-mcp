@@ -102,13 +102,20 @@ def test_section_marker_byte_span() -> None:
     assert nfc[sec_tok.start_byte : sec_tok.end_byte].decode("utf-8") == "§"
 
 
-def test_indent_zero_width_convention() -> None:
-    """INDENT tokens are NOT zero-width — they cover the leading spaces."""
+def test_indent_covers_leading_whitespace() -> None:
+    """INDENT tokens cover the leading whitespace bytes (lexer.py:25 convention).
+
+    Note: ADR-0006 SR2-T2 brief described INDENT as zero-width; the
+    implementation chose "covers leading spaces" instead. The implemented
+    convention is internally consistent, documented in lexer.py:25-26, and
+    is more useful for splice operations. ADR §7 R3 reconciliation pending
+    in PR-2 ADR revisions.
+    """
     src = "BLOCK:\n  CHILD::val\n"
     tokens, _ = tokenize(src)
     nfc = _nfc_bytes(src)
     indent_tok = next(t for t in tokens if t.type == TokenType.INDENT)
-    # INDENT spans the leading whitespace
+    # INDENT spans the leading whitespace bytes
     assert indent_tok.end_byte - indent_tok.start_byte == 2
     assert nfc[indent_tok.start_byte : indent_tok.end_byte] == b"  "
 
