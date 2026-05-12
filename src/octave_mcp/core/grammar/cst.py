@@ -1,5 +1,35 @@
 """Concrete Syntax Tree (CST) node definitions (ADR-0006 SR1-T1 Step 4).
 
+Source-span infrastructure (ADR-0006 SR2-T2 Strategy A, GH#377)
+---------------------------------------------------------------
+
+PR-1 of 4 adds source-span fields on the base ``ASTNode`` and a minimal
+``start_byte``/``end_byte`` pair on each value type (``ListValue``,
+``InlineMap``, ``HolographicValue``, ``LiteralZoneValue``). Spans index
+the **NFC-normalised content** byte stream (see ``lexer`` module docstring
+for the convention). The new fields are populated by the parser in PR-1
+but consumed by nothing — emitter and write-side consumers come in
+PR-3 / PR-2 respectively. This preserves I1 (SYNTACTIC_FIDELITY) and I3
+(MIRROR_CONSTRAINT) trivially: spans REFLECT positions, never invent
+semantic content.
+
+The fields added to ``ASTNode`` (and therefore inherited by every
+concrete node):
+
+* ``start_byte: int | None`` — inclusive byte offset (post-NFC).
+* ``end_byte: int | None`` — exclusive byte offset (post-NFC).
+* ``dirty: bool`` — per-key/-node "value was changed" marker for the
+  Strategy A toggle (GH#376). Reserved infra; written by PR-2.
+* ``repaired: bool`` — set by repair sites in PR-2. Reserved infra.
+* ``comment_block_start_byte: int | None`` — leading-comment-band marker
+  per ADR §3. Used to determine which comments travel with the node
+  on rewrite. Reserved infra; populated in PR-3.
+
+Value types (``ListValue``, ``InlineMap``, ``HolographicValue``,
+``LiteralZoneValue``) only carry the ``start_byte``/``end_byte`` pair —
+they do NOT get ``dirty``/``repaired`` because they inherit dirtiness
+from their parent ``Assignment`` (ADR §4).
+
 This module is the promotion of ``octave_mcp.core.ast_nodes`` to the
 unified grammar package per ADR-0006 §2.2 and §3 row 4. The promotion
 adds three pieces of structural surface without altering the runtime
@@ -161,6 +191,15 @@ class ASTNode:
     leading_trivia: str | None = None
     trailing_trivia: str | None = None
     was_quoted: bool | None = None
+    # --- Source-span infrastructure (ADR-0006 SR2-T2, GH#377).        ---
+    # --- start_byte/end_byte index post-NFC content; populated by the ---
+    # --- parser in PR-1. dirty/repaired/comment_block_start_byte are  ---
+    # --- reserved for PR-2 (write-side) and PR-3 (emitter) consumers. ---
+    start_byte: int | None = None
+    end_byte: int | None = None
+    dirty: bool = False
+    repaired: bool = False
+    comment_block_start_byte: int | None = None
     # --- Structural discriminator (ADR-0006 §3 row 4). Subclasses     ---
     # --- override with their own NodeKind variant via init=False.     ---
     # The base ASTNode itself is abstract for kind purposes; the default
@@ -239,6 +278,10 @@ class Document(ASTNode):
     raw_frontmatter: str | None = None
     trailing_comments: list[str] = field(default_factory=list)
     grammar_version: str | None = None
+    # ADR-0006 SR2-T2 (GH#377): byte range of the META block region,
+    # populated by the parser when a META block is present.
+    meta_start_byte: int | None = None
+    meta_end_byte: int | None = None
     kind: NodeKind = field(default=NodeKind.DOCUMENT, init=False)
 
 
@@ -267,6 +310,9 @@ class ListValue:
 
     items: list[Any] = field(default_factory=list)
     tokens: list[Any] | None = None  # Gap_2: Token slice for fidelity reconstruction
+    # ADR-0006 SR2-T2 (GH#377): byte range for value-type spans.
+    start_byte: int | None = None
+    end_byte: int | None = None
 
 
 @dataclass
@@ -277,6 +323,9 @@ class InlineMap:
     """
 
     pairs: dict[str, Any] = field(default_factory=dict)
+    # ADR-0006 SR2-T2 (GH#377): byte range for value-type spans.
+    start_byte: int | None = None
+    end_byte: int | None = None
 
 
 @dataclass
@@ -304,6 +353,9 @@ class HolographicValue:
     target: str | None
     raw_pattern: str = ""
     tokens: list[Any] | None = None
+    # ADR-0006 SR2-T2 (GH#377): byte range for value-type spans.
+    start_byte: int | None = None
+    end_byte: int | None = None
 
 
 @dataclass
@@ -337,6 +389,9 @@ class LiteralZoneValue:
     content: str = ""
     info_tag: str | None = None
     fence_marker: str = "```"
+    # ADR-0006 SR2-T2 (GH#377): byte range for value-type spans.
+    start_byte: int | None = None
+    end_byte: int | None = None
 
 
 __all__ = [
