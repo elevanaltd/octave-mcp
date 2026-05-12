@@ -109,6 +109,26 @@ W_COMPACT_REFUSED = "W_COMPACT_REFUSED"
 # RecursionError escape unwrapped.
 E_AST_CYCLE = "E_AST_CYCLE"
 
+# GH#403: Annotation content discipline warning.
+# Fires (non-blocking) when annotation identifier content (the qualifier
+# inside <>) exceeds the discipline threshold: len > 32 chars OR
+# underscore-token count >= 5.  Content at this size is snake_case prose
+# masquerading as an identifier qualifier — it belongs in a sibling
+# RATIONALE field with quoted prose.  Routed to corrections (repair_log),
+# NOT to errors — it is advisory, not a validation failure.
+W_ANNOTATION_TOO_LONG = "W_ANNOTATION_TOO_LONG"
+
+# Threshold constants (GH#403)
+_ANNOTATION_TOO_LONG_CHAR_LIMIT = 32
+_ANNOTATION_TOO_LONG_TOKEN_LIMIT = 5  # >= 5 underscore-delimited tokens
+
+# Regex to extract annotation qualifier content (inside angle brackets).
+# Matches NAME<qualifier> at word boundaries within a line; captures the
+# qualifier content only.  The outer name part is not restricted here
+# because is_annotation_shape already enforces the identifier grammar;
+# we need a broader scan that catches multi-annotation list values.
+_ANNOTATION_QUALIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]*<([A-Za-z_./][A-Za-z0-9_.\-/]*)>")
+
 
 class OctaveASTCycleError(ValueError):
     """Raised when a format_style AST traversal detects a cycle.
@@ -439,6 +459,138 @@ def _detect_unquoted_section_in_values(content: str) -> list[dict[str, Any]]:
                 "semantics_changed": False,
             }
         )
+    return warnings
+
+
+def _build_annotation_protected_ranges(content: str) -> list[tuple[int, int]]:
+    """Build character-offset protected ranges for W_ANNOTATION_TOO_LONG scanner.
+
+    GH#403 rework: mirrors the protected-range approach used in
+    _repair_curly_brace_annotations() to avoid false positives in:
+      1. Literal zones (``` fenced blocks) — Zone 3, exempt from normalization
+      2. Quoted strings ("...") — Zone 2, preserving containers
+      3. Comment spans (// to end of line) — not OCTAVE DSL content
+
+    Returns:
+        Sorted list of (start, end) character-offset tuples that are protected.
+    """
+    protected: list[tuple[int, int]] = []
+
+    # 1. Literal zones: ``` fenced blocks (including fence lines themselves)
+    in_fence = False
+    fence_start = 0
+    offset = 0
+    for line in content.split("\n"):
+        line_start = offset
+        offset += len(line) + 1  # +1 for newline separator
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if not in_fence:
+                in_fence = True
+                fence_start = line_start
+            else:
+                in_fence = False
+                fence_end = line_start + len(line)
+                protected.append((fence_start, fence_end))
+    # If fence was never closed, protect from fence_start to end of content
+    if in_fence:
+        protected.append((fence_start, len(content)))
+
+    # 2. Quoted strings: text between "" anywhere in content
+    quote_pattern = re.compile(r'"(?:[^"\\]|\\.)*"')
+    for m in quote_pattern.finditer(content):
+        protected.append((m.start(), m.end()))
+
+    # 3. Comments: // to end of line
+    comment_pattern = re.compile(r"//[^\n]*")
+    for m in comment_pattern.finditer(content):
+        protected.append((m.start(), m.end()))
+
+    protected.sort()
+    return protected
+
+
+def _is_in_protected_range(pos: int, protected: list[tuple[int, int]]) -> bool:
+    """Return True if character position falls within any protected range."""
+    for start, end in protected:
+        if start <= pos < end:
+            return True
+        if start > pos:
+            break
+    return False
+
+
+def _detect_annotation_too_long(content: str) -> list[dict[str, Any]]:
+    """Detect annotation identifier content that violates discipline thresholds.
+
+    GH#403: Annotations are SHORT qualifiers (1-3 words, identifier-only).
+    Multi-word snake_case rationales stuffed into annotation content are a
+    discipline violation.  This function emits a non-blocking advisory warning
+    (W_ANNOTATION_TOO_LONG) for any annotation qualifier that exceeds EITHER:
+      * len(qualifier) > 32 characters, OR
+      * underscore-delimited token count >= 5 (i.e. >= 4 underscores in content)
+
+    GH#403 rework: Uses character-offset protected ranges (same approach as
+    _repair_curly_brace_annotations) to skip comment lines, quoted string
+    values, and fenced literal zones.  Only Zone 1 (normalizing DSL) content
+    is scanned for discipline violations.
+
+    The warning is safe=True, semantics_changed=False — it is advisory only
+    and does NOT block the write operation.  Frozen archives (docs/research/,
+    examples/) receive the same treatment; the JIT policy (AGENTS.oct.md)
+    governs when agents should refactor long annotations on amendment.
+
+    Args:
+        content: Raw OCTAVE document content string.
+
+    Returns:
+        List of correction dicts with W_ANNOTATION_TOO_LONG code, one per
+        offending annotation found in the document.
+    """
+    warnings: list[dict[str, Any]] = []
+
+    # Build protected ranges once for the whole document (I1: zone-aware scanning)
+    protected = _build_annotation_protected_ranges(content)
+
+    for match in _ANNOTATION_QUALIFIER_RE.finditer(content):
+        # Skip matches whose start position falls inside a protected zone
+        if _is_in_protected_range(match.start(), protected):
+            continue
+
+        qualifier = match.group(1)
+        if not qualifier:
+            continue
+
+        qualifier_len = len(qualifier)
+        underscore_token_count = qualifier.count("_") + 1  # tokens = underscores + 1
+
+        if (
+            qualifier_len > _ANNOTATION_TOO_LONG_CHAR_LIMIT
+            or underscore_token_count >= _ANNOTATION_TOO_LONG_TOKEN_LIMIT
+        ):
+            # Compute 1-based line number from match position in full content
+            line_num = content[: match.start()].count("\n") + 1
+            annotation_value = match.group(0)
+            warnings.append(
+                {
+                    "code": W_ANNOTATION_TOO_LONG,
+                    "tier": "ANNOTATION_DISCIPLINE",
+                    "message": (
+                        f"W_ANNOTATION_TOO_LONG at line {line_num}: annotation qualifier "
+                        f"'{qualifier}' exceeds discipline thresholds "
+                        f"(len={qualifier_len}, tokens={underscore_token_count}). "
+                        f"Annotations must be ≤32 chars and ≤4 underscore-tokens. "
+                        f"Extract multi-word rationale to a sibling RATIONALE field with quoted prose."
+                    ),
+                    "line": line_num,
+                    "annotation": annotation_value,
+                    "qualifier": qualifier,
+                    "qualifier_len": qualifier_len,
+                    "underscore_token_count": underscore_token_count,
+                    "safe": True,
+                    "semantics_changed": False,
+                }
+            )
     return warnings
 
 
@@ -3505,6 +3657,12 @@ class WriteTool(BaseTool):
             # The lexer/parser behavior is correct; this is purely user-facing guidance.
             section_warnings = _detect_unquoted_section_in_values(parse_input)
             corrections.extend(section_warnings)
+
+            # GH#403: Detect annotation identifier content that violates discipline
+            # thresholds (len > 32 chars OR underscore-token count >= 5).
+            # Non-blocking advisory — goes to corrections only, not errors.
+            annotation_discipline_warnings = _detect_annotation_too_long(parse_input)
+            corrections.extend(annotation_discipline_warnings)
 
             # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)
