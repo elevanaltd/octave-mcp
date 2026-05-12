@@ -127,7 +127,7 @@ _ANNOTATION_TOO_LONG_TOKEN_LIMIT = 5  # >= 5 underscore-delimited tokens
 # qualifier content only.  The outer name part is not restricted here
 # because is_annotation_shape already enforces the identifier grammar;
 # we need a broader scan that catches multi-annotation list values.
-_ANNOTATION_QUALIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]*<([A-Za-z_][A-Za-z0-9_,]*)>")
+_ANNOTATION_QUALIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]*<([A-Za-z_./][A-Za-z0-9_.\-/]*)>")
 
 
 class OctaveASTCycleError(ValueError):

@@ -128,6 +128,20 @@ ROLES::[
         warnings = _detect_annotation_too_long(content)
         assert len(warnings) == 2
 
+    def test_qualifier_with_hyphen_dot_slash_triggers_warning_when_long(self):
+        """Qualifiers using identifier_char chars (-, ., /) must fire when over threshold."""
+        # identifier_char per grammar: letter | digit | "_" | "-" | "." | "/" | unicode_symbol
+        content = "FIELD<some-path/to.a-very-long-and-deeply-nested-qualifier-value>"
+        warnings = _detect_annotation_too_long(content)
+        assert len(warnings) == 1
+        assert warnings[0]["code"] == "W_ANNOTATION_TOO_LONG"
+
+    def test_short_qualifier_with_hyphen_no_warning(self):
+        """Short qualifiers using hyphen must NOT trigger warning."""
+        content = "FIELD<read-only>"
+        warnings = _detect_annotation_too_long(content)
+        assert warnings == []
+
 
 class TestWriteToolAnnotationWarnings:
     """Integration tests: W_ANNOTATION_TOO_LONG surfaces in WriteTool corrections."""
