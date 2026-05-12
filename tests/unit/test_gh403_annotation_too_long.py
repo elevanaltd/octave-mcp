@@ -88,8 +88,13 @@ ROLES::[
         assert len(warnings) == 1
 
     def test_four_underscore_tokens_no_warning(self):
-        """Annotation with 4 underscore-delimited tokens must NOT trigger warning."""
-        content = "AGENT<production_grade_quality>"  # 3 tokens, clearly fine
+        """Annotation with 4 underscore-delimited tokens must NOT trigger warning.
+
+        4 tokens (3 underscores) is the maximum allowed; >= 5 tokens triggers.
+        'only_when_genuinely_beneficial' = only+when+genuinely+beneficial (4 tokens,
+        30 chars) — sits at the boundary and must pass clean.
+        """
+        content = "AGENT<only_when_genuinely_beneficial>"  # 4 tokens, 30 chars — max allowed
         warnings = _detect_annotation_too_long(content)
         assert warnings == []
 
