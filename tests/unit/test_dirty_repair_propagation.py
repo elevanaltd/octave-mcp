@@ -1,4 +1,4 @@
-"""T4 tests: dirty/repaired propagation across parser and write-side mutation sites.
+"""T4/T6 tests: dirty/repaired propagation across parser and write-side mutation sites.
 
 ADR-0006 SR2-T2 Strategy A PR-2 (GH#377). PR-2 wires the dirty-bit +
 repaired-bit propagation through:
@@ -237,3 +237,151 @@ class TestSchemaRepairPairedWrite:
         # After repair: value is canonical AND .repaired is True.
         assert node.value == "ACTIVE"
         assert node.repaired is True
+
+
+# ---------------------------------------------------------------------------
+# T6 tests (ADR-0006 SR2-T2 Strategy A PR-2): _apply_changes mark-touched
+# integration. Every $op (MERGE/APPEND/PREPEND/DELETE) and every path shape
+# (top-level KEY, META.FIELD, PARENT.CHILD, §N.KEY) must paired-write the
+# correct dirty flag on the correct node. Sibling-clean invariant: only the
+# touched leaf is dirty.
+# ---------------------------------------------------------------------------
+
+
+class TestApplyChangesTopLevelKey:
+    """Top-level KEY edit marks only the touched Assignment dirty."""
+
+    def test_top_level_set_marks_assignment_dirty(self):
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = parse("===DOC===\nA::1\nB::2\nC::3\n===END===\n")
+        tool = WriteTool()
+        tool._apply_changes(doc, {"B": 99})
+        # Sibling-clean invariant: only B is dirty.
+        keys_dirty = {n.key: n.dirty for n in doc.sections if hasattr(n, "key")}
+        assert keys_dirty == {"A": False, "B": True, "C": False}
+
+    def test_top_level_new_key_appended_dirty(self):
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = parse("===DOC===\nA::1\n===END===\n")
+        tool = WriteTool()
+        tool._apply_changes(doc, {"NEW": "v"})
+        new_node = next(n for n in doc.sections if hasattr(n, "key") and n.key == "NEW")
+        assert new_node.dirty is True
+
+
+class TestApplyChangesMetaDirty:
+    """META.FIELD edits mark doc.meta_dirty per key, leaving other META keys clean."""
+
+    def test_meta_field_update_marks_meta_dirty_for_field(self):
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = parse("===DOC===\nMETA:\n  STATUS::ACTIVE\n  VERSION::1.0\n===END===\n")
+        tool = WriteTool()
+        tool._apply_changes(doc, {"META.STATUS": "PAUSED"})
+        assert doc.meta_dirty.get("STATUS") is True
+        # Sibling-clean: VERSION untouched.
+        assert "VERSION" not in doc.meta_dirty
+
+    def test_meta_delete_marks_meta_dirty(self):
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = parse("===DOC===\nMETA:\n  STATUS::ACTIVE\n  VERSION::1.0\n===END===\n")
+        tool = WriteTool()
+        tool._apply_changes(doc, {"META.STATUS": {"$op": "DELETE"}})
+        assert "STATUS" not in doc.meta
+        assert doc.meta_dirty.get("STATUS") is True
+
+    def test_meta_dict_merge_marks_each_touched_key(self):
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = parse("===DOC===\nMETA:\n  STATUS::ACTIVE\n  VERSION::1.0\n===END===\n")
+        tool = WriteTool()
+        tool._apply_changes(doc, {"META": {"STATUS": "PAUSED"}})
+        assert doc.meta_dirty.get("STATUS") is True
+        # VERSION not in payload — stays clean.
+        assert "VERSION" not in doc.meta_dirty
+
+
+class TestApplyChangesBlockChild:
+    """PARENT.CHILD mutation flips Block.body_dirty + child Assignment.dirty."""
+
+    def test_block_child_update_marks_child_dirty_and_block_body_dirty(self):
+        from octave_mcp.core.grammar.cst import Assignment, Block
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = parse("===DOC===\nPARENT:\n  CHILD_A::1\n  CHILD_B::2\n===END===\n")
+        tool = WriteTool()
+        tool._apply_changes(doc, {"PARENT.CHILD_A": 99})
+        parent = next(n for n in doc.sections if isinstance(n, Block) and n.key == "PARENT")
+        child_a = next(c for c in parent.children if isinstance(c, Assignment) and c.key == "CHILD_A")
+        child_b = next(c for c in parent.children if isinstance(c, Assignment) and c.key == "CHILD_B")
+        assert child_a.dirty is True
+        # Sibling-clean inside the block.
+        assert child_b.dirty is False
+        # Body changed -> block.body_dirty=True (header bytes still spliceable).
+        assert parent.body_dirty is True
+        # The block header itself is NOT marked whole-dirty.
+        assert parent.dirty is False
+
+
+class TestApplyChangesSectionChild:
+    "\u00a7N.KEY mutation flips Section.body_dirty + child Assignment.dirty."
+
+    def test_section_child_update_marks_child_dirty_and_section_body_dirty(self):
+        from octave_mcp.core.grammar.cst import Assignment, Section
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = parse("===DOC===\n§1::IDENTITY\n  ROLE::AGENT\n  TIER::DEEP\n===END===\n")
+        tool = WriteTool()
+        tool._apply_changes(doc, {"§1.ROLE": "LEAD"})
+        section = next(n for n in doc.sections if isinstance(n, Section) and n.section_id == "1")
+        role = next(c for c in section.children if isinstance(c, Assignment) and c.key == "ROLE")
+        tier = next(c for c in section.children if isinstance(c, Assignment) and c.key == "TIER")
+        assert role.dirty is True
+        assert tier.dirty is False  # sibling-clean
+        assert section.body_dirty is True
+        assert section.dirty is False
+
+
+class TestApplyChangesArrayOps:
+    """APPEND/PREPEND on a top-level array Assignment marks it dirty."""
+
+    def test_append_marks_assignment_dirty(self):
+        from octave_mcp.core.grammar.cst import Assignment
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = parse("===DOC===\nITEMS::[a, b]\nOTHER::1\n===END===\n")
+        tool = WriteTool()
+        tool._apply_changes(doc, {"ITEMS": {"$op": "APPEND", "value": "c"}})
+        items = next(n for n in doc.sections if isinstance(n, Assignment) and n.key == "ITEMS")
+        other = next(n for n in doc.sections if isinstance(n, Assignment) and n.key == "OTHER")
+        assert items.dirty is True
+        assert other.dirty is False  # sibling-clean
+
+
+class TestApplyMutations:
+    """_apply_mutations marks doc.meta_dirty per touched META key."""
+
+    def test_apply_mutations_marks_meta_dirty(self):
+        from octave_mcp.core.grammar.cst import Document
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = Document(name="DOC")
+        doc.meta["STATUS"] = "ACTIVE"
+        doc.meta["VERSION"] = "1.0"
+        tool = WriteTool()
+        tool._apply_mutations(doc, {"STATUS": "PAUSED"})
+        assert doc.meta["STATUS"] == "PAUSED"
+        assert doc.meta_dirty.get("STATUS") is True
+        # VERSION not in mutations -> not marked.
+        assert "VERSION" not in doc.meta_dirty
