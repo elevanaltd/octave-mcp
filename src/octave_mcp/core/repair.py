@@ -315,7 +315,15 @@ def _repair_ast_node(
                 fix=True,
             )
             if was_repaired:
+                # ADR-0006 SR2-T2 PR-2 (GH#377): paired-write rule.
+                # node.value mutation MUST be paired with node.repaired
+                # = True. Splicing a "clean" node whose value was
+                # repaired post-parse would re-introduce the source
+                # bytes the schema repair just normalised away — an I1
+                # violation. Setting repaired=True forces re-emit on
+                # the eventual PR-3 emitter pass.
                 node.value = repaired_value
+                node.repaired = True
 
     elif isinstance(node, Block):
         # Recursively process block children

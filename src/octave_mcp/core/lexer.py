@@ -4,6 +4,31 @@ Implements P1.2: lenient_lexer_with_ascii_normalization
 
 Token types and normalization logic for OCTAVE syntax.
 Handles ASCII aliases (→/->, ⊕/+, etc.) with deterministic normalization.
+
+Source-span convention (ADR-0006 SR2-T2, GH#377)
+------------------------------------------------
+
+Each ``Token`` carries ``start_byte`` and ``end_byte`` UTF-8 byte offsets
+into the **NFC-normalised** content (i.e. the byte string produced by
+``unicodedata.normalize('NFC', content)``).  The NFC pass happens once
+in ``tokenize`` (via ``_normalize_with_fence_detection``); literal-zone
+spans are preserved verbatim per Issue #235.  Spans index the resulting
+canonical baseline, satisfying I1 (SYNTACTIC_FIDELITY) and I3 (MIRROR
+CONSTRAINT — REFLECT only present, create nothing).
+
+Conventions:
+
+* Lexeme-bearing tokens (IDENTIFIER, NUMBER, STRING, operators, fences,
+  envelope markers, etc.) span the exact byte range matched.  For ASCII
+  aliases ('->' → '→') the span covers the *original* source bytes; the
+  ``normalized_from`` field records the alias.
+* Wider tokens may carry width (e.g. INDENT covers the leading spaces).
+* EOF is a zero-width sentinel at the end of the NFC byte stream
+  (``start_byte == end_byte == len(content_nfc.encode())``).
+
+PR-1 of 4 (Strategy A): spans are populated but consumed by nothing —
+no behaviour change to the existing parser/emitter.  See
+``docs/adr/adr-0006-sr2-t2-ast-span-coverage-audit.md`` §7 R3.
 """
 
 import re
@@ -72,7 +97,13 @@ class TokenType(Enum):
 
 @dataclass
 class Token:
-    """OCTAVE token with position and normalization info."""
+    """OCTAVE token with position and normalization info.
+
+    ADR-0006 SR2-T2 (GH#377) adds ``start_byte`` and ``end_byte``:
+    UTF-8 byte offsets into the NFC-normalised content (see module
+    docstring for the span convention). PR-1 populates these fields;
+    consumers will be wired in PR-2 / PR-3.
+    """
 
     type: TokenType
     value: Any
@@ -80,6 +111,11 @@ class Token:
     column: int
     normalized_from: str | None = None  # Original ASCII alias if normalized
     raw: str | None = None  # Original lexeme text (for NUMBER tokens)
+    # ADR-0006 SR2-T2 (GH#377) — byte offsets into NFC-normalised content.
+    # Populated by ``tokenize``; defaults are 0 so synthetic/test Token
+    # constructions remain ergonomic.
+    start_byte: int = 0
+    end_byte: int = 0
 
 
 class LexerError(Exception):
@@ -819,6 +855,17 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
     # Replaces blanket NFC: literal zone content is preserved verbatim (D3: zero processing)
     content, fence_spans = _normalize_with_fence_detection(content)
 
+    # ADR-0006 SR2-T2 (GH#377): build a character-index → UTF-8 byte-offset
+    # mapping over the NFC-normalised content. Token spans index this byte
+    # baseline (I1 SYNTACTIC_FIDELITY; I3 MIRROR_CONSTRAINT). One-shot O(n)
+    # cost amortised across all token emissions.
+    char_to_byte: list[int] = [0] * (len(content) + 1)
+    _byte_acc = 0
+    for _i, _ch in enumerate(content):
+        char_to_byte[_i] = _byte_acc
+        _byte_acc += len(_ch.encode("utf-8"))
+    char_to_byte[len(content)] = _byte_acc
+
     # Check for tabs OUTSIDE literal zones only (Issue #235: tab bypass)
     for i, char in enumerate(content):
         if char == "\t":
@@ -856,13 +903,18 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
         if fence_span_idx < len(fence_spans) and pos == fence_spans[fence_span_idx][0]:
             span_start, span_end, marker, tag = fence_spans[fence_span_idx]
 
-            # Emit FENCE_OPEN token
+            # Emit FENCE_OPEN token — span covers opening fence line
+            # (from span_start through the newline that terminates it).
+            first_newline = content.index("\n", span_start)
+            fence_open_end_char = first_newline if first_newline < span_end else span_end
             tokens.append(
                 Token(
                     TokenType.FENCE_OPEN,
                     {"fence_marker": marker, "info_tag": tag},
                     line,
                     column,
+                    start_byte=char_to_byte[span_start],
+                    end_byte=char_to_byte[fence_open_end_char],
                 )
             )
 
@@ -890,7 +942,16 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
 
             # Emit LITERAL_CONTENT token (line is the first content line)
             content_line = line
-            tokens.append(Token(TokenType.LITERAL_CONTENT, literal_text, content_line, 1))
+            tokens.append(
+                Token(
+                    TokenType.LITERAL_CONTENT,
+                    literal_text,
+                    content_line,
+                    1,
+                    start_byte=char_to_byte[content_start] if content_start <= len(content) else _byte_acc,
+                    end_byte=char_to_byte[content_end] if content_end <= len(content) else _byte_acc,
+                )
+            )
 
             # Advance line tracking past content lines.
             # Count newlines in the span to determine how many content lines exist.
@@ -905,7 +966,16 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
             # Find the indent of the closing fence line
             close_fence_start = last_newline + 1
             close_column = 1
-            tokens.append(Token(TokenType.FENCE_CLOSE, marker, close_line, close_column))
+            tokens.append(
+                Token(
+                    TokenType.FENCE_CLOSE,
+                    marker,
+                    close_line,
+                    close_column,
+                    start_byte=char_to_byte[close_fence_start],
+                    end_byte=char_to_byte[span_end],
+                )
+            )
 
             # Advance past the span
             # Count the closing fence line's newline in line tracking
@@ -921,7 +991,16 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
             # but before the newline that follows
             if pos < len(content) and content[pos] == "\n":
                 # Emit NEWLINE token for the line break after closing fence
-                tokens.append(Token(TokenType.NEWLINE, "\n", close_line, len(closing_fence_text) + 1))
+                tokens.append(
+                    Token(
+                        TokenType.NEWLINE,
+                        "\n",
+                        close_line,
+                        len(closing_fence_text) + 1,
+                        start_byte=char_to_byte[pos],
+                        end_byte=char_to_byte[pos + 1],
+                    )
+                )
                 pos += 1
 
             fence_span_idx += 1
@@ -932,13 +1011,25 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
         if content[pos] == " ":
             # Count leading spaces for indentation
             if column == 1:  # Start of line
+                indent_start_pos = pos
                 space_count = 0
                 while pos < len(content) and content[pos] == " ":
                     space_count += 1
                     pos += 1
                 if space_count > 0 and pos < len(content) and content[pos] != "\n":
-                    # Only emit INDENT if followed by non-newline
-                    tokens.append(Token(TokenType.INDENT, space_count, line, column))
+                    # Only emit INDENT if followed by non-newline.
+                    # Span covers the leading spaces (ASCII, so char idx == byte idx,
+                    # but use char_to_byte for consistency / future-proofing).
+                    tokens.append(
+                        Token(
+                            TokenType.INDENT,
+                            space_count,
+                            line,
+                            column,
+                            start_byte=char_to_byte[indent_start_pos],
+                            end_byte=char_to_byte[pos],
+                        )
+                    )
                     column += space_count
                 continue
             else:
@@ -964,7 +1055,16 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                     if end_pos >= len(content) or not _is_valid_identifier_char(content[end_pos]):
                         if lenient:
                             # Auto-repair: emit as STRING token and log repair
-                            tokens.append(Token(TokenType.STRING, matched_ts, line, column))
+                            tokens.append(
+                                Token(
+                                    TokenType.STRING,
+                                    matched_ts,
+                                    line,
+                                    column,
+                                    start_byte=char_to_byte[pos],
+                                    end_byte=char_to_byte[end_pos],
+                                )
+                            )
                             repairs.append(
                                 {
                                     "type": "repair_candidate",
@@ -1082,7 +1182,14 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                         while ident_end > end_pos and content[ident_end - 1] == "-":
                             ident_end -= 1
                         merged_value = content[pos:ident_end]
-                        token = Token(TokenType.IDENTIFIER, merged_value, line, column)
+                        token = Token(
+                            TokenType.IDENTIFIER,
+                            merged_value,
+                            line,
+                            column,
+                            start_byte=char_to_byte[pos],
+                            end_byte=char_to_byte[ident_end],
+                        )
                         tokens.append(token)
                         column += len(merged_value)
                         pos = ident_end
@@ -1126,7 +1233,16 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                         normalized_from = matched_text
                         value = ASCII_ALIASES[matched_text]
 
-                token = Token(token_type, value, line, column, normalized_from, raw_lexeme)
+                token = Token(
+                    token_type,
+                    value,
+                    line,
+                    column,
+                    normalized_from,
+                    raw_lexeme,
+                    start_byte=char_to_byte[pos],
+                    end_byte=char_to_byte[match.end()],
+                )
                 tokens.append(token)
 
                 # GH#184: Check for wrong-case boolean/null patterns (spec §6::NEVER)
@@ -1235,7 +1351,17 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                     # But we're here, so it wasn't matched - treat as synthesis
                     pass
                 # Treat as synthesis operator
-                tokens.append(Token(TokenType.SYNTHESIS, "⊕", line, column, "+"))
+                tokens.append(
+                    Token(
+                        TokenType.SYNTHESIS,
+                        "⊕",
+                        line,
+                        column,
+                        "+",
+                        start_byte=char_to_byte[pos],
+                        end_byte=char_to_byte[pos + 1],
+                    )
+                )
                 repairs.append(
                     {"type": "normalization", "original": "+", "normalized": "⊕", "line": line, "column": column}
                 )
@@ -1254,7 +1380,14 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                         r["line"] = line
                         r["column"] = column
 
-                token = Token(TokenType.IDENTIFIER, unicode_id, line, column)
+                token = Token(
+                    TokenType.IDENTIFIER,
+                    unicode_id,
+                    line,
+                    column,
+                    start_byte=char_to_byte[pos],
+                    end_byte=char_to_byte[pos + len(unicode_id)],
+                )
                 tokens.append(token)
 
                 # GH#184: Check for wrong-case boolean/null patterns
@@ -1364,6 +1497,8 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                         prev_token.column,
                         prev_token.normalized_from,
                         None,
+                        start_byte=prev_token.start_byte,
+                        end_byte=char_to_byte[suffix_pos],
                     )
                     advance = suffix_pos - pos
                     column += advance
@@ -1425,6 +1560,8 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                     prev_token.column,
                     prev_token.normalized_from,
                     None,
+                    start_byte=prev_token.start_byte,
+                    end_byte=char_to_byte[suffix_pos],
                 )
                 advance = suffix_pos - pos
                 column += advance
@@ -1457,7 +1594,17 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
             "E_UNBALANCED_BRACKET",
         )
 
-    # Add EOF token
-    tokens.append(Token(TokenType.EOF, None, line, column))
+    # Add EOF token — zero-width at end of NFC byte stream
+    eof_byte = char_to_byte[len(content)]
+    tokens.append(
+        Token(
+            TokenType.EOF,
+            None,
+            line,
+            column,
+            start_byte=eof_byte,
+            end_byte=eof_byte,
+        )
+    )
 
     return tokens, repairs
