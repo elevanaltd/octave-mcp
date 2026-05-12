@@ -14,6 +14,8 @@ This release completes the ADR-0006 writer/reader symmetry programme: the SR0 co
 - **W002 destructive empty-`after` corrections eliminated** — pre-1.12.0 the W002 normalization repair could emit `after=""` corrections that silently destroyed source content. The discriminant is now centralised and the destructive variant is rejected at write + lexer. (#383)
 - **Ambiguous `Block.child` paths surface as `W_AMBIGUOUS_PATH` warning** — `octave_write` now drains an `E_AMBIGUOUS_PATH`-scaffolded warning into emit error envelopes when a `changes` path is structurally ambiguous (e.g. duplicate child key target). Warning-only in v1.12.0 — does **not** yet hard-fail. (#391, #392)
 - **HARD_SYMMETRY roundtrip suite enforced in CI** — corner-case fixtures (deeply nested keys, trailing whitespace, multi-byte identifiers, blank-line stripping, triple-quote collapse, identifier dequoting) all enforce writer/reader symmetry; 10 previously strict-xfailed fixtures flipped to expected pass via the reconciler bridge. (#385, #395, #399)
+- **SR1-T4 — Explicit `octave_write` no-op invariant assertion**: when supplied content already matches target bytes, the write tool is a true no-op (no normalisation, no corrections emitted). Closes the symmetry programme's writer contract. (#407)
+- **GH-386 / W002 discriminant** — W002 destructive-normalization guard now uses a discriminant against a closed `SUPPRESSIBLE_NORMALIZATION_CODES` set; future W003+ codes require explicit admission policy. Prevents accidental warning suppression as new normalisation codes are added. (#408)
 
 ### NOT YET in this release (coming in v1.13.0)
 > These are intentional deferrals with named dependencies. They will land **after** ADR-0006 Sprint 2 exit criteria are written.
