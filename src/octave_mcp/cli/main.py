@@ -438,7 +438,7 @@ def write(
     from octave_mcp.core.grammar.cst import Assignment
     from octave_mcp.core.parser import parse
     from octave_mcp.core.validator import Validator
-    from octave_mcp.mcp.write import OctaveASTCycleError, _emit_with_style
+    from octave_mcp.mcp.write import OctaveASTCycleError, _emit_with_style, _to_baseline_bytes
     from octave_mcp.schemas.loader import get_builtin_schema
 
     # CRS-FIX #3: XOR enforcement - exactly ONE input source
@@ -469,33 +469,34 @@ def write(
     # GH#376 PR-A: corrections collector for CLI W_COMPACT_REFUSED entries.
     # Surfaced via stderr after write completes when format_style="compact".
     cli_corrections: list[dict] = []
-    baseline_for_preserve: str | None = None
+    baseline_for_preserve_raw: str | None = None
 
     try:
         # Handle content mode (create/overwrite)
         if content is not None:
             # Parse and emit canonical form
             doc = parse(content)
-            # GH#376 PR-A: when --format-style=preserve, read existing baseline
-            # bytes (if any) so the Strategy C short-circuit can return them
-            # verbatim on AST-equality.
+            # GH#376 PR-A / GH#377 Strategy A (T8): when --format-style=preserve,
+            # read existing baseline bytes (if any) so the span-aware emit path
+            # can slice unchanged regions verbatim.
+            # HC-1: pass post-NFC bytes via _to_baseline_bytes(), not raw str.
             if format_style == "preserve":
                 from pathlib import Path as _Path
 
                 _existing = _Path(file)
                 if _existing.exists():
                     try:
-                        baseline_for_preserve = _existing.read_text(encoding="utf-8")
+                        baseline_for_preserve_raw = _existing.read_text(encoding="utf-8")
                     except (OSError, UnicodeError):
                         # Cubic C1 (#376 PR-A): UnicodeDecodeError is a
                         # ValueError, not an OSError, so a baseline file
                         # with invalid UTF-8 previously aborted the write.
-                        # Degrade gracefully — preserve short-circuit just
+                        # Degrade gracefully — preserve path just
                         # cannot fire, and we fall through to canonical emit.
-                        baseline_for_preserve = None
+                        baseline_for_preserve_raw = None
             canonical_content = _emit_with_style(
                 doc,
-                baseline_bytes=baseline_for_preserve,
+                baseline_bytes=_to_baseline_bytes(baseline_for_preserve_raw or ""),
                 new_bytes=content,
                 format_style=format_style,
                 corrections=cli_corrections,
@@ -513,7 +514,7 @@ def write(
 
             # Read existing file
             original_content = target_path.read_text(encoding="utf-8")
-            baseline_for_preserve = original_content
+            baseline_for_preserve_raw = original_content
 
             # Parse existing content
             doc = parse(original_content)
@@ -540,7 +541,7 @@ def write(
 
             canonical_content = _emit_with_style(
                 doc,
-                baseline_bytes=baseline_for_preserve,
+                baseline_bytes=_to_baseline_bytes(baseline_for_preserve_raw or ""),
                 new_bytes=None,
                 format_style=format_style,
                 corrections=cli_corrections,
