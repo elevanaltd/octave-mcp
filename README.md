@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-2258%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-3003%20passing-brightgreen.svg)]()
 [![PyPI](https://img.shields.io/pypi/v/octave-mcp.svg)](https://pypi.org/project/octave-mcp/)
 
 **Deterministic document infrastructure for LLM pipelines.** Canonicalization, schema validation, grammar compilation, and MCP tools for durable AI artifacts.
