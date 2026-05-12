@@ -868,7 +868,9 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
                 f"META span [{doc.meta_start_byte}:{doc.meta_end_byte}] out of bounds "
                 f"for baseline ({len(_baseline_bytes)} bytes). NFC contract violated."
             )
-            lines.append(_baseline_bytes[doc.meta_start_byte : doc.meta_end_byte].decode("utf-8"))
+            # Strip trailing newline for consistency with emit_meta() output
+            # (which does not include a trailing newline; "\n".join handles it).
+            lines.append(_baseline_bytes[doc.meta_start_byte : doc.meta_end_byte].decode("utf-8").rstrip("\n"))
             meta_sliced = True
         if not meta_sliced:
             lines.append(emit_meta(doc.meta, format_options))
@@ -908,7 +910,13 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
                 f"out of bounds for baseline ({len(_baseline_bytes)} bytes). "
                 "NFC contract violated."
             )
-            lines.append(_baseline_bytes[section.start_byte : section.end_byte].decode("utf-8"))
+            # Strip exactly one trailing newline from the sliced content.
+            # The byte span may include a trailing '\n' (section spans end at
+            # the next section's start_byte which follows a '\n'). The
+            # "\n".join(lines) call below will re-add the separator, so we
+            # must strip to avoid double newlines between sliced sections.
+            sliced_text = _baseline_bytes[section.start_byte : section.end_byte].decode("utf-8")
+            lines.append(sliced_text.rstrip("\n"))
             continue
 
         # Re-emit path: produce canonical output from AST.
