@@ -510,8 +510,15 @@ class Parser:
         return target
 
     def parse_document(self) -> Document:
-        """Parse a complete OCTAVE document."""
+        """Parse a complete OCTAVE document.
+
+        ADR-0006 SR2-T2 (GH#377): populates ``start_byte`` / ``end_byte``
+        on the Document (covering the full NFC byte stream) and on the
+        META region when present (``meta_start_byte`` / ``meta_end_byte``).
+        """
         doc = Document()
+        # Document start_byte is always 0 (NFC content base offset).
+        doc.start_byte = 0
         self.skip_whitespace()
 
         # Issue #48 Phase 2: Check for grammar sentinel OCTAVE::VERSION
@@ -531,10 +538,20 @@ class Parser:
             # Infer envelope for single doc
             doc.name = "INFERRED"
 
-        # Parse META block first if present
+        # Parse META block first if present.
+        # ADR-0006 SR2-T2 (GH#377): record byte range of the META region for
+        # downstream consumers (PR-3 emitter). Captured BEFORE the call so the
+        # start_byte reflects the META identifier token; the end_byte reflects
+        # whichever token sits one past the last META child.
         if self.current().type == TokenType.IDENTIFIER and self.current().value == "META":
+            meta_start_tok = self.current()
             meta_block = self.parse_meta_block()
             doc.meta = meta_block
+            doc.meta_start_byte = meta_start_tok.start_byte
+            # The current token (post parse_meta_block) is one past the META
+            # region; use the previously consumed token's end_byte.
+            prev_idx = max(0, self.pos - 1)
+            doc.meta_end_byte = self.tokens[prev_idx].end_byte
             # Issue #182: Don't skip comments after META
             self.skip_whitespace(skip_comments=False)
 
@@ -599,6 +616,12 @@ class Parser:
         # Expect END envelope (lenient - allow missing)
         if self.current().type == TokenType.ENVELOPE_END:
             self.advance()
+
+        # ADR-0006 SR2-T2 (GH#377): Document.end_byte = last token's end_byte.
+        # The lexer emits EOF with end_byte == len(content_nfc.encode()), so
+        # this transitively covers the whole NFC byte stream.
+        if self.tokens:
+            doc.end_byte = self.tokens[-1].end_byte
 
         return doc
 
@@ -965,6 +988,15 @@ class Parser:
                 for comment_text in pre_indent_comments:
                     children.append(Comment(text=comment_text))
 
+        # ADR-0006 SR2-T2 (GH#377): span = §-marker token start ... last
+        # child's end (or section_token's end_byte if no children).
+        section_end_byte: int | None = section_token.end_byte
+        if children:
+            for _span_child in reversed(children):
+                _child_end = getattr(_span_child, "end_byte", None)
+                if _child_end is not None:
+                    section_end_byte = _child_end
+                    break
         return Section(
             section_id=section_id,
             key=section_name,
@@ -972,6 +1004,8 @@ class Parser:
             children=children,
             line=section_token.line,
             column=section_token.column,
+            start_byte=section_token.start_byte,
+            end_byte=section_end_byte,
         )
 
     def _try_consume_numeric_key(self) -> bool:
@@ -1099,6 +1133,8 @@ class Parser:
 
             # Issue #182: Collect trailing comment after value
             trailing_comment = self.collect_trailing_comment()
+            # ADR-0006 SR2-T2 (GH#377): span = identifier ... last consumed token.
+            assign_end_byte = self.tokens[max(0, self.pos - 1)].end_byte
             assignment = Assignment(
                 key=key,
                 value=value,
@@ -1106,6 +1142,8 @@ class Parser:
                 column=identifier_token.column,
                 leading_comments=leading_comments or [],
                 trailing_comment=trailing_comment,
+                start_byte=identifier_token.start_byte,
+                end_byte=assign_end_byte,
             )
             # ADR-0006 SR1-T1 Step 5 §4.5 G2: record source-quoting provenance.
             # value_is_quoted is True iff the consumed value token was a STRING
@@ -1144,13 +1182,17 @@ class Parser:
             # The normal INDENT-gated path would leave children empty, silently dropping
             # the literal zone (I1 violation). Parse it here into a bare-key Assignment.
             if self.current().type == TokenType.FENCE_OPEN:
+                fence_open_tok = self.current()
                 lzv = self.parse_literal_zone()
+                lz_end_byte = self.tokens[max(0, self.pos - 1)].end_byte
                 children.append(
                     Assignment(
                         key="",
                         value=lzv,
-                        line=self.current().line,
-                        column=self.current().column,
+                        line=fence_open_tok.line,
+                        column=fence_open_tok.column,
+                        start_byte=fence_open_tok.start_byte,
+                        end_byte=lz_end_byte,
                     )
                 )
 
@@ -1206,14 +1248,18 @@ class Parser:
                     # causing the loop to break and silently drop the literal zone (I1).
                     # Parse it here directly as a bare-key Assignment child.
                     if self.current().type == TokenType.FENCE_OPEN:
+                        fence_open_tok = self.current()
                         lzv = self.parse_literal_zone()
+                        lz_end_byte = self.tokens[max(0, self.pos - 1)].end_byte
                         children.append(
                             Assignment(
                                 key="",
                                 value=lzv,
-                                line=self.current().line,
-                                column=self.current().column,
+                                line=fence_open_tok.line,
+                                column=fence_open_tok.column,
                                 leading_comments=pending_comments or [],
+                                start_byte=fence_open_tok.start_byte,
+                                end_byte=lz_end_byte,
                             )
                         )
                         pending_comments = []
@@ -1266,6 +1312,15 @@ class Parser:
                     for comment_text in pending_comments:
                         children.append(Comment(text=comment_text))
 
+            # ADR-0006 SR2-T2 (GH#377): span = identifier_token.start ...
+            # last child's end_byte (or block_token.end_byte if no children).
+            block_end_byte: int | None = block_token.end_byte
+            if children:
+                for _span_child in reversed(children):
+                    _child_end = getattr(_span_child, "end_byte", None)
+                    if _child_end is not None:
+                        block_end_byte = _child_end
+                        break
             return Block(
                 key=key,
                 children=children,
@@ -1273,6 +1328,8 @@ class Parser:
                 column=identifier_token.column,
                 leading_comments=leading_comments or [],
                 target=block_target,  # Issue #189: Block inheritance target
+                start_byte=identifier_token.start_byte,
+                end_byte=block_end_byte,
             )
 
         # GH#64: Bare identifier without :: or : operator - emit I4 audit warning
@@ -1337,10 +1394,15 @@ class Parser:
                 "E006",
             )
 
+        # ADR-0006 SR2-T2 (GH#377): span = fence_open.start ...
+        # last consumed token's end (FENCE_CLOSE or recovery point).
+        lzv_end_byte = self.tokens[max(0, self.pos - 1)].end_byte
         return LiteralZoneValue(
             content=content,
             info_tag=info_tag,
             fence_marker=marker,
+            start_byte=fence_token.start_byte,
+            end_byte=lzv_end_byte,
         )
 
     def parse_value(self) -> Any:
@@ -2000,6 +2062,8 @@ class Parser:
         # We want tokens from [ to ] inclusive for reconstruction
         start_pos = self.pos
         bracket_token = self.current()  # Capture for line number in warnings
+        # ADR-0006 SR2-T2 (GH#377): span = LIST_START.start ... LIST_END.end.
+        list_start_byte = bracket_token.start_byte
         self.expect(TokenType.LIST_START)
         self.bracket_depth += 1  # GH#184: Track bracket nesting for NEVER rule validation
 
@@ -2090,14 +2154,25 @@ class Parser:
         end_pos = self.pos
         token_slice = self.tokens[start_pos:end_pos]
 
+        # ADR-0006 SR2-T2 (GH#377): list_end_byte = previously consumed
+        # token's end_byte (LIST_END or recovery point).
+        list_end_byte = self.tokens[max(0, self.pos - 1)].end_byte
+
         # Issue #187: Check if this is a holographic pattern
         # Holographic patterns have the form: ["example"∧CONSTRAINT→§TARGET]
         # Detection: Look for CONSTRAINT (∧) token in the token slice
         holographic_result = self._try_parse_holographic(token_slice)
         if holographic_result is not None:
+            holographic_result.start_byte = list_start_byte
+            holographic_result.end_byte = list_end_byte
             return holographic_result
 
-        return ListValue(items=items, tokens=token_slice)
+        return ListValue(
+            items=items,
+            tokens=token_slice,
+            start_byte=list_start_byte,
+            end_byte=list_end_byte,
+        )
 
     def parse_list_item(self) -> Any:
         """Parse a single list item.
@@ -2184,7 +2259,14 @@ class Parser:
                 )
 
             pairs[key] = value
-            return InlineMap(pairs=pairs)
+            # ADR-0006 SR2-T2 (GH#377): span = key_token.start ... last consumed
+            # token's end (covers k::v pair extent).
+            im_end_byte = self.tokens[max(0, self.pos - 1)].end_byte
+            return InlineMap(
+                pairs=pairs,
+                start_byte=key_token.start_byte,
+                end_byte=im_end_byte,
+            )
 
         # Regular value
         return self.parse_value()
