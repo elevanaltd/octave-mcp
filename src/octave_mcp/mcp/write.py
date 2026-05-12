@@ -3376,6 +3376,13 @@ class WriteTool(BaseTool):
                     baseline_doc = parse(baseline_content_for_diff)
                     if baseline_doc.raw_frontmatter is not None:
                         doc.raw_frontmatter = baseline_doc.raw_frontmatter
+                        # ADR-0006 SR2-T2 PR-2 (GH#377): the inheritance
+                        # branch mutates a post-parse field on doc. Per
+                        # ADR §3 frontmatter-inheritance policy, mark the
+                        # whole document dirty so any future Strategy-A
+                        # emitter pass cannot silently splice the
+                        # frontmatter region from a stale baseline.
+                        doc.dirty = True
                         corrections.append(
                             {
                                 "code": "W_FRONTMATTER_INHERITED",
@@ -3618,7 +3625,15 @@ class WriteTool(BaseTool):
                             continue
 
                         canonical_value = matches[0]
+                        # ADR-0006 SR2-T2 PR-2 (GH#377): paired-write rule.
+                        # doc.meta[k] mutation in the enum-casefold branch
+                        # must pair with doc.meta_dirty[k]=True. The source
+                        # bytes for this META key would re-introduce the
+                        # un-casefolded value on re-parse, so Strategy A's
+                        # emitter (PR-3) must re-emit this key from the
+                        # AST rather than splice from baseline (I1).
                         doc.meta[field_name] = canonical_value
+                        doc.meta_dirty[field_name] = True
                         did_repair = True
                         result["corrections"].append(
                             {

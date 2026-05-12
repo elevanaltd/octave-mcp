@@ -565,6 +565,11 @@ class Parser:
         # Parse document body
         # Issue #182: Track pending comments for next section
         pending_comments: list[str] = []
+        # ADR-0006 SR2-T2 PR-2 (GH#377): track the start_byte of the first
+        # comment in the pending band, so the eventual parse_section()
+        # call can populate ``node.comment_block_start_byte``. Reset to
+        # None whenever pending_comments is reset to [].
+        pending_comments_start_byte: int | None = None
         # GH#294: Track key positions for duplicate detection at document level
         doc_key_positions: dict[str, list[int]] = {}
 
@@ -576,6 +581,8 @@ class Parser:
 
             # Issue #182: Collect comments as pending for next section
             if self.current().type == TokenType.COMMENT:
+                if not pending_comments:
+                    pending_comments_start_byte = self.current().start_byte
                 pending_comments.append(self.current().value)
                 self.advance()
                 continue
@@ -586,8 +593,9 @@ class Parser:
                 continue
 
             # Parse section (assignment or block) with pending comments
-            section = self.parse_section(0, pending_comments)
+            section = self.parse_section(0, pending_comments, leading_comments_start_byte=pending_comments_start_byte)
             pending_comments = []  # Reset after passing to section
+            pending_comments_start_byte = None
             if section:
                 # GH#294: Track duplicate keys at document level
                 if isinstance(section, Assignment):
@@ -612,6 +620,15 @@ class Parser:
         # (they appear before ===END===), so store them as document trailing comments
         if pending_comments:
             doc.trailing_comments = pending_comments
+            # ADR-0006 SR2-T2 PR-2 (GH#377): trailing-comments byte band
+            # = first comment's start_byte ... last comment's end_byte.
+            doc.trailing_comments_start_byte = pending_comments_start_byte
+            # End byte = position of the token immediately preceding
+            # ENVELOPE_END / EOF. self.pos points at ENVELOPE_END (or
+            # EOF) when we exit the loop; the trailing band ends at the
+            # previous token's end_byte.
+            _band_end_idx = max(0, self.pos - 1)
+            doc.trailing_comments_end_byte = self.tokens[_band_end_idx].end_byte
 
         # Expect END envelope (lenient - allow missing)
         if self.current().type == TokenType.ENVELOPE_END:
@@ -623,7 +640,45 @@ class Parser:
         if self.tokens:
             doc.end_byte = self.tokens[-1].end_byte
 
+        # ADR-0006 SR2-T2 PR-2 (GH#377): trail-anchored whitespace policy.
+        # A node's end_byte extends through its trailing blank lines up to
+        # (but not including) the next sibling's start_byte. Implemented as
+        # a post-pass walking doc.sections (and children) in order.
+        # See ADR §3 whitespace subsection.
+        self._extend_trail_anchored_spans(doc)
+
         return doc
+
+    def _extend_trail_anchored_spans(self, doc: Document) -> None:
+        """Extend each node's ``end_byte`` to its successor's ``start_byte``.
+
+        ADR-0006 SR2-T2 PR-2 (GH#377). For each ordered sibling list
+        (doc.sections, Block.children, Section.children), set
+        ``sibling[i].end_byte = sibling[i+1].start_byte`` when both are
+        non-None and the existing end_byte is <= the successor's start.
+        For the last sibling, leave its end_byte unchanged — the parent
+        owns the gap up to its own end_byte (or to ===END=== for
+        doc.sections; the trailing-comments band lives there).
+
+        Containers (Block, Section) are recursed BEFORE their own
+        end_byte is adjusted, so child extension does not race with
+        parent extension on the same byte position.
+        """
+
+        def _adjust(siblings: list[Any]) -> None:
+            for i, node in enumerate(siblings):
+                # Recurse first so children's end_bytes reach their own
+                # next-sibling boundaries before parent re-adjusts.
+                if isinstance(node, (Block, Section)):
+                    _adjust(node.children)
+                if i + 1 >= len(siblings):
+                    continue
+                next_start = getattr(siblings[i + 1], "start_byte", None)
+                cur_end = getattr(node, "end_byte", None)
+                if next_start is not None and cur_end is not None and cur_end <= next_start:
+                    node.end_byte = next_start
+
+        _adjust(doc.sections)
 
     def parse_meta_block(self) -> dict[str, Any]:
         """Parse META block into dictionary.
@@ -896,6 +951,15 @@ class Parser:
             # Issue #182: Track pending comments for next child
             # Issue #217: Include any pre-indent comments collected before first INDENT
             pending_comments: list[str] = pre_indent_comments.copy()
+            # PR-2 T4 (GH#377): track first-comment start_byte for the
+            # leading-comment band span. pre_indent_comments at this
+            # point have already been consumed by the earlier loop so
+            # their start byte is lost; we approximate by using the next
+            # COMMENT token's start_byte if pending was repopulated by
+            # pre_indent_comments. For pre_indent_comments-only cases,
+            # set to None so the slice path falls back to canonical
+            # re-emission of the parent (safe default).
+            pending_comments_start_byte: int | None = None
 
             while True:
                 # End conditions
@@ -913,6 +977,8 @@ class Parser:
 
                 # Issue #182: Collect comments as pending for next child
                 if self.current().type == TokenType.COMMENT:
+                    if not pending_comments:
+                        pending_comments_start_byte = self.current().start_byte
                     pending_comments.append(self.current().value)
                     self.advance()
                     continue
@@ -950,12 +1016,18 @@ class Parser:
                     for comment_text in pending_comments:
                         children.append(Comment(text=comment_text))
                     pending_comments = []
+                    pending_comments_start_byte = None
                     current_line_indent = 0
                     continue
 
                 # Parse child with any pending comments
-                child = self.parse_section(child_indent, pending_comments)
+                child = self.parse_section(
+                    child_indent,
+                    pending_comments,
+                    leading_comments_start_byte=pending_comments_start_byte,
+                )
                 pending_comments = []  # Reset after passing to child
+                pending_comments_start_byte = None
                 if child:
                     # GH#294: Track duplicate keys in section children
                     if isinstance(child, Assignment):
@@ -1053,19 +1125,29 @@ class Parser:
         return False
 
     def parse_section(
-        self, base_indent: int, leading_comments: list[str] | None = None
+        self,
+        base_indent: int,
+        leading_comments: list[str] | None = None,
+        leading_comments_start_byte: int | None = None,
     ) -> Assignment | Block | Section | None:
         """Parse a top-level section (assignment, block, or section).
 
         Args:
             base_indent: The base indentation level for this section
             leading_comments: Comments collected before this section (Issue #182)
+            leading_comments_start_byte: ADR-0006 SR2-T2 PR-2 (GH#377).
+                Start byte of the first comment in ``leading_comments``;
+                populates ``node.comment_block_start_byte`` so Strategy
+                A can decide whether to splice the leading-comment band
+                (parent clean) or re-emit it (parent dirty).
         """
         # Check for section marker first
         if self.current().type == TokenType.SECTION:
             section = self.parse_section_marker()
             if section and leading_comments:
                 section.leading_comments = leading_comments
+                # PR-2 T4: comment-block span on the wrapping Section.
+                section.comment_block_start_byte = leading_comments_start_byte
             return section
 
         if self.current().type != TokenType.IDENTIFIER:
@@ -1105,7 +1187,18 @@ class Parser:
             # GH#310: Capture whether value is quoted BEFORE parse_value() strips quotes.
             # Used to emit W_PATTERN_AUTOQUOTE when PATTERN/REGEX values are bare.
             value_is_quoted = self.current().type == TokenType.STRING
+            # ADR-0006 SR2-T2 PR-2 (GH#377): track lenient_parse warnings
+            # emitted during this Assignment's value parse. If any
+            # lenient repair fires (multi_word_coalesce, etc.) the
+            # source bytes diverge from the AST value semantically;
+            # splicing them back would re-introduce the unrepaired
+            # form. The Assignment must be marked ``repaired=True`` so
+            # Strategy A's emitter (PR-3 / T8) re-emits canonically.
+            _warnings_before_value = len(self.warnings)
             value = self.parse_value()
+            _lenient_warning_fired = any(
+                w.get("type") == "lenient_parse" for w in self.warnings[_warnings_before_value:]
+            )
 
             # GH#310: PATTERN/REGEX keys with bare (unquoted) values get auto-quoted
             # by the emitter. Emit I4 audit warning so the correction is traceable.
@@ -1144,6 +1237,7 @@ class Parser:
                 trailing_comment=trailing_comment,
                 start_byte=identifier_token.start_byte,
                 end_byte=assign_end_byte,
+                comment_block_start_byte=(leading_comments_start_byte if leading_comments else None),
             )
             # ADR-0006 SR1-T1 Step 5 §4.5 G2: record source-quoting provenance.
             # value_is_quoted is True iff the consumed value token was a STRING
@@ -1151,6 +1245,11 @@ class Parser:
             # NUMBER, BOOLEAN, NULL, list, inline-map, etc.). Step 3 will read
             # this to log identifier-dequoting decisions via tier_normalize.
             assignment.was_quoted = value_is_quoted
+            # ADR-0006 SR2-T2 PR-2 (GH#377): mark Assignment repaired when
+            # a lenient_parse warning fired during value parsing
+            # (multi_word_coalesce, pattern_autoquote, etc.). See above.
+            if _lenient_warning_fired:
+                assignment.repaired = True
             return assignment
 
         elif self.current().type == TokenType.BLOCK:
@@ -1208,6 +1307,9 @@ class Parser:
 
                 # Issue #182: Track pending comments for next child
                 pending_comments: list[str] = []
+                # PR-2 T4 (GH#377): track first-comment start_byte for the
+                # block child's leading-comment band span.
+                pending_comments_start_byte: int | None = None
 
                 while True:
                     # End conditions
@@ -1225,6 +1327,8 @@ class Parser:
 
                     # Issue #182: Collect comments as pending for next child
                     if self.current().type == TokenType.COMMENT:
+                        if not pending_comments:
+                            pending_comments_start_byte = self.current().start_byte
                         pending_comments.append(self.current().value)
                         self.advance()
                         continue
@@ -1260,9 +1364,11 @@ class Parser:
                                 leading_comments=pending_comments or [],
                                 start_byte=fence_open_tok.start_byte,
                                 end_byte=lz_end_byte,
+                                comment_block_start_byte=(pending_comments_start_byte if pending_comments else None),
                             )
                         )
                         pending_comments = []
+                        pending_comments_start_byte = None
                         current_line_indent = 0
                         continue
 
@@ -1276,12 +1382,18 @@ class Parser:
                         for comment_text in pending_comments:
                             children.append(Comment(text=comment_text))
                         pending_comments = []
+                        pending_comments_start_byte = None
                         current_line_indent = 0
                         continue
 
                     # Parse child with any pending comments
-                    child = self.parse_section(child_indent, pending_comments)
+                    child = self.parse_section(
+                        child_indent,
+                        pending_comments,
+                        leading_comments_start_byte=pending_comments_start_byte,
+                    )
                     pending_comments = []  # Reset after passing to child
+                    pending_comments_start_byte = None
                     if child:
                         # GH#294: Track duplicate keys in block children
                         if isinstance(child, Assignment):
@@ -1330,6 +1442,7 @@ class Parser:
                 target=block_target,  # Issue #189: Block inheritance target
                 start_byte=identifier_token.start_byte,
                 end_byte=block_end_byte,
+                comment_block_start_byte=(leading_comments_start_byte if leading_comments else None),
             )
 
         # GH#64: Bare identifier without :: or : operator - emit I4 audit warning
