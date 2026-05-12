@@ -732,6 +732,32 @@ def _extract_op_descriptor(value: Any) -> tuple[str | None, Any, dict[str, Any] 
     return (op, payload, None)
 
 
+def _mark_dirty(node: Any, *, body: bool = False) -> None:
+    """ADR-0006 SR2-T2 PR-2 (GH#377): mark an AST node dirty for re-emit.
+
+    Centralises the paired-write rule across every mutation site in
+    ``_apply_changes`` (and friends). Splicing a node from baseline
+    bytes when its Python-side value has been changed would emit stale
+    bytes (I1 violation). Pairing every mutation with a call to this
+    helper IS the structural enforcement of I3+I4.
+
+    Args:
+        node: The AST node whose value/children just mutated.
+        body: When True AND the node is a Block/Section, set
+            ``body_dirty`` instead of ``dirty``. The header bytes still
+            splice from baseline; only the children region re-emits.
+
+    No-op for value types (ListValue/InlineMap/HolographicValue/
+    LiteralZoneValue) — those do not carry a dirty flag; their parent
+    Assignment owns dirtiness (ADR §4 ¶4).
+    """
+    if body and isinstance(node, (Block, Section)):
+        node.body_dirty = True
+        return
+    if isinstance(node, ASTNode):
+        node.dirty = True
+
+
 def _apply_array_op_inplace(assignment: Assignment, op: str, payload: Any) -> None:
     """GH#373: Apply APPEND or PREPEND to a list-valued Assignment in place.
 
@@ -744,6 +770,11 @@ def _apply_array_op_inplace(assignment: Assignment, op: str, payload: Any) -> No
     Existing items keep their original tokens (where present); new items are
     appended as Python values, mirroring how _normalize_value_for_ast produces
     list contents.
+
+    ADR-0006 SR2-T2 PR-2 (GH#377): the Assignment whose value was
+    mutated is marked ``dirty=True`` via ``_mark_dirty`` so Strategy
+    A's emitter (PR-3) re-emits the modified array rather than splicing
+    stale baseline bytes.
 
     Args:
         assignment: The Assignment node holding a ListValue or list.
@@ -762,11 +793,13 @@ def _apply_array_op_inplace(assignment: Assignment, op: str, payload: Any) -> No
             assignment.value = ListValue(items=existing + new_items)
         else:  # PREPEND
             assignment.value = ListValue(items=new_items + existing)
+        _mark_dirty(assignment)
     elif isinstance(current, list):
         if op == "APPEND":
             assignment.value = ListValue(items=current + new_items)
         else:  # PREPEND
             assignment.value = ListValue(items=new_items + current)
+        _mark_dirty(assignment)
     else:
         # Validator should prevent this; defensive raise for direct callers.
         raise ValueError(
@@ -2671,12 +2704,16 @@ class WriteTool(BaseTool):
 
         if op == "DELETE" or _is_delete_sentinel(new_value):
             block.children = [c for c in block.children if not (isinstance(c, Assignment) and c.key == child_key)]
+            # PR-2 T6: children list mutated -> block body dirty.
+            _mark_dirty(block, body=True)
             return
 
         if op in ("APPEND", "PREPEND"):
             for child in block.children:
                 if isinstance(child, Assignment) and child.key == child_key:
                     _apply_array_op_inplace(child, op, payload)
+                    # PR-2 T6: child mutated -> parent block body dirty.
+                    _mark_dirty(block, body=True)
                     return
             # Validator should have caught missing target; safety net.
             raise ValueError(
@@ -2696,11 +2733,18 @@ class WriteTool(BaseTool):
         for child in block.children:
             if isinstance(child, Assignment) and child.key == child_key:
                 child.value = normalized_value
+                # PR-2 T6: child Assignment value mutated; parent block
+                # body region must re-emit (the child line bytes are
+                # stale) while block header line still splices.
+                _mark_dirty(child)
+                _mark_dirty(block, body=True)
                 return
 
         # If we reach here, _validate_change_paths missed the case. Add as new
         # child Assignment to keep behaviour consistent with _apply_section_change.
-        block.children.append(Assignment(key=child_key, value=normalized_value))
+        new_child = Assignment(key=child_key, value=normalized_value, dirty=True)
+        block.children.append(new_child)
+        _mark_dirty(block, body=True)
 
     def _find_section(
         self,
@@ -2798,12 +2842,16 @@ class WriteTool(BaseTool):
         if op == "DELETE" or _is_delete_sentinel(new_value):
             # I2: DELETE sentinel - remove child from section
             section.children = [c for c in section.children if not (isinstance(c, Assignment) and c.key == child_key)]
+            # PR-2 T6: children list mutated -> section body dirty.
+            _mark_dirty(section, body=True)
             return
 
         if op in ("APPEND", "PREPEND"):
             for child in section.children:
                 if isinstance(child, Assignment) and child.key == child_key:
                     _apply_array_op_inplace(child, op, payload)
+                    # PR-2 T6: child mutated -> section body dirty.
+                    _mark_dirty(section, body=True)
                     return
             raise ValueError(
                 [
@@ -2823,13 +2871,20 @@ class WriteTool(BaseTool):
         for child in section.children:
             if isinstance(child, Assignment) and child.key == child_key:
                 child.value = normalized_value
+                # PR-2 T6: child Assignment value mutated.
+                _mark_dirty(child)
                 found = True
                 break
 
         if not found:
             # Add new assignment to section children
-            new_assignment = Assignment(key=child_key, value=normalized_value)
+            new_assignment = Assignment(key=child_key, value=normalized_value, dirty=True)
             section.children.append(new_assignment)
+        # PR-2 T6: in both branches the section's body region changed
+        # (either an existing child mutated, or a new child appended),
+        # so mark the section body dirty so the children region
+        # re-emits even though the section header line still splices.
+        _mark_dirty(section, body=True)
 
     def _apply_changes(
         self,
@@ -2886,15 +2941,31 @@ class WriteTool(BaseTool):
                     # Delete field from doc.meta
                     if field_name in doc.meta:
                         del doc.meta[field_name]
+                    # PR-2 T6: per-key META dirty map captures the
+                    # deletion event so PR-3's emitter knows this META
+                    # key no longer exists in the AST.
+                    doc.meta_dirty[field_name] = True
                 else:
                     # Update or add field in doc.meta
                     # I1 (Syntactic Fidelity): Normalize Python values to AST types
                     # Without this, Python lists emit as "['a', 'b']" instead of "[a,b]"
                     doc.meta[field_name] = _normalize_value_for_ast(new_value)
+                    # PR-2 T6: paired-write — mark per-key dirty so PR-3
+                    # emitter re-emits only this META key and splices
+                    # the rest of META verbatim.
+                    doc.meta_dirty[field_name] = True
             elif key == "META" and isinstance(new_value, dict):
                 if _is_delete_sentinel(new_value):
                     # DELETE sentinel on META clears the entire block
                     doc.meta = {}
+                    # PR-2 T6: whole-META clear -> mark every existing
+                    # key in meta_dirty so PR-3 emitter knows no key
+                    # survives. Use a sentinel "*" to denote whole-meta
+                    # dirty WITHOUT inventing a key shape that doesn't
+                    # match observable data. We instead mark
+                    # ``doc.dirty=True`` for whole-doc re-emit; the
+                    # per-key map remains the precision instrument.
+                    doc.dirty = True
                 else:
                     # GH#302: MERGE into existing META, not replace.
                     # Previous behavior replaced the entire META dict, silently
@@ -2911,9 +2982,16 @@ class WriteTool(BaseTool):
                     for mk, mv in merge_dict.items():
                         if _is_delete_sentinel(mv):
                             doc.meta.pop(mk, None)
+                            # PR-2 T6: per-key META dirty (deletion).
+                            doc.meta_dirty[mk] = True
                         else:
                             # I1 (Syntactic Fidelity): Normalize values for AST
                             doc.meta[mk] = _normalize_value_for_ast(mv)
+                            # PR-2 T6: paired-write — only touched keys
+                            # are marked dirty; unmentioned META keys
+                            # stay clean per the sibling-clean invariant
+                            # (ADR §4 per-key dirty model).
+                            doc.meta_dirty[mk] = True
             elif (
                 "." in key
                 and key.count(".") == 1
@@ -2935,6 +3013,49 @@ class WriteTool(BaseTool):
             elif _is_delete_sentinel(new_value):
                 # I2: DELETE sentinel - remove field entirely from sections
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
+                # PR-2 T6: doc.sections list changed (deletion). The
+                # Document does not carry body_dirty; mark whole-doc
+                # dirty so PR-3 emitter knows the sections list shape
+                # differs from baseline. The other clean sections
+                # still slice individually via their own dirty=False
+                # spans.
+                doc.dirty = True
+            elif (
+                isinstance(new_value, dict)
+                and not _is_op_descriptor(new_value)
+                and self._find_block(doc, key) is not None
+            ):
+                # ADR-0006 SR2-T2 PR-2 (GH#377) T7: bare ``{KEY: {child:
+                # v2}}`` change against an EXISTING top-level Block.
+                # Without this branch, the dict would be normalised to
+                # an InlineMap and appended as a NEW top-level
+                # Assignment beside the Block (duplicate key, silent
+                # shape switch — I3 violation under format_style
+                # ``"preserve"``). With this branch, the dict is
+                # expanded into per-child Assignment mutations against
+                # the existing Block, keeping the Block shape and
+                # marking only the touched children dirty.
+                t7_block = self._find_block(doc, key)
+                assert t7_block is not None  # narrowed by branch guard
+                for mk, mv in new_value.items():
+                    if _is_delete_sentinel(mv):
+                        t7_block.children = [
+                            c for c in t7_block.children if not (isinstance(c, Assignment) and c.key == mk)
+                        ]
+                        _mark_dirty(t7_block, body=True)
+                        continue
+                    normalized_mv = _normalize_value_for_ast(mv)
+                    found_child = False
+                    for child in t7_block.children:
+                        if isinstance(child, Assignment) and child.key == mk:
+                            child.value = normalized_mv
+                            _mark_dirty(child)
+                            found_child = True
+                            break
+                    if not found_child:
+                        new_child = Assignment(key=mk, value=normalized_mv, dirty=True)
+                        t7_block.children.append(new_child)
+                    _mark_dirty(t7_block, body=True)
             else:
                 # GH#373: Op-aware dispatch on top-level keys.
                 # MERGE on a top-level Block; APPEND/PREPEND on a top-level
@@ -2951,16 +3072,24 @@ class WriteTool(BaseTool):
                                 target_block.children = [
                                     c for c in target_block.children if not (isinstance(c, Assignment) and c.key == mk)
                                 ]
+                                _mark_dirty(target_block, body=True)
                                 continue
                             normalized_mv = _normalize_value_for_ast(mv)
                             found_child = False
                             for child in target_block.children:
                                 if isinstance(child, Assignment) and child.key == mk:
                                     child.value = normalized_mv
+                                    # PR-2 T6: paired-write per leaf.
+                                    _mark_dirty(child)
                                     found_child = True
                                     break
                             if not found_child:
-                                target_block.children.append(Assignment(key=mk, value=normalized_mv))
+                                new_child = Assignment(key=mk, value=normalized_mv, dirty=True)
+                                target_block.children.append(new_child)
+                            # PR-2 T6: in every MERGE-on-Block branch
+                            # (existing-child mutate or new-child
+                            # append), the block's body region changed.
+                            _mark_dirty(target_block, body=True)
                         continue
 
                     # MERGE on a Section -- search and merge children.
@@ -2977,16 +3106,20 @@ class WriteTool(BaseTool):
                                     for c in target_section.children
                                     if not (isinstance(c, Assignment) and c.key == mk)
                                 ]
+                                _mark_dirty(target_section, body=True)
                                 continue
                             normalized_mv = _normalize_value_for_ast(mv)
                             found_child = False
                             for child in target_section.children:
                                 if isinstance(child, Assignment) and child.key == mk:
                                     child.value = normalized_mv
+                                    _mark_dirty(child)
                                     found_child = True
                                     break
                             if not found_child:
-                                target_section.children.append(Assignment(key=mk, value=normalized_mv))
+                                new_child = Assignment(key=mk, value=normalized_mv, dirty=True)
+                                target_section.children.append(new_child)
+                            _mark_dirty(target_section, body=True)
                         continue
                     # Validator should have caught missing target; safety net.
                     raise ValueError(
@@ -3021,13 +3154,17 @@ class WriteTool(BaseTool):
                 for section in doc.sections:
                     if isinstance(section, Assignment) and section.key == key:
                         section.value = normalized_value
+                        # PR-2 T6: paired-write on top-level Assignment.
+                        _mark_dirty(section)
                         found = True
                         break
 
                 # If not found and not deleting, add new field
                 if not found:
-                    # Create new assignment node with normalized value
-                    new_assignment = Assignment(key=key, value=normalized_value)
+                    # Create new assignment node with normalized value.
+                    # PR-2 T6: new Assignment is born dirty (no source
+                    # bytes to splice; its value MUST be re-emitted).
+                    new_assignment = Assignment(key=key, value=normalized_value, dirty=True)
                     doc.sections.append(new_assignment)
 
         return doc
@@ -3050,8 +3187,13 @@ class WriteTool(BaseTool):
         for key, value in mutations.items():
             if _is_delete_sentinel(value):
                 doc.meta.pop(key, None)
+                # PR-2 T6: per-key META dirty (deletion via mutations).
+                doc.meta_dirty[key] = True
                 continue
             doc.meta[key] = _normalize_value_for_ast(value)
+            # PR-2 T6: paired-write — touched META keys mark per-key
+            # dirty so PR-3 emitter re-emits only the affected keys.
+            doc.meta_dirty[key] = True
 
     def _generate_diff(
         self,
@@ -3534,6 +3676,13 @@ class WriteTool(BaseTool):
                     baseline_doc = parse(baseline_content_for_diff)
                     if baseline_doc.raw_frontmatter is not None:
                         doc.raw_frontmatter = baseline_doc.raw_frontmatter
+                        # ADR-0006 SR2-T2 PR-2 (GH#377): the inheritance
+                        # branch mutates a post-parse field on doc. Per
+                        # ADR §3 frontmatter-inheritance policy, mark the
+                        # whole document dirty so any future Strategy-A
+                        # emitter pass cannot silently splice the
+                        # frontmatter region from a stale baseline.
+                        doc.dirty = True
                         corrections.append(
                             {
                                 "code": "W_FRONTMATTER_INHERITED",
@@ -3776,7 +3925,15 @@ class WriteTool(BaseTool):
                             continue
 
                         canonical_value = matches[0]
+                        # ADR-0006 SR2-T2 PR-2 (GH#377): paired-write rule.
+                        # doc.meta[k] mutation in the enum-casefold branch
+                        # must pair with doc.meta_dirty[k]=True. The source
+                        # bytes for this META key would re-introduce the
+                        # un-casefolded value on re-parse, so Strategy A's
+                        # emitter (PR-3) must re-emit this key from the
+                        # AST rather than splice from baseline (I1).
                         doc.meta[field_name] = canonical_value
+                        doc.meta_dirty[field_name] = True
                         did_repair = True
                         result["corrections"].append(
                             {
