@@ -40,14 +40,14 @@ def test_helper_returns_false_for_record_lacking_both_discriminants() -> None:
     malformed emit.
     """
     malformed: dict[str, Any] = {"original": "->", "line": 1, "column": 1}
-    assert is_destructive_normalization_repair(malformed) is False
+    assert is_destructive_normalization_repair(malformed, warning_code="W002") is False
 
 
 def test_helper_returns_true_for_normalization_typed_with_empty_normalized() -> None:
     """type=="normalization" is normalization-shaped; empty `normalized`
     is destructive."""
     record = {"type": "normalization", "original": '"""', "normalized": ""}
-    assert is_destructive_normalization_repair(record) is True
+    assert is_destructive_normalization_repair(record, warning_code="W002") is True
 
 
 def test_helper_returns_true_for_repair_with_empty_normalized_field() -> None:
@@ -55,14 +55,14 @@ def test_helper_returns_true_for_repair_with_empty_normalized_field() -> None:
     normalization-shaped via the second discriminant; empty value is
     destructive."""
     record = {"original": "->", "normalized": "", "line": 1, "column": 1}
-    assert is_destructive_normalization_repair(record) is True
+    assert is_destructive_normalization_repair(record, warning_code="W002") is True
 
 
 def test_helper_returns_false_for_well_formed_repair() -> None:
     """Well-formed records with non-empty `normalized` are not
     destructive."""
     record = {"original": "->", "normalized": "→", "line": 1, "column": 1}
-    assert is_destructive_normalization_repair(record) is False
+    assert is_destructive_normalization_repair(record, warning_code="W002") is False
 
 
 # ---------------------------------------------------------------------------

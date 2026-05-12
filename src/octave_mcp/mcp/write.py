@@ -96,8 +96,8 @@ E_AMBIGUOUS_PATH = "E_AMBIGUOUS_PATH"
 #
 # When format_style is omitted (None), today's behaviour is preserved exactly:
 # emit(doc) with no pre-pass and no short-circuit (the "current" sentinel
-# documented in the PR description). This guarantees the 2788 baseline tests
-# remain byte-identical.
+# documented in the PR description). This guarantees the historical baseline
+# test suite remains byte-identical (no behavioural drift on the default path).
 FORMAT_STYLE_VALUES: tuple[str, str, str] = ("preserve", "expanded", "compact")
 E_INVALID_FORMAT_STYLE = "E_INVALID_FORMAT_STYLE"
 W_COMPACT_REFUSED = "W_COMPACT_REFUSED"
@@ -1730,8 +1730,13 @@ class WriteTool(BaseTool):
                 # alone but lacking the `normalized` key would slip past the
                 # helper. Belt-and-braces: also gate on a non-empty
                 # normalized_value so neither defect class can land.
+                #
+                # GH-386: the helper now keys on warning code AND shape. Pass
+                # the W002 discriminant explicitly so a future W003+
+                # normalization warning routed through this branch is not
+                # silently suppressed by the W002 guard.
                 normalized_value = w.get("normalized", "")
-                if is_destructive_normalization_repair(w) or not normalized_value:
+                if is_destructive_normalization_repair(w, warning_code="W002") or not normalized_value:
                     continue
                 corrections.append(
                     {
@@ -2186,9 +2191,14 @@ class WriteTool(BaseTool):
         # shaped) and emit W002 with empty `after`. Belt-and-braces: also
         # gate on a non-empty normalized_value so the malformed case is
         # suppressed too. The helper's narrow semantics are preserved.
+        #
+        # GH-386: the helper now keys on warning code AND shape. Pass the
+        # W002 discriminant explicitly so a future W003+ normalization
+        # warning routed through this mapping is not silently suppressed
+        # by the W002 guard.
         for token_repair in tokenize_repairs:
             normalized_value = token_repair.get("normalized", "")
-            if is_destructive_normalization_repair(token_repair) or not normalized_value:
+            if is_destructive_normalization_repair(token_repair, warning_code="W002") or not normalized_value:
                 continue
             corrections.append(
                 {

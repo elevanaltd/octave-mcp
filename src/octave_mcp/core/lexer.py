@@ -1308,6 +1308,8 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                 # normalisations via the shared discriminant in core.repair_log.
                 # See is_destructive_normalization_repair docstring for the I1/I3
                 # rationale.
+                # GH-386: pass the warning code explicitly so a future W003+
+                # normalisation is not silently suppressed by the W002 guard.
                 if normalized_from:
                     candidate = {
                         "type": "normalization",
@@ -1316,7 +1318,7 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                         "line": line,
                         "column": column,
                     }
-                    if not is_destructive_normalization_repair(candidate):
+                    if not is_destructive_normalization_repair(candidate, warning_code="W002"):
                         repairs.append(candidate)
 
                 # Update position - count embedded newlines in matched text

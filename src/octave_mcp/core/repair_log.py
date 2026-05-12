@@ -4,10 +4,27 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+# GH-386 (ADR-0006 SR1, CE follow-up to PR #383): the destructive-empty-
+# normalization guard now keys on warning code AND shape, not on shape
+# alone. Suppression is restricted to this closed set so a future W003+
+# normalization warning that legitimately reuses the (original, normalized)
+# shape with an empty `normalized` value cannot be silently suppressed by
+# the W002 guard.
+#
+# To opt a new code into suppression, add it here AND add a discriminator
+# test in tests/unit/test_w002_discriminant_tagging.py asserting the
+# desired empty-handling semantics. The set is frozen so it cannot be
+# mutated by side effect at import time.
+SUPPRESSIBLE_NORMALIZATION_CODES: frozenset[str] = frozenset({"W002"})
 
-def is_destructive_normalization_repair(repair: dict[str, Any]) -> bool:
-    """Return True iff `repair` is a normalization-shaped record whose
-    post-normalization output is missing or empty.
+
+def is_destructive_normalization_repair(
+    repair: dict[str, Any],
+    *,
+    warning_code: str = "W002",
+) -> bool:
+    """Return True iff `repair` is a destructive normalization record for
+    the given warning code.
 
     ADR-0006 SR0-T2 (GH#381): a normalization repair with an empty
     `normalized` value would render downstream as a W002 correction with
@@ -16,6 +33,19 @@ def is_destructive_normalization_repair(repair: dict[str, Any]) -> bool:
     I1 (SYNTACTIC_FIDELITY) and I3 (MIRROR_CONSTRAINT), and breaks the
     HARD_SYMMETRY invariant by emitting a correction the rendered diff
     cannot reflect.
+
+    GH-386 (SR1 CE follow-up): the helper now requires the caller to
+    declare which warning code it is guarding. Suppression returns True
+    only when ALL of:
+      1. ``warning_code`` is in ``SUPPRESSIBLE_NORMALIZATION_CODES``
+         (today: ``{"W002"}``), AND
+      2. the record is *normalization-shaped*, AND
+      3. the ``normalized`` value is missing or empty.
+
+    A future W003+ normalization warning that wants different empty-
+    handling MUST NOT be silently suppressed by this guard; the helper
+    returns False for any non-enumerated code, leaving the policy to the
+    call site.
 
     A record is "normalization-shaped" if either:
       * ``type == "normalization"`` (lexer/parser warning shape), or
@@ -28,16 +58,23 @@ def is_destructive_normalization_repair(repair: dict[str, Any]) -> bool:
 
     Scope is intentionally narrow: it does NOT classify other warning
     codes (e.g. W_UNQUOTED_SECTION_IN_VALUE uses original/repaired and
-    is out of scope; broader audit-cardinality discriminants are tracked
-    at #386 for SR1).
+    is out of scope).
 
     Args:
         repair: A repair / warning candidate dict.
+        warning_code: The warning code the caller is guarding. Defaults
+            to ``"W002"`` for backwards-compatibility with existing call
+            sites. Pass an explicit code at every call site for clarity
+            and to make future-code policy decisions self-documenting.
 
     Returns:
         True iff the record is a destructive (empty-normalised)
-        normalization repair that callers must suppress.
+        normalization repair under the given warning code that callers
+        must suppress; False otherwise (including for any warning code
+        outside ``SUPPRESSIBLE_NORMALIZATION_CODES``).
     """
+    if warning_code not in SUPPRESSIBLE_NORMALIZATION_CODES:
+        return False
     is_normalization_shaped = repair.get("type") == "normalization" or "normalized" in repair
     if not is_normalization_shaped:
         return False
