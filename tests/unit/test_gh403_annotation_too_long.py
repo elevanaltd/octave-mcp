@@ -256,5 +256,5 @@ class TestAnnotationTooLongProtectedZones:
         warnings = _detect_annotation_too_long(content)
         codes = [w["code"] for w in warnings]
         assert "W_ANNOTATION_TOO_LONG" in codes, (
-            f"Regression: genuine Zone 1 long annotation did NOT fire W_ANNOTATION_TOO_LONG"
+            "Regression: genuine Zone 1 long annotation did NOT fire W_ANNOTATION_TOO_LONG"
         )
