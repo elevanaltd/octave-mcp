@@ -102,6 +102,30 @@ class TestLenientRepairRepairedFlag:
         assert a is not None
         assert a.repaired is False
 
+    def test_pattern_autoquote_marks_assignment_repaired(self) -> None:
+        # CRS PR-2 P1-1 regression: `PATTERN::bare_value` triggers the
+        # pattern_autoquote lenient_parse warning AFTER parse_value() returns.
+        # The Assignment.repaired flag must reflect the full warning window
+        # for this Assignment, NOT just the pre-pattern-autoquote slice.
+        doc_text = "===DOC===\nPATTERN::bare_pattern_value\n===END===\n"
+        doc = parse(doc_text)
+        a = _find_assignment(doc, "PATTERN")
+        assert a is not None
+        # Sanity: pattern_autoquote warning was emitted.
+        from octave_mcp.core.lexer import tokenize
+        from octave_mcp.core.parser import Parser
+
+        tokens, _ = tokenize(doc_text)
+        p = Parser(tokens)
+        p.parse_document()
+        assert any(
+            w.get("subtype") == "pattern_autoquote" for w in p.warnings
+        ), "expected pattern_autoquote lenient_parse warning"
+        # Structural assertion: Assignment.repaired = True so Strategy A's
+        # emitter (PR-3 T8) re-emits canonically instead of splicing the
+        # unrepaired (bare, unquoted) source bytes.
+        assert a.repaired is True
+
 
 class TestTrailAnchoredWhitespace:
     """A node's end_byte extends through its trailing blank lines up to the next node."""

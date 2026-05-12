@@ -1196,9 +1196,6 @@ class Parser:
             # Strategy A's emitter (PR-3 / T8) re-emits canonically.
             _warnings_before_value = len(self.warnings)
             value = self.parse_value()
-            _lenient_warning_fired = any(
-                w.get("type") == "lenient_parse" for w in self.warnings[_warnings_before_value:]
-            )
 
             # GH#310: PATTERN/REGEX keys with bare (unquoted) values get auto-quoted
             # by the emitter. Emit I4 audit warning so the correction is traceable.
@@ -1246,8 +1243,14 @@ class Parser:
             # this to log identifier-dequoting decisions via tier_normalize.
             assignment.was_quoted = value_is_quoted
             # ADR-0006 SR2-T2 PR-2 (GH#377): mark Assignment repaired when
-            # a lenient_parse warning fired during value parsing
-            # (multi_word_coalesce, pattern_autoquote, etc.). See above.
+            # a lenient_parse warning fired during value parsing OR auto-quoting
+            # (multi_word_coalesce, pattern_autoquote, etc.). Computed AFTER
+            # pattern_autoquote since that warning fires after parse_value()
+            # returns (CRS P1-1 fix on PR-2: re-checked here so the boolean
+            # reflects the full warning window for this Assignment).
+            _lenient_warning_fired = any(
+                w.get("type") == "lenient_parse" for w in self.warnings[_warnings_before_value:]
+            )
             if _lenient_warning_fired:
                 assignment.repaired = True
             return assignment
