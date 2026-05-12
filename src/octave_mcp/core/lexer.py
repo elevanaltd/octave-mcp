@@ -838,6 +838,36 @@ def _check_invalid_envelope(content: str, pos: int, line: int, column: int) -> L
     )
 
 
+def normalize_content(content: str) -> str:
+    """Return the post-NFC-normalized form of ``content``.
+
+    HC-3 (GH#377 Strategy A): the write pipeline must supply
+    ``baseline_bytes = normalize_content(raw).encode('utf-8')`` as the
+    ``baseline_bytes`` argument to ``_emit_with_style`` so that byte-span
+    slices are valid.  Token ``start_byte``/``end_byte`` values produced by
+    ``tokenize`` index exactly this normalized string, encoded as UTF-8.
+
+    This function exposes ``_normalize_with_fence_detection`` as a public
+    utility.  A plain ``unicodedata.normalize('NFC', content)`` is NOT
+    equivalent because literal-zone content (inside fenced blocks) is NOT
+    normalized — fence-aware, selective NFC is required.
+
+    Args:
+        content: Raw (possibly pre-NFC) OCTAVE text.
+
+    Returns:
+        The fence-aware NFC-normalized string whose UTF-8 encoding is
+        byte-index-compatible with all Token spans produced by
+        ``tokenize(content)``.
+
+    Raises:
+        LexerError: If the content contains an unterminated fence (E006)
+            or a nested fence (E007_NESTED_FENCE).
+    """
+    normalized, _ = _normalize_with_fence_detection(content)
+    return normalized
+
+
 def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any]]:
     """Tokenize OCTAVE content with ASCII alias normalization.
 
