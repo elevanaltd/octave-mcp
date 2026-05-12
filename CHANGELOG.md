@@ -13,7 +13,7 @@ This release completes the ADR-0006 writer/reader symmetry programme: the SR0 co
 - **`octave_validate` and `octave_write` share a unified grammar core** — validator surface single-sourced on `class Validator` (now a `Visitor[None]`); `core/schema.py` deleted; `core/grammar/entry.py` is the parse-stage seam. Closes **R2 — `validator_drift_multiple_validators`**. (#393, #394, #396, #397, #398, #399, #400, #401)
 - **W002 destructive empty-`after` corrections eliminated** — pre-1.12.0 the W002 normalization repair could emit `after=""` corrections that silently destroyed source content. The discriminant is now centralised and the destructive variant is rejected at write + lexer. (#383)
 - **Ambiguous `Block.child` paths surface as `W_AMBIGUOUS_PATH` warning** — `octave_write` now drains an `E_AMBIGUOUS_PATH`-scaffolded warning into emit error envelopes when a `changes` path is structurally ambiguous (e.g. duplicate child key target). Warning-only in v1.12.0 — does **not** yet hard-fail. (#391, #392)
-- **HARD_SYMMETRY roundtrip suite enforced in CI** — corner-case fixtures (deeply nested keys, trailing whitespace, multi-byte identifiers, blank-line stripping, triple-quote collapse, identifier dequoting) all enforce writer/reader symmetry; 10 previously strict-xfailed fixtures flipped to expected pass via the reconciler bridge. (#385, #395, #399)
+- **HARD_SYMMETRY roundtrip suite enforced in CI** — corner-case fixtures (deeply nested keys, trailing whitespace, multi-byte identifiers, blank-line stripping, triple-quote collapse, identifier dequoting) all enforce writer/reader symmetry; 10 corner-case fixtures (deeply nested keys, blank-line stripping, triple-quote collapse, etc.) now enforced as expected-pass rather than skipped, via the reconciler bridge. (#385, #395, #399)
 - **SR1-T4 — Explicit `octave_write` no-op invariant assertion**: when supplied content already matches target bytes, the write tool is a true no-op (no normalisation, no corrections emitted). Closes the symmetry programme's writer contract. (#407)
 - **GH-386 / W002 discriminant** — W002 destructive-normalization guard now uses a discriminant against a closed `SUPPRESSIBLE_NORMALIZATION_CODES` set; future W003+ codes require explicit admission policy. Prevents accidental warning suppression as new normalisation codes are added. (#408)
 
@@ -22,6 +22,50 @@ This release completes the ADR-0006 writer/reader symmetry programme: the SR0 co
 - **`format_style="preserve"` as default** — currently opt-in only. Default flip is pending Strategy A (per-key dirty tracking) per **#376** + **#377**. Triggering the default on today's Strategy C narrow short-circuit would cause unsafe writes on byte-identical-but-AST-different inputs.
 - **Single-region diffs on edits** — currently `octave_write` produces full-document canonical re-emits even for one-line edits. Cursor-backed CST + per-key dirty tracking is pending **#377**.
 - **Full hard-fail on ambiguous paths** — currently warning-only via `W_AMBIGUOUS_PATH` (see Shipped). Hard-fail with `E_AMBIGUOUS_PATH` is pending **#369** (Block.child path corruption hard-fail) and downstream consumer migration.
+
+### ⚠️ Known Issues (filed for v1.13.0)
+
+These pre-existing defects in `octave_write` changes-mode primitives are
+not fixed in v1.12.0. They are confirmed in #411 and will be addressed
+alongside Strategy A in v1.13.0.
+
+- **#411 defect 1 — `$op:APPEND` emits Python dict syntax inside OCTAVE
+  arrays.** Calling `octave_write` with `{"$op":"APPEND","value":{"K":"V"}}`
+  on a list-valued target produces `{'K': 'V'}` (Python repr) in the
+  output. The tool returns `validation_status: VALIDATED` because the
+  lexer accepts the form, but the output is semantically invalid OCTAVE.
+  **Workaround:** pass APPEND values as a list of K::V strings, not a
+  dict; or use content-mode rewrite.
+
+- **#411 defect 2 — `format_style:"expanded"` over-eagerly lifts inner
+  list-of-atoms.** The lifter cannot distinguish a structured record
+  (`KEY::[TOKEN::X, STATUS::Y]`) from a list of K::V data points
+  (`FACTS::[a::1, b::2]`). Both lift to Block form. The lift is
+  semantically wrong on the second case and drops the outer `]` causing
+  document boundary loss. **Workaround:** do not run `expanded` on
+  documents containing inner list-of-atoms; pre-canonicalise block-form
+  entries only.
+
+- **#411 defect 3 — `$op:MERGE` rejects inline-array top-level targets.**
+  Feature gap, not corruption. MERGE only supports Block/Section/META
+  targets. **Workaround:** content-mode rewrite for inline-array
+  records.
+
+- **#411 defect 4 — Validator false-green on writer output.** All three
+  defects above produce output that `octave_validate` accepts. This
+  violates HARD_SYMMETRY in the *output* direction (the validator
+  cannot be used to verify that `octave_write` output is semantically
+  correct). Tracked separately as a lexer-level investigation.
+
+Until v1.13.0 ships, callers should spot-check `octave_write` diffs
+visually rather than relying on `validation_status: VALIDATED` alone
+for changes-mode operations on inline-array top-level entries.
+
+### Related work tracked separately
+
+- **#403 — annotation-content discipline epic** — broader programme on
+  annotation hygiene across the writer/reader surface. Not a v1.12.0
+  blocker; tracked for visibility and future sprint planning.
 
 ### ⚠️ Breaking Changes — direct importers of internal API
 
