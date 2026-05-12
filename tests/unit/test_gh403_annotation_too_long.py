@@ -210,9 +210,9 @@ class TestAnnotationTooLongProtectedZones:
         content = f"// TODO I6<{self.LONG_QUALIFIER}>\n"
         warnings = _detect_annotation_too_long(content)
         codes = [w["code"] for w in warnings]
-        assert "W_ANNOTATION_TOO_LONG" not in codes, (
-            f"False positive: comment line fired W_ANNOTATION_TOO_LONG for {self.LONG_QUALIFIER!r}"
-        )
+        assert (
+            "W_ANNOTATION_TOO_LONG" not in codes
+        ), f"False positive: comment line fired W_ANNOTATION_TOO_LONG for {self.LONG_QUALIFIER!r}"
 
     def test_quoted_string_value_no_warning(self):
         """Annotation-shaped text inside a quoted string value must NOT fire W_ANNOTATION_TOO_LONG.
@@ -223,9 +223,9 @@ class TestAnnotationTooLongProtectedZones:
         content = f'A::"I6<{self.LONG_QUALIFIER}>"\n'
         warnings = _detect_annotation_too_long(content)
         codes = [w["code"] for w in warnings]
-        assert "W_ANNOTATION_TOO_LONG" not in codes, (
-            f"False positive: quoted string value fired W_ANNOTATION_TOO_LONG for {self.LONG_QUALIFIER!r}"
-        )
+        assert (
+            "W_ANNOTATION_TOO_LONG" not in codes
+        ), f"False positive: quoted string value fired W_ANNOTATION_TOO_LONG for {self.LONG_QUALIFIER!r}"
 
     def test_literal_zone_content_no_warning(self):
         """Annotation-shaped text inside a fenced literal zone must NOT fire W_ANNOTATION_TOO_LONG.
@@ -233,19 +233,12 @@ class TestAnnotationTooLongProtectedZones:
         CE evidence: fenced literal-zone content containing annotation-shaped text.
         Literal zones are Zone 3 (explicit literal), exempt from all normalization.
         """
-        content = (
-            "===DOC===\n"
-            "EXAMPLE:\n"
-            "```\n"
-            f"FIELD::VALUE[I6<{self.LONG_QUALIFIER}>]\n"
-            "```\n"
-            "===END===\n"
-        )
+        content = "===DOC===\n" "EXAMPLE:\n" "```\n" f"FIELD::VALUE[I6<{self.LONG_QUALIFIER}>]\n" "```\n" "===END===\n"
         warnings = _detect_annotation_too_long(content)
         codes = [w["code"] for w in warnings]
-        assert "W_ANNOTATION_TOO_LONG" not in codes, (
-            f"False positive: literal zone content fired W_ANNOTATION_TOO_LONG for {self.LONG_QUALIFIER!r}"
-        )
+        assert (
+            "W_ANNOTATION_TOO_LONG" not in codes
+        ), f"False positive: literal zone content fired W_ANNOTATION_TOO_LONG for {self.LONG_QUALIFIER!r}"
 
     def test_unprotected_long_annotation_still_fires(self):
         """W_ANNOTATION_TOO_LONG must still fire for a genuine long annotation in Zone 1.
@@ -255,6 +248,6 @@ class TestAnnotationTooLongProtectedZones:
         content = f"FIELD::VALUE[I6<{self.LONG_QUALIFIER}>]\n"
         warnings = _detect_annotation_too_long(content)
         codes = [w["code"] for w in warnings]
-        assert "W_ANNOTATION_TOO_LONG" in codes, (
-            "Regression: genuine Zone 1 long annotation did NOT fire W_ANNOTATION_TOO_LONG"
-        )
+        assert (
+            "W_ANNOTATION_TOO_LONG" in codes
+        ), "Regression: genuine Zone 1 long annotation did NOT fire W_ANNOTATION_TOO_LONG"
