@@ -177,7 +177,16 @@ jobs:
       - name: Update release notes
         uses: softprops/action-gh-release@v2
         with:
-          append_body: |
+          # softprops/action-gh-release@v2 input contract:
+          # - `body` (String): the release notes text
+          # - `append_body` (Boolean): flag enabling append-to-existing-body
+          # Earlier revisions of this workflow placed the footer text inside
+          # `append_body:`, which the action coerced to a truthy boolean and
+          # then silently dropped the content (no `body`/`body_path` supplied).
+          # That is why v1.10/v1.11/v1.12 GH Releases shipped without the
+          # Installation footer despite this job reporting success.
+          append_body: true
+          body: |
 
             ## Installation
 
