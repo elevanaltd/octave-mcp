@@ -2868,6 +2868,42 @@ class WriteTool(BaseTool):
                 # still slice individually via their own dirty=False
                 # spans.
                 doc.dirty = True
+            elif (
+                isinstance(new_value, dict)
+                and not _is_op_descriptor(new_value)
+                and self._find_block(doc, key) is not None
+            ):
+                # ADR-0006 SR2-T2 PR-2 (GH#377) T7: bare ``{KEY: {child:
+                # v2}}`` change against an EXISTING top-level Block.
+                # Without this branch, the dict would be normalised to
+                # an InlineMap and appended as a NEW top-level
+                # Assignment beside the Block (duplicate key, silent
+                # shape switch — I3 violation under format_style
+                # ``"preserve"``). With this branch, the dict is
+                # expanded into per-child Assignment mutations against
+                # the existing Block, keeping the Block shape and
+                # marking only the touched children dirty.
+                t7_block = self._find_block(doc, key)
+                assert t7_block is not None  # narrowed by branch guard
+                for mk, mv in new_value.items():
+                    if _is_delete_sentinel(mv):
+                        t7_block.children = [
+                            c for c in t7_block.children if not (isinstance(c, Assignment) and c.key == mk)
+                        ]
+                        _mark_dirty(t7_block, body=True)
+                        continue
+                    normalized_mv = _normalize_value_for_ast(mv)
+                    found_child = False
+                    for child in t7_block.children:
+                        if isinstance(child, Assignment) and child.key == mk:
+                            child.value = normalized_mv
+                            _mark_dirty(child)
+                            found_child = True
+                            break
+                    if not found_child:
+                        new_child = Assignment(key=mk, value=normalized_mv, dirty=True)
+                        t7_block.children.append(new_child)
+                    _mark_dirty(t7_block, body=True)
             else:
                 # GH#373: Op-aware dispatch on top-level keys.
                 # MERGE on a top-level Block; APPEND/PREPEND on a top-level

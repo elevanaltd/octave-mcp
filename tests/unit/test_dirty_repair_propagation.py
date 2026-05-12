@@ -385,3 +385,48 @@ class TestApplyMutations:
         assert doc.meta_dirty.get("STATUS") is True
         # VERSION not in mutations -> not marked.
         assert "VERSION" not in doc.meta_dirty
+
+
+class TestNormalizeValueForAstBlockPreservation:
+    """T7: bare key:dict against existing top-level Block keeps Block shape."""
+
+    def test_bare_key_dict_against_existing_block_keeps_block_shape(self):
+        from octave_mcp.core.grammar.cst import Assignment, Block
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        # Pre-condition: PARENT is a Block with one child Assignment.
+        doc = parse("===DOC===\nPARENT:\n  CHILD::v\n===END===\n")
+        tool = WriteTool()
+        # Apply a bare-dict change to PARENT (no $op): {"PARENT": {"CHILD": "v2"}}.
+        # Expected behaviour under T7:
+        #   - The PARENT Block is preserved (NOT replaced by an InlineMap).
+        #   - CHILD's Assignment.value is updated to "v2".
+        #   - The Block body_dirty flips True; CHILD.dirty=True.
+        #   - No duplicate top-level Assignment "PARENT" is appended.
+        tool._apply_changes(doc, {"PARENT": {"CHILD": "v2"}})
+        # Block is still the only top-level node with key="PARENT".
+        parent_nodes = [n for n in doc.sections if hasattr(n, "key") and n.key == "PARENT"]
+        assert len(parent_nodes) == 1, f"expected single PARENT node, got {parent_nodes!r}"
+        assert isinstance(parent_nodes[0], Block)
+        # Child updated to v2.
+        child = next(c for c in parent_nodes[0].children if isinstance(c, Assignment) and c.key == "CHILD")
+        assert child.value == "v2"
+        assert child.dirty is True
+        assert parent_nodes[0].body_dirty is True
+
+    def test_bare_key_dict_against_existing_inline_map_replaces(self):
+        """When existing top-level KEY is an InlineMap-style Assignment, replace whole."""
+        from octave_mcp.core.grammar.cst import Assignment, InlineMap
+        from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write import WriteTool
+
+        doc = parse("===DOC===\nKEY::[CHILD::v]\n===END===\n")
+        tool = WriteTool()
+        # Existing node is an Assignment whose value is an InlineMap.
+        tool._apply_changes(doc, {"KEY": {"CHILD": "v2"}})
+        # Behaviour: whole Assignment value replaced with new InlineMap; Assignment.dirty=True.
+        key_node = next(n for n in doc.sections if isinstance(n, Assignment) and n.key == "KEY")
+        assert isinstance(key_node.value, InlineMap)
+        assert key_node.value.pairs == {"CHILD": "v2"}
+        assert key_node.dirty is True
