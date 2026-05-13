@@ -576,5 +576,70 @@ octave-mcp-server 2>&1 | tee server-log.txt
 
 ---
 
+## Migration: `format_style` across versions (v1.12 → v1.13 → v1.14)
+
+`octave_write`'s `format_style` parameter is being rolled out in three stages
+across v1.12.0, v1.13.0, and v1.14.0. This section documents the behaviour
+matrix and the recommended upgrade path for callers.
+
+### Behaviour matrix
+
+| `format_style` value | v1.12.0 behaviour | v1.13.0 behaviour | v1.14.0 behaviour (planned) |
+|---|---|---|---|
+| _(parameter omitted)_ | Full canonical re-emit. Today's default. | **Unchanged** — full canonical re-emit. No warning. | **Flips to `"preserve"`** — span-aware preserve mode. No warning. |
+| `None` *(explicit)* | Full canonical re-emit (same as omitted). | **Deprecated** — same full canonical re-emit behaviour, but emits a `DeprecationWarning` announcing the v1.14.0 flip. | Behaviour TBD; treat as removed. Pin an explicit string value. |
+| `"preserve"` | Strategy C narrow short-circuit (`parse∘emit` identity). | **Strategy A span-aware preserve mode (#418).** Single-region slice-and-replace; clean nodes byte-identical to baseline. | Same as v1.13.0 (the new default). |
+| `"expanded"` | AST lift `InlineMap` → `Block` form. | Unchanged. | Unchanged. |
+| `"compact"` | AST collapse atom-only Blocks → inline-list; veto + `W_COMPACT_REFUSED` on comment-bearing subtrees. | Unchanged. | Unchanged. |
+| unknown string | `E_INVALID_FORMAT_STYLE` | `E_INVALID_FORMAT_STYLE` | `E_INVALID_FORMAT_STYLE` |
+
+### Recommended upgrade path
+
+| If you are on v1.12.0 and you… | …recommended action for v1.13.0 |
+|---|---|
+| omit `format_style` and DO NOT care about the v1.14.0 default flip | No change required. Keep omitting. You will silently accept Strategy A preserve mode in v1.14.0. |
+| omit `format_style` and DO care about byte-shape stability across the v1.14.0 flip | Pin an explicit value now. Pass `format_style="expanded"` if you want to keep v1.12.0 canonical re-emit behaviour, or `format_style="preserve"` if you want the future default. |
+| pass `format_style=None` explicitly (e.g. from a wrapper that always sets it) | Replace with `format_style="expanded"` (keep current behaviour) **or** drop the explicit None (accept the future default silently). The explicit-None path will emit a `DeprecationWarning` in v1.13.0. |
+| pass `format_style="preserve"` explicitly | No change. You will now benefit from Strategy A's single-region diffs (≤0.5% diff footprint) instead of Strategy C's narrow short-circuit. |
+| pass `format_style="expanded"` or `format_style="compact"` explicitly | No change. Behaviour is preserved across the flip. |
+
+### Silencing the `DeprecationWarning`
+
+The v1.13.0 `DeprecationWarning` fires only when `format_style=None` is
+passed *explicitly*. The cleanest way to silence it is to replace the
+explicit `None` with the value that captures your intent:
+
+```python
+# Before — emits DeprecationWarning in v1.13.0:
+result = await write_tool.execute(target_path=path, changes=changes, format_style=None)
+
+# After — explicit pin, no warning, byte-shape stable across v1.14.0:
+result = await write_tool.execute(target_path=path, changes=changes, format_style="expanded")
+```
+
+If you need to suppress the warning at the consumer level instead (e.g. a
+library that wraps `octave_write` and cannot change its caller's code),
+use the standard `warnings` filter:
+
+```python
+import warnings
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="octave_mcp")
+    result = await write_tool.execute(target_path=path, changes=changes, format_style=None)
+```
+
+This is **not recommended** as a long-term strategy — the underlying
+behavioural flip still lands in v1.14.0. Use the explicit-pin upgrade
+above as a permanent fix.
+
+### CLI equivalent
+
+The CLI surface mirrors the same contract. `octave write --format-style none`
+is the explicit-None analogue and emits the deprecation warning; omitting
+`--format-style` is silent. The behaviour matrix above applies identically.
+
+---
+
 For MCP configuration details, see [MCP Configuration Guide](mcp-configuration.md).
 For API reference, see [API Reference](api.md).
