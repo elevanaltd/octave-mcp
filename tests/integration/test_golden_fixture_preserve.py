@@ -168,7 +168,7 @@ class TestGoldenFixtureDiffFootprint:
                 # Find corresponding baseline line
                 # For unchanged lines the baseline index equals output index
                 # minus any offset from insertions/deletions. Use opcodes.
-                for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                for tag, i1, _i2, j1, j2 in matcher.get_opcodes():
                     if tag == "equal" and j1 <= j < j2:
                         i = i1 + (j - j1)
                         if baseline_lines[i] != output_lines[j]:
@@ -179,7 +179,7 @@ class TestGoldenFixtureDiffFootprint:
                         break
 
         assert not mismatches, (
-            f"Mixed annotation forms changed in unchanged sections:\n"
+            "Mixed annotation forms changed in unchanged sections:\n"
             + "\n".join(mismatches[:10])
         )
 
