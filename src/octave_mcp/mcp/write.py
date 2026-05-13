@@ -37,7 +37,7 @@ from octave_mcp.core.grammar.cst import (
     Section,
 )
 from octave_mcp.core.hydrator import resolve_hermetic_standard
-from octave_mcp.core.lexer import ENVELOPE_ID_PATTERN, LexerError, tokenize
+from octave_mcp.core.lexer import ENVELOPE_ID_PATTERN, LexerError, normalize_content, tokenize
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.repair import repair
 from octave_mcp.core.repair_log import RepairLog, is_destructive_normalization_repair
@@ -1230,51 +1230,83 @@ def _apply_format_style(doc: Document, format_style: str | None, corrections: li
     return new_doc
 
 
+def _to_baseline_bytes(raw_str: str) -> bytes | None:
+    """Convert a raw file-content string to post-NFC baseline bytes.
+
+    HC-1 (GH#377 Strategy A): ``baseline_content_for_diff`` is the raw
+    str from ``f.read()`` and must NOT be passed directly as
+    ``baseline_bytes`` to the slice path.  Instead callers use this helper
+    which applies the same fence-aware NFC normalization that ``tokenize()``
+    performs, then encodes the result as UTF-8.  The resulting bytes are
+    byte-index-compatible with all Token ``start_byte``/``end_byte`` values
+    in the parsed document.
+
+    Returns None if ``raw_str`` is empty or if normalization fails (e.g.
+    due to an unterminated fence in the baseline — the slice path will
+    simply not activate for malformed baselines).
+    """
+    if not raw_str:
+        return None
+    try:
+        return normalize_content(raw_str).encode("utf-8")
+    except (LexerError, Exception):
+        # Malformed baseline: fall back to None so _emit_with_style
+        # does not attempt the slice path.
+        return None
+
+
 def _emit_with_style(
     doc: Document,
     *,
-    baseline_bytes: str | None = None,
+    baseline_bytes: bytes | None = None,
     new_bytes: str | None = None,  # noqa: ARG001 -- reserved for future preserve variants (#377)
     format_style: str | None,
     corrections: list[dict[str, Any]],
+    spans_valid_for_baseline: bool = False,
 ) -> str:
     """Single canon orchestrator: produce canonical bytes for ``doc`` under
     ``format_style``.
 
-    Strategy:
+    Strategy (GH#377 Strategy A, T8 — Strategy-C short-circuit deleted):
     - 'expanded' / 'compact' → apply AST pre-pass and emit().
-    - 'preserve' (Strategy C short-circuit): emit canonically; if
-      ``baseline_bytes`` is provided AND its canonical form equals the new
-      canonical form, return ``baseline_bytes`` verbatim (zero diff for
-      whitespace-only edits). Otherwise return the canonical bytes.
-    - Anything else (including None) → emit(doc) (today's behaviour preserved
+    - 'preserve' with spans_valid_for_baseline=True → Strategy A span-aware
+      emit via FormatOptions.  ``baseline_bytes`` (post-NFC encoded, HC-2:
+      bytes not str) is passed through FormatOptions to emit(), which
+      dispatches per-node via dirty/repaired flags.  Unchanged nodes are
+      sliced verbatim from baseline_bytes; changed nodes fall through to the
+      canonical re-emit path.
+    - 'preserve' with spans_valid_for_baseline=False (content mode) →
+      emit(doc) canonical form.  This is correct because the doc's
+      start_byte/end_byte values were computed from the NEW content, not from
+      the baseline file, so the slice path would produce wrong output.
+    - Anything else (including None) → emit(doc) (current behaviour preserved
       byte-for-byte; this is the documented "current" sentinel).
 
-    All non-shortcut paths route through one and only one ``emit()`` call on
-    the doc (or its pre-pass projection), satisfying I1 Single-Canon Discipline.
+    All paths route through one and only one ``emit()`` call on the doc (or
+    its pre-pass projection), satisfying I1 Single-Canon Discipline.
 
-    The ``new_bytes`` parameter is reserved for future preserve-mode variants
-    (full Strategy A in #377) where source-span infrastructure may need access
-    to the original input bytes; PR-A uses canonical-form comparison only.
+    HC-1: ``baseline_bytes`` is post-NFC encoded bytes (not the raw str from
+    f.read()). The caller must pass normalize_content(raw).encode('utf-8').
+    HC-2: Parameter type is ``bytes | None`` (not str | None).
+
+    spans_valid_for_baseline: True only when ``doc`` was parsed from the same
+    content that ``baseline_bytes`` represents (changes mode / normalize mode).
+    False in content mode where the user supplies entirely new content.
+
+    The ``new_bytes`` parameter is reserved for future preserve-mode variants.
     """
+    if format_style == "preserve" and baseline_bytes is not None and spans_valid_for_baseline:
+        # Strategy A: span-aware emit. FormatOptions threads baseline_bytes
+        # and enable_preserve=True into emit(), which dispatches per-node via
+        # dirty/repaired flags. EC-1b: no parse(emit) or emit(parse) calls.
+        from octave_mcp.core.emitter import FormatOptions
+
+        fmt = FormatOptions(baseline_bytes=baseline_bytes, enable_preserve=True)
+        return emit(doc, fmt)
     if format_style in ("expanded", "compact"):
         projected = _apply_format_style(doc, format_style, corrections)
-        canonical = emit(projected)
-    else:
-        canonical = emit(doc)
-
-    if format_style == "preserve" and baseline_bytes is not None:
-        try:
-            # TODO(#377): pass the already-parsed baseline_doc through and
-            # skip this reparse — Strategy A reworks preserve mode entirely
-            # (CRS P3-01 / TMG advisory).
-            baseline_canonical = emit(parse(baseline_bytes))
-        except (LexerError, ParserError):
-            return canonical
-        if baseline_canonical == canonical:
-            return baseline_bytes
-
-    return canonical
+        return emit(projected)
+    return emit(doc)
 
 
 # GH#263: Regex pattern for detecting NAME{qualifier} curly-brace annotations
@@ -3393,6 +3425,15 @@ class WriteTool(BaseTool):
         # Determine mode
         normalize_mode = content is None and changes is None
 
+        # GH#377 Strategy A (T8): track whether doc's byte spans (start_byte,
+        # end_byte) were computed from the same bytes as baseline_content_for_diff.
+        # True only for changes mode and normalize mode (doc parsed from the
+        # existing file).  False for content mode (doc parsed from user-supplied
+        # new content — spans index the new content, NOT the old baseline).
+        # This guards against slicing old baseline bytes using new-content spans,
+        # which would produce garbage output.
+        _doc_spans_match_baseline = False
+
         if normalize_mode:
             # NORMALIZE MODE: read existing file, parse, emit canonical form, write back
             # Pure I1 (Syntactic Fidelity) enforcement: normalization alters syntax never semantics
@@ -3429,6 +3470,9 @@ class WriteTool(BaseTool):
             # Feed through parse -> emit pipeline (reuse content-mode logic)
             # I3 (Mirror Constraint): reflect only what is present, create nothing
             content = baseline_content_for_diff
+            # GH#377 Strategy A: normalize mode parses the baseline content,
+            # so doc spans will be valid against baseline_content_for_diff.
+            _doc_spans_match_baseline = True
 
         if changes is not None:
             # CHANGES MODE (Amend) - file must exist
@@ -3466,6 +3510,8 @@ class WriteTool(BaseTool):
             try:
                 doc = parse(baseline_content_for_diff)
                 original_metrics = extract_structural_metrics(doc)
+                # GH#377 Strategy A: doc spans index baseline_content_for_diff.
+                _doc_spans_match_baseline = True
             except Exception as e:
                 return self._error_envelope(
                     target_path,
@@ -3714,20 +3760,23 @@ class WriteTool(BaseTool):
                     )
 
         # Emit canonical form (may be re-emitted after schema repair).
-        # GH#376 PR-A: format_style routes through _emit_with_style — a single
-        # canonical AST→bytes orchestrator that applies expanded/compact AST
-        # pre-passes or the preserve Strategy C short-circuit, all via the
-        # SAME emit() call (I1 Single-Canon Discipline).
+        # GH#376 PR-A / GH#377 Strategy A (T8): format_style routes through
+        # _emit_with_style — a single canonical AST→bytes orchestrator that
+        # applies expanded/compact AST pre-passes or Strategy A span-aware
+        # preserve emit, all via the SAME emit() call (I1 Single-Canon Discipline).
+        # HC-1: _to_baseline_bytes() converts raw str → post-NFC bytes so
+        # start_byte/end_byte slices are valid.
         # ADR-0006 SR1-T1 Step 3: emit under tier_normalize.active() so
         # precise instrumentation (identifier dequoting) records its receipts.
         try:
             with tier_normalize.active(tier_normalize_log):
                 canonical_content = _emit_with_style(
                     doc,
-                    baseline_bytes=baseline_content_for_diff or None,
+                    baseline_bytes=_to_baseline_bytes(baseline_content_for_diff),
                     new_bytes=content,
                     format_style=format_style,
                     corrections=corrections,
+                    spans_valid_for_baseline=_doc_spans_match_baseline,
                 )
             canonical_metrics = extract_structural_metrics(doc)
         except OctaveASTCycleError as cyc:
@@ -3965,10 +4014,11 @@ class WriteTool(BaseTool):
                         with tier_normalize.active(tier_normalize_log):
                             canonical_content = _emit_with_style(
                                 doc,
-                                baseline_bytes=baseline_content_for_diff or None,
+                                baseline_bytes=_to_baseline_bytes(baseline_content_for_diff),
                                 new_bytes=content,
                                 format_style=format_style,
                                 corrections=result["corrections"],
+                                spans_valid_for_baseline=_doc_spans_match_baseline,
                             )
                         canonical_metrics = extract_structural_metrics(doc)
                         validation_errors = validator.validate(doc, strict=False, section_schemas=section_schemas)
@@ -3996,10 +4046,11 @@ class WriteTool(BaseTool):
                         with tier_normalize.active(tier_normalize_log):
                             canonical_content = _emit_with_style(
                                 doc,
-                                baseline_bytes=baseline_content_for_diff or None,
+                                baseline_bytes=_to_baseline_bytes(baseline_content_for_diff),
                                 new_bytes=content,
                                 format_style=format_style,
                                 corrections=result["corrections"],
+                                spans_valid_for_baseline=_doc_spans_match_baseline,
                             )
                         canonical_metrics = extract_structural_metrics(doc)
                         # Revalidate

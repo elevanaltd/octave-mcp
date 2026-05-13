@@ -1,0 +1,3610 @@
+===GOVERNANCE_DECISIONS===
+META:
+  TYPE::DECISIONS_GOVERNANCE
+  VERSION::"1.0.0"
+  STATUS::ACTIVE
+  UPDATED::"2026-05-12"
+  AUTHORITY::"DUAL_KEY"
+  PURPOSE::"Governance decision record for OCTAVE-MCP project — mixed annotation form fixture for GH#377 Strategy A regression testing"
+---
+§1::DECISION_0001
+  ID::"D-0001"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-02"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 1 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_1]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0001[prerequisite],D-0002[related]]
+§2::DECISION_0002
+  ID::"D-0002"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-03"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 2 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_2]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0002[prerequisite],D-0003[related]]
+§3::DECISION_0003
+  ID::"D-0003"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-04"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 3 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_3]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0003[prerequisite],D-0004[related]]
+§4::DECISION_0004
+  ID::"D-0004"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-05"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 4 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_4]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0004[prerequisite],D-0005[related]]
+§5::DECISION_0005
+  ID::"D-0005"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-06"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 5 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_5]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0005[prerequisite],D-0006[related]]
+§6::DECISION_0006
+  ID::"D-0006"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-07"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 6 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_6]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0006[prerequisite],D-0007[related]]
+§7::DECISION_0007
+  ID::"D-0007"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-08"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 7 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_7]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0007[prerequisite],D-0008[related]]
+§8::DECISION_0008
+  ID::"D-0008"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-09"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 8 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_8]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0008[prerequisite],D-0009[related]]
+§9::DECISION_0009
+  ID::"D-0009"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-10"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 9 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_9]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0009[prerequisite],D-0010[related]]
+§10::DECISION_0010
+  ID::"D-0010"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-11"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 10 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_10]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0010[prerequisite],D-0011[related]]
+§11::DECISION_0011
+  ID::"D-0011"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-12"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 11 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_11]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0011[prerequisite],D-0012[related]]
+§12::DECISION_0012
+  ID::"D-0012"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-13"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 12 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_12]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0012[prerequisite],D-0013[related]]
+§13::DECISION_0013
+  ID::"D-0013"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-14"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 13 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_13]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0013[prerequisite],D-0014[related]]
+§14::DECISION_0014
+  ID::"D-0014"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-15"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 14 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_14]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0014[prerequisite],D-0015[related]]
+§15::DECISION_0015
+  ID::"D-0015"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-16"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 15 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_15]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0015[prerequisite],D-0016[related]]
+§16::DECISION_0016
+  ID::"D-0016"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-17"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 16 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_16]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0016[prerequisite],D-0017[related]]
+§17::DECISION_0017
+  ID::"D-0017"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-18"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 17 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_17]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0017[prerequisite],D-0018[related]]
+§18::DECISION_0018
+  ID::"D-0018"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-19"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 18 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_18]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0018[prerequisite],D-0019[related]]
+§19::DECISION_0019
+  ID::"D-0019"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-20"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 19 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_19]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0019[prerequisite],D-0020[related]]
+§20::DECISION_0020
+  ID::"D-0020"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-21"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 20 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_20]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0020[prerequisite],D-0021[related]]
+§21::DECISION_0021
+  ID::"D-0021"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-22"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 21 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_21]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0021[prerequisite],D-0022[related]]
+§22::DECISION_0022
+  ID::"D-0022"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-23"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 22 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_22]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0022[prerequisite],D-0023[related]]
+§23::DECISION_0023
+  ID::"D-0023"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-24"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 23 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_23]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0023[prerequisite],D-0024[related]]
+§24::DECISION_0024
+  ID::"D-0024"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-25"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 24 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_24]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0024[prerequisite],D-0025[related]]
+§25::DECISION_0025
+  ID::"D-0025"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-26"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 25 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_25]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0025[prerequisite],D-0026[related]]
+§26::DECISION_0026
+  ID::"D-0026"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-27"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 26 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_26]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0026[prerequisite],D-0027[related]]
+§27::DECISION_0027
+  ID::"D-0027"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-28"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 27 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_27]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0027[prerequisite],D-0028[related]]
+§28::DECISION_0028
+  ID::"D-0028"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-01"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 28 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_28]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0028[prerequisite],D-0029[related]]
+§29::DECISION_0029
+  ID::"D-0029"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-02"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 29 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_29]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0029[prerequisite],D-0030[related]]
+§30::DECISION_0030
+  ID::"D-0030"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-03"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 30 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_30]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0030[prerequisite],D-0031[related]]
+§31::DECISION_0031
+  ID::"D-0031"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-04"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 31 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_31]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0031[prerequisite],D-0032[related]]
+§32::DECISION_0032
+  ID::"D-0032"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-05"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 32 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_32]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0032[prerequisite],D-0033[related]]
+§33::DECISION_0033
+  ID::"D-0033"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-06"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 33 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_33]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0033[prerequisite],D-0034[related]]
+§34::DECISION_0034
+  ID::"D-0034"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-07"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 34 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_34]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0034[prerequisite],D-0035[related]]
+§35::DECISION_0035
+  ID::"D-0035"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-08"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 35 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_35]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0035[prerequisite],D-0036[related]]
+§36::DECISION_0036
+  ID::"D-0036"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-09"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 36 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_36]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0036[prerequisite],D-0037[related]]
+§37::DECISION_0037
+  ID::"D-0037"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-10"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 37 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_37]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0037[prerequisite],D-0038[related]]
+§38::DECISION_0038
+  ID::"D-0038"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-11"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 38 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_38]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0038[prerequisite],D-0039[related]]
+§39::DECISION_0039
+  ID::"D-0039"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-12"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 39 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_39]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0039[prerequisite],D-0040[related]]
+§40::DECISION_0040
+  ID::"D-0040"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-13"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 40 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_40]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0040[prerequisite],D-0041[related]]
+§41::DECISION_0041
+  ID::"D-0041"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-14"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 41 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_41]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0041[prerequisite],D-0042[related]]
+§42::DECISION_0042
+  ID::"D-0042"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-15"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 42 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_42]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0042[prerequisite],D-0043[related]]
+§43::DECISION_0043
+  ID::"D-0043"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-16"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 43 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_43]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0043[prerequisite],D-0044[related]]
+§44::DECISION_0044
+  ID::"D-0044"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-17"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 44 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_44]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0044[prerequisite],D-0045[related]]
+§45::DECISION_0045
+  ID::"D-0045"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-18"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 45 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_45]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0045[prerequisite],D-0046[related]]
+§46::DECISION_0046
+  ID::"D-0046"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-19"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 46 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_46]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0046[prerequisite],D-0047[related]]
+§47::DECISION_0047
+  ID::"D-0047"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-20"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 47 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_47]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0047[prerequisite],D-0048[related]]
+§48::DECISION_0048
+  ID::"D-0048"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-21"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 48 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_48]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0048[prerequisite],D-0049[related]]
+§49::DECISION_0049
+  ID::"D-0049"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-22"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 49 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_49]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0049[prerequisite],D-0050[related]]
+§50::DECISION_0050
+  ID::"D-0050"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-23"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 50 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_50]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0050[prerequisite],D-0051[related]]
+§51::DECISION_0051
+  ID::"D-0051"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-24"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 51 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_51]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0051[prerequisite],D-0052[related]]
+§52::DECISION_0052
+  ID::"D-0052"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-25"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 52 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_52]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0052[prerequisite],D-0053[related]]
+§53::DECISION_0053
+  ID::"D-0053"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-26"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 53 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_53]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0053[prerequisite],D-0054[related]]
+§54::DECISION_0054
+  ID::"D-0054"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-27"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 54 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_54]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0054[prerequisite],D-0055[related]]
+§55::DECISION_0055
+  ID::"D-0055"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-28"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 55 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_55]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0055[prerequisite],D-0056[related]]
+§56::DECISION_0056
+  ID::"D-0056"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-01"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 56 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_56]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0056[prerequisite],D-0057[related]]
+§57::DECISION_0057
+  ID::"D-0057"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-02"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 57 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_57]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0057[prerequisite],D-0058[related]]
+§58::DECISION_0058
+  ID::"D-0058"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-03"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 58 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_58]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0058[prerequisite],D-0059[related]]
+§59::DECISION_0059
+  ID::"D-0059"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-04"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 59 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_59]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0059[prerequisite],D-0060[related]]
+§60::DECISION_0060
+  ID::"D-0060"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-05"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 60 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_60]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0060[prerequisite],D-0061[related]]
+§61::DECISION_0061
+  ID::"D-0061"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-06"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 61 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_61]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0061[prerequisite],D-0062[related]]
+§62::DECISION_0062
+  ID::"D-0062"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-07"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 62 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_62]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0062[prerequisite],D-0063[related]]
+§63::DECISION_0063
+  ID::"D-0063"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-08"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 63 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_63]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0063[prerequisite],D-0064[related]]
+§64::DECISION_0064
+  ID::"D-0064"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-09"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 64 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_64]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0064[prerequisite],D-0065[related]]
+§65::DECISION_0065
+  ID::"D-0065"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-10"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 65 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_65]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0065[prerequisite],D-0066[related]]
+§66::DECISION_0066
+  ID::"D-0066"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-11"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 66 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_66]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0066[prerequisite],D-0067[related]]
+§67::DECISION_0067
+  ID::"D-0067"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-12"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 67 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_67]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0067[prerequisite],D-0068[related]]
+§68::DECISION_0068
+  ID::"D-0068"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-13"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 68 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_68]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0068[prerequisite],D-0069[related]]
+§69::DECISION_0069
+  ID::"D-0069"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-14"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 69 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_69]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0069[prerequisite],D-0070[related]]
+§70::DECISION_0070
+  ID::"D-0070"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-15"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 70 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_70]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0070[prerequisite],D-0071[related]]
+§71::DECISION_0071
+  ID::"D-0071"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-16"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 71 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_71]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0071[prerequisite],D-0072[related]]
+§72::DECISION_0072
+  ID::"D-0072"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-17"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 72 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_72]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0072[prerequisite],D-0073[related]]
+§73::DECISION_0073
+  ID::"D-0073"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-18"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 73 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_73]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0073[prerequisite],D-0074[related]]
+§74::DECISION_0074
+  ID::"D-0074"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-19"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 74 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_74]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0074[prerequisite],D-0075[related]]
+§75::DECISION_0075
+  ID::"D-0075"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-20"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 75 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_75]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0075[prerequisite],D-0076[related]]
+§76::DECISION_0076
+  ID::"D-0076"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-21"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 76 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_76]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0076[prerequisite],D-0077[related]]
+§77::DECISION_0077
+  ID::"D-0077"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-22"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 77 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_77]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0077[prerequisite],D-0078[related]]
+§78::DECISION_0078
+  ID::"D-0078"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-23"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 78 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_78]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0078[prerequisite],D-0079[related]]
+§79::DECISION_0079
+  ID::"D-0079"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-24"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 79 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_79]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0079[prerequisite],D-0080[related]]
+§80::DECISION_0080
+  ID::"D-0080"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-25"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 80 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_80]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0080[prerequisite],D-0081[related]]
+§81::DECISION_0081
+  ID::"D-0081"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-26"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 81 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_81]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0081[prerequisite],D-0082[related]]
+§82::DECISION_0082
+  ID::"D-0082"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-27"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 82 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_82]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0082[prerequisite],D-0083[related]]
+§83::DECISION_0083
+  ID::"D-0083"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-28"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 83 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_83]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0083[prerequisite],D-0084[related]]
+§84::DECISION_0084
+  ID::"D-0084"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-01"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 84 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_84]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0084[prerequisite],D-0085[related]]
+§85::DECISION_0085
+  ID::"D-0085"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-02"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 85 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_85]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0085[prerequisite],D-0086[related]]
+§86::DECISION_0086
+  ID::"D-0086"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-03"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 86 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_86]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0086[prerequisite],D-0087[related]]
+§87::DECISION_0087
+  ID::"D-0087"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-04"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 87 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_87]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0087[prerequisite],D-0088[related]]
+§88::DECISION_0088
+  ID::"D-0088"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-05"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 88 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_88]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0088[prerequisite],D-0089[related]]
+§89::DECISION_0089
+  ID::"D-0089"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-06"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 89 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_89]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0089[prerequisite],D-0090[related]]
+§90::DECISION_0090
+  ID::"D-0090"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-07"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 90 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_90]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0090[prerequisite],D-0091[related]]
+§91::DECISION_0091
+  ID::"D-0091"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-08"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 91 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_91]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0091[prerequisite],D-0092[related]]
+§92::DECISION_0092
+  ID::"D-0092"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-09"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 92 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_92]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0092[prerequisite],D-0093[related]]
+§93::DECISION_0093
+  ID::"D-0093"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-10"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 93 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_93]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0093[prerequisite],D-0094[related]]
+§94::DECISION_0094
+  ID::"D-0094"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-11"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 94 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_94]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0094[prerequisite],D-0095[related]]
+§95::DECISION_0095
+  ID::"D-0095"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-12"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 95 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_95]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0095[prerequisite],D-0096[related]]
+§96::DECISION_0096
+  ID::"D-0096"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-13"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 96 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_96]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0096[prerequisite],D-0097[related]]
+§97::DECISION_0097
+  ID::"D-0097"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-14"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 97 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_97]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0097[prerequisite],D-0098[related]]
+§98::DECISION_0098
+  ID::"D-0098"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-15"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 98 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_98]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0098[prerequisite],D-0099[related]]
+§99::DECISION_0099
+  ID::"D-0099"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-16"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 99 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_99]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0099[prerequisite],D-0100[related]]
+§100::DECISION_0100
+  ID::"D-0100"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-17"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 100 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_100]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0100[prerequisite],D-0101[related]]
+§101::DECISION_0101
+  ID::"D-0101"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-18"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 101 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_101]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0101[prerequisite],D-0102[related]]
+§102::DECISION_0102
+  ID::"D-0102"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-19"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 102 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_102]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0102[prerequisite],D-0103[related]]
+§103::DECISION_0103
+  ID::"D-0103"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-20"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 103 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_103]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0103[prerequisite],D-0104[related]]
+§104::DECISION_0104
+  ID::"D-0104"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-21"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 104 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_104]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0104[prerequisite],D-0105[related]]
+§105::DECISION_0105
+  ID::"D-0105"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-22"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 105 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_105]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0105[prerequisite],D-0106[related]]
+§106::DECISION_0106
+  ID::"D-0106"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-23"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 106 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_106]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0106[prerequisite],D-0107[related]]
+§107::DECISION_0107
+  ID::"D-0107"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-24"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 107 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_107]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0107[prerequisite],D-0108[related]]
+§108::DECISION_0108
+  ID::"D-0108"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-25"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 108 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_108]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0108[prerequisite],D-0109[related]]
+§109::DECISION_0109
+  ID::"D-0109"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-26"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 109 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_109]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0109[prerequisite],D-0110[related]]
+§110::DECISION_0110
+  ID::"D-0110"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-27"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 110 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_110]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0110[prerequisite],D-0111[related]]
+§111::DECISION_0111
+  ID::"D-0111"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-28"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 111 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_111]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0111[prerequisite],D-0112[related]]
+§112::DECISION_0112
+  ID::"D-0112"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-01"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 112 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_112]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0112[prerequisite],D-0113[related]]
+§113::DECISION_0113
+  ID::"D-0113"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-02"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 113 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_113]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0113[prerequisite],D-0114[related]]
+§114::DECISION_0114
+  ID::"D-0114"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-03"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 114 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_114]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0114[prerequisite],D-0115[related]]
+§115::DECISION_0115
+  ID::"D-0115"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-04"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 115 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_115]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0115[prerequisite],D-0116[related]]
+§116::DECISION_0116
+  ID::"D-0116"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-05"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 116 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_116]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0116[prerequisite],D-0117[related]]
+§117::DECISION_0117
+  ID::"D-0117"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-06"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 117 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_117]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0117[prerequisite],D-0118[related]]
+§118::DECISION_0118
+  ID::"D-0118"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-07"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 118 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_118]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0118[prerequisite],D-0119[related]]
+§119::DECISION_0119
+  ID::"D-0119"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-08"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 119 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_119]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0119[prerequisite],D-0120[related]]
+§120::DECISION_0120
+  ID::"D-0120"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-09"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 120 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_120]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0120[prerequisite],D-0121[related]]
+§121::DECISION_0121
+  ID::"D-0121"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-10"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 121 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_121]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0121[prerequisite],D-0122[related]]
+§122::DECISION_0122
+  ID::"D-0122"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-11"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 122 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_122]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0122[prerequisite],D-0123[related]]
+§123::DECISION_0123
+  ID::"D-0123"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-12"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 123 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_123]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0123[prerequisite],D-0124[related]]
+§124::DECISION_0124
+  ID::"D-0124"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-13"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 124 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_124]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0124[prerequisite],D-0125[related]]
+§125::DECISION_0125
+  ID::"D-0125"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-14"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 125 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_125]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0125[prerequisite],D-0126[related]]
+§126::DECISION_0126
+  ID::"D-0126"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-15"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 126 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_126]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0126[prerequisite],D-0127[related]]
+§127::DECISION_0127
+  ID::"D-0127"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-16"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 127 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_127]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0127[prerequisite],D-0128[related]]
+§128::DECISION_0128
+  ID::"D-0128"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-17"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 128 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_128]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0128[prerequisite],D-0129[related]]
+§129::DECISION_0129
+  ID::"D-0129"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-18"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 129 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_129]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0129[prerequisite],D-0130[related]]
+§130::DECISION_0130
+  ID::"D-0130"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-19"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 130 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_130]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0130[prerequisite],D-0131[related]]
+§131::DECISION_0131
+  ID::"D-0131"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-20"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 131 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_131]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0131[prerequisite],D-0132[related]]
+§132::DECISION_0132
+  ID::"D-0132"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-21"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 132 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_132]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0132[prerequisite],D-0133[related]]
+§133::DECISION_0133
+  ID::"D-0133"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-22"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 133 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_133]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0133[prerequisite],D-0134[related]]
+§134::DECISION_0134
+  ID::"D-0134"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-23"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 134 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_134]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0134[prerequisite],D-0135[related]]
+§135::DECISION_0135
+  ID::"D-0135"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-24"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 135 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_135]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0135[prerequisite],D-0136[related]]
+§136::DECISION_0136
+  ID::"D-0136"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-25"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 136 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_136]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0136[prerequisite],D-0137[related]]
+§137::DECISION_0137
+  ID::"D-0137"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-26"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 137 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_137]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0137[prerequisite],D-0138[related]]
+§138::DECISION_0138
+  ID::"D-0138"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-27"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 138 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_138]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0138[prerequisite],D-0139[related]]
+§139::DECISION_0139
+  ID::"D-0139"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-28"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 139 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_139]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0139[prerequisite],D-0140[related]]
+§140::DECISION_0140
+  ID::"D-0140"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-01"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 140 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_140]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0140[prerequisite],D-0141[related]]
+§141::DECISION_0141
+  ID::"D-0141"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-02"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 141 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_141]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0141[prerequisite],D-0142[related]]
+§142::DECISION_0142
+  ID::"D-0142"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-03"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 142 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_142]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0142[prerequisite],D-0143[related]]
+§143::DECISION_0143
+  ID::"D-0143"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-04"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 143 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_143]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0143[prerequisite],D-0144[related]]
+§144::DECISION_0144
+  ID::"D-0144"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-05"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 144 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_144]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0144[prerequisite],D-0145[related]]
+§145::DECISION_0145
+  ID::"D-0145"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-06"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 145 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_145]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0145[prerequisite],D-0146[related]]
+§146::DECISION_0146
+  ID::"D-0146"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-07"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 146 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_146]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0146[prerequisite],D-0147[related]]
+§147::DECISION_0147
+  ID::"D-0147"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-08"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 147 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_147]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0147[prerequisite],D-0148[related]]
+§148::DECISION_0148
+  ID::"D-0148"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-09"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 148 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_148]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0148[prerequisite],D-0149[related]]
+§149::DECISION_0149
+  ID::"D-0149"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-10"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 149 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_149]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0149[prerequisite],D-0150[related]]
+§150::DECISION_0150
+  ID::"D-0150"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-11"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 150 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_150]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0150[prerequisite],D-0151[related]]
+§151::DECISION_0151
+  ID::"D-0151"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-12"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 151 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_151]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0151[prerequisite],D-0152[related]]
+§152::DECISION_0152
+  ID::"D-0152"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-13"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 152 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_152]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0152[prerequisite],D-0153[related]]
+§153::DECISION_0153
+  ID::"D-0153"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-14"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 153 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_153]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0153[prerequisite],D-0154[related]]
+§154::DECISION_0154
+  ID::"D-0154"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-15"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 154 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_154]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0154[prerequisite],D-0155[related]]
+§155::DECISION_0155
+  ID::"D-0155"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-16"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 155 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_155]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0155[prerequisite],D-0156[related]]
+§156::DECISION_0156
+  ID::"D-0156"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-17"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 156 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_156]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0156[prerequisite],D-0157[related]]
+§157::DECISION_0157
+  ID::"D-0157"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-18"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 157 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_157]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0157[prerequisite],D-0158[related]]
+§158::DECISION_0158
+  ID::"D-0158"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-19"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 158 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_158]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0158[prerequisite],D-0159[related]]
+§159::DECISION_0159
+  ID::"D-0159"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-20"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 159 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_159]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0159[prerequisite],D-0160[related]]
+§160::DECISION_0160
+  ID::"D-0160"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-21"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 160 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_160]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0160[prerequisite],D-0161[related]]
+§161::DECISION_0161
+  ID::"D-0161"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-22"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 161 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_161]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0161[prerequisite],D-0162[related]]
+§162::DECISION_0162
+  ID::"D-0162"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-23"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 162 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_162]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0162[prerequisite],D-0163[related]]
+§163::DECISION_0163
+  ID::"D-0163"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-24"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 163 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_163]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0163[prerequisite],D-0164[related]]
+§164::DECISION_0164
+  ID::"D-0164"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-25"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 164 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_164]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0164[prerequisite],D-0165[related]]
+§165::DECISION_0165
+  ID::"D-0165"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-26"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 165 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_165]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0165[prerequisite],D-0166[related]]
+§166::DECISION_0166
+  ID::"D-0166"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-27"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 166 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_166]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0166[prerequisite],D-0167[related]]
+§167::DECISION_0167
+  ID::"D-0167"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-28"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 167 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_167]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0167[prerequisite],D-0168[related]]
+§168::DECISION_0168
+  ID::"D-0168"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-01"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 168 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_168]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0168[prerequisite],D-0169[related]]
+§169::DECISION_0169
+  ID::"D-0169"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-02"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 169 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_169]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0169[prerequisite],D-0170[related]]
+§170::DECISION_0170
+  ID::"D-0170"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-03"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 170 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_170]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0170[prerequisite],D-0171[related]]
+§171::DECISION_0171
+  ID::"D-0171"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-04"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 171 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_171]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0171[prerequisite],D-0172[related]]
+§172::DECISION_0172
+  ID::"D-0172"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-05"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 172 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_172]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0172[prerequisite],D-0173[related]]
+§173::DECISION_0173
+  ID::"D-0173"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-06"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 173 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_173]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0173[prerequisite],D-0174[related]]
+§174::DECISION_0174
+  ID::"D-0174"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-07"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 174 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_174]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0174[prerequisite],D-0175[related]]
+§175::DECISION_0175
+  ID::"D-0175"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-08"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 175 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_175]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0175[prerequisite],D-0176[related]]
+§176::DECISION_0176
+  ID::"D-0176"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-09"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 176 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_176]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0176[prerequisite],D-0177[related]]
+§177::DECISION_0177
+  ID::"D-0177"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-10"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 177 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_177]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0177[prerequisite],D-0178[related]]
+§178::DECISION_0178
+  ID::"D-0178"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-11"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 178 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_178]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0178[prerequisite],D-0179[related]]
+§179::DECISION_0179
+  ID::"D-0179"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-12"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 179 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_179]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0179[prerequisite],D-0180[related]]
+§180::DECISION_0180
+  ID::"D-0180"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-13"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 180 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_180]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0180[prerequisite],D-0181[related]]
+§181::DECISION_0181
+  ID::"D-0181"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-14"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 181 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_181]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0181[prerequisite],D-0182[related]]
+§182::DECISION_0182
+  ID::"D-0182"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-15"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 182 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_182]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0182[prerequisite],D-0183[related]]
+§183::DECISION_0183
+  ID::"D-0183"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-16"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 183 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_183]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0183[prerequisite],D-0184[related]]
+§184::DECISION_0184
+  ID::"D-0184"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-17"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 184 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_184]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0184[prerequisite],D-0185[related]]
+§185::DECISION_0185
+  ID::"D-0185"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-18"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 185 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_185]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0185[prerequisite],D-0186[related]]
+§186::DECISION_0186
+  ID::"D-0186"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-19"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 186 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_186]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0186[prerequisite],D-0187[related]]
+§187::DECISION_0187
+  ID::"D-0187"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-20"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 187 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_187]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0187[prerequisite],D-0188[related]]
+§188::DECISION_0188
+  ID::"D-0188"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-21"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 188 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_188]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0188[prerequisite],D-0189[related]]
+§189::DECISION_0189
+  ID::"D-0189"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-22"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 189 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_189]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0189[prerequisite],D-0190[related]]
+§190::DECISION_0190
+  ID::"D-0190"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-23"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 190 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_190]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0190[prerequisite],D-0191[related]]
+§191::DECISION_0191
+  ID::"D-0191"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-24"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 191 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_191]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0191[prerequisite],D-0192[related]]
+§192::DECISION_0192
+  ID::"D-0192"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-25"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 192 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_192]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0192[prerequisite],D-0193[related]]
+§193::DECISION_0193
+  ID::"D-0193"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-26"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 193 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_193]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0193[prerequisite],D-0194[related]]
+§194::DECISION_0194
+  ID::"D-0194"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-27"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 194 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_194]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0194[prerequisite],D-0195[related]]
+§195::DECISION_0195
+  ID::"D-0195"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-28"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 195 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_195]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0195[prerequisite],D-0196[related]]
+§196::DECISION_0196
+  ID::"D-0196"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-01"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 196 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_196]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0196[prerequisite],D-0197[related]]
+§197::DECISION_0197
+  ID::"D-0197"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-02"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 197 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_197]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0197[prerequisite],D-0198[related]]
+§198::DECISION_0198
+  ID::"D-0198"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-03"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 198 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_198]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0198[prerequisite],D-0199[related]]
+§199::DECISION_0199
+  ID::"D-0199"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-04"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 199 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_199]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0199[prerequisite],D-0200[related]]
+§200::DECISION_0200
+  ID::"D-0200"
+  STATUS::APPROVED
+  PRIORITY::HIGH
+  CATEGORY::ARCHITECTURE
+  DATE::"2026-01-05"
+  AUTHOR::"implementation-lead"
+  RATIONALE::"Decision 200 rationale: structural integrity over velocity"
+  CONSTRAINTS::[REQ[mandatory],OPT[optional],CONST[fixed_200]]
+  BLOCKERS::[NEVER<bypass_gates>,NEVER<skip_verification>,NEVER<assume_correctness>]
+  ARCHETYPE::[HEPHAESTUS<craft>,ATLAS<foundation>,HERMES<coordination>]
+  IMPACT::[BREAKING[signature_change],COMPATIBLE[additive],INTERNAL[impl_only]]
+  EVIDENCE::[test_results[3108_passing],lint_output[ruff_clean],type_check[mypy_clean]]
+  RESOLUTION::ACCEPTED[unanimous]
+  RISK_LEVEL::LOW<mitigated>
+  ENFORCEMENT::AUTOMATED[CI_gates]
+  LIFECYCLE::[DRAFT→REVIEW→APPROVED<final>]
+  DEPENDENCIES::[D-0200[prerequisite],D-0001[related]]
+===END===
