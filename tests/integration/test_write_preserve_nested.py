@@ -187,3 +187,140 @@ def test_preserve_nested_mutation_parametric(
     assert status == "success", f"[{label}] status={status!r}"
     assert new_marker in written, f"[{label}] new value missing; file is: {written!r}"
     assert old_marker not in written, f"[{label}] old value persisted; file is: {written!r}"
+
+
+# ---------------------------------------------------------------------------
+# CE BLOCKER (PR #418, rework cycle 3): repair-side propagation
+# ---------------------------------------------------------------------------
+#
+# Schema repair recurses into Block/Section children and may set
+# ``child.repaired = True`` on an Assignment whose value was normalised
+# (e.g. ENUM casefold).  Pre-fix, the containing Block/Section was left
+# with ``body_dirty = False``; emit()'s slice predicate then sliced the
+# parent's whole subtree from baseline, silently discarding the repair.
+#
+# The fix in core/repair.py propagates the "I or a descendant was
+# repaired" signal upwards: any Block/Section whose descendant tree
+# contains a repaired Assignment is marked ``body_dirty = True``.
+
+
+class TestPreserveRepairNestedPropagation:
+    """CE BLOCKER regression: schema repair on a nested Assignment must apply."""
+
+    def test_repair_nested_child_propagates_to_block_body_dirty(self) -> None:
+        """Repairing a grandchild Assignment must mark the parent Block body_dirty.
+
+        Uses ``_apply_schema_repairs`` directly with an ENUM casefold
+        schema definition.  Pre-fix: ``child.repaired=True`` but
+        ``block.body_dirty=False`` → slice path emits stale baseline →
+        output still contains the lowercase ``STATUS::active``.
+        Post-fix: ``block.body_dirty=True`` → re-emit path → output
+        contains canonical ``STATUS::ACTIVE``.
+        """
+        from octave_mcp.core.constraints import ConstraintChain, EnumConstraint
+        from octave_mcp.core.emitter import FormatOptions, emit
+        from octave_mcp.core.holographic import HolographicPattern
+        from octave_mcp.core.parser import parse
+        from octave_mcp.core.repair import _apply_schema_repairs
+        from octave_mcp.core.repair_log import RepairLog
+        from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
+        from octave_mcp.mcp.write import _to_baseline_bytes
+
+        content = "===TEST===\nBLOCK:\n  STATUS::active\n===END===\n"
+        doc = parse(content)
+
+        # Sanity-check the AST shape before mutation.
+        block = doc.sections[0]
+        child = block.children[0]
+        assert type(block).__name__ == "Block"
+        assert child.key == "STATUS"
+        assert getattr(block, "body_dirty", False) is False
+        assert child.repaired is False
+
+        # Build a schema with an ENUM casefold rule on STATUS.
+        constraints = ConstraintChain([EnumConstraint(allowed_values=["ACTIVE", "INACTIVE"])])
+        pattern = HolographicPattern(example="ACTIVE", constraints=constraints, target=None)
+        field_def = FieldDefinition(name="STATUS", pattern=pattern, raw_value=None)
+        schema = SchemaDefinition(name="TEST", fields={"STATUS": field_def})
+
+        # Apply repair — this is the production code path that triggered
+        # CE's BLOCKER finding.
+        repair_log = RepairLog(repairs=[])
+        _apply_schema_repairs(doc, schema, repair_log)
+
+        # Post-fix invariants: child repaired AND parent body_dirty set
+        # by the recursive propagation in _repair_ast_node.
+        assert child.repaired is True, "child Assignment was not repaired"
+        assert (
+            getattr(block, "body_dirty", False) is True
+        ), "ancestor Block.body_dirty was NOT propagated — CE BLOCKER regressed"
+
+        # End-to-end: preserve-mode emit must contain the repaired value
+        # and NOT the pre-repair source bytes.
+        bl = _to_baseline_bytes(content)
+        out = emit(doc, FormatOptions(baseline_bytes=bl, enable_preserve=True))
+        assert "STATUS::ACTIVE" in out, f"repair did not land in output; file is: {out!r}"
+        assert (
+            "STATUS::active" not in out
+        ), f"pre-repair source bytes persisted; slice path emitted stale baseline. file is: {out!r}"
+
+    def test_repair_nested_child_propagates_to_section_body_dirty(self) -> None:
+        """Same propagation rule for Section parents."""
+        from octave_mcp.core.constraints import ConstraintChain, EnumConstraint
+        from octave_mcp.core.emitter import FormatOptions, emit
+        from octave_mcp.core.holographic import HolographicPattern
+        from octave_mcp.core.parser import parse
+        from octave_mcp.core.repair import _apply_schema_repairs
+        from octave_mcp.core.repair_log import RepairLog
+        from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
+        from octave_mcp.mcp.write import _to_baseline_bytes
+
+        content = "===TEST===\n§1::SEC\n  STATUS::active\n===END===\n"
+        doc = parse(content)
+        section = doc.sections[0]
+        assert type(section).__name__ == "Section"
+
+        constraints = ConstraintChain([EnumConstraint(allowed_values=["ACTIVE", "INACTIVE"])])
+        pattern = HolographicPattern(example="ACTIVE", constraints=constraints, target=None)
+        field_def = FieldDefinition(name="STATUS", pattern=pattern, raw_value=None)
+        schema = SchemaDefinition(name="TEST", fields={"STATUS": field_def})
+
+        _apply_schema_repairs(doc, schema, RepairLog(repairs=[]))
+
+        assert (
+            getattr(section, "body_dirty", False) is True
+        ), "Section.body_dirty was NOT propagated — CE BLOCKER regressed"
+
+        bl = _to_baseline_bytes(content)
+        out = emit(doc, FormatOptions(baseline_bytes=bl, enable_preserve=True))
+        assert "STATUS::ACTIVE" in out
+        assert "STATUS::active" not in out
+
+    def test_no_repair_leaves_body_dirty_unset(self) -> None:
+        """Negative case: if NO descendant is repaired, the parent's body_dirty MUST remain False.
+
+        This guards against an over-correction where we eagerly mark every
+        ancestor body_dirty regardless of whether any repair occurred,
+        defeating the slice path for clean documents.
+        """
+        from octave_mcp.core.constraints import ConstraintChain, EnumConstraint
+        from octave_mcp.core.holographic import HolographicPattern
+        from octave_mcp.core.parser import parse
+        from octave_mcp.core.repair import _apply_schema_repairs
+        from octave_mcp.core.repair_log import RepairLog
+        from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
+
+        content = "===TEST===\nBLOCK:\n  STATUS::ACTIVE\n===END===\n"  # already canonical
+        doc = parse(content)
+        block = doc.sections[0]
+
+        constraints = ConstraintChain([EnumConstraint(allowed_values=["ACTIVE", "INACTIVE"])])
+        pattern = HolographicPattern(example="ACTIVE", constraints=constraints, target=None)
+        field_def = FieldDefinition(name="STATUS", pattern=pattern, raw_value=None)
+        schema = SchemaDefinition(name="TEST", fields={"STATUS": field_def})
+
+        _apply_schema_repairs(doc, schema, RepairLog(repairs=[]))
+
+        assert (
+            getattr(block, "body_dirty", False) is False
+        ), "body_dirty was set without any descendant repair — over-propagation regression"
