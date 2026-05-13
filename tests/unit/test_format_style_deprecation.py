@@ -251,3 +251,129 @@ class TestCLIDeprecationWarning:
             "--format-style produced different output bytes. The default "
             "flip is scheduled for v1.14.0 — not v1.13.0."
         )
+
+
+# ---------------------------------------------------------------------------
+# CE + CRS CONDITIONAL on PR #422: schema-level regression
+# ---------------------------------------------------------------------------
+#
+# The MCP input schema is the protocol-boundary contract. If the
+# ``format_style`` schema description claims Strategy C semantics (the
+# pre-PR-#418 narrow short-circuit) or references GH#377 as
+# "tracked separately" (#377 IS the Strategy A work, now landed), then
+# JSON-RPC clients see stale metadata while the Python-side runtime
+# behaves correctly — a silent protocol-level lie.
+#
+# Worse: if the schema declares ``"type": "string"`` (enum-only) without
+# a null variant, JSON-RPC clients passing explicit ``null`` are
+# rejected at the JSON Schema boundary BEFORE reaching the Python-side
+# DeprecationWarning code, making the Shape B deprecation contract
+# unreachable for protocol clients.
+
+
+class TestFormatStyleInputSchema:
+    """Schema-level regression: protocol-boundary metadata must reflect reality.
+
+    These checks guard against the schema going stale again as the
+    underlying ``format_style`` semantics evolve. They assert the
+    invariants the CE + CRS CONDITIONAL findings on PR #422 surfaced.
+    """
+
+    def _format_style_schema(self) -> dict:
+        """Return the ``format_style`` property dict from the MCP input schema."""
+        schema = WriteTool().get_input_schema()
+        properties = schema["properties"]
+        assert "format_style" in properties, "format_style missing from input schema"
+        return properties["format_style"]
+
+    def test_description_reflects_strategy_a_not_strategy_c(self) -> None:
+        """Description MUST describe Strategy A semantics, not the pre-PR-#418 Strategy C."""
+        desc = self._format_style_schema().get("description", "")
+        # Strategy A markers that MUST be present.
+        assert "Strategy A" in desc, (
+            "format_style schema description does not mention 'Strategy A' — "
+            "JSON-RPC clients still see stale Strategy-C metadata. "
+            "See CE+CRS CONDITIONAL on PR #422."
+        )
+        # Pre-PR-#418 phrases that MUST NOT be present.
+        for stale_marker in ("Strategy C", "parse-equality", "AST-equal to"):
+            assert stale_marker not in desc, (
+                f"format_style schema description contains stale Strategy-C "
+                f"phrase {stale_marker!r}. The schema must be updated to "
+                f"reflect Strategy A semantics (PR #418). "
+                f"See CE+CRS CONDITIONAL on PR #422."
+            )
+
+    def test_description_does_not_claim_gh_377_is_tracked_separately(self) -> None:
+        """GH#377 IS the Strategy A work landed in PR #418; the schema must not
+        claim it is still tracked elsewhere as outstanding."""
+        desc = self._format_style_schema().get("description", "")
+        # The literal "tracked separately as #377" phrasing from the
+        # pre-PR-#418 schema description.
+        assert "tracked separately as #377" not in desc, (
+            "format_style schema description still claims '#377 tracked "
+            "separately' — but GH#377 IS the Strategy A work, now landed "
+            "in PR #418. See CE+CRS CONDITIONAL on PR #422."
+        )
+
+    def test_description_surfaces_v1_13_0_deprecation_contract(self) -> None:
+        """The Shape B deprecation contract MUST be visible at the protocol boundary.
+
+        Without this, JSON-RPC clients have no warning at the schema level
+        that explicit ``null`` is deprecated and the v1.14.0 default flip
+        is coming.
+        """
+        desc = self._format_style_schema().get("description", "")
+        assert "DEPRECATED" in desc or "Deprecated" in desc or "deprecated" in desc, (
+            "format_style schema description does not surface the Shape B "
+            "deprecation contract. The protocol-boundary metadata must "
+            "match docstring + CHANGELOG visibility."
+        )
+        assert "v1.14.0" in desc, (
+            "format_style schema description does not name the v1.14.0 "
+            "flip target version. The protocol-boundary metadata must "
+            "match docstring + CHANGELOG visibility."
+        )
+
+    def test_schema_type_admits_null(self) -> None:
+        """The JSON Schema type MUST admit ``null`` so JSON-RPC clients
+        passing explicit ``null`` reach the Python-side DeprecationWarning
+        instead of being rejected at the schema boundary.
+        """
+        type_field = self._format_style_schema().get("type")
+        assert type_field is not None, "format_style schema missing 'type'"
+        if isinstance(type_field, str):
+            pytest.fail(
+                f"format_style schema declares type={type_field!r} (scalar "
+                f"string). JSON-RPC clients passing explicit null would be "
+                f"rejected at the schema boundary BEFORE reaching the "
+                f"Python-side DeprecationWarning. The type must be a list "
+                f"that includes 'null'. See CE+CRS CONDITIONAL on PR #422."
+            )
+        # type is a list — assert null is one of the admitted variants.
+        assert "null" in type_field, (
+            f"format_style schema type {type_field!r} does not include "
+            f"'null'. JSON-RPC clients passing explicit null would be "
+            f"rejected at the schema boundary."
+        )
+        # And 'string' is still admitted for the normal enum values.
+        assert "string" in type_field, (
+            f"format_style schema type {type_field!r} dropped 'string' — " f"normal enum values would now be rejected."
+        )
+
+    def test_schema_enum_admits_none(self) -> None:
+        """The enum MUST include ``None`` as a valid value alongside the
+        three string options so JSON-RPC clients passing literal null
+        validate successfully and reach the Python-side warning.
+        """
+        enum = self._format_style_schema().get("enum")
+        assert enum is not None, "format_style schema missing 'enum'"
+        assert None in enum, (
+            f"format_style schema enum {enum!r} does not include None. "
+            f"Explicit null from a JSON-RPC client would fail enum "
+            f"validation before reaching the DeprecationWarning. "
+            f"See CE+CRS CONDITIONAL on PR #422."
+        )
+        # And the three valid string values are still present.
+        for value in ("preserve", "expanded", "compact"):
+            assert value in enum, f"format_style schema enum dropped {value!r}"
