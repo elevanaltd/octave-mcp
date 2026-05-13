@@ -80,8 +80,7 @@ def _run_octave_write_changes(content: str, changes: dict, format_style: str = "
 def fixture_content() -> str:
     """Load the golden fixture content."""
     assert FIXTURE_PATH.exists(), (
-        f"Golden fixture not found at {FIXTURE_PATH}. "
-        "Generate it by running the fixture generation script."
+        f"Golden fixture not found at {FIXTURE_PATH}. " "Generate it by running the fixture generation script."
     )
     return FIXTURE_PATH.read_text(encoding="utf-8")
 
@@ -173,15 +172,11 @@ class TestGoldenFixtureDiffFootprint:
                         i = i1 + (j - j1)
                         if baseline_lines[i] != output_lines[j]:
                             mismatches.append(
-                                f"Line {j}: baseline={baseline_lines[i]!r} "
-                                f"output={output_lines[j]!r}"
+                                f"Line {j}: baseline={baseline_lines[i]!r} " f"output={output_lines[j]!r}"
                             )
                         break
 
-        assert not mismatches, (
-            "Mixed annotation forms changed in unchanged sections:\n"
-            + "\n".join(mismatches[:10])
-        )
+        assert not mismatches, "Mixed annotation forms changed in unchanged sections:\n" + "\n".join(mismatches[:10])
 
     def test_annotation_forms_present_in_fixture(self, fixture_content: str) -> None:
         """Fixture must contain both [X] and <X> annotation forms.
@@ -192,12 +187,8 @@ class TestGoldenFixtureDiffFootprint:
         bracket_forms = re.findall(r"\w+\[[\w_]+\]", fixture_content)
         angle_forms = re.findall(r"\w+<[\w_]+>", fixture_content)
 
-        assert len(bracket_forms) >= 10, (
-            f"Fixture has only {len(bracket_forms)} [X] annotation forms, need >= 10"
-        )
-        assert len(angle_forms) >= 10, (
-            f"Fixture has only {len(angle_forms)} <X> annotation forms, need >= 10"
-        )
+        assert len(bracket_forms) >= 10, f"Fixture has only {len(bracket_forms)} [X] annotation forms, need >= 10"
+        assert len(angle_forms) >= 10, f"Fixture has only {len(angle_forms)} <X> annotation forms, need >= 10"
 
     def test_file_size_in_expected_range(self, fixture_content: str) -> None:
         """Fixture must be in the ~100-200KB range for meaningful diff-footprint testing."""
@@ -236,6 +227,5 @@ class TestGoldenFixtureDiffFootprint:
         max_allowed = int(file_size * 0.005)
 
         assert diff_size <= max_allowed, (
-            f"[{description}] Diff footprint {diff_size} bytes > {max_allowed} bytes "
-            f"(0.5% of {file_size} bytes)"
+            f"[{description}] Diff footprint {diff_size} bytes > {max_allowed} bytes " f"(0.5% of {file_size} bytes)"
         )
