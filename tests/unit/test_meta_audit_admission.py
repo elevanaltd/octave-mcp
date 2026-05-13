@@ -242,6 +242,160 @@ def test_w_meta_audit_severity_is_warning_not_error() -> None:
         assert a.severity == "warning", f"W_META_AUDIT must have severity='warning'. Got: {a!r}"
 
 
+# ---------------------------------------------------------------------------
+# TMG follow-up (PR #419 comment 4439247781): boundary tests for
+# prefix-adjacent non-matching META keys.
+#
+# Sub-spec §Acceptance Criteria implies that "close-but-non-matching keys
+# like NON_CANON_DEGRADED or _NON_CANONICAL_" must STILL trigger E007 in
+# STRICT mode AND NOT emit W_META_AUDIT. The 8 tests below cover the
+# closure: one close-match (root-word resemblance, prefix mismatch) and
+# one leading-underscore variant per admit pattern.
+#
+# Selection methodology for "close-match" non-admit keys:
+# - Each close-match shares the prefix's root word but truncates or alters
+#   the trailing portion so ``str.startswith(prefix)`` returns False.
+# - Documented in each test docstring; future-prefix admissibility is
+#   called out where relevant (e.g. NON_CANON_ could plausibly be added
+#   as a future admit prefix, but at the present admit-pattern surface
+#   it is a non-match and MUST reject).
+# ---------------------------------------------------------------------------
+
+
+def _make_doc_with_meta_key(key: str) -> str:
+    """Build a minimal OCTAVE doc whose META block contains ``key``."""
+    return (
+        f"===AUDIT_DOC===\n"
+        f"META:\n"
+        f'  TYPE::"TEST"\n'
+        f'  {key}::"v"\n'
+        f"\n"
+        f"§1::CONTENT\n"
+        f'  KEY::"value"\n'
+        f"\n"
+        f"===END==="
+    )
+
+
+def _assert_strict_rejects_non_match(field_name: str) -> None:
+    """Shared assertion: STRICT-mode emits E007 for ``field_name`` and does
+    NOT emit W_META_AUDIT for it.
+
+    This is the closure half of the admission policy — anything that does
+    not match ``META_AUDIT_ADMIT_PATTERNS`` is governed by the existing
+    L328 unknown-field check (E007), not by the admit path.
+    """
+    doc = parse(_make_doc_with_meta_key(field_name))
+    validator = Validator(schema=SCHEMA_WITH_META_FIELDS)
+    validator.validate(doc, strict=True)
+
+    e007_for_key = [e for e in validator.errors if e.code == "E007" and e.field_path == f"META.{field_name}"]
+    audit_for_key = [e for e in validator.errors if e.code == "W_META_AUDIT" and e.field_path == f"META.{field_name}"]
+
+    assert e007_for_key, (
+        f"STRICT mode must reject prefix-adjacent non-match {field_name!r} with E007 "
+        f"(no admit pattern in META_AUDIT_ADMIT_PATTERNS matches). "
+        f"All errors: {validator.errors!r}"
+    )
+    assert audit_for_key == [], (
+        f"W_META_AUDIT must NOT fire for prefix-adjacent non-match {field_name!r}; " f"got: {audit_for_key!r}"
+    )
+
+
+# --- NON_CANONICAL_ prefix boundary -----------------------------------------
+
+
+def test_close_match_non_canon_degraded_rejected() -> None:
+    """``NON_CANON_DEGRADED`` shares the root word ``NON_`` and contains
+    ``CANON`` but drops the trailing ``ICAL_`` — does NOT match the
+    ``NON_CANONICAL_`` admit prefix. STRICT mode must reject with E007.
+
+    Note: ``NON_CANON_`` could plausibly be added as a future admit
+    prefix (it carries the same semantic intent — a "non-canonical"
+    audit marker). At the present admit-pattern surface
+    (``META_AUDIT_ADMIT_PATTERNS``), however, it is a non-match and MUST
+    reject — that closure is the whole point of the bounded admission
+    policy (sub-spec §Out of Scope: 'closing the broader admission gap
+    ... is separate validator-vocabulary alignment work')."""
+    _assert_strict_rejects_non_match("NON_CANON_DEGRADED")
+
+
+def test_leading_underscore_non_canonical_rejected() -> None:
+    """``_NON_CANONICAL_PREFIX`` has a leading underscore so
+    ``str.startswith("NON_CANONICAL_")`` returns False. STRICT mode must
+    reject with E007."""
+    _assert_strict_rejects_non_match("_NON_CANONICAL_PREFIX")
+
+
+# --- DEGRADED_ prefix boundary ----------------------------------------------
+
+
+def test_close_match_degrade_regions_rejected() -> None:
+    """``DEGRADE_REGIONS`` drops the trailing ``D`` so it does NOT match
+    ``DEGRADED_``. STRICT mode must reject with E007.
+
+    Selection rationale: this is the canonical "off-by-one trailing
+    char" boundary case — ``DEGRADE`` is a real English word and a
+    plausible typo for ``DEGRADED``, so this guards a likely real-world
+    misspelling."""
+    _assert_strict_rejects_non_match("DEGRADE_REGIONS")
+
+
+def test_leading_underscore_degraded_rejected() -> None:
+    """``_DEGRADED_MARKER`` has a leading underscore so
+    ``str.startswith("DEGRADED_")`` returns False. STRICT mode must
+    reject with E007."""
+    _assert_strict_rejects_non_match("_DEGRADED_MARKER")
+
+
+# --- NORMALIZED_ prefix boundary --------------------------------------------
+
+
+def test_close_match_normalised_from_rejected() -> None:
+    """``NORMALISED_FROM`` (British spelling, S not Z) does NOT match the
+    American-spelling admit prefix ``NORMALIZED_``. STRICT mode must
+    reject with E007.
+
+    Selection rationale: locale-spelling drift is a known accumulator of
+    silent-pass-through bugs. Pinning the rejection here makes the
+    locale assumption in the admit-pattern set explicit."""
+    _assert_strict_rejects_non_match("NORMALISED_FROM")
+
+
+def test_leading_underscore_normalized_rejected() -> None:
+    """``_NORMALIZED_AT`` has a leading underscore so
+    ``str.startswith("NORMALIZED_")`` returns False. STRICT mode must
+    reject with E007."""
+    _assert_strict_rejects_non_match("_NORMALIZED_AT")
+
+
+# --- ROUNDTRIP_ prefix boundary ---------------------------------------------
+
+
+def test_close_match_round_trip_loss_rejected() -> None:
+    """``ROUND_TRIP_LOSS`` splits ``ROUNDTRIP`` with an underscore so it
+    does NOT start with ``ROUNDTRIP_``. STRICT mode must reject with
+    E007.
+
+    Selection rationale: ``ROUND_TRIP`` is a common two-word variant in
+    documentation; this guards against a casual reader assuming the
+    prefix is word-segmentation-insensitive. The admit set is
+    byte-prefix exact."""
+    _assert_strict_rejects_non_match("ROUND_TRIP_LOSS")
+
+
+def test_leading_underscore_roundtrip_rejected() -> None:
+    """``_ROUNDTRIP_HASH`` has a leading underscore so
+    ``str.startswith("ROUNDTRIP_")`` returns False. STRICT mode must
+    reject with E007."""
+    _assert_strict_rejects_non_match("_ROUNDTRIP_HASH")
+
+
+# ---------------------------------------------------------------------------
+# Existing parametric coverage of the admit side (preserved unchanged).
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.parametrize("prefix", list(META_AUDIT_ADMIT_PATTERNS))
 def test_every_admit_pattern_admits_a_synthetic_key(prefix: str) -> None:
     """Sanity: every prefix in the tuple admits at least one synthetic key
