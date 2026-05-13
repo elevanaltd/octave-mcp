@@ -438,7 +438,12 @@ def write(
     from octave_mcp.core.grammar.cst import Assignment
     from octave_mcp.core.parser import parse
     from octave_mcp.core.validator import Validator
-    from octave_mcp.mcp.write import OctaveASTCycleError, _emit_with_style, _to_baseline_bytes
+    from octave_mcp.mcp.write import (
+        OctaveASTCycleError,
+        _emit_with_style,
+        _mark_dirty,
+        _to_baseline_bytes,
+    )
     from octave_mcp.schemas.loader import get_builtin_schema
 
     # CRS-FIX #3: XOR enforcement - exactly ONE input source
@@ -520,24 +525,49 @@ def write(
             doc = parse(original_content)
 
             # Apply changes (changes is guaranteed to be non-None in this branch)
+            #
+            # CE BLOCKER (PR #418): every AST mutation MUST be paired with the
+            # appropriate dirty/meta_dirty flag, mirroring the discipline that
+            # PR-2 (#414) installed in mcp/write.py. Without these flags, the
+            # Strategy A T8 slice path in emit() treats nodes as clean and
+            # splices the OLD baseline bytes, silently discarding the change.
+            # The paired-write contract is enforced structurally by
+            # tests/unit/test_dirty_paired_write_lint.py (which now also
+            # scans this file).
             assert changes is not None
             changes_dict = json_module.loads(changes)
             for key, value in changes_dict.items():
                 if key.startswith("META."):
                     field_name = key[5:]
                     doc.meta[field_name] = value
+                    # Paired-write: per-key META dirty so emit() re-emits
+                    # this key and splices the rest of META verbatim.
+                    doc.meta_dirty[field_name] = True
                 elif key == "META" and isinstance(value, dict):
                     doc.meta = value.copy()
+                    # Whole-META replacement → mark every key dirty so the
+                    # emitter cannot splice any META key from baseline.
+                    for _meta_key in doc.meta:
+                        doc.meta_dirty[_meta_key] = True
+                    # Belt-and-braces: also set doc.dirty so even an unknown
+                    # downstream slice path on Document falls through to
+                    # canonical emit.
+                    doc.dirty = True
                 else:
                     # Update or add field in sections
                     found = False
                     for section in doc.sections:
                         if isinstance(section, Assignment) and section.key == key:
                             section.value = value
+                            # Paired-write on existing top-level Assignment.
+                            _mark_dirty(section)
                             found = True
                             break
                     if not found:
-                        doc.sections.append(Assignment(key=key, value=value))
+                        # New Assignment is born dirty — no source bytes to
+                        # splice; its value MUST be re-emitted (mirrors
+                        # write.py:3209).
+                        doc.sections.append(Assignment(key=key, value=value, dirty=True))
 
             # GH#377 Strategy A T8 (Cubic P1): changes mode parses the
             # existing file content, so doc spans index the same bytes as
