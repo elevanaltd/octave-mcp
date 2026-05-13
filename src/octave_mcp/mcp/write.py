@@ -3308,6 +3308,19 @@ class WriteTool(BaseTool):
             base_hash: Optional CAS consistency check hash
             schema: Optional schema name for validation
             debug_grammar: Whether to include compiled grammar in output (default: False)
+            format_style: Output formatting mode. One of ``"preserve"`` /
+                ``"expanded"`` / ``"compact"`` or omitted.
+
+                .. deprecated:: 1.13.0
+                    Passing ``format_style=None`` EXPLICITLY is deprecated.
+                    In v1.14.0 the default will change from full canonical
+                    re-emit to span-aware ``"preserve"`` mode. To keep the
+                    current canonical re-emit behaviour beyond v1.14.0,
+                    pass ``format_style="expanded"`` explicitly. To opt in
+                    to preserve mode now, pass ``format_style="preserve"``.
+                    OMITTING the parameter does NOT emit a warning — that
+                    is the supported way to accept the future default
+                    silently. See ADR-0006 Sprint 2 addendum §5 Shape B.
 
         Returns:
             Dictionary with:
@@ -3346,6 +3359,29 @@ class WriteTool(BaseTool):
         corrections_only = params.get("corrections_only", False) or params.get("dry_run", False)
         parse_error_policy = params.get("parse_error_policy", "error")
         # GH#376 PR-A: format_style is optional; None preserves today's behaviour.
+        #
+        # ADR-0006 Sprint 2 addendum §5 Shape B (PR-4 T10): in v1.13.0,
+        # passing format_style=None EXPLICITLY emits a DeprecationWarning
+        # so callers know the v1.14.0 default flip is coming. Omitting
+        # the parameter does NOT warn — that would spam every caller of
+        # the default path. The distinction is made by checking
+        # ``"format_style" in kwargs`` (explicit) versus absent (omitted).
+        # In v1.14.0 the default will flip from full canonical re-emit
+        # to span-aware "preserve" mode.
+        if "format_style" in kwargs and kwargs["format_style"] is None:
+            import warnings as _warnings
+
+            _warnings.warn(
+                "Passing format_style=None explicitly is deprecated. "
+                "In v1.14.0 the default will change from full canonical "
+                "re-emit to span-aware preserve mode. To keep the current "
+                "canonical re-emit behaviour, pass format_style='expanded' "
+                "explicitly. To opt in to preserve mode now, pass "
+                "format_style='preserve'. To accept the future default "
+                "silently, omit the parameter entirely.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         format_style = params.get("format_style")
 
         if parse_error_policy not in ("error", "salvage"):
