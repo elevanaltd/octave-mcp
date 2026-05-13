@@ -2047,25 +2047,61 @@ class WriteTool(BaseTool):
 
         # GH#376 PR-A: format_style toggle. Three modes are AST projections
         # of one canonical emit() (I1 Single-Canon Discipline).
+        #
+        # CE + CRS CONDITIONAL on PR #422: the schema description and
+        # null-handling must reflect Strategy A (GH#377, shipped via PR #418)
+        # AND the Shape B deprecation contract — otherwise JSON-RPC clients
+        # see stale Strategy-C metadata, and explicit `null` from a client
+        # gets rejected at the schema boundary before reaching the Python
+        # DeprecationWarning code path.
         schema.add_parameter(
             "format_style",
             "string",
             required=False,
             description=(
                 "Output formatting style for canonical emission. "
-                "'preserve' (Strategy C): if new content is AST-equal to the existing file, "
-                "write the baseline bytes verbatim — zero diff for whitespace-only edits. "
-                "'expanded': lift inline-map shapes (KEY::[K::V,...]) into Block form before emit. "
-                "'compact': collapse atom-only Blocks (no comments, arity-bounded) into "
-                "inline-list-of-InlineMap form. Comment-bearing subtrees are vetoed and a "
-                f"{W_COMPACT_REFUSED} record surfaces in corrections (I3 Mirror Constraint, "
-                "I4 Auditability). When omitted, today's canonical behaviour is preserved exactly. "
-                "(GH#376 PR-A — full preserve-mode strategy A is tracked separately as #377.)"
+                "'preserve' (Strategy A, GH#377): span-aware preserve mode — "
+                "clean nodes slice from baseline_bytes, dirty/repaired nodes "
+                "re-emit canonically. Diff footprint ≤0.5% of file size on "
+                "single-key edits against representative documents. Subsumes "
+                "GH#248 mixed annotation form drift. "
+                "'expanded': lift inline-map shapes (KEY::[K::V,...]) into "
+                "Block form before emit. "
+                "'compact': collapse atom-only Blocks (no comments, "
+                f"arity-bounded) into inline-list-of-InlineMap form. "
+                f"Comment-bearing subtrees vetoed with {W_COMPACT_REFUSED} "
+                "(I3 Mirror Constraint, I4 Auditability). "
+                "DEPRECATED v1.13.0: Passing format_style=null explicitly "
+                "emits a DeprecationWarning; the default will change from "
+                "full canonical re-emit to 'preserve' in v1.14.0. To keep "
+                "canonical re-emit past the flip, pass 'expanded' "
+                "explicitly. To opt in to the new default early, pass "
+                "'preserve'. Omitting the parameter accepts the future "
+                "default silently."
             ),
             enum=list(FORMAT_STYLE_VALUES),
         )
 
-        return schema.build()
+        built = schema.build()
+
+        # CE + CRS CONDITIONAL on PR #422: widen format_style to allow
+        # explicit null so JSON-RPC clients reach the Python-side
+        # DeprecationWarning instead of being rejected at the schema
+        # boundary. SchemaBuilder.add_parameter accepts only a scalar
+        # type string and a string-only enum list, so we post-process
+        # the built schema rather than widening the builder API (which
+        # has 29 other callsites). The contract on Python callers is
+        # unchanged — explicit None still triggers the deprecation
+        # warning at WriteTool.execute (the warning's source-of-truth
+        # check is "format_style" in kwargs and kwargs["format_style"]
+        # is None, not the schema enum).
+        _fs_schema = built["properties"]["format_style"]
+        _fs_schema["type"] = ["string", "null"]
+        # Append None to the enum so the canonical JSON Schema validator
+        # accepts a literal `null` from JSON-RPC clients.
+        _fs_schema["enum"] = [*FORMAT_STYLE_VALUES, None]
+
+        return built
 
     def _validate_path(self, target_path: str) -> tuple[bool, str | None]:
         """Validate target path for security.

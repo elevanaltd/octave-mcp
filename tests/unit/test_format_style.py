@@ -174,9 +174,15 @@ class TestFormatStyleSchema:
         schema = tool.get_input_schema()
         assert "format_style" in schema["properties"]
         prop = schema["properties"]["format_style"]
-        assert prop["type"] == "string"
-        # Enum lists exactly the three documented values
-        assert set(prop["enum"]) == {"preserve", "expanded", "compact"}
+        # CE + CRS CONDITIONAL on PR #422: the type is widened to admit
+        # explicit `null` so JSON-RPC clients reach the Python-side
+        # DeprecationWarning instead of being rejected at the schema
+        # boundary. The three documented string values are still admitted.
+        assert prop["type"] == ["string", "null"]
+        # Enum admits the three documented string values AND None for
+        # the Shape B explicit-null deprecation path.
+        assert {v for v in prop["enum"] if v is not None} == {"preserve", "expanded", "compact"}
+        assert None in prop["enum"]
         # Optional (not required)
         assert "format_style" not in schema.get("required", [])
 
