@@ -76,6 +76,15 @@ class FormatOptions:
     trailing_whitespace: Literal["strip", "preserve"] = "strip"
     key_sorting: bool = False
     strip_comments: bool = False
+    # GH#377 Strategy A (T8): span-aware preserve mode.
+    # baseline_bytes MUST be normalize_content(raw).encode('utf-8') — i.e.
+    # post-NFC bytes — so that start_byte/end_byte slices are valid.
+    # HC-2: type is bytes | None (not str | None).
+    baseline_bytes: bytes | None = None
+    # When True, emit() uses dirty/repaired flags to decide per-node whether
+    # to slice baseline_bytes or fall through to the re-emit path.
+    # I1 (ONE_EMIT_CODEPATH): no parallel emit function.
+    enable_preserve: bool = False
 
 
 # ADR-0006 SR1-T1 Step 5 §4.5: identifier/annotation/expression shape
@@ -823,9 +832,64 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     # Always emit explicit envelope
     lines.append(f"==={doc.name}===")
 
-    # Emit META if present
+    # GH#377 Strategy A (T8): extract preserve-mode parameters once.
+    # I1 (ONE_EMIT_CODEPATH): all paths use the same emit() function.
+    # The slice path is conditionally activated per-node via dirty flags;
+    # the re-emit path is the existing emit_* helpers, unchanged.
+    _enable_preserve = bool(format_options and format_options.enable_preserve)
+    _baseline_bytes: bytes | None = format_options.baseline_bytes if format_options else None
+
+    # Emit META if present.
+    # GH#377 Strategy A: per-key META slice. When enable_preserve=True,
+    # we have a single META block region (meta_start_byte..meta_end_byte).
+    # Keys not in meta_dirty (or meta_dirty[key]==False) are sliced verbatim;
+    # only the dirty keys are re-emitted through emit_meta.
+    #
+    # Implementation note: per-key META slicing requires individual key
+    # byte spans. Those spans are NOT yet populated by the parser in this
+    # PR — the parser populates meta_start_byte/meta_end_byte (block-level)
+    # but not per-key spans. Until per-key spans are available, we fall back
+    # to full META block slicing when NO key is dirty, and full META re-emit
+    # when ANY key is dirty. This is correct and safe: the diff footprint for
+    # a single-key META change equals the full META block size, which for
+    # typical documents is well within the 0.5% threshold.
     if doc.meta:
-        lines.append(emit_meta(doc.meta, format_options))
+        meta_sliced = False
+        # CRS BLOCKER (PR #418): also check `doc.dirty` (whole-META
+        # replacement signal from cli/main.py) and inspect meta_dirty
+        # over BOTH the current doc.meta keys AND any keys that were
+        # deleted (which are absent from doc.meta but still recorded
+        # as dirty in meta_dirty). Without the union, a delete-only
+        # mutation would slice the OLD META block from baseline and
+        # silently re-introduce the deleted key.
+        _meta_dirty_keys = set(doc.meta_dirty.keys())
+        _meta_live_keys = set(doc.meta.keys())
+        _any_meta_dirty = any(doc.meta_dirty.get(k, False) for k in _meta_dirty_keys | _meta_live_keys)
+        if (
+            _enable_preserve
+            and _baseline_bytes is not None
+            and doc.meta_start_byte is not None
+            and doc.meta_end_byte is not None
+            and not getattr(doc, "dirty", False)
+            and not _any_meta_dirty
+        ):
+            # No META key is dirty — slice entire META block verbatim.
+            # R4 structural integrity check (I4 audit trail).
+            assert 0 <= doc.meta_start_byte < doc.meta_end_byte <= len(_baseline_bytes), (
+                f"META span [{doc.meta_start_byte}:{doc.meta_end_byte}] out of bounds "
+                f"for baseline ({len(_baseline_bytes)} bytes). NFC contract violated."
+            )
+            # Strip exactly ONE trailing newline for consistency with
+            # emit_meta() output (which does not include a trailing newline;
+            # "\n".join handles it).  Cubic P2: `rstrip("\n")` would consume
+            # ALL trailing newlines, silently dropping trail-anchored blank
+            # lines that belong inside the META block span (ADR §3 blank-line
+            # policy). `removesuffix` strips at most one — the separator that
+            # "\n".join below re-adds.
+            lines.append(_baseline_bytes[doc.meta_start_byte : doc.meta_end_byte].decode("utf-8").removesuffix("\n"))
+            meta_sliced = True
+        if not meta_sliced:
+            lines.append(emit_meta(doc.meta, format_options))
 
     # Emit separator if present
     if doc.has_separator:
@@ -834,7 +898,63 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     # Emit sections
     # I2 Compliance: Skip assignments with Absent values
     # Issue #182: Pass format_options for comment handling
+    # GH#377 Strategy A (T8): span-aware per-node dispatch.
+    # For each node: if enable_preserve=True AND baseline_bytes is set AND
+    # the node is clean (not dirty, not repaired) AND has valid byte spans,
+    # slice the baseline bytes verbatim (the slice path).
+    # Otherwise fall through to the existing emit_* helpers (the re-emit path).
+    # TWO TRUTHS, NEVER COMPARED (ADR §5, CDV P0-2, I3):
+    #   - Slice path: returns post-NFC source bytes verbatim.
+    #   - Re-emit path: produces canonical bytes from the AST.
+    # These two outputs are never compared; they are alternate routes that
+    # cannot mix for the same node.
     for section in doc.sections:
+        # GH#377 Strategy A: try the slice path first.
+        #
+        # CRS BLOCKER (PR #418): `body_dirty=True` means the parent's
+        # children have been mutated even though the parent's header is
+        # unchanged. Slicing the whole node here would emit the OLD
+        # baseline bytes for the parent — INCLUDING its stale children —
+        # silently discarding the user's change to a child. Force the
+        # re-emit path (emit_block / emit_section) whenever body_dirty is
+        # set so canonical re-emission picks up the mutated children.
+        #
+        # This is the conservative Option A: when body_dirty, the entire
+        # subtree re-emits canonically. A future PR may add child-level
+        # span dispatch (Option B) — recursive descent that slices the
+        # header from baseline and dispatches each child individually —
+        # but that is a larger architectural change.
+        if (
+            _enable_preserve
+            and _baseline_bytes is not None
+            and not section.dirty
+            and not section.repaired
+            and not getattr(section, "body_dirty", False)
+            and section.start_byte is not None
+            and section.end_byte is not None
+        ):
+            # R4 structural integrity check: validate bounds.
+            # This is NOT a parse∘emit identity assertion — it is a bounds
+            # check that guards against corrupt span data. (I4, ADR §5 R4)
+            assert 0 <= section.start_byte < section.end_byte <= len(_baseline_bytes), (
+                f"Node {type(section).__name__} span [{section.start_byte}:{section.end_byte}] "
+                f"out of bounds for baseline ({len(_baseline_bytes)} bytes). "
+                "NFC contract violated."
+            )
+            # Strip exactly ONE trailing newline from the sliced content.
+            # The byte span ends at the next section's start_byte, which sits
+            # immediately after a single '\n' separator. The "\n".join(lines)
+            # call below re-adds that separator, so we must remove exactly
+            # one to avoid double newlines between sliced sections.
+            # Cubic P2: `rstrip("\n")` would consume ALL trailing newlines,
+            # silently dropping trail-anchored blank lines that belong inside
+            # the section's end_byte (ADR §3 blank-line policy — an I1
+            # violation on clean nodes). `removesuffix` strips at most one.
+            sliced_text = _baseline_bytes[section.start_byte : section.end_byte].decode("utf-8")
+            lines.append(sliced_text.removesuffix("\n"))
+            continue
+
+        # Re-emit path: produce canonical output from AST.
         if isinstance(section, Assignment):
             if is_absent(section.value):
                 # I2: Absent fields are not emitted

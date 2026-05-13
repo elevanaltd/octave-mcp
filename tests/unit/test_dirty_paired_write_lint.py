@@ -18,8 +18,12 @@ mutated post-parse re-introduces stale source bytes (I1 violation
 under Strategy A's emitter in PR-3). The lint gate ensures the
 symmetry is enforced structurally, not by convention.
 
-Scope: write-side mutation surface only (``mcp/write.py``,
-``core/repair.py``). Tests, fixtures, and the parser itself are
+Scope: write-side mutation surface (``mcp/write.py``, ``core/repair.py``,
+and ``cli/main.py``). The CLI was added to the gate after a critical-
+engineer review on PR #418 found that ``cli/main.py``'s changes-mode
+loop was mutating the AST WITHOUT setting dirty flags, causing the
+Strategy A T8 slice path to splice the OLD baseline bytes and silently
+discard the user's change. Tests, fixtures, and the parser itself are
 excluded because:
 
 * Parser nodes are constructed at parse-time with no source-byte
@@ -45,6 +49,10 @@ _ROOT = Path(__file__).resolve().parents[2]
 _FILES_UNDER_LINT: tuple[Path, ...] = (
     _ROOT / "src" / "octave_mcp" / "mcp" / "write.py",
     _ROOT / "src" / "octave_mcp" / "core" / "repair.py",
+    # Added after CE BLOCKER on PR #418: the CLI write command's changes
+    # loop is a parallel mutation surface to mcp/write.py and is subject
+    # to the same paired-write discipline under Strategy A T8.
+    _ROOT / "src" / "octave_mcp" / "cli" / "main.py",
 )
 
 # Line patterns that COUNT as a mutation site. We match on:
@@ -179,3 +187,146 @@ def test_paired_write_symmetry_across_write_and_repair() -> None:
         for rel, line_no, line_text, reason in all_violations:
             msg_lines.append(f"  {rel}:{line_no} [{reason}]: {line_text.strip()}")
         raise AssertionError("\n".join(msg_lines))
+
+
+def test_repair_ast_node_propagates_body_dirty_to_ancestors() -> None:
+    """CE BLOCKER (PR #418): the recursive repair walker MUST return its
+    propagation signal so ancestor Block/Section parents can mark body_dirty.
+
+    The 10-line proximity lint above only verifies that ``.repaired = True``
+    is set on the mutated Assignment. It does NOT enforce the cross-node
+    invariant: "if a descendant Assignment is repaired, every ancestor
+    Block/Section MUST be marked body_dirty so the slice path in emit()
+    falls through to canonical re-emit."
+
+    This complementary structural check guards the recursion contract by
+    parsing core/repair.py with the ``ast`` module and inspecting ONLY
+    the body of the ``_repair_ast_node`` function:
+
+      1. Its return annotation MUST be ``bool`` so callers can propagate
+         the "descendant was repaired" signal upward.
+      2. The function body MUST contain at least 2 assignments of the
+         form ``<target>.body_dirty = True`` (one for the Block branch,
+         one for the Section branch).
+
+    Cubic P2 (PR #418): the lint is scoped to the function body so an
+    unrelated ``body_dirty = True`` write elsewhere in repair.py — or a
+    refactor that moves body_dirty propagation OUT of
+    ``_repair_ast_node`` into a sibling function — cannot falsely
+    satisfy a whole-file substring count.
+    """
+    import ast
+
+    src = (_ROOT / "src" / "octave_mcp" / "core" / "repair.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    func: ast.FunctionDef | None = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_repair_ast_node":
+            func = node
+            break
+    assert func is not None, "_repair_ast_node missing from repair.py"
+
+    # 1. Return annotation MUST be `bool`.
+    assert isinstance(func.returns, ast.Name) and func.returns.id == "bool", (
+        "_repair_ast_node MUST be declared `-> bool` so callers can propagate "
+        "the 'descendant was repaired' signal up to ancestor Block/Section "
+        "body_dirty. See CE BLOCKER on PR #418."
+    )
+
+    # 2. Count `<target>.body_dirty = True` assignments INSIDE the function
+    # body only (ast.walk(func) does not descend into sibling functions).
+    body_dirty_assigns = [
+        n
+        for n in ast.walk(func)
+        if isinstance(n, ast.Assign)
+        and len(n.targets) == 1
+        and isinstance(n.targets[0], ast.Attribute)
+        and n.targets[0].attr == "body_dirty"
+        and isinstance(n.value, ast.Constant)
+        and n.value.value is True
+    ]
+    assert len(body_dirty_assigns) >= 2, (
+        f"Expected body_dirty=True propagation in BOTH the Block and Section "
+        f"branches of _repair_ast_node, found {len(body_dirty_assigns)} "
+        f"occurrence(s) inside the function body. "
+        f"See CE BLOCKER and Cubic P2 on PR #418."
+    )
+
+
+def test_parser_propagates_repaired_to_body_dirty_post_pass() -> None:
+    """CE BLOCKER cycle 5 (PR #418): parser.py MUST invoke a post-pass that
+    propagates descendant ``repaired=True`` to ancestor ``body_dirty=True``.
+
+    The parser sets ``assignment.repaired=True`` on a child Assignment
+    when a lenient value-parse repair fires (e.g. multi_word_coalesce).
+    Without a post-pass that sweeps the constructed Document and marks
+    every ancestor Block/Section ``body_dirty=True``, preserve-mode
+    emit() slices the parent's whole subtree from baseline and silently
+    drops the repair.
+
+    The dirty-paired-write proximity lint (top of this file) intentionally
+    EXCLUDES parser.py because the parser builds nodes structurally
+    rather than mutating them post-hoc — so a proximity rule cannot catch
+    a missing post-construction sweep. This complementary AST-scoped
+    structural check enforces the recurrence-free contract: the helper
+    ``_propagate_repaired_to_body_dirty`` exists AND is invoked from
+    ``Parser.parse_document``.
+    """
+    import ast
+
+    src = (_ROOT / "src" / "octave_mcp" / "core" / "parser.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    # 1. The helper itself must exist as a module-level FunctionDef.
+    helper: ast.FunctionDef | None = None
+    for top in tree.body:
+        if isinstance(top, ast.FunctionDef) and top.name == "_propagate_repaired_to_body_dirty":
+            helper = top
+            break
+    assert helper is not None, (
+        "_propagate_repaired_to_body_dirty MUST exist at module scope in "
+        "core/parser.py. See CE BLOCKER cycle 5 on PR #418."
+    )
+
+    # The helper must set body_dirty at least once (the propagation point).
+    helper_body_dirty = [
+        n
+        for n in ast.walk(helper)
+        if isinstance(n, ast.Assign)
+        and len(n.targets) == 1
+        and isinstance(n.targets[0], ast.Attribute)
+        and n.targets[0].attr == "body_dirty"
+        and isinstance(n.value, ast.Constant)
+        and n.value.value is True
+    ]
+    assert len(helper_body_dirty) >= 1, (
+        "_propagate_repaired_to_body_dirty MUST contain at least one "
+        "`<target>.body_dirty = True` assignment — otherwise the post-pass "
+        "is a no-op."
+    )
+
+    # 2. Parser.parse_document MUST invoke the helper.
+    parse_document: ast.FunctionDef | None = None
+    for n in ast.walk(tree):
+        if isinstance(n, ast.FunctionDef) and n.name == "parse_document":
+            parse_document = n
+            break
+    assert parse_document is not None, "Parser.parse_document missing from parser.py"
+
+    invoked = False
+    for n in ast.walk(parse_document):
+        if (
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name)
+            and n.func.id == "_propagate_repaired_to_body_dirty"
+        ):
+            invoked = True
+            break
+    assert invoked, (
+        "Parser.parse_document MUST invoke `_propagate_repaired_to_body_dirty(doc)` "
+        "after the structural walk so descendant repaired flags propagate to "
+        "ancestor body_dirty. Without this, preserve-mode emit slices stale "
+        "baseline bytes when a child Assignment is lenient-repaired. "
+        "See CE BLOCKER cycle 5 on PR #418."
+    )

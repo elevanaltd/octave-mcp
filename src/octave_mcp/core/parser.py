@@ -647,6 +647,16 @@ class Parser:
         # See ADR §3 whitespace subsection.
         self._extend_trail_anchored_spans(doc)
 
+        # CE BLOCKER (PR #418): propagate descendant ``repaired=True`` to
+        # ancestor ``body_dirty=True`` so the Strategy A T8 slice path in
+        # emit() cannot splice the OLD baseline bytes for a parent whose
+        # child Assignment was lenient-repaired (e.g. multi_word_coalesce,
+        # pattern_autoquote) during parse construction. Same propagation
+        # contract that ``core/repair.py:_repair_ast_node`` enforces for
+        # the post-parse schema-repair surface, applied here at a single
+        # post-pass chokepoint.
+        _propagate_repaired_to_body_dirty(doc)
+
         return doc
 
     def _extend_trail_anchored_spans(self, doc: Document) -> None:
@@ -2796,6 +2806,62 @@ class Parser:
             )
 
         return "".join(str(p) for p in parts)
+
+
+def _propagate_repaired_to_body_dirty(node: Any) -> bool:
+    """Propagate descendant ``repaired=True`` to ancestor ``body_dirty=True``.
+
+    Walks the AST subtree rooted at ``node`` and returns True iff ``node``
+    OR any descendant has ``repaired=True``. On the way out, every
+    Block/Section whose descendant tree contains a repaired Assignment is
+    marked ``body_dirty=True`` so the Strategy A T8 slice path in
+    ``emit()`` falls through to the canonical re-emit path for that
+    subtree.
+
+    CE BLOCKER (PR #418, rework cycle 5): the parser sets
+    ``assignment.repaired=True`` on a child Assignment whenever a lenient
+    value-parse repair fires (e.g. multi_word_coalesce, pattern_autoquote)
+    but the enclosing Block/Section is left with ``body_dirty=False``.
+    Without this post-pass, preserve-mode emit would slice the parent's
+    whole subtree from baseline — including the un-canonicalised child
+    bytes — silently dropping the repair.
+
+    This is the parser-side analogue of ``core/repair.py:_repair_ast_node``,
+    which performs the same propagation for the post-parse schema-repair
+    surface. The parser builds bottom-up so a single post-pass over the
+    constructed Document is sufficient and cheap (one O(n) walk where n
+    is the total node count, after which preserve-mode emit can dispatch
+    in O(1) per top-level section).
+
+    Args:
+        node: AST node to scan (Document, Block, Section, Assignment, …).
+
+    Returns:
+        True iff this node OR any descendant has ``repaired=True``;
+        False otherwise.
+    """
+    self_repaired = bool(getattr(node, "repaired", False))
+    children = getattr(node, "children", None)
+    sections = getattr(node, "sections", None)  # only Document has this
+
+    descendant_repaired = False
+    if children:
+        for child in children:
+            if _propagate_repaired_to_body_dirty(child):
+                descendant_repaired = True
+    if sections:
+        for section in sections:
+            if _propagate_repaired_to_body_dirty(section):
+                descendant_repaired = True
+
+    if descendant_repaired and hasattr(node, "body_dirty"):
+        # Paired-write: any ancestor whose descendant subtree was
+        # repaired MUST be marked body_dirty so emit() takes the
+        # canonical re-emit path instead of slicing stale baseline
+        # bytes for the now-mutated subtree.
+        node.body_dirty = True
+
+    return self_repaired or descendant_repaired
 
 
 def parse(content: str | list[Token]) -> Document:
