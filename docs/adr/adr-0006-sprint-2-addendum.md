@@ -45,12 +45,48 @@ This addendum is **docs-only**. No `src/` changes. Any code drift surfaced durin
 
 The following MUST hold before any v1.13.0 work begins. Each line is testable.
 
-### EC-1 — Strategy A engine merged and gated
+### EC-1 — Strategy A engine merged and gated — **SATISFIED (2026-05-13)**
+
+**Resolution:** PR #418 merged (`fe7734f`); EC-1a, EC-1b, EC-1c all verified by the PR-3 acceptance suite. Emitter contract is frozen for v1.13.0 per §4.5 — Sprint 3+ retriage (EC-4) opens.
+
+#### Original EC-1 enumeration (preserved for audit trail)
+
 - **EC-1a** — SR2-T2 PR-3 (T8+T9) merged on `main`. `emit()` in `src/octave_mcp/core/emitter.py` honours `FormatOptions.baseline_bytes` + `FormatOptions.enable_preserve`; clean nodes (`not dirty and not repaired` with valid span) slice from baseline; dirty/repaired nodes re-emit through the canonical path. **Verifiable by:** the golden-fixture regression test landed in T9 (single META.STATUS change on a 100–150 KB document → diff footprint ≤ 0.5% of file size; non-changed mixed-annotation regions byte-identical to baseline).
 - **EC-1b** — The Strategy-C parse-equality short-circuit at `src/octave_mcp/mcp/write.py` (currently around L1081–L1090 per audit §5) is **deleted**, subsumed by Strategy A. **Verifiable by:** grep gate — no `parse(emit(...)) == parse(...)` short-circuit remains.
 - **EC-1c** — HARD_SYMMETRY suite (currently 3108 passed / 11 skipped / 1 xfailed per PROJECT-CONTEXT.oct.md L41) remains green; T9 adds at minimum one fixture-class diff-footprint assertion.
 
-### EC-2 — T3 admission policy decided (#384)
+### EC-2 — T3 admission policy decided (#384) — **SATISFIED (2026-05-13)**
+
+**Resolution:** State 1 (Option C implemented and merged via PR #419 — `cad08e1`).
+
+**Evidence (verified by system-steward 2026-05-13):**
+
+- Core implementing commit: `8db1631 feat(validator): admit META audit markers via W_META_AUDIT (GH-384)`.
+- Merge commit: `cad08e1 Merge pull request #419 from elevanaltd/feat/gh384-sr2-t3-meta-audit-admission`.
+- Constant at `src/octave_mcp/core/validator.py:75-80`:
+
+  ```python
+  META_AUDIT_ADMIT_PATTERNS: tuple[str, ...] = (
+      "NON_CANONICAL_",
+      "DEGRADED_",
+      "NORMALIZED_",
+      "ROUNDTRIP_",
+  )
+  ```
+
+- Discriminant helper at `src/octave_mcp/core/validator.py:83-93` (`_matches_audit_pattern`) centralises the admit/warn match per the GH-386 `is_destructive_normalization_repair` precedent.
+- Admit path at `src/octave_mcp/core/validator.py:376-377` skips E007 for matching keys.
+- Warning emission at `src/octave_mcp/core/validator.py:436-450` (`code="W_META_AUDIT"`) runs unconditionally on a successful validation pass.
+- Vocabulary capsule updated at `src/octave_mcp/resources/specs/vocabularies/core/META.oct.md` §4 (AUDIT_MARKERS); registry bumped to META v1.1.0 in cubic P2 follow-up `f6e8929`.
+- Test suite: `tests/unit/test_meta_audit_admission.py` (424 LOC, GREEN at `cad08e1`); `tests/fixtures/symmetry/meta_audit_markers.oct.md` adds an admission marker to the HARD_SYMMETRY corpus; `tests/unit/test_writer_reader_symmetry.py` extended (+35 LOC).
+- §4.3 evidence E1-E5 verified empirically: no `core/grammar/cst.py` change; no new per-node AST flag-state introduced (cst.py was not touched by PR #419 — confirmed via `git show cad08e1 --stat`). The §4.6 escalation tripwire was NOT triggered during implementation.
+
+**EC-2b status:** Per state-1 resolution, v1.13.0 CHANGELOG will document the admission codes ship in v1.13.0 (alongside Strategy A); ambiguity is closed. PR-4 (T10+T11) authoring is the canonical surface for the CHANGELOG entry.
+
+#### Original EC-2 enumeration (preserved for audit trail)
+
+The criteria as written before resolution. Retained verbatim for historical fidelity.
+
 - **EC-2a** — One of three states is on record before v1.13.0 ships:
   1. T3 (Option C from `adr-0006-g3-meta-audit-markers.md`) implemented and merged: validator emits `W_META_AUDIT` for keys matching `META_AUDIT_ADMIT_PATTERNS = ("NON_CANONICAL_", "DEGRADED_", "NORMALIZED_", "ROUNDTRIP_")`; STRICT-mode admits without E007.
   2. T3 explicitly **deferred** to v1.14.0 with a documented `[Sprint 3+ — DO NOT START]` label on #384 and a CHANGELOG note clarifying that no admission codes ship in v1.13.0.
