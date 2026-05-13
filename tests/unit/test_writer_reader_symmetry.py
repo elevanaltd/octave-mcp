@@ -206,17 +206,36 @@ async def test_hard_symmetry_roundtrip(fixture_path: Path) -> None:
     for correction in corrections:
         _assert_correction_after_non_empty(correction, fixture_id)
 
-    # Step 3c: diff_unified non-empty IFF corrections non-empty.
+    # Step 3c: diff_unified non-empty IFF transformation-tier corrections non-empty.
+    #
+    # ``STRUCTURAL_CHECK``-tier corrections (W_DUPLICATE_TARGET, W_META_001,
+    # W_META_002, W_META_AUDIT) are informational diagnostics surfaced from the
+    # structural validator at ``mcp/write.py``. They describe document
+    # properties, not text transformations, and therefore do NOT produce a
+    # diff. The HARD_SYMMETRY diff-iff-corrections invariant binds to
+    # *transformation* corrections (NORMALIZATION, LENIENT_PARSE,
+    # etc.). Filter out structural-check corrections before the check.
+    #
+    # Rationale (PROD::I4): the audit-trail requirement is that every text
+    # transformation logged in the corrections list is reflected in the
+    # rendered diff. A no-op informational marker that produces no
+    # transformation is not subject to that mapping. The corrections list
+    # still surfaces the diagnostic; the diff just legitimately remains
+    # empty when nothing was changed.
     diff_unified = write_result.get("diff_unified", "") or ""
-    has_corrections = bool(corrections)
+    transformation_corrections = [c for c in corrections if c.get("tier") != "STRUCTURAL_CHECK"]
+    has_transformation_corrections = bool(transformation_corrections)
     has_diff = bool(diff_unified.strip())
-    assert has_corrections == has_diff, (
-        f"HARD_SYMMETRY violation in {fixture_id}: corrections list and "
-        f"diff_unified disagree. corrections={len(corrections)}, "
-        f"diff_unified_empty={not has_diff}. "
+    assert has_transformation_corrections == has_diff, (
+        f"HARD_SYMMETRY violation in {fixture_id}: transformation corrections "
+        f"and diff_unified disagree. transformation_corrections="
+        f"{len(transformation_corrections)}, diff_unified_empty={not has_diff}. "
         f"I4 audit-trail invariant requires the rendered diff to reflect "
-        f"every emitted correction (ADR-0006). "
-        f"corrections={corrections!r}; diff_unified={diff_unified!r}"
+        f"every emitted transformation correction (ADR-0006). "
+        f"transformation_corrections={transformation_corrections!r}; "
+        f"diff_unified={diff_unified!r}; "
+        f"(structural-check corrections excluded: "
+        f"{[c for c in corrections if c.get('tier') == 'STRUCTURAL_CHECK']!r})"
     )
 
 
