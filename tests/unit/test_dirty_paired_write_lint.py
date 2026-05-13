@@ -252,3 +252,81 @@ def test_repair_ast_node_propagates_body_dirty_to_ancestors() -> None:
         f"occurrence(s) inside the function body. "
         f"See CE BLOCKER and Cubic P2 on PR #418."
     )
+
+
+def test_parser_propagates_repaired_to_body_dirty_post_pass() -> None:
+    """CE BLOCKER cycle 5 (PR #418): parser.py MUST invoke a post-pass that
+    propagates descendant ``repaired=True`` to ancestor ``body_dirty=True``.
+
+    The parser sets ``assignment.repaired=True`` on a child Assignment
+    when a lenient value-parse repair fires (e.g. multi_word_coalesce).
+    Without a post-pass that sweeps the constructed Document and marks
+    every ancestor Block/Section ``body_dirty=True``, preserve-mode
+    emit() slices the parent's whole subtree from baseline and silently
+    drops the repair.
+
+    The dirty-paired-write proximity lint (top of this file) intentionally
+    EXCLUDES parser.py because the parser builds nodes structurally
+    rather than mutating them post-hoc — so a proximity rule cannot catch
+    a missing post-construction sweep. This complementary AST-scoped
+    structural check enforces the recurrence-free contract: the helper
+    ``_propagate_repaired_to_body_dirty`` exists AND is invoked from
+    ``Parser.parse_document``.
+    """
+    import ast
+
+    src = (_ROOT / "src" / "octave_mcp" / "core" / "parser.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    # 1. The helper itself must exist as a module-level FunctionDef.
+    helper: ast.FunctionDef | None = None
+    for top in tree.body:
+        if isinstance(top, ast.FunctionDef) and top.name == "_propagate_repaired_to_body_dirty":
+            helper = top
+            break
+    assert helper is not None, (
+        "_propagate_repaired_to_body_dirty MUST exist at module scope in "
+        "core/parser.py. See CE BLOCKER cycle 5 on PR #418."
+    )
+
+    # The helper must set body_dirty at least once (the propagation point).
+    helper_body_dirty = [
+        n
+        for n in ast.walk(helper)
+        if isinstance(n, ast.Assign)
+        and len(n.targets) == 1
+        and isinstance(n.targets[0], ast.Attribute)
+        and n.targets[0].attr == "body_dirty"
+        and isinstance(n.value, ast.Constant)
+        and n.value.value is True
+    ]
+    assert len(helper_body_dirty) >= 1, (
+        "_propagate_repaired_to_body_dirty MUST contain at least one "
+        "`<target>.body_dirty = True` assignment — otherwise the post-pass "
+        "is a no-op."
+    )
+
+    # 2. Parser.parse_document MUST invoke the helper.
+    parse_document: ast.FunctionDef | None = None
+    for n in ast.walk(tree):
+        if isinstance(n, ast.FunctionDef) and n.name == "parse_document":
+            parse_document = n
+            break
+    assert parse_document is not None, "Parser.parse_document missing from parser.py"
+
+    invoked = False
+    for n in ast.walk(parse_document):
+        if (
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name)
+            and n.func.id == "_propagate_repaired_to_body_dirty"
+        ):
+            invoked = True
+            break
+    assert invoked, (
+        "Parser.parse_document MUST invoke `_propagate_repaired_to_body_dirty(doc)` "
+        "after the structural walk so descendant repaired flags propagate to "
+        "ancestor body_dirty. Without this, preserve-mode emit slices stale "
+        "baseline bytes when a child Assignment is lenient-repaired. "
+        "See CE BLOCKER cycle 5 on PR #418."
+    )
