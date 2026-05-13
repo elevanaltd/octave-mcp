@@ -5,6 +5,34 @@ All notable changes to OCTAVE-MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v1.13.0 — "Strategy A Span-Aware Preserve" (ADR-0006 SR2)
+
+This release lands the Strategy A span-aware preserve-mode engine (#418), the META audit-marker admission policy (#419, GH#384), and the Shape B `format_style` deprecation rollout (PR-4 / addendum §5). The default `format_style` does **not** flip in this release — see "Deprecated" below for the v1.14.0 plan.
+
+### Added
+- **Strategy A span-aware preserve mode engine (#418).** When `format_style="preserve"` is passed, `octave_write` returns single-region slice-and-replace output: clean nodes are sliced verbatim from the post-NFC baseline bytes, only mutated subtrees are re-emitted canonically. Diff footprint ≤0.5% of file size on representative documents (≈162KB governance fixture). Subsumes **GH#248** mixed `[X]`/`<X>` annotation form drift — annotations in unchanged regions are byte-identical to baseline. Implemented across the lexer (post-NFC `normalize_content()` public utility), emitter (`FormatOptions.baseline_bytes` + `enable_preserve` span-aware dispatch in the single `emit()` codepath, no parallel emitters), and write pipeline (NFC threading at all three `_emit_with_style` call sites, `spans_valid_for_baseline` discriminator for content-mode vs. changes-mode docs).
+- **Paired-write discipline across four mutation surfaces.** The Strategy A slice path requires that every AST mutation be paired with the appropriate `dirty` / `body_dirty` / `meta_dirty` flag, or the emitter would splice stale baseline bytes. PR-3 of #418 installed this contract on `mcp/write.py` (PR-2 carryover), `cli/main.py` (CE BLOCKER cycle 4), `core/repair.py` (CE BLOCKER cycle 3), and `core/parser.py` (CE BLOCKER cycle 5). A structural lint gate (`tests/unit/test_dirty_paired_write_lint.py`) enforces both proximity-based pairing (write/repair/cli) and AST-scoped function-body checks (repair propagation, parser post-pass invocation) so the bug class cannot recur.
+- **META audit-marker admission via Option C (#419, GH#384).** Closed-set `META_AUDIT_ADMIT_PATTERNS` matches audit markers (e.g. `AUDIT_*::`, `EVIDENCE::`) in META blocks and emits informational `W_META_AUDIT` warnings rather than rejecting them; non-matching patterns still fall through to the regular admission rules.
+- **`octave_mcp.core.lexer.normalize_content(content: str) -> str`** — public utility exposing the fence-aware NFC normalisation that `tokenize()` applies internally. Callers feeding `baseline_bytes` to `_emit_with_style` must use this (or `mcp.write._to_baseline_bytes`) so byte spans index the same bytes the parser saw. See `docs/api.md` for the NFC contract.
+
+### Deprecated
+- **Passing `format_style=None` *explicitly* now emits a `DeprecationWarning`** at both the MCP `octave_write` tool surface and the CLI `octave write` command (via the new `--format-style none` literal choice). In **v1.14.0** the default will change from full canonical re-emit to span-aware `"preserve"` mode. To keep the current canonical re-emit behaviour across the flip, pass `format_style="expanded"` explicitly. To opt in to preserve mode now, pass `format_style="preserve"`. **OMITTING the parameter does NOT emit a warning** — that is the supported way to accept the future default silently. See ADR-0006 Sprint 2 addendum §5 Shape B for the rationale.
+- **Notice.** v1.14.0 will flip the `format_style` default. Callers asserting byte-shape of `octave_write` outputs SHOULD review their integration and pin a `format_style` value explicitly before the v1.14.0 upgrade.
+
+### Migration
+- No code changes required to upgrade from v1.12.0 to v1.13.0. Behaviour on the default path (`format_style` omitted) is byte-identical to v1.12.0.
+- To silence the new `DeprecationWarning` while intentionally keeping v1.12.0 behaviour, replace any `format_style=None` explicit pass with `format_style="expanded"`.
+- See `docs/usage.md` for the v1.12.0 → v1.13.0 → v1.14.0 behaviour matrix per `format_style` value.
+
+### Status of v1.12.0 known issues (#411)
+PR #418 (Strategy A engine) explicitly does NOT subsume #411 defects 1 and 2 (`$op:APPEND` Python-dict emission; `format_style:"expanded"` lifter dropping outer `]`); those remain open for a follow-up sprint. PR #418 partially subsumes #411 defects 3 and 4 — preserve mode now surfaces nested-merge errors structurally (no longer silently invalid output) although MERGE on inline-array top-level targets is still rejected and the validator's false-green on inline-array writer output remains tracked separately. See ADR-0006 Sprint 2 addendum EC-4 / EC-4b for the subsumption retriage record.
+
+### Related PRs
+- **#418** — Strategy A span-aware preserve mode engine (PR-3 / T8 + T9 + reviewer rework cycles 1–5).
+- **#419** — META audit-marker admission (GH#384 / SR2-T3).
+- **#421** — Sprint 2 EC coordination (EC-1 + EC-2 SATISFIED).
+- **PR-4 (this release)** — Shape B `format_style` deprecation warning + v1.13.0 documentation (T10 + T11).
+
 ## [1.12.0] - 2026-05-11 - "Writer/Reader Symmetry" Release (ADR-0006 SR0 + SR1-T1)
 
 This release completes the ADR-0006 writer/reader symmetry programme: the SR0 corpus + W002 destructive-correction work (#383) and all six SR1-T1 steps (#393, #394, #395, #396, #397, #398, #399, #400, #401). It single-sources the validator surface (closing North Star Risk **R2**) and enforces I4 (TRANSFORM_AUDITABILITY) at boundary cases by routing every canonical re-emit transformation through a `TIER_NORMALIZATION` receipt.
