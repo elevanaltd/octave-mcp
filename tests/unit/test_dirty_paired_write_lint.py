@@ -200,33 +200,55 @@ def test_repair_ast_node_propagates_body_dirty_to_ancestors() -> None:
     falls through to canonical re-emit."
 
     This complementary structural check guards the recursion contract by
-    inspecting the source of ``_repair_ast_node`` in core/repair.py:
+    parsing core/repair.py with the ``ast`` module and inspecting ONLY
+    the body of the ``_repair_ast_node`` function:
 
-      1. It MUST be declared ``-> bool`` so callers can propagate the
-         "descendant was repaired" signal upward.
-      2. Both the Block branch AND the Section branch MUST set
-         ``body_dirty = True`` (at least 2 occurrences in the function).
+      1. Its return annotation MUST be ``bool`` so callers can propagate
+         the "descendant was repaired" signal upward.
+      2. The function body MUST contain at least 2 assignments of the
+         form ``<target>.body_dirty = True`` (one for the Block branch,
+         one for the Section branch).
 
-    If a future refactor drops either invariant, this test fails loudly
-    with a pointer to the regressed contract.
+    Cubic P2 (PR #418): the lint is scoped to the function body so an
+    unrelated ``body_dirty = True`` write elsewhere in repair.py — or a
+    refactor that moves body_dirty propagation OUT of
+    ``_repair_ast_node`` into a sibling function — cannot falsely
+    satisfy a whole-file substring count.
     """
+    import ast
+
     src = (_ROOT / "src" / "octave_mcp" / "core" / "repair.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
 
-    assert "def _repair_ast_node(" in src, "_repair_ast_node missing from repair.py"
+    func: ast.FunctionDef | None = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_repair_ast_node":
+            func = node
+            break
+    assert func is not None, "_repair_ast_node missing from repair.py"
 
-    sig_match = re.search(r"def _repair_ast_node\([^)]*\)\s*->\s*bool\s*:", src, re.DOTALL)
-    assert sig_match is not None, (
+    # 1. Return annotation MUST be `bool`.
+    assert isinstance(func.returns, ast.Name) and func.returns.id == "bool", (
         "_repair_ast_node MUST be declared `-> bool` so callers can propagate "
         "the 'descendant was repaired' signal up to ancestor Block/Section "
         "body_dirty. See CE BLOCKER on PR #418."
     )
 
-    assert "body_dirty = True" in src, (
-        "_repair_ast_node MUST set body_dirty=True on Block/Section parents "
-        "whose descendant tree contained a repair. See CE BLOCKER on PR #418."
-    )
-    body_dirty_count = src.count("body_dirty = True")
-    assert body_dirty_count >= 2, (
+    # 2. Count `<target>.body_dirty = True` assignments INSIDE the function
+    # body only (ast.walk(func) does not descend into sibling functions).
+    body_dirty_assigns = [
+        n
+        for n in ast.walk(func)
+        if isinstance(n, ast.Assign)
+        and len(n.targets) == 1
+        and isinstance(n.targets[0], ast.Attribute)
+        and n.targets[0].attr == "body_dirty"
+        and isinstance(n.value, ast.Constant)
+        and n.value.value is True
+    ]
+    assert len(body_dirty_assigns) >= 2, (
         f"Expected body_dirty=True propagation in BOTH the Block and Section "
-        f"branches of _repair_ast_node, found {body_dirty_count} occurrence(s)."
+        f"branches of _repair_ast_node, found {len(body_dirty_assigns)} "
+        f"occurrence(s) inside the function body. "
+        f"See CE BLOCKER and Cubic P2 on PR #418."
     )
