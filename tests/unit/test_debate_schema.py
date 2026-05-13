@@ -120,6 +120,46 @@ class TestDebateSchemaLoading:
         assert "synthesis" in raw, "STATUS should include 'synthesis' value"
         assert "closed" in raw, "STATUS should include 'closed' value"
 
+    def test_debate_schema_status_enum_includes_paused(self):
+        """STATUS enum MUST include 'paused' (GH-423).
+
+        debate-hall-mcp actively emits ``STATUS::paused`` for debates in the
+        human-interject state. Before GH-423, the DEBATE_TRANSCRIPT STATUS
+        enum was constrained to ``[active, synthesis, closed]`` only, producing
+        a live false negative in octave_validate against an active consumer.
+
+        North Star compliance:
+        - I5 SCHEMA_SOVEREIGNTY: validation status must reflect reality.
+        - I1 SYNTACTIC_FIDELITY: existing enum values retain identical semantics
+          (non-regression covered by ``test_debate_schema_status_has_enum``).
+        - I4 TRANSFORM_AUDITABILITY: this test documents the enum addition.
+        """
+        schema = load_schema_by_name("DEBATE_TRANSCRIPT")
+        assert schema is not None
+        assert "STATUS" in schema.fields
+
+        status_field = schema.fields["STATUS"]
+
+        # Prefer the parsed pattern when available
+        if status_field.pattern is not None and status_field.pattern.constraints:
+            for constraint in status_field.pattern.constraints.constraints:
+                if hasattr(constraint, "values"):
+                    assert (
+                        "paused" in constraint.values
+                    ), f"STATUS enum must include 'paused' (GH-423), got {constraint.values}"
+                    # Non-regression: prior values must still be present
+                    for prior in ("active", "synthesis", "closed"):
+                        assert prior in constraint.values, (
+                            f"STATUS enum lost prior value '{prior}'; " f"got {constraint.values}"
+                        )
+                    return
+
+        # Fallback: assert against raw schema text
+        raw = status_field.raw_value or ""
+        assert "paused" in raw, f"STATUS raw value must include 'paused' (GH-423): {raw!r}"
+        for prior in ("active", "synthesis", "closed"):
+            assert prior in raw, f"STATUS raw value lost prior value '{prior}': {raw!r}"
+
     def test_debate_schema_has_version(self):
         """Debate schema should have version defined."""
         schema = load_schema_by_name("DEBATE_TRANSCRIPT")
