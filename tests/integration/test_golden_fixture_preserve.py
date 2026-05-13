@@ -8,7 +8,12 @@ Assertions:
      (GH#377: unchanged regions preserved as byte-identical slices).
   2. All section content in unchanged regions is byte-identical to baseline
      (GH#248 subsumption: mixed [X]/<X> annotation forms preserved verbatim).
-  3. Diff footprint holds for every supported $op type on a single key.
+  3. Diff footprint holds for single-key BARE ASSIGNMENT changes (replacing
+     a META field's value) on the 162KB document.  This parametric does
+     NOT cover MERGE / DELETE / APPEND / PREPEND $op types — those
+     non-assignment ops are exercised against smaller fixtures in
+     tests/integration/test_write_preserve_nested.py (CRS BLOCKER
+     coverage on PR #418).
 
 Trail-anchored policy (ADR §3): blank-line edge cases in the fixture are
 validated implicitly because sections with adjacent blank-line separators
@@ -214,10 +219,14 @@ class TestGoldenFixtureDiffFootprint:
     def test_single_key_change_diff_footprint_parametric(
         self, fixture_content: str, changes: dict, description: str
     ) -> None:
-        """Any single-key META change must stay within 0.5% diff footprint.
+        """Any single-key bare-assignment META change must stay within 0.5% diff footprint.
 
-        Parametric: verifies the footprint bound holds for multiple $op types
-        and field types, not just STATUS.
+        TMG CONDITIONAL (PR #418): this parametric exercises BARE
+        ASSIGNMENT shape only — replacing the value of an existing META
+        field.  MERGE / DELETE / APPEND / PREPEND $op coverage lives in
+        tests/integration/test_write_preserve_nested.py against smaller
+        fixtures (where the slice/re-emit predicate is the assertion of
+        interest, not the absolute diff-footprint percentage at scale).
         """
         baseline = fixture_content
         file_size = len(baseline.encode("utf-8"))
