@@ -399,16 +399,20 @@ def validate(file: str | None, use_stdin: bool, schema: str | None, fix: bool, v
 @click.option(
     "--format-style",
     "format_style",
-    type=click.Choice(["preserve", "expanded", "compact"]),
+    type=click.Choice(["preserve", "expanded", "compact", "none"]),
     default=None,
     help=(
         "Output formatting style (GH#376 PR-A). "
-        "'preserve' = Strategy C no-op shortcut (write baseline bytes verbatim "
-        "when new content is AST-equal to existing file). "
+        "'preserve' = Strategy A span-aware preserve mode (write baseline bytes "
+        "verbatim for unchanged regions, re-emit only mutated subtrees). "
         "'expanded' = lift inline-map shapes into Block form. "
         "'compact' = collapse atom-only Blocks to inline-list form (vetoed on "
         "comment-bearing subtrees, W_COMPACT_REFUSED logged). "
-        "Default: today's canonical behaviour."
+        "'none' = explicitly request today's canonical behaviour (emits a "
+        "DeprecationWarning — in v1.14.0 the default will flip to 'preserve'). "
+        "Omitting the flag accepts the current default silently and will "
+        "accept the v1.14.0 default flip silently — pass an explicit value "
+        "if you want byte-shape stability across versions."
     ),
 )
 def write(
@@ -432,6 +436,7 @@ def write(
     """
     import json as json_module
     import sys
+    import warnings as _warnings
 
     from octave_mcp.core.emitter import emit  # noqa: F401 -- kept for backwards-compatible imports
     from octave_mcp.core.file_ops import atomic_write_octave, validate_octave_path
@@ -445,6 +450,27 @@ def write(
         _to_baseline_bytes,
     )
     from octave_mcp.schemas.loader import get_builtin_schema
+
+    # ADR-0006 Sprint 2 addendum §5 Shape B (PR-4 T10): the CLI mirrors
+    # the MCP tool's explicit-None deprecation contract. Click cannot
+    # distinguish "omitted" from "explicitly passed None" — omitting
+    # ``--format-style`` always sets the parameter to None. To honour
+    # the "warn ONLY on explicit None" rule, we expose ``--format-style
+    # none`` as a literal choice that maps to None AND triggers the
+    # warning; bare omission stays silent.
+    if format_style == "none":
+        _warnings.warn(
+            "Passing --format-style=none explicitly is deprecated. "
+            "In v1.14.0 the default will change from full canonical "
+            "re-emit to span-aware preserve mode. To keep the current "
+            "canonical re-emit behaviour, pass --format-style=expanded "
+            "explicitly. To opt in to preserve mode now, pass "
+            "--format-style=preserve. To accept the future default "
+            "silently, omit the flag entirely.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        format_style = None
 
     # CRS-FIX #3: XOR enforcement - exactly ONE input source
     # Count how many input sources are provided
