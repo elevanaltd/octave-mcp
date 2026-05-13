@@ -18,8 +18,12 @@ mutated post-parse re-introduces stale source bytes (I1 violation
 under Strategy A's emitter in PR-3). The lint gate ensures the
 symmetry is enforced structurally, not by convention.
 
-Scope: write-side mutation surface only (``mcp/write.py``,
-``core/repair.py``). Tests, fixtures, and the parser itself are
+Scope: write-side mutation surface (``mcp/write.py``, ``core/repair.py``,
+and ``cli/main.py``). The CLI was added to the gate after a critical-
+engineer review on PR #418 found that ``cli/main.py``'s changes-mode
+loop was mutating the AST WITHOUT setting dirty flags, causing the
+Strategy A T8 slice path to splice the OLD baseline bytes and silently
+discard the user's change. Tests, fixtures, and the parser itself are
 excluded because:
 
 * Parser nodes are constructed at parse-time with no source-byte
@@ -45,6 +49,10 @@ _ROOT = Path(__file__).resolve().parents[2]
 _FILES_UNDER_LINT: tuple[Path, ...] = (
     _ROOT / "src" / "octave_mcp" / "mcp" / "write.py",
     _ROOT / "src" / "octave_mcp" / "core" / "repair.py",
+    # Added after CE BLOCKER on PR #418: the CLI write command's changes
+    # loop is a parallel mutation surface to mcp/write.py and is subject
+    # to the same paired-write discipline under Strategy A T8.
+    _ROOT / "src" / "octave_mcp" / "cli" / "main.py",
 )
 
 # Line patterns that COUNT as a mutation site. We match on:
