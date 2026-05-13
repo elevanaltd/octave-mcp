@@ -324,3 +324,104 @@ class TestPreserveRepairNestedPropagation:
         assert (
             getattr(block, "body_dirty", False) is False
         ), "body_dirty was set without any descendant repair — over-propagation regression"
+
+
+# ---------------------------------------------------------------------------
+# CE BLOCKER (PR #418, rework cycle 5): parser-side propagation
+# ---------------------------------------------------------------------------
+#
+# The parser sets ``assignment.repaired=True`` whenever a lenient value-parse
+# repair fires (e.g. multi_word_coalesce: `CHILD::foo bar` → `CHILD::"foo bar"`).
+# Pre-fix, the enclosing Block/Section was left with ``body_dirty=False``;
+# emit() then sliced the whole parent from baseline, silently dropping the
+# parser's repair. The fix in core/parser.py runs a single post-pass over
+# the constructed Document (``_propagate_repaired_to_body_dirty``) so every
+# Block/Section whose descendant tree contains a ``repaired=True``
+# Assignment is marked ``body_dirty=True``.
+#
+# This is the parser-side analogue of the schema-repair propagation in
+# core/repair.py:_repair_ast_node.
+
+
+class TestPreserveParserRepairPropagation:
+    """CE BLOCKER regression: parser-origin lenient repair must propagate body_dirty."""
+
+    def test_preserve_parser_lenient_repair_propagates_to_block_body_dirty(self) -> None:
+        """Multi-word coalesce on a child Assignment inside a Block must
+        mark the parent Block.body_dirty so preserve-mode emit re-emits
+        canonically instead of slicing the stale subtree.
+        """
+        from octave_mcp.core.emitter import FormatOptions, emit
+        from octave_mcp.core.parser import parse_with_warnings
+        from octave_mcp.mcp.write import _to_baseline_bytes
+
+        content = "===TEST===\nBLOCK:\n  CHILD::foo bar\n===END===\n"
+        doc, warnings = parse_with_warnings(content, strict_structure=True)
+
+        # Confirm the parser DID apply the lenient repair we expect.
+        assert any(
+            w.get("subtype") == "multi_word_coalesce" for w in warnings
+        ), f"Parser did not produce the expected lenient repair; warnings={warnings!r}"
+
+        block = doc.sections[0]
+        child = block.children[0]
+        assert type(block).__name__ == "Block"
+        assert child.repaired is True, "child Assignment was not marked repaired by the parser"
+
+        # Internal invariant: ancestor body_dirty propagated.
+        assert (
+            getattr(block, "body_dirty", False) is True
+        ), "Block.body_dirty was NOT propagated from descendant repaired flag — CE BLOCKER regressed"
+
+        # End-to-end: preserve-mode emit must produce the canonical
+        # quoted form and NOT the un-canonicalised baseline bytes.
+        bl = _to_baseline_bytes(content)
+        out = emit(doc, FormatOptions(baseline_bytes=bl, enable_preserve=True))
+        assert 'CHILD::"foo bar"' in out, f"canonical repair did not land in output; out={out!r}"
+        assert (
+            "CHILD::foo bar\n" not in out
+        ), f"pre-repair source bytes persisted; slice path emitted stale baseline. out={out!r}"
+
+    def test_preserve_parser_lenient_repair_propagates_to_section_body_dirty(self) -> None:
+        """Same propagation contract for Section parents."""
+        from octave_mcp.core.emitter import FormatOptions, emit
+        from octave_mcp.core.parser import parse_with_warnings
+        from octave_mcp.mcp.write import _to_baseline_bytes
+
+        content = "===TEST===\n§1::SEC\n  CHILD::foo bar\n===END===\n"
+        doc, warnings = parse_with_warnings(content, strict_structure=True)
+
+        assert any(w.get("subtype") == "multi_word_coalesce" for w in warnings)
+
+        section = doc.sections[0]
+        child = section.children[0]
+        assert type(section).__name__ == "Section"
+        assert child.repaired is True
+
+        assert (
+            getattr(section, "body_dirty", False) is True
+        ), "Section.body_dirty was NOT propagated from descendant repaired flag — CE BLOCKER regressed"
+
+        bl = _to_baseline_bytes(content)
+        out = emit(doc, FormatOptions(baseline_bytes=bl, enable_preserve=True))
+        assert 'CHILD::"foo bar"' in out
+        assert "CHILD::foo bar\n" not in out
+
+    def test_preserve_parser_no_repair_no_propagation(self) -> None:
+        """Negative case: a clean parse (no lenient repair) must leave
+        ``body_dirty=False`` on every Block/Section so the slice path
+        can still fire normally for unchanged documents.
+
+        Guards against an over-correction where every ancestor is eagerly
+        marked dirty regardless of repair, defeating the slice path.
+        """
+        from octave_mcp.core.parser import parse
+
+        content = '===TEST===\nBLOCK:\n  CHILD::clean\n  OTHER::"already quoted"\n===END===\n'
+        doc = parse(content)
+        block = doc.sections[0]
+        for child in block.children:
+            assert child.repaired is False, f"unexpected repair on {child.key}"
+        assert (
+            getattr(block, "body_dirty", False) is False
+        ), "body_dirty was set on a clean parse — parser-side over-propagation regression"
