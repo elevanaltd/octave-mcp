@@ -49,6 +49,49 @@ from octave_mcp.core.schema_extractor import (
     extract_block_targets,
 )
 
+# ADR-0006 SR2-T3 / GH-384 (sub-spec ``docs/adr/adr-0006-g3-meta-audit-markers.md``):
+# Bounded-prefix admission policy for META audit-marker keys.
+#
+# Keys whose name begins with any prefix in this tuple are:
+#   1. Admitted in STRICT mode without raising E007 (the unknown-field check
+#      skips them — see ``_validate_meta``).
+#   2. Surfaced via a single informational ``W_META_AUDIT`` warning in BOTH
+#      LENIENT and STRICT modes, regardless of schema presence (mirrors the
+#      unconditional W_META_001/W_META_002 pattern — see
+#      ``_check_meta_warnings``).
+#
+# Why a tuple, not a frozenset:
+#   The values are prefix strings consumed by ``str.startswith()`` (an
+#   ordered-iterable input). The sub-spec line 86 names the constant a
+#   "tuple". The GH-386 ``SUPPRESSIBLE_NORMALIZATION_CODES`` frozenset
+#   precedent applies to warning-code identity (exact-match set membership),
+#   not prefix matching, so it is not the right shape here. Immutability of
+#   ``tuple`` carries the closed-set intent.
+#
+# Adding a new prefix:
+#   1. Append to this tuple.
+#   2. Update ``META.oct.md`` §4::AUDIT_MARKERS via ``mcp__octave__octave_write``.
+#   3. Add an acceptance test in ``test_meta_audit_admission.py``.
+META_AUDIT_ADMIT_PATTERNS: tuple[str, ...] = (
+    "NON_CANONICAL_",
+    "DEGRADED_",
+    "NORMALIZED_",
+    "ROUNDTRIP_",
+)
+
+
+def _matches_audit_pattern(field_name: str) -> bool:
+    """Return True iff ``field_name`` matches any prefix in
+    ``META_AUDIT_ADMIT_PATTERNS``.
+
+    Module-private helper centralising the discriminant so the admit-path
+    (in ``_validate_meta``) and the warning-emit path (in
+    ``_check_meta_warnings``) cannot drift apart over time. See the
+    GH-386 ``is_destructive_normalization_repair`` precedent in
+    ``core/repair_log.py``.
+    """
+    return any(field_name.startswith(prefix) for prefix in META_AUDIT_ADMIT_PATTERNS)
+
 
 class UnknownFieldPolicy(Enum):
     """Policy for handling unknown fields during validation.
@@ -329,6 +372,14 @@ class Validator:
             allowed = schema_meta.get("fields", {}).keys()
             for field_name in meta.keys():
                 if field_name not in allowed and allowed:
+                    # ADR-0006 SR2-T3 / GH-384: META audit-marker keys
+                    # matching ``META_AUDIT_ADMIT_PATTERNS`` are admitted
+                    # without E007. The matching ``W_META_AUDIT`` warning
+                    # is emitted unconditionally by ``_check_meta_warnings``
+                    # so the admission decision remains visible in the
+                    # validator output (PROD::I5 SCHEMA_SOVEREIGNTY).
+                    if _matches_audit_pattern(field_name):
+                        continue
                     self.errors.append(
                         ValidationError(
                             code="E007",
@@ -381,6 +432,28 @@ class Validator:
                     severity="warning",
                 )
             )
+
+        # ADR-0006 SR2-T3 / GH-384: emit W_META_AUDIT for every META key
+        # matching ``META_AUDIT_ADMIT_PATTERNS``. Runs unconditionally on
+        # ``doc.meta`` content — independent of mode (LENIENT/STRICT) and
+        # of schema presence — mirroring the W_META_001/W_META_002
+        # pattern above. PROD::I4 (TRANSFORM_AUDITABILITY: stable-ID
+        # audit receipt) + PROD::I5 (SCHEMA_SOVEREIGNTY: validation
+        # status visible in output).
+        for field_name in meta.keys():
+            if _matches_audit_pattern(field_name):
+                self.errors.append(
+                    ValidationError(
+                        code="W_META_AUDIT",
+                        message=(
+                            f"Audit marker '{field_name}' admitted "
+                            f"(matches META_AUDIT_ADMIT_PATTERNS — see "
+                            f"ADR-0006 G3 / GH-384)"
+                        ),
+                        field_path=f"META.{field_name}",
+                        severity="warning",
+                    )
+                )
 
     def _check_duplicate_semantic_targets(self, nodes: list[ASTNode]) -> None:
         """Emit W_DUPLICATE_TARGET when a Block(K) coexists with a flat

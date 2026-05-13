@@ -1,0 +1,12 @@
+===META_AUDIT_MARKERS===
+META:
+  TYPE::TEST
+  NON_CANONICAL_DEGRADED::true
+  DEGRADED_REGIONS::[
+    10,
+    42,
+    87
+  ]
+§1::CONTENT
+  KEY::value
+===END===
