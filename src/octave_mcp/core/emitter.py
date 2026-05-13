@@ -868,9 +868,14 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
                 f"META span [{doc.meta_start_byte}:{doc.meta_end_byte}] out of bounds "
                 f"for baseline ({len(_baseline_bytes)} bytes). NFC contract violated."
             )
-            # Strip trailing newline for consistency with emit_meta() output
-            # (which does not include a trailing newline; "\n".join handles it).
-            lines.append(_baseline_bytes[doc.meta_start_byte : doc.meta_end_byte].decode("utf-8").rstrip("\n"))
+            # Strip exactly ONE trailing newline for consistency with
+            # emit_meta() output (which does not include a trailing newline;
+            # "\n".join handles it).  Cubic P2: `rstrip("\n")` would consume
+            # ALL trailing newlines, silently dropping trail-anchored blank
+            # lines that belong inside the META block span (ADR §3 blank-line
+            # policy). `removesuffix` strips at most one — the separator that
+            # "\n".join below re-adds.
+            lines.append(_baseline_bytes[doc.meta_start_byte : doc.meta_end_byte].decode("utf-8").removesuffix("\n"))
             meta_sliced = True
         if not meta_sliced:
             lines.append(emit_meta(doc.meta, format_options))
@@ -910,13 +915,17 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
                 f"out of bounds for baseline ({len(_baseline_bytes)} bytes). "
                 "NFC contract violated."
             )
-            # Strip exactly one trailing newline from the sliced content.
-            # The byte span may include a trailing '\n' (section spans end at
-            # the next section's start_byte which follows a '\n'). The
-            # "\n".join(lines) call below will re-add the separator, so we
-            # must strip to avoid double newlines between sliced sections.
+            # Strip exactly ONE trailing newline from the sliced content.
+            # The byte span ends at the next section's start_byte, which sits
+            # immediately after a single '\n' separator. The "\n".join(lines)
+            # call below re-adds that separator, so we must remove exactly
+            # one to avoid double newlines between sliced sections.
+            # Cubic P2: `rstrip("\n")` would consume ALL trailing newlines,
+            # silently dropping trail-anchored blank lines that belong inside
+            # the section's end_byte (ADR §3 blank-line policy — an I1
+            # violation on clean nodes). `removesuffix` strips at most one.
             sliced_text = _baseline_bytes[section.start_byte : section.end_byte].decode("utf-8")
-            lines.append(sliced_text.rstrip("\n"))
+            lines.append(sliced_text.removesuffix("\n"))
             continue
 
         # Re-emit path: produce canonical output from AST.

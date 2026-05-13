@@ -141,40 +141,45 @@ class TestGoldenFixtureDiffFootprint:
             format_style="preserve",
         )
 
-        # Find lines with annotation forms in the SECTIONS (after META block)
-        # These should all be unchanged since only META.STATUS was modified.
+        # Cubic P1: key the assertion off the BASELINE, not the output.
+        # If a bug removed annotation markers from output lines, an
+        # output-keyed regex would silently skip those lines and the
+        # assertion would never fire — the test would pass on corrupted
+        # output. Iterating baseline lines guarantees every annotation
+        # present in the source is checked for byte-identity in the output.
         bracket_pattern = re.compile(r"\w+\[[\w_]+\]")
         angle_pattern = re.compile(r"\w+<[\w_]+>")
 
         baseline_lines = baseline.splitlines()
         output_lines = output.splitlines()
 
-        # Build sets of changed line indices from the diff
-        changed_in_output: set[int] = set()
+        # Build set of baseline line indices that are part of a diff hunk.
         matcher = difflib.SequenceMatcher(None, baseline_lines, output_lines)
-        for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
+        changed_in_baseline: set[int] = set()
+        for tag, i1, i2, _j1, _j2 in matcher.get_opcodes():
             if tag != "equal":
-                for j in range(j1, j2):
-                    changed_in_output.add(j)
+                for i in range(i1, i2):
+                    changed_in_baseline.add(i)
 
-        # Verify annotation-form lines in output that were NOT changed are
-        # identical to corresponding baseline lines.
+        # For each baseline line that contains a [X]/<X> annotation in an
+        # unchanged region, locate the corresponding output line via opcodes
+        # and assert byte-identity. This catches:
+        #   (a) annotation markers stripped from output,
+        #   (b) annotation byte content mutated in output,
+        #   (c) trail-anchored blank lines lost (rstrip vs removesuffix).
         mismatches: list[str] = []
-        for j, line in enumerate(output_lines):
-            if j in changed_in_output:
+        for i, baseline_line in enumerate(baseline_lines):
+            if i in changed_in_baseline:
                 continue
-            if bracket_pattern.search(line) or angle_pattern.search(line):
-                # Find corresponding baseline line
-                # For unchanged lines the baseline index equals output index
-                # minus any offset from insertions/deletions. Use opcodes.
-                for tag, i1, _i2, j1, j2 in matcher.get_opcodes():
-                    if tag == "equal" and j1 <= j < j2:
-                        i = i1 + (j - j1)
-                        if baseline_lines[i] != output_lines[j]:
-                            mismatches.append(
-                                f"Line {j}: baseline={baseline_lines[i]!r} " f"output={output_lines[j]!r}"
-                            )
-                        break
+            if not (bracket_pattern.search(baseline_line) or angle_pattern.search(baseline_line)):
+                continue
+            # Locate the corresponding output line via the equal opcode.
+            for tag, i1, i2, j1, _j2 in matcher.get_opcodes():
+                if tag == "equal" and i1 <= i < i2:
+                    j = j1 + (i - i1)
+                    if output_lines[j] != baseline_line:
+                        mismatches.append(f"Line baseline[{i}]={baseline_line!r} != output[{j}]={output_lines[j]!r}")
+                    break
 
         assert not mismatches, "Mixed annotation forms changed in unchanged sections:\n" + "\n".join(mismatches[:10])
 

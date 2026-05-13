@@ -539,12 +539,19 @@ def write(
                     if not found:
                         doc.sections.append(Assignment(key=key, value=value))
 
+            # GH#377 Strategy A T8 (Cubic P1): changes mode parses the
+            # existing file content, so doc spans index the same bytes as
+            # baseline_for_preserve_raw. Setting spans_valid_for_baseline=True
+            # enables the span-aware slice path in _emit_with_style; without
+            # it, the CLI always falls through to canonical emit and T8 is
+            # effectively disabled in the CLI.
             canonical_content = _emit_with_style(
                 doc,
                 baseline_bytes=_to_baseline_bytes(baseline_for_preserve_raw or ""),
                 new_bytes=None,
                 format_style=format_style,
                 corrections=cli_corrections,
+                spans_valid_for_baseline=True,
             )
 
         # Schema validation if requested
