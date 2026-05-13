@@ -187,3 +187,46 @@ def test_paired_write_symmetry_across_write_and_repair() -> None:
         for rel, line_no, line_text, reason in all_violations:
             msg_lines.append(f"  {rel}:{line_no} [{reason}]: {line_text.strip()}")
         raise AssertionError("\n".join(msg_lines))
+
+
+def test_repair_ast_node_propagates_body_dirty_to_ancestors() -> None:
+    """CE BLOCKER (PR #418): the recursive repair walker MUST return its
+    propagation signal so ancestor Block/Section parents can mark body_dirty.
+
+    The 10-line proximity lint above only verifies that ``.repaired = True``
+    is set on the mutated Assignment. It does NOT enforce the cross-node
+    invariant: "if a descendant Assignment is repaired, every ancestor
+    Block/Section MUST be marked body_dirty so the slice path in emit()
+    falls through to canonical re-emit."
+
+    This complementary structural check guards the recursion contract by
+    inspecting the source of ``_repair_ast_node`` in core/repair.py:
+
+      1. It MUST be declared ``-> bool`` so callers can propagate the
+         "descendant was repaired" signal upward.
+      2. Both the Block branch AND the Section branch MUST set
+         ``body_dirty = True`` (at least 2 occurrences in the function).
+
+    If a future refactor drops either invariant, this test fails loudly
+    with a pointer to the regressed contract.
+    """
+    src = (_ROOT / "src" / "octave_mcp" / "core" / "repair.py").read_text(encoding="utf-8")
+
+    assert "def _repair_ast_node(" in src, "_repair_ast_node missing from repair.py"
+
+    sig_match = re.search(r"def _repair_ast_node\([^)]*\)\s*->\s*bool\s*:", src, re.DOTALL)
+    assert sig_match is not None, (
+        "_repair_ast_node MUST be declared `-> bool` so callers can propagate "
+        "the 'descendant was repaired' signal up to ancestor Block/Section "
+        "body_dirty. See CE BLOCKER on PR #418."
+    )
+
+    assert "body_dirty = True" in src, (
+        "_repair_ast_node MUST set body_dirty=True on Block/Section parents "
+        "whose descendant tree contained a repair. See CE BLOCKER on PR #418."
+    )
+    body_dirty_count = src.count("body_dirty = True")
+    assert body_dirty_count >= 2, (
+        f"Expected body_dirty=True propagation in BOTH the Block and Section "
+        f"branches of _repair_ast_node, found {body_dirty_count} occurrence(s)."
+    )
