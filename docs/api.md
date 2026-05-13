@@ -237,9 +237,10 @@ values are **AST-level pre-passes that all funnel into the single canonical
 
 | Mode | Semantics | When to use |
 |---|---|---|
-| _(unset / `null`)_ | Today's canonical behaviour byte-for-byte. No pre-pass, no short-circuit. | Default — preserves existing call-site behaviour. All baseline tests pass unchanged. |
-| `"preserve"` | **Strategy C narrow short-circuit.** If `parse(new_content) == parse(baseline_content)` (AST-equality, ignoring whitespace), write the baseline file's bytes verbatim and skip canonical re-emission entirely. Otherwise fall through to canonical `emit()`. | Governance / context files where whitespace-only or no-op edits should produce a zero-byte diff. **Note:** richer per-key dirty tracking (Strategy A) is intentionally deferred to [GH#377](https://github.com/elevanaltd/octave-mcp/issues/377). |
-| `"expanded"` | AST normalisation pre-pass that lifts `InlineMap` (and `ListValue` items that are `InlineMap`) into `Block` form before `emit()`. Materially changes on-disk shape vs default. | Canonicalisation pipelines where compact inline shapes must be normalised to multi-line Blocks for diff stability or downstream tooling. |
+| _(unset / omitted)_ | Today's canonical behaviour byte-for-byte. No pre-pass, no short-circuit. | Default — preserves existing call-site behaviour. **Note:** in **v1.14.0** this default will flip to `"preserve"`; pin a value explicitly if byte-shape stability across versions matters. |
+| _(explicit `null` / `None`)_ | **Deprecated in v1.13.0.** Same byte-for-byte behaviour as omission today, but emits a `DeprecationWarning` to announce the v1.14.0 default flip. | Avoid — either omit the parameter (accept the future default) or pin an explicit string value. |
+| `"preserve"` | **Strategy A span-aware preserve mode (#418).** Single-region slice-and-replace: clean nodes are sliced verbatim from the post-NFC baseline bytes; only mutated subtrees (`dirty`, `body_dirty`, `repaired`, `meta_dirty[k]=True`) are re-emitted canonically. Diff footprint ≤0.5% of file size on representative documents. Subsumes GH#248 mixed annotation form drift. Falls through to canonical `emit()` when the doc was parsed from user-supplied new content (content mode — spans index the new content, not the baseline file). | The recommended mode for changes-mode edits where unchanged regions should produce zero-byte diff. |
+| `"expanded"` | AST normalisation pre-pass that lifts `InlineMap` (and `ListValue` items that are `InlineMap`) into `Block` form before `emit()`. Materially changes on-disk shape vs default. | Canonicalisation pipelines where compact inline shapes must be normalised to multi-line Blocks for diff stability or downstream tooling. ALSO the recommended pin if you want to keep v1.12.0 canonical re-emit behaviour past the v1.14.0 default flip. |
 | `"compact"` | AST pre-pass that collapses atom-only Blocks (no `Comment` anywhere in subtree, arity ≤ 8) into `Assignment(value=ListValue([InlineMap{...}, ...]))` form. Subtrees containing **any** `Comment` are vetoed and a `W_COMPACT_REFUSED` correction is appended to the repair log. | Token-minimised outputs for LLM consumption — but mind the comment veto. |
 
 ##### `W_COMPACT_REFUSED` repair record
@@ -271,13 +272,53 @@ form would silently drop them. The veto + audit-log pattern preserves both
 the source content and a transparent record of where compact-mode could not
 be applied.
 
-##### Forward reference
+##### Strategy A NFC contract for `baseline_bytes` (#377, #418)
 
-Strategy A (per-key dirty tracking, deep changes-mode paths, source-span
-infrastructure, and the `_normalize_value_for_ast` Block-shape preservation
-fix) is tracked in [GH#377](https://github.com/elevanaltd/octave-mcp/issues/377).
-The default value of `format_style` may flip from unset to `"preserve"` at
-that point; today's PR-A ships the toggle as purely additive.
+When `format_style="preserve"` is engaged, the span-aware emitter slices
+unchanged regions verbatim from a `baseline_bytes: bytes` value supplied
+via `FormatOptions`. The slice path is only correct if `baseline_bytes`
+satisfies the **post-NFC byte equality contract**:
+
+> `baseline_bytes == octave_mcp.core.lexer.normalize_content(raw).encode("utf-8")`
+
+where `raw` is the original file content. The reason is structural —
+`tokenize()` applies fence-aware NFC normalisation via the internal
+`_normalize_with_fence_detection` pass, and every `Token.start_byte` /
+`Token.end_byte` (and the AST node spans derived from them) indexes the
+NFC-normalised byte stream, **not** the raw on-disk bytes. A plain
+`unicodedata.normalize("NFC", raw)` is **not equivalent** because the
+fence-aware pass deliberately exempts literal-zone (fenced) content from
+NFC. Passing un-normalised `baseline_bytes` would corrupt the slice
+output for any document containing pre-NFC Unicode outside literal
+zones.
+
+The MCP `WriteTool` and CLI `write` command thread this contract
+automatically via the internal `mcp.write._to_baseline_bytes()` helper.
+**Python callers using `mcp.write._emit_with_style` directly** must
+either:
+
+* prefer `_to_baseline_bytes(raw_str)` (recommended — single source of
+  truth, returns `None` on malformed baselines so the slice path
+  degrades safely), OR
+* call `from octave_mcp.core.lexer import normalize_content; baseline_bytes = normalize_content(raw).encode("utf-8")`.
+
+The CE-identified hard constraints behind this contract are documented
+in PR #418's commit history as **HC-1** (don't pass pre-NFC `str` to the
+slice path), **HC-2** (`baseline_bytes` type is `bytes | None`, not
+`str | None`), and **HC-3** (expose `normalize_content()` as a public
+utility for write-pipeline callers).
+
+##### `spans_valid_for_baseline` discriminator
+
+`_emit_with_style(spans_valid_for_baseline=...)` is a structural
+discriminator that must be `True` only when the parsed `Document` was
+built from the same content that `baseline_bytes` represents — i.e.
+changes-mode or normalize-mode where `doc = parse(baseline_content)`.
+It must be `False` in content-mode where the caller supplied entirely
+new content, because the doc's `start_byte`/`end_byte` values index the
+NEW content's bytes, not the old baseline. Slicing the old baseline
+with new-content spans would produce garbage; the discriminator forces
+fall-through to canonical `emit()` in that case.
 
 ---
 
