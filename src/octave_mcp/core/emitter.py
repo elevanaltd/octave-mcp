@@ -855,12 +855,23 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     # typical documents is well within the 0.5% threshold.
     if doc.meta:
         meta_sliced = False
+        # CRS BLOCKER (PR #418): also check `doc.dirty` (whole-META
+        # replacement signal from cli/main.py) and inspect meta_dirty
+        # over BOTH the current doc.meta keys AND any keys that were
+        # deleted (which are absent from doc.meta but still recorded
+        # as dirty in meta_dirty). Without the union, a delete-only
+        # mutation would slice the OLD META block from baseline and
+        # silently re-introduce the deleted key.
+        _meta_dirty_keys = set(doc.meta_dirty.keys())
+        _meta_live_keys = set(doc.meta.keys())
+        _any_meta_dirty = any(doc.meta_dirty.get(k, False) for k in _meta_dirty_keys | _meta_live_keys)
         if (
             _enable_preserve
             and _baseline_bytes is not None
             and doc.meta_start_byte is not None
             and doc.meta_end_byte is not None
-            and not any(doc.meta_dirty.get(k, False) for k in doc.meta)
+            and not getattr(doc, "dirty", False)
+            and not _any_meta_dirty
         ):
             # No META key is dirty — slice entire META block verbatim.
             # R4 structural integrity check (I4 audit trail).
@@ -899,11 +910,26 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     # cannot mix for the same node.
     for section in doc.sections:
         # GH#377 Strategy A: try the slice path first.
+        #
+        # CRS BLOCKER (PR #418): `body_dirty=True` means the parent's
+        # children have been mutated even though the parent's header is
+        # unchanged. Slicing the whole node here would emit the OLD
+        # baseline bytes for the parent — INCLUDING its stale children —
+        # silently discarding the user's change to a child. Force the
+        # re-emit path (emit_block / emit_section) whenever body_dirty is
+        # set so canonical re-emission picks up the mutated children.
+        #
+        # This is the conservative Option A: when body_dirty, the entire
+        # subtree re-emits canonically. A future PR may add child-level
+        # span dispatch (Option B) — recursive descent that slices the
+        # header from baseline and dispatches each child individually —
+        # but that is a larger architectural change.
         if (
             _enable_preserve
             and _baseline_bytes is not None
             and not section.dirty
             and not section.repaired
+            and not getattr(section, "body_dirty", False)
             and section.start_byte is not None
             and section.end_byte is not None
         ):
