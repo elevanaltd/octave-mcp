@@ -117,9 +117,7 @@ def _run_octave_write_normalize(content_bytes: bytes) -> bytes:
             path = f.name
         try:
             result = await tool.execute(target_path=path)
-            assert result.get("status") == "success", (
-                f"octave_write normalize-mode failed: {result.get('errors')!r}"
-            )
+            assert result.get("status") == "success", f"octave_write normalize-mode failed: {result.get('errors')!r}"
             with open(path, "rb") as fp:
                 return fp.read()
         finally:
@@ -142,8 +140,7 @@ def _run_octave_write_normalize(content_bytes: bytes) -> bytes:
 # nesting the recognition can be widened (or, better, the test can call
 # ``core.holographic`` directly).
 _HOLOGRAPHIC_SPAN_RE = re.compile(
-    r"\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*(?:∧|→§|->§)[^\[\]]*"
-    r"(?:\[[^\[\]]*\][^\[\]]*)*\]"
+    r"\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*(?:∧|→§|->§)[^\[\]]*" r"(?:\[[^\[\]]*\][^\[\]]*)*\]"
 )
 
 
@@ -173,17 +170,13 @@ def test_schema_canonical_form_is_idempotent_fixed_point(schema_path: Path) -> N
         first_lines = first_pass.splitlines()
         second_lines = second_pass.splitlines()
         diff_excerpts: list[str] = []
-        for lineno, (a, b) in enumerate(zip(first_lines, second_lines), start=1):
+        for lineno, (a, b) in enumerate(zip(first_lines, second_lines, strict=False), start=1):
             if a != b:
-                diff_excerpts.append(
-                    f"  line {lineno}:\n    PASS1: {a!r}\n    PASS2: {b!r}"
-                )
+                diff_excerpts.append(f"  line {lineno}:\n    PASS1: {a!r}\n    PASS2: {b!r}")
                 if len(diff_excerpts) >= 3:
                     break
         if len(first_lines) != len(second_lines):
-            diff_excerpts.append(
-                f"  line count: PASS1={len(first_lines)} PASS2={len(second_lines)}"
-            )
+            diff_excerpts.append(f"  line count: PASS1={len(first_lines)} PASS2={len(second_lines)}")
         pytest.fail(
             f"Canonical form of {schema_path.name} is not a fixed point "
             f"(PROD::I4 violation):\n" + "\n".join(diff_excerpts)
@@ -219,9 +212,7 @@ def test_schema_holographic_spans_survive_round_trip(schema_path: Path) -> None:
             f"check trivially passes (the idempotency fixed-point test still applies)."
         )
 
-    round_tripped_text = _run_octave_write_normalize(
-        original_text.encode("utf-8")
-    ).decode("utf-8")
+    round_tripped_text = _run_octave_write_normalize(original_text.encode("utf-8")).decode("utf-8")
 
     missing: list[str] = []
     for span in original_spans:
@@ -236,11 +227,7 @@ def test_schema_holographic_spans_survive_round_trip(schema_path: Path) -> None:
             f"were destroyed by octave_write (PROD::I1/I3 violation):\n"
             f"  First missing: {missing[0]!r}\n"
             f"  Round-tripped output excerpt:\n"
-            + "\n".join(
-                f"    {line}"
-                for line in round_tripped_text.splitlines()
-                if "§" in line or "∧" in line
-            )[:2000]
+            + "\n".join(f"    {line}" for line in round_tripped_text.splitlines() if "§" in line or "∧" in line)[:2000]
         )
 
 
@@ -262,12 +249,7 @@ def test_holographic_operator_chain_survives_auto_quote_pass() -> None:
     from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
 
     holographic_line = '  THREAD_ID::["example-debate-001"∧REQ→§INDEXER]'
-    content = (
-        "===TEST===\n"
-        "META:\n"
-        f"{holographic_line}\n"
-        "===END===\n"
-    )
+    content = "===TEST===\n" "META:\n" f"{holographic_line}\n" "===END===\n"
 
     output, corrections = _auto_quote_section_refs_in_values(content)
 
@@ -299,9 +281,7 @@ def test_ascii_arrow_holographic_pattern_also_protected() -> None:
     ascii_line = '  THREAD_ID::["example"∧REQ->§INDEXER]'
     content = f"===TEST===\nMETA:\n{ascii_line}\n===END===\n"
     output, corrections = _auto_quote_section_refs_in_values(content)
-    assert output == content, (
-        f"ASCII-arrow holographic span destroyed:\n  IN : {content!r}\n  OUT: {output!r}"
-    )
+    assert output == content, f"ASCII-arrow holographic span destroyed:\n  IN : {content!r}\n  OUT: {output!r}"
     assert not corrections
 
 
@@ -319,9 +299,7 @@ def test_non_holographic_section_ref_still_gets_quoted() -> None:
 
     content = "===TEST===\nMETA:\n  KEY::§SOMETHING\n===END===\n"
     output, corrections = _auto_quote_section_refs_in_values(content)
-    assert output != content, (
-        "Non-holographic bare §SOMETHING should be auto-quoted; sanctuary too wide"
-    )
-    assert any(c["code"] == "W_UNQUOTED_SECTION_IN_VALUE" for c in corrections), (
-        "Auto-quote of non-holographic § value should emit W_UNQUOTED_SECTION_IN_VALUE"
-    )
+    assert output != content, "Non-holographic bare §SOMETHING should be auto-quoted; sanctuary too wide"
+    assert any(
+        c["code"] == "W_UNQUOTED_SECTION_IN_VALUE" for c in corrections
+    ), "Auto-quote of non-holographic § value should emit W_UNQUOTED_SECTION_IN_VALUE"

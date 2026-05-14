@@ -287,10 +287,7 @@ def _build_holographic_line_set(content: str) -> set[int]:
                     depth -= 1
                     if depth == 0 and span_start != -1:
                         span = value_part[span_start:i]
-                        if (
-                            _find_constraint_start(span) != -1
-                            or _find_target_start(span) != -1
-                        ):
+                        if _find_constraint_start(span) != -1 or _find_target_start(span) != -1:
                             protected.add(line_num)
                             break
                         span_start = -1
