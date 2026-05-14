@@ -285,6 +285,92 @@ def test_ascii_arrow_holographic_pattern_also_protected() -> None:
     assert not corrections
 
 
+def test_holographic_sanctuary_handles_even_backslash_run_before_quote() -> None:
+    """RED (cubic P1): even backslash-run before a quote MUST be treated as unescaped.
+
+    Quote-escape parity bug surfaced by cubic-dev-ai on PR #431:
+    ``_build_holographic_line_set`` used a single-character lookback
+    (``value_part[i - 1] != "\\\\"``) to decide whether a quote was
+    escaped. That is incorrect when the prior character is itself an
+    escaped backslash. The convention enforced elsewhere in this module
+    (see ``_all_section_marks_quoted``, GH#361r2) is to count the run of
+    trailing backslashes before the quote: even count (including zero)
+    means the quote is UNESCAPED and must toggle ``in_quotes``; odd count
+    means the quote is escaped and must NOT toggle.
+
+    Test corpus (each line is a valid holographic pattern that should be
+    protected by the sanctuary):
+
+    1. Two backslashes then quote (``\\\\``): the backslashes are an
+       escaped backslash pair, the quote that follows is UNESCAPED and
+       closes the string. With the buggy single-char lookback, ``in_quotes``
+       would remain True past this point and the operators ``∧`` / ``→§``
+       inside the bracketed value would be missed.
+    2. Four backslashes then quote (``\\\\\\\\``): two escaped backslash
+       pairs, quote is UNESCAPED. Same expected behaviour as case 1.
+    3. Escaped-quote inside string (``\\\\"``): single backslash before
+       quote means quote IS escaped, ``in_quotes`` stays True until a
+       subsequent unescaped quote closes the string. This case must STILL
+       be recognised as holographic because the operators sit AFTER the
+       closing quote, outside the string.
+
+    All three lines RED on the buggy implementation: the sanctuary fails
+    to recognise them as holographic and ``_auto_quote_section_refs_in_values``
+    wraps ``§T`` in quotes, destroying the operator chain.
+    """
+    from octave_mcp.mcp.write import _auto_quote_section_refs_in_values, _build_holographic_line_set
+
+    # Case 1: even backslash-run of length 2.
+    # Raw OCTAVE bytes on disk:  K::["a\\"∧REQ→§T]
+    # Interpretation: string-example is "a\\" (literal backslash inside string),
+    # closing quote is unescaped (2 trailing backslashes = even parity).
+    case1 = '  K::["a\\\\"∧REQ→§T]'
+    content1 = f"===T===\nM:\n{case1}\n===END===\n"
+    assert 3 in _build_holographic_line_set(content1), (
+        f"Case 1 (even backslash-run len=2): line 3 should be in holographic set.\n"
+        f"  raw line bytes: {case1.encode('utf-8')!r}\n"
+        f"  sanctuary returned: {_build_holographic_line_set(content1)!r}"
+    )
+    out1, corr1 = _auto_quote_section_refs_in_values(content1)
+    assert (
+        out1 == content1
+    ), f"Case 1: holographic span destroyed.\n  IN : {content1!r}\n  OUT: {out1!r}\n  CORR: {corr1!r}"
+    assert not corr1
+
+    # Case 2: even backslash-run of length 4.
+    # Raw OCTAVE bytes on disk:  K::["a\\\\"∧REQ→§T]
+    case2 = '  K::["a\\\\\\\\"∧REQ→§T]'
+    content2 = f"===T===\nM:\n{case2}\n===END===\n"
+    assert 3 in _build_holographic_line_set(content2), (
+        f"Case 2 (even backslash-run len=4): line 3 should be in holographic set.\n"
+        f"  raw line bytes: {case2.encode('utf-8')!r}\n"
+        f"  sanctuary returned: {_build_holographic_line_set(content2)!r}"
+    )
+    out2, corr2 = _auto_quote_section_refs_in_values(content2)
+    assert (
+        out2 == content2
+    ), f"Case 2: holographic span destroyed.\n  IN : {content2!r}\n  OUT: {out2!r}\n  CORR: {corr2!r}"
+    assert not corr2
+
+    # Case 3: escaped quote inside example string then unescaped close-quote.
+    # Raw OCTAVE bytes on disk:  K::["a\"b"∧REQ→§T]
+    # Interpretation: string-example is "a\"b" (escaped-quote then b then unescaped close).
+    # First inner quote has one trailing backslash (odd) -> escaped, stays in_quotes.
+    # Second inner quote has zero trailing backslashes (even) -> unescaped, closes the string.
+    case3 = '  K::["a\\"b"∧REQ→§T]'
+    content3 = f"===T===\nM:\n{case3}\n===END===\n"
+    assert 3 in _build_holographic_line_set(content3), (
+        f"Case 3 (escaped-quote inside string): line 3 should be in holographic set.\n"
+        f"  raw line bytes: {case3.encode('utf-8')!r}\n"
+        f"  sanctuary returned: {_build_holographic_line_set(content3)!r}"
+    )
+    out3, corr3 = _auto_quote_section_refs_in_values(content3)
+    assert (
+        out3 == content3
+    ), f"Case 3: holographic span destroyed.\n  IN : {content3!r}\n  OUT: {out3!r}\n  CORR: {corr3!r}"
+    assert not corr3
+
+
 def test_non_holographic_section_ref_still_gets_quoted() -> None:
     """The sanctuary is narrow: bare ``§REF`` in a non-holographic value MUST still be quoted.
 

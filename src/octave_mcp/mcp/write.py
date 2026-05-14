@@ -272,11 +272,23 @@ def _build_holographic_line_set(content: str) -> set[int]:
         while i < length:
             ch = value_part[i]
             if ch == '"':
-                # Treat escaped quotes inside strings as opaque: a single
-                # backslash before the quote leaves the string state
-                # unchanged. This matches the convention used elsewhere
-                # in this module (see _all_section_marks_quoted).
-                if i == 0 or value_part[i - 1] != "\\":
+                # Backslash-run parity (matches GH#361r2 convention used in
+                # ``_all_section_marks_quoted``): count the run of trailing
+                # backslashes immediately before this quote. Even count
+                # (including zero) means the quote is UNESCAPED and must
+                # toggle ``in_quotes``; odd count means the quote is
+                # escaped and must NOT toggle. A naive single-character
+                # lookback misclassifies ``\\"`` (two backslashes = escaped
+                # backslash pair, quote IS unescaped) as escaped, which
+                # leaves the parser walk stuck inside a string and lets
+                # operators in the bracketed value escape recognition
+                # (cubic-dev-ai P1 on PR #431).
+                backslash_count = 0
+                j = i - 1
+                while j >= 0 and value_part[j] == "\\":
+                    backslash_count += 1
+                    j -= 1
+                if backslash_count % 2 == 0:
                     in_quotes = not in_quotes
             elif not in_quotes:
                 if ch == "[":
