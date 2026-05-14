@@ -34,7 +34,6 @@ from octave_mcp.core.holographic import (
     parse_holographic_pattern,
 )
 
-
 # Each row: (run_len, is_quote_unescaped). Even-length runs (including
 # zero) leave the quote unescaped; odd-length runs escape it.
 _PARITY_CASES = [
@@ -47,9 +46,7 @@ _PARITY_CASES = [
 
 
 @pytest.mark.parametrize("run_len,quote_unescaped", _PARITY_CASES)
-def test_find_target_start_respects_backslash_run_parity(
-    run_len: int, quote_unescaped: bool
-) -> None:
+def test_find_target_start_respects_backslash_run_parity(run_len: int, quote_unescaped: bool) -> None:
     """``_find_target_start`` must apply backslash-run parity to quotes.
 
     For run_len in {0, 2, 4} the close-quote that follows the run is
@@ -74,9 +71,9 @@ def test_find_target_start_respects_backslash_run_parity(
             f"  content: {content!r}"
         )
         # Sanity: the offset points at the arrow character.
-        assert content[result : result + 2] == "→§", (
-            f"run_len={run_len}: offset {result} does not point at →§ in {content!r}"
-        )
+        assert (
+            content[result : result + 2] == "→§"
+        ), f"run_len={run_len}: offset {result} does not point at →§ in {content!r}"
     else:
         assert result == -1, (
             f"run_len={run_len} (odd, escaped close-quote): "
@@ -86,9 +83,7 @@ def test_find_target_start_respects_backslash_run_parity(
 
 
 @pytest.mark.parametrize("run_len,quote_unescaped", _PARITY_CASES)
-def test_find_constraint_start_respects_backslash_run_parity(
-    run_len: int, quote_unescaped: bool
-) -> None:
+def test_find_constraint_start_respects_backslash_run_parity(run_len: int, quote_unescaped: bool) -> None:
     """``_find_constraint_start`` must apply backslash-run parity to quotes.
 
     For run_len in {0, 2, 4} the close-quote is UNESCAPED; the string
@@ -106,9 +101,7 @@ def test_find_constraint_start_respects_backslash_run_parity(
             f"_find_constraint_start should see ∧ at top level but returned -1.\n"
             f"  content: {content!r}"
         )
-        assert content[result] == "∧", (
-            f"run_len={run_len}: offset {result} does not point at ∧ in {content!r}"
-        )
+        assert content[result] == "∧", f"run_len={run_len}: offset {result} does not point at ∧ in {content!r}"
     else:
         assert result == -1, (
             f"run_len={run_len} (odd, escaped close-quote): "
@@ -118,9 +111,7 @@ def test_find_constraint_start_respects_backslash_run_parity(
 
 
 @pytest.mark.parametrize("run_len,quote_unescaped", _PARITY_CASES)
-def test_parse_list_example_respects_backslash_run_parity(
-    run_len: int, quote_unescaped: bool
-) -> None:
+def test_parse_list_example_respects_backslash_run_parity(run_len: int, quote_unescaped: bool) -> None:
     """``_parse_list_example`` must apply backslash-run parity to quotes.
 
     With an unescaped close-quote, the comma immediately following sits
@@ -143,8 +134,7 @@ def test_parse_list_example_respects_backslash_run_parity(
     if quote_unescaped:
         # Two items: "a\\..." (parsed as a string) and "b".
         assert len(items) == 2, (
-            f"run_len={run_len} (even): list should split into 2 items.\n"
-            f"  input: {list_str!r}\n  parsed: {items!r}"
+            f"run_len={run_len} (even): list should split into 2 items.\n" f"  input: {list_str!r}\n  parsed: {items!r}"
         )
         assert items[1] == "b", f"second item should be 'b', got {items[1]!r}"
     else:

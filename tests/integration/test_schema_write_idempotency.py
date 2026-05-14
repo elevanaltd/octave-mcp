@@ -371,19 +371,30 @@ def test_holographic_sanctuary_handles_even_backslash_run_before_quote() -> None
     assert not corr3
 
 
-def test_target_only_holographic_with_backslash_run_round_trips_stably() -> None:
-    """RED (CE codex, GH-432): target-only holographic with backslash-run parity.
+def test_sanctuary_protects_target_only_holographic_with_backslash_run() -> None:
+    """RED (CE codex, GH-432): sanctuary recognises target-only holographic across parity.
 
     Target-only holographic patterns (no ``∧`` constraint, only a ``→§``
-    target arrow) are valid OCTAVE — the constraint chain is optional.
-    The sanctuary delegates to ``core.holographic._find_target_start``
-    for recognition. That parser uses a single-character backslash
-    lookback to decide whether a quote is escaped, which mishandles
-    even-length backslash runs the same way the sanctuary did
-    pre-fix (cubic P1).
+    target arrow) are the case CE codex flagged. Recognition delegates
+    to ``core.holographic._find_target_start``, which prior to GH-432
+    used a single-character backslash lookback and misclassified
+    even-length backslash runs the same way the sanctuary did pre-fix
+    (cubic P1).
+
+    This test pins the SANCTUARY-LAYER contract — that the sanctuary
+    correctly classifies these lines as holographic and that
+    ``_auto_quote_section_refs_in_values`` leaves them untouched. The
+    full-pipeline byte-identity of target-only patterns through
+    ``octave_write`` is a SEPARATE concern: the OCTAVE document lexer
+    currently does not classify target-only patterns as
+    ``HolographicValue`` (it parses them as ``ListValue`` because the
+    grammar requires the ``∧`` constraint chain for holographic
+    recognition at the AST level). That is a grammar-feature gap
+    independent of the quote-parity fix and is surfaced separately.
 
     Case A — run_len=2 — even parity, close-quote unescaped, the
-    holographic span must be protected and round-trip byte-stable.
+    holographic span must be protected (sanctuary returns line in
+    protected set, repair pass leaves it untouched).
     Case B — run_len=4 — same expected behaviour.
     Case C — run_len=1 — odd parity, close-quote escaped, the line is
     NOT holographic (the ``→§T`` sits inside the still-open string).
@@ -411,10 +422,7 @@ def test_target_only_holographic_with_backslash_run_round_trips_stably() -> None
             f"run_len={run_len}: target-only holographic span destroyed.\n"
             f"  IN : {content!r}\n  OUT: {out!r}\n  CORR: {corr!r}"
         )
-        assert not corr, (
-            f"run_len={run_len}: no corrections expected on protected holographic line, "
-            f"got {corr!r}"
-        )
+        assert not corr, f"run_len={run_len}: no corrections expected on protected holographic line, " f"got {corr!r}"
 
     # Negative cases: odd parity → close-quote is escaped, the string
     # state stays open, ``→§T`` sits inside the string. The sanctuary
