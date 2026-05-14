@@ -371,6 +371,69 @@ def test_holographic_sanctuary_handles_even_backslash_run_before_quote() -> None
     assert not corr3
 
 
+def test_target_only_holographic_with_backslash_run_round_trips_stably() -> None:
+    """RED (CE codex, GH-432): target-only holographic with backslash-run parity.
+
+    Target-only holographic patterns (no ``∧`` constraint, only a ``→§``
+    target arrow) are valid OCTAVE — the constraint chain is optional.
+    The sanctuary delegates to ``core.holographic._find_target_start``
+    for recognition. That parser uses a single-character backslash
+    lookback to decide whether a quote is escaped, which mishandles
+    even-length backslash runs the same way the sanctuary did
+    pre-fix (cubic P1).
+
+    Case A — run_len=2 — even parity, close-quote unescaped, the
+    holographic span must be protected and round-trip byte-stable.
+    Case B — run_len=4 — same expected behaviour.
+    Case C — run_len=1 — odd parity, close-quote escaped, the line is
+    NOT holographic (the ``→§T`` sits inside the still-open string).
+    The sanctuary must therefore NOT protect it; existing
+    auto-quote behaviour applies. This pins the boundary against
+    accidental over-protection regressions.
+    Case D — run_len=3 — odd parity, same negative expectation as C.
+    """
+    from octave_mcp.mcp.write import _auto_quote_section_refs_in_values, _build_holographic_line_set
+
+    # Positive cases: even parity → holographic, must be protected.
+    for run_len in (2, 4):
+        backslashes = "\\" * run_len
+        # Raw OCTAVE bytes on disk:  K::["a{backslashes}"→§T]
+        line = f'  K::["a{backslashes}"→§T]'
+        content = f"===T===\nM:\n{line}\n===END===\n"
+        assert 3 in _build_holographic_line_set(content), (
+            f"run_len={run_len} (even, target-only holographic): "
+            f"sanctuary should protect line 3.\n"
+            f"  raw line bytes: {line.encode('utf-8')!r}\n"
+            f"  sanctuary returned: {_build_holographic_line_set(content)!r}"
+        )
+        out, corr = _auto_quote_section_refs_in_values(content)
+        assert out == content, (
+            f"run_len={run_len}: target-only holographic span destroyed.\n"
+            f"  IN : {content!r}\n  OUT: {out!r}\n  CORR: {corr!r}"
+        )
+        assert not corr, (
+            f"run_len={run_len}: no corrections expected on protected holographic line, "
+            f"got {corr!r}"
+        )
+
+    # Negative cases: odd parity → close-quote is escaped, the string
+    # state stays open, ``→§T`` sits inside the string. The sanctuary
+    # MUST NOT protect such a line — preventing accidental
+    # over-protection regressions.
+    for run_len in (1, 3):
+        backslashes = "\\" * run_len
+        line = f'  K::["a{backslashes}"→§T]'
+        content = f"===T===\nM:\n{line}\n===END===\n"
+        assert 3 not in _build_holographic_line_set(content), (
+            f"run_len={run_len} (odd, close-quote ESCAPED): "
+            f"the line is NOT a recognisable holographic pattern — "
+            f"sanctuary must NOT protect line 3 (otherwise the boundary "
+            f"between holographic and non-holographic is broken).\n"
+            f"  raw line bytes: {line.encode('utf-8')!r}\n"
+            f"  sanctuary returned: {_build_holographic_line_set(content)!r}"
+        )
+
+
 def test_non_holographic_section_ref_still_gets_quoted() -> None:
     """The sanctuary is narrow: bare ``§REF`` in a non-holographic value MUST still be quoted.
 
