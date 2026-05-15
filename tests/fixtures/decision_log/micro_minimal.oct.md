@@ -1,0 +1,12 @@
+===DECISIONS_OCTAVE_v20260417===
+META:
+  TYPE::DECISION_LOG
+  VERSION::"1.0"
+TEST_MICRO:
+  TOKEN::HO-TEST-MICRO-20260515
+  TIER::MICRO
+  STATUS::ACTIVE
+  DECISION::minimal_micro_record_carries_ENFORCEMENT_REF
+  BECAUSE::[micro_tier_encodes_decision_in_tooling_not_documentation]
+  ENFORCEMENT_REF::"src/octave_mcp/resources/specs/schemas/decision_log.oct.md"
+===END===

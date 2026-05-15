@@ -112,3 +112,76 @@ TEST_DECISION:
             f"Errors: {result.get('validation_errors', [])}"
         )
         assert result["valid"] is False
+
+
+# ---------------------------------------------------------------------------
+# GREEN: on-disk fixtures validate against the DECISION_LOG schema.
+#
+# Fixtures live in ``tests/fixtures/decision_log/`` and cover one minimal
+# record per tier plus a malformed-rejection corpus. They are intentionally
+# synthesised (not copied from the elevana-studio reference document) to keep
+# the test corpus self-contained and stable across the schema sweep — the
+# external reference is enumerated in the PR body, not embedded as fixture.
+# ---------------------------------------------------------------------------
+
+_FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "decision_log"
+
+
+class TestDecisionLogFixturesValidate:
+    """On-disk fixture-driven validation tests (GREEN)."""
+
+    def test_architectural_minimal_fixture_validates(self) -> None:
+        """The minimal ARCHITECTURAL-tier fixture MUST validate clean."""
+        fixture = _FIXTURES_DIR / "architectural_minimal.oct.md"
+        assert fixture.exists(), f"Fixture missing: {fixture}"
+
+        result = _validate_content(fixture.read_text(encoding="utf-8"))
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"architectural_minimal.oct.md should validate. "
+            f"Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
+
+    def test_convention_minimal_fixture_validates(self) -> None:
+        """The minimal CONVENTION-tier fixture MUST validate clean."""
+        fixture = _FIXTURES_DIR / "convention_minimal.oct.md"
+        assert fixture.exists(), f"Fixture missing: {fixture}"
+
+        result = _validate_content(fixture.read_text(encoding="utf-8"))
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"convention_minimal.oct.md should validate. "
+            f"Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
+
+    def test_micro_minimal_fixture_validates(self) -> None:
+        """The minimal MICRO-tier fixture (carrying ENFORCEMENT_REF) MUST validate clean."""
+        fixture = _FIXTURES_DIR / "micro_minimal.oct.md"
+        assert fixture.exists(), f"Fixture missing: {fixture}"
+
+        result = _validate_content(fixture.read_text(encoding="utf-8"))
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"micro_minimal.oct.md should validate. "
+            f"Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
+
+    def test_malformed_missing_token_fixture_rejects(self) -> None:
+        """The malformed-missing-TOKEN fixture MUST reject (mirrors RED unit test, fixture-driven)."""
+        fixture = _FIXTURES_DIR / "malformed_missing_token.oct.md"
+        assert fixture.exists(), f"Fixture missing: {fixture}"
+
+        result = _validate_content(fixture.read_text(encoding="utf-8"))
+
+        assert result["validation_status"] == "INVALID", (
+            f"malformed_missing_token.oct.md should be INVALID. "
+            f"Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is False
