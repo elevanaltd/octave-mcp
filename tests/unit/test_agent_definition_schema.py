@@ -242,17 +242,36 @@ META:
         assert result["valid"] is True
 
 
+# Empirically-surfaced gaps in the existing agent corpus (WAVE_2 finding).
+# These two files genuinely lack AUTHORITY_MANDATE — every other on-disk
+# agent declares one. Tracked as a follow-up gap to be filled in upstream
+# (agent-expert authoring), NOT by relaxing the schema. Honours HEPHAESTUS
+# bias (anvil of real input surfaces real defects) and ATLAS bias (do not
+# weaken load-bearing schema fields to paper over upstream omissions).
+KNOWN_AUTHORITY_MANDATE_GAPS: frozenset[str] = frozenset(
+    {
+        "ideator.oct.md",
+        "synthesizer.oct.md",
+    }
+)
+
+
 class TestExistingAgentFilesValidate:
     """Integration: every on-disk agent file validates clean against the schema.
 
     Each ``.hestai-sys/library/agents/*.oct.md`` file is the empirical ground
-    truth for the schema. If any file fails validation, the schema is wrong
-    (forge it on the anvil of real input — HEPHAESTUS bias).
+    truth for the schema. Files NOT on the known-gap allowlist must validate
+    clean (forge it on the anvil of real input — HEPHAESTUS bias).
+
+    The known-gap allowlist (``KNOWN_AUTHORITY_MANDATE_GAPS``) records agents
+    surfaced as structurally incomplete by this schema. They are pinned by a
+    second test to ensure the AUTHORITY_MANDATE diagnostic remains visible
+    (PROD::I5 SCHEMA_SOVEREIGNTY).
     """
 
     @pytest.mark.parametrize(
         "agent_path",
-        _agent_files(),
+        [p for p in _agent_files() if p.name not in KNOWN_AUTHORITY_MANDATE_GAPS],
         ids=lambda p: p.name,
     )
     def test_existing_agent_file_validates(self, agent_path: Path) -> None:
@@ -271,3 +290,40 @@ class TestExistingAgentFilesValidate:
                 f"  total_errors={len(errors)}"
             )
         assert result["valid"] is True
+
+    @pytest.mark.parametrize(
+        "agent_filename",
+        sorted(KNOWN_AUTHORITY_MANDATE_GAPS),
+    )
+    def test_known_gap_agent_files_surface_authority_mandate_diagnostic(
+        self, agent_filename: str
+    ) -> None:
+        """Known-gap agents surface the AUTHORITY_MANDATE E003 diagnostic.
+
+        Pins the schema sovereignty signal (PROD::I5): the schema is doing
+        its job by reporting the structural omission. If this test starts
+        failing because the file now validates clean, the gap has been
+        closed upstream and the entry should be removed from
+        ``KNOWN_AUTHORITY_MANDATE_GAPS``.
+        """
+        agent_path = _AGENTS_DIR / agent_filename
+        if not agent_path.exists():
+            pytest.skip(f"{agent_filename} no longer exists on disk")
+
+        content = agent_path.read_text(encoding="utf-8")
+        result = _validate_content(content)
+
+        assert result.get("validation_status") == "INVALID", (
+            f"{agent_filename} unexpectedly validates clean — gap may be closed. "
+            f"Remove from KNOWN_AUTHORITY_MANDATE_GAPS."
+        )
+        errors = result.get("validation_errors", [])
+        e003_authority_errors = [
+            e
+            for e in errors
+            if e.get("code") == "E003" and "AUTHORITY_MANDATE" in e.get("message", "")
+        ]
+        assert e003_authority_errors, (
+            f"{agent_filename}: expected E003/AUTHORITY_MANDATE diagnostic, "
+            f"got errors={errors!r}"
+        )
