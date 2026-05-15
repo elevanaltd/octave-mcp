@@ -205,6 +205,113 @@ def _build_literal_zone_line_set(content: str) -> set[int]:
     return inside_lines
 
 
+def _build_holographic_line_set(content: str) -> set[int]:
+    """Build a set of 1-based line numbers whose value is a holographic pattern.
+
+    Shape F lexical sanctuary (GH-420, debate thread
+    ``2026-05-14-octave-mcp-octavewrite-meta-gr-01krjzag``).
+
+    The lenient-parsing repair pass ``_auto_quote_section_refs_in_values``
+    must NOT mutate lines whose bracketed value is a holographic pattern
+    of the form::
+
+        KEY::["example"∧CONSTRAINT→§TARGET]
+
+    or its ASCII-arrow variant ``->§TARGET``. Quoting the trailing
+    ``§TARGET`` fragments the operator chain semantics and violates
+    PROD::I1::SYNTACTIC_FIDELITY and PROD::I3::MIRROR_CONSTRAINT.
+
+    Authority direction (per debate verdict, operators declared OPEN):
+    recognition defers to ``octave_mcp.core.holographic``'s existing
+    operator-boundary detection (``_find_constraint_start`` /
+    ``_find_target_start``). The repair pass is NOT permitted to maintain
+    a parallel operator catalogue — that would silently re-introduce the
+    same bug whenever a new operator joins the meta-grammar.
+
+    A line is considered holographic when, after splitting on the first
+    ``::``, the value portion (stripped of any trailing line-comment)
+    contains at least one bracket-enclosed value whose contents have a
+    parser-recognised constraint operator (``∧``) at top level OR a
+    parser-recognised target operator (``→§`` / ``->§``) at top level.
+
+    Args:
+        content: Raw OCTAVE content to scan.
+
+    Returns:
+        Set of 1-based line numbers protected by the lexical sanctuary.
+    """
+    # Lazy import to avoid a module-load cycle: core.holographic imports
+    # core.constraints which transitively reaches lexer-adjacent modules.
+    # mcp.write is loaded as part of the MCP tool surface, well after
+    # core.holographic, so a function-local import is safe and explicit.
+    from octave_mcp.core.holographic import _find_constraint_start, _find_target_start
+
+    protected: set[int] = set()
+
+    for line_num, raw_line in enumerate(content.split("\n"), start=1):
+        line = raw_line
+
+        # The value follows the first ``::``. Lines without ``::`` cannot
+        # carry a key::value holographic pattern in this position.
+        colon_idx = line.find("::")
+        if colon_idx == -1:
+            continue
+        value_part = line[colon_idx + 2 :]
+
+        # Walk the value portion looking for bracket-enclosed regions.
+        # ``_find_constraint_start`` / ``_find_target_start`` operate on
+        # the content *inside* the outer brackets, so we extract each
+        # ``[...]`` span and ask the parser whether it contains a
+        # top-level holographic operator. Any single matching span is
+        # sufficient to mark the line as protected.
+        depth = 0
+        in_quotes = False
+        span_start = -1
+        i = 0
+        length = len(value_part)
+        while i < length:
+            ch = value_part[i]
+            if ch == '"':
+                # Backslash-run parity (matches GH#361r2 convention used in
+                # ``_all_section_marks_quoted``): count the run of trailing
+                # backslashes immediately before this quote. Even count
+                # (including zero) means the quote is UNESCAPED and must
+                # toggle ``in_quotes``; odd count means the quote is
+                # escaped and must NOT toggle. A naive single-character
+                # lookback misclassifies ``\\"`` (two backslashes = escaped
+                # backslash pair, quote IS unescaped) as escaped, which
+                # leaves the parser walk stuck inside a string and lets
+                # operators in the bracketed value escape recognition
+                # (cubic-dev-ai P1 on PR #431).
+                backslash_count = 0
+                j = i - 1
+                while j >= 0 and value_part[j] == "\\":
+                    backslash_count += 1
+                    j -= 1
+                if backslash_count % 2 == 0:
+                    in_quotes = not in_quotes
+            elif not in_quotes:
+                if ch == "[":
+                    if depth == 0:
+                        span_start = i + 1
+                    depth += 1
+                elif ch == "]":
+                    depth -= 1
+                    if depth == 0 and span_start != -1:
+                        span = value_part[span_start:i]
+                        if _find_constraint_start(span) != -1 or _find_target_start(span) != -1:
+                            protected.add(line_num)
+                            break
+                        span_start = -1
+                elif ch == "/" and i + 1 < length and value_part[i + 1] == "/" and depth == 0:
+                    # OCTAVE line comment outside any bracket span: the
+                    # rest of the line is commentary, stop scanning.
+                    break
+            i += 1
+
+    return protected
+
+
 def _all_section_marks_quoted(line: str) -> bool:
     """Return True if every § on *line* appears inside a double-quoted string.
 
@@ -291,6 +398,12 @@ def _auto_quote_section_refs_in_values(content: str) -> tuple[str, list[dict[str
     """
     corrections: list[dict[str, Any]] = []
     literal_zone_lines = _build_literal_zone_line_set(content)
+    # Shape F sanctuary (GH-420): lines whose bracketed value is a
+    # holographic pattern (e.g. ``KEY::["x"∧REQ→§TARGET]``) must NOT be
+    # quoted. The recognition defers to ``core.holographic``; see
+    # ``_build_holographic_line_set`` for the authority chain.
+    holographic_lines = _build_holographic_line_set(content)
+    protected_lines = literal_zone_lines | holographic_lines
 
     lines = content.split("\n")
     result_lines: list[str] = []
@@ -298,8 +411,8 @@ def _auto_quote_section_refs_in_values(content: str) -> tuple[str, list[dict[str
     for line_num_0, line in enumerate(lines):
         line_num = line_num_0 + 1  # 1-based
 
-        # Skip lines inside literal zones
-        if line_num in literal_zone_lines:
+        # Skip lines inside literal zones or holographic sanctuaries
+        if line_num in protected_lines:
             result_lines.append(line)
             continue
 
@@ -420,13 +533,17 @@ def _detect_unquoted_section_in_values(content: str) -> list[dict[str, Any]]:
     warnings: list[dict[str, Any]] = []
     # GH#329: Build set of line numbers inside literal zones to skip
     literal_zone_lines = _build_literal_zone_line_set(content)
+    # GH-420 Shape F sanctuary: lines whose bracketed value is a holographic
+    # pattern are NOT advisory targets — the § is part of the operator chain.
+    holographic_lines = _build_holographic_line_set(content)
+    protected_lines = literal_zone_lines | holographic_lines
 
     for match in _UNQUOTED_SECTION_RE.finditer(content):
         # Calculate line number from match position
         line_num = content[: match.start()].count("\n") + 1
 
-        # GH#329: Skip matches inside literal zones
-        if line_num in literal_zone_lines:
+        # Skip matches inside literal zones or holographic sanctuaries
+        if line_num in protected_lines:
             continue
 
         # Extract the full line for context

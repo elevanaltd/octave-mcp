@@ -151,15 +151,17 @@ def _parse_list_example(list_str: str) -> list:
     if not inner:
         return []
 
-    # Split by comma, handling nested quotes
+    # Split by comma, handling nested quotes and escaped quote characters
+    # (GH-432: backslash-run parity, not naive toggle).
     items = []
     current = ""
     in_quotes = False
     depth = 0
 
-    for char in inner:
+    for idx, char in enumerate(inner):
         if char == '"' and depth == 0:
-            in_quotes = not in_quotes
+            if _quote_is_unescaped(inner, idx):
+                in_quotes = not in_quotes
             current += char
         elif char == "[":
             depth += 1
@@ -181,10 +183,35 @@ def _parse_list_example(list_str: str) -> list:
     return items
 
 
+def _quote_is_unescaped(content: str, quote_index: int) -> bool:
+    """Return True if the ``"`` at ``quote_index`` is not escaped.
+
+    A ``"`` is considered escaped when the run of consecutive backslashes
+    immediately preceding it has ODD length. An even-length run
+    (including zero) means the backslashes pair up as escaped backslashes
+    and the quote itself stands unescaped. This matches the GH#361r2
+    convention already used by ``mcp/write.py::_all_section_marks_quoted``
+    and is the parity contract pinned by GH-432.
+
+    A naive single-character lookback (``content[i - 1] != "\\"``)
+    misclassifies ``\\"`` as escaped — the case CE codex demonstrated on
+    PR #431 with target-only holographic patterns. A bare unconditional
+    toggle ignores escapes entirely. Both prior implementations are
+    incorrect for OCTAVE string semantics.
+    """
+    backslash_count = 0
+    j = quote_index - 1
+    while j >= 0 and content[j] == "\\":
+        backslash_count += 1
+        j -= 1
+    return backslash_count % 2 == 0
+
+
 def _find_constraint_start(content: str) -> int:
     """Find the position of the first ∧ that starts the constraint chain.
 
-    Handles nested brackets properly to avoid matching ∧ inside list examples.
+    Handles nested brackets and escaped quotes properly to avoid matching
+    ∧ inside list examples or quoted strings (GH-432 parity contract).
 
     Args:
         content: Pattern content without outer brackets
@@ -197,7 +224,8 @@ def _find_constraint_start(content: str) -> int:
 
     for i, char in enumerate(content):
         if char == '"':
-            in_quotes = not in_quotes
+            if _quote_is_unescaped(content, i):
+                in_quotes = not in_quotes
         elif not in_quotes:
             if char == "[":
                 depth += 1
@@ -213,7 +241,11 @@ def _find_target_start(content: str) -> int:
     """Find the position of →§ that starts the target.
 
     Handles nested brackets and quoted strings properly to avoid matching
-    →§ inside example values (Issue #93).
+    →§ inside example values (Issue #93). Escape-aware quote handling
+    uses backslash-run parity (GH-432) rather than a single-character
+    lookback, so ``"a\\"→§T`` (escaped backslash pair followed by an
+    unescaped close-quote then a top-level target arrow) is parsed
+    correctly.
 
     Args:
         content: Pattern content
@@ -225,8 +257,9 @@ def _find_target_start(content: str) -> int:
     in_quotes = False
 
     for i, char in enumerate(content):
-        if char == '"' and (i == 0 or content[i - 1] != "\\"):
-            in_quotes = not in_quotes
+        if char == '"':
+            if _quote_is_unescaped(content, i):
+                in_quotes = not in_quotes
         elif not in_quotes:
             if char == "[":
                 depth += 1
