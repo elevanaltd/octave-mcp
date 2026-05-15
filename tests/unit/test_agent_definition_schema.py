@@ -36,18 +36,9 @@ import pytest
 
 from octave_mcp.schemas.loader import load_schema_by_name
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _AGENTS_DIR = _REPO_ROOT / ".hestai-sys" / "library" / "agents"
-_SCHEMA_PATH = (
-    _REPO_ROOT
-    / "src"
-    / "octave_mcp"
-    / "resources"
-    / "specs"
-    / "schemas"
-    / "agent_definition.oct.md"
-)
+_SCHEMA_PATH = _REPO_ROOT / "src" / "octave_mcp" / "resources" / "specs" / "schemas" / "agent_definition.oct.md"
 
 
 def _agent_files() -> list[Path]:
@@ -97,9 +88,7 @@ class TestAgentDefinitionSchemaLoading:
             if field.pattern is not None and field.pattern.constraints:
                 assert field.is_required, f"{name} should be REQ via pattern"
             else:
-                assert "REQ" in (field.raw_value or ""), (
-                    f"{name} should carry REQ in raw value: {field.raw_value!r}"
-                )
+                assert "REQ" in (field.raw_value or ""), f"{name} should carry REQ in raw value: {field.raw_value!r}"
 
     def test_schema_has_version(self) -> None:
         """Schema should declare an explicit version."""
@@ -145,9 +134,7 @@ META:
         )
         assert result["valid"] is False
         error_messages = [e.get("message", "") for e in result.get("validation_errors", [])]
-        assert any("ROLE" in msg for msg in error_messages), (
-            f"Error should mention ROLE. Got: {error_messages}"
-        )
+        assert any("ROLE" in msg for msg in error_messages), f"Error should mention ROLE. Got: {error_messages}"
 
     def test_missing_authority_mandate_is_invalid(self) -> None:
         """An agent missing AUTHORITY_MANDATE must fail validation."""
@@ -177,9 +164,9 @@ META:
         )
         assert result["valid"] is False
         error_messages = [e.get("message", "") for e in result.get("validation_errors", [])]
-        assert any("AUTHORITY_MANDATE" in msg for msg in error_messages), (
-            f"Error should mention AUTHORITY_MANDATE. Got: {error_messages}"
-        )
+        assert any(
+            "AUTHORITY_MANDATE" in msg for msg in error_messages
+        ), f"Error should mention AUTHORITY_MANDATE. Got: {error_messages}"
 
     def test_missing_mission_is_invalid(self) -> None:
         """An agent missing MISSION must fail validation."""
@@ -203,9 +190,9 @@ META:
     MUST_USE::[]
 ===END==="""
         result = _validate_content(content)
-        assert result["validation_status"] == "INVALID", (
-            f"Missing MISSION should be INVALID. Got: {result.get('validation_status')}"
-        )
+        assert (
+            result["validation_status"] == "INVALID"
+        ), f"Missing MISSION should be INVALID. Got: {result.get('validation_status')}"
         assert result["valid"] is False
 
 
@@ -295,9 +282,7 @@ class TestExistingAgentFilesValidate:
         "agent_filename",
         sorted(KNOWN_AUTHORITY_MANDATE_GAPS),
     )
-    def test_known_gap_agent_files_surface_authority_mandate_diagnostic(
-        self, agent_filename: str
-    ) -> None:
+    def test_known_gap_agent_files_surface_authority_mandate_diagnostic(self, agent_filename: str) -> None:
         """Known-gap agents surface the AUTHORITY_MANDATE E003 diagnostic.
 
         Pins the schema sovereignty signal (PROD::I5): the schema is doing
@@ -319,11 +304,8 @@ class TestExistingAgentFilesValidate:
         )
         errors = result.get("validation_errors", [])
         e003_authority_errors = [
-            e
-            for e in errors
-            if e.get("code") == "E003" and "AUTHORITY_MANDATE" in e.get("message", "")
+            e for e in errors if e.get("code") == "E003" and "AUTHORITY_MANDATE" in e.get("message", "")
         ]
         assert e003_authority_errors, (
-            f"{agent_filename}: expected E003/AUTHORITY_MANDATE diagnostic, "
-            f"got errors={errors!r}"
+            f"{agent_filename}: expected E003/AUTHORITY_MANDATE diagnostic, " f"got errors={errors!r}"
         )
