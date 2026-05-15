@@ -141,16 +141,19 @@ class TestDecisionLogSchemaLoading:
         )
 
     def test_decision_log_schema_has_version_and_loaded_schema_governs_validation(self) -> None:
-        """Schema declares version "1.0" AND the loaded definition is the same one driving validation.
+        """Schema declares version "1.1" AND the loaded definition is the same one driving validation.
 
         TMG concern 2: pairs the version assertion with a validation call that
         relies on the loaded schema's field set. The validation case (missing
         TOKEN) only succeeds in producing E003 if the loaded schema is actually
         what the validator consumes — proving load-vs-validate identity.
+
+        Version bumped from 1.0 to 1.1 by the SR G2 follow-up commit that
+        added the optional DATE field to the FIELDS block.
         """
         schema = load_schema_by_name("DECISION_LOG")
         assert schema is not None
-        assert schema.version == "1.0"
+        assert schema.version == "1.1"
 
         result = _validate_content(
             "===DECISIONS_OCTAVE_v20260417===\n"
@@ -316,6 +319,54 @@ class TestDecisionLogFixturesValidate:
             f"Errors: {result.get('validation_errors', [])}"
         )
         assert result["valid"] is True
+
+    def test_decision_log_with_date_field_validates_without_warnings(self) -> None:
+        """A DECISION_LOG payload carrying the optional DATE field MUST validate clean.
+
+        Per SR (standards-reviewer / goose) G2 advisory on PR #438: DATE is
+        widely used in the external DECISIONS.oct.md exemplar at
+        ``/Volumes/HestAI-Projects/elevana-studio/.hestai/decisions/DECISIONS.oct.md``
+        (e.g., lines 477, 589, 999, 1030, 1084 carry ``DATE::"YYYY-MM-DD"``).
+        Before this commit the field was missing from the schema's FIELDS
+        block; documents using DATE would surface a W001 ``Unknown field``
+        warning under the ``UNKNOWN_FIELDS::WARN`` policy.
+
+        This test pins three guarantees:
+        1. ``validation_status`` is ``VALIDATED`` (DATE is accepted as OPT).
+        2. No validation_errors are emitted.
+        3. No W001 ``Unknown field`` warning is emitted for the DATE field —
+           proving DATE is now formally part of the schema's accepted field
+           set rather than tolerated by policy permissiveness.
+
+        Fixture: ``tests/fixtures/decision_log/architectural_with_date.oct.md``.
+        """
+        fixture = _FIXTURES_DIR / "architectural_with_date.oct.md"
+        assert fixture.exists(), f"Fixture missing: {fixture}"
+
+        result = _validate_content(fixture.read_text(encoding="utf-8"))
+
+        assert result["validation_status"] == "VALIDATED", (
+            f"DATE-bearing fixture should validate. "
+            f"Got: {result.get('validation_status')}. "
+            f"Errors: {result.get('validation_errors', [])}"
+        )
+        assert result["valid"] is True
+        assert not result.get("validation_errors"), (
+            f"DATE-bearing fixture should produce no validation errors. " f"Got: {result.get('validation_errors')}"
+        )
+
+        # No W001 "Unknown field" warning for DATE.
+        warnings = result.get("warnings") or []
+        date_unknown_warnings = [
+            w
+            for w in warnings
+            if w.get("code") == "W001" and "DATE" in (w.get("field") or "") + (w.get("message") or "")
+        ]
+        assert not date_unknown_warnings, (
+            f"DATE-bearing fixture should NOT emit a W001 'Unknown field' warning "
+            f"for DATE — the field must be formally declared in the schema. "
+            f"Got: {date_unknown_warnings}"
+        )
 
 
 # ---------------------------------------------------------------------------

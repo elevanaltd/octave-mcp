@@ -1,7 +1,7 @@
 ===DECISION_LOG===
 META:
   TYPE::SCHEMA
-  VERSION::"1.0"
+  VERSION::"1.1"
   STATUS::ACTIVE
   PURPOSE::"Schema for DECISIONS_OCTAVE_v20260417 decision-log documents. Codifies the self-declared per-entry schema (TOKEN/TIER/STATUS/DECISION/BECAUSE plus tier-conditional fields) into a validator-recognised contract. Ratified per HO_DECISION_GOVERNANCE_GRAVITY_TIERED_20260428 extending HestAI-MCP ADR-0060."
 POLICY:
@@ -14,6 +14,7 @@ FIELDS:
   STATUS::["BINDING"∧REQ→§SELF]
   DECISION::["The decision essence"∧REQ→§SELF]
   BECAUSE::[["rationale"]∧REQ→§SELF]
+  DATE::["2026-04-29"∧OPT→§SELF]
   ISSUE_REF::["#751"∧OPT→§SELF]
   ENFORCEMENT_REF::["src/path/to/enforcer.py"∧OPT→§SELF]
   CANONICAL::["DECISIONS-ARCHIVE.oct.md#TOKEN"∧OPT→§SELF]
@@ -55,6 +56,7 @@ USAGE_NOTES::[
   "STATUS: Lifecycle state. Common values: BINDING, ACTIVE, SUPERSEDED_BY_<TOKEN>, DEPRECATED, ARCHIVED. Enforced by document convention, not by enum at schema level.",
   "DECISION: One-line essence of the decision. Required except for stub-pointer entries (see SCHEMA_REQUIRED_EXCEPTIONS).",
   "BECAUSE: Rationale list. Required except for stub-pointer entries.",
+  "DATE: ISO8601 date string (YYYY-MM-DD) recording when the decision was ratified. Widely used in the elevana-studio reference document; declared OPT for validator ergonomics so decision entries carrying DATE do not surface UNKNOWN_FIELDS warnings. Per SR G2 advisory on PR #438.",
   "ISSUE_REF: GitHub issue reference. REQUIRED when TIER::ARCHITECTURAL; enforcement of tier-conditional requirement is via document convention plus CI octave_validate, not via schema-level conditional constraints.",
   "ENFORCEMENT_REF: Path to commit or file implementing the mechanism. REQUIRED when TIER::MICRO.",
   "SUPERSEDED_BY / SUPERSEDES / EXTENDS / AMENDS: Decision-relationship references. Targets are TOKEN values of other entries.",
