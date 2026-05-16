@@ -1,0 +1,13 @@
+===DECISIONS_OCTAVE_v20260417===
+META:
+  TYPE::DECISION_LOG
+  VERSION::"1.0"
+TEST_ARCHITECTURAL_WITH_DATE:
+  TOKEN::HO-TEST-ARCHITECTURAL-WITH-DATE-20260515
+  TIER::ARCHITECTURAL
+  STATUS::BINDING
+  DECISION::minimal_architectural_record_carrying_optional_DATE_field
+  BECAUSE::[date_field_widely_used_in_external_exemplar_per_SR_G2_advisory]
+  DATE::"2026-05-15"
+  ISSUE_REF::"#999"
+===END===

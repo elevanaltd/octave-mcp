@@ -1,0 +1,12 @@
+===DECISIONS_OCTAVE_v20260417===
+META:
+  TYPE::DECISION_LOG
+  VERSION::"1.0"
+TEST_ARCHITECTURAL:
+  TOKEN::HO-TEST-ARCHITECTURAL-20260515
+  TIER::ARCHITECTURAL
+  STATUS::BINDING
+  DECISION::minimal_architectural_decision_record_for_schema_validation
+  BECAUSE::[test_rationale_architectural_tier_requires_ISSUE_REF]
+  ISSUE_REF::"#999"
+===END===
