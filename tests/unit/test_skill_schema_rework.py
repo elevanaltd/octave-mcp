@@ -492,11 +492,46 @@ class TestItem5SectionContextThreading:
         for needed in ("NEVER", "MUST", "GATE"):
             assert needed in joined, f"Warning should name missing field {needed!r}; got {joined!r}"
 
-        # Defensive: the OUTER bucket should also exist (Block-key registration)
-        # but is not required to fire any conditional — it's just present.
-        # The TARGET assignment lives in ANCHOR_KERNEL's bucket, not OUTER's,
-        # because the walker threads ANCHOR_KERNEL as the enclosing_key on
-        # its inner recursion.
+        # CE re-review CONDITIONAL strengthening: the three substring checks
+        # above survive a four-field "missing" list that a broken-enclosing_key
+        # walker would produce when TARGET is mis-attributed to the OUTER
+        # bucket instead of being threaded into ANCHOR_KERNEL. Parse the
+        # "missing required field(s): X, Y, Z." portion of the warning
+        # message and assert TARGET is NOT in that list — TARGET IS present
+        # in the document under the nested ANCHOR_KERNEL block, so the only
+        # way it can land in the missing list is if the walker dropped the
+        # ANCHOR_KERNEL enclosing context on its inner recursion. Note: the
+        # full warning string also recites the declared set ("declares the
+        # full set as TARGET, NEVER, MUST, GATE"), so a naive
+        # ``"TARGET" not in joined`` would always fail — we must isolate the
+        # missing-list segment.
+        import re
+
+        missing_lists: list[str] = []
+        for e in incomplete:
+            match = re.search(r"missing required field\(s\):\s*([^.]+)\.", e.message)
+            if match:
+                missing_lists.append(match.group(1).strip())
+        assert missing_lists, (
+            f"Expected at least one warning message containing a "
+            f"'missing required field(s): ...' segment. Got: "
+            f"{[e.message for e in incomplete]!r}"
+        )
+        for missing_csv in missing_lists:
+            missing_fields = {f.strip() for f in missing_csv.split(",")}
+            assert "TARGET" not in missing_fields, (
+                f"Warning's missing-field list must NOT name TARGET — TARGET IS "
+                f"present in the document under the nested ANCHOR_KERNEL block. "
+                f"If TARGET appears in the missing list, the walker dropped the "
+                f"ANCHOR_KERNEL enclosing context on its inner recursion and "
+                f"mis-attributed TARGET to the OUTER bucket. Missing list: "
+                f"{missing_csv!r}"
+            )
+            assert missing_fields == {"NEVER", "MUST", "GATE"}, (
+                f"Missing-field list should be exactly {{NEVER, MUST, GATE}}; "
+                f"got {missing_fields!r}. A 4-field missing list (including "
+                f"TARGET) indicates broken enclosing_key threading."
+            )
 
     def test_nested_block_anchor_kernel_complete_does_not_warn(self) -> None:
         from octave_mcp.core.parser import parse as _parse
