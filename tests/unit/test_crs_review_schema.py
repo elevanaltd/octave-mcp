@@ -37,7 +37,7 @@ class TestCrsReviewSchemaLoading:
         assert isinstance(schema, SchemaDefinition)
 
     def test_schema_name_is_crs_review(self):
-        """Loaded schema should have name CRS_REVIEW_SCHEMA or envelope name."""
+        """Loaded schema should have canonical envelope name CRS_REVIEW (GH-426 migration)."""
         schema = load_schema_by_name("CRS_REVIEW")
         assert schema is not None
         # The envelope name in the .oct.md file
@@ -173,9 +173,9 @@ META:
   P5::0
 
 §3::FINDINGS
-  [tier::P0,confidence::CERTAIN,file::"Utils/Diagnostics.swift",line::"13",category::security,issue::"Command injection via unsanitized host parameter",impact::"Full server compromise",fix::"Use Process with separate arguments array"]
-  [tier::P1,confidence::HIGH,file::"Data/DatabaseManager.swift",line::"24-41",category::security,issue::"SQL injection via string interpolation",impact::"Data exfiltration possible",fix::"Use parameterized queries"]
-  [tier::P2,confidence::MODERATE,file::"Services/TradingService.swift",line::"27-58",category::reliability,issue::"Race condition on account balances",impact::"Incorrect balance calculations under concurrency",fix::"Add actor isolation or mutex"]
+  [SEVERITY::P0,CONFIDENCE::CERTAIN,FILE::"Utils/Diagnostics.swift",LINES::"13",TITLE::"Command injection",ISSUE::"Command injection via unsanitized host parameter",IMPACT::"Full server compromise",REQUIRED_FIX::"Use Process with separate arguments array"]
+  [SEVERITY::P1,CONFIDENCE::HIGH,FILE::"Data/DatabaseManager.swift",LINES::"24-41",TITLE::"SQL injection",ISSUE::"SQL injection via string interpolation",IMPACT::"Data exfiltration possible",REQUIRED_FIX::"Use parameterized queries"]
+  [SEVERITY::P2,CONFIDENCE::MODERATE,FILE::"Services/TradingService.swift",LINES::"27-58",TITLE::"Race condition",ISSUE::"Race condition on account balances",IMPACT::"Incorrect balance calculations under concurrency",REQUIRED_FIX::"Add actor isolation or mutex"]
 
 §4::SUMMARY
   ASSESSMENT::"System exhibits critical security and concurrency failures"
@@ -345,12 +345,12 @@ META:
   P5::1
 
 §3::FINDINGS
-  [tier::P0,confidence::CERTAIN,file::"auth.py",line::"10",category::security,issue::"Hardcoded secret",impact::"Credential exposure",fix::"Use environment variable"]
-  [tier::P1,confidence::HIGH,file::"db.py",line::"20",category::correctness,issue::"Null dereference",impact::"Runtime crash",fix::"Add null check"]
-  [tier::P2,confidence::HIGH,file::"api.py",line::"30-35",category::reliability,issue::"Unhandled exception",impact::"500 error in production",fix::"Add try-except block"]
-  [tier::P3,confidence::MODERATE,file::"models.py",line::"40",category::architecture,issue::"God object pattern",impact::"Maintenance burden",fix::"Extract responsibilities"]
-  [tier::P4,confidence::MODERATE,file::"utils.py",line::"50",category::performance,issue::"N+1 query",impact::"Slow page load",fix::"Use eager loading"]
-  [tier::P5,confidence::MODERATE,file::"views.py",line::"60",category::style,issue::"Inconsistent naming",impact::"Readability",fix::"Follow naming convention"]
+  [SEVERITY::P0,CONFIDENCE::CERTAIN,FILE::"auth.py",LINES::"10",TITLE::"Hardcoded secret",ISSUE::"Hardcoded secret",IMPACT::"Credential exposure",REQUIRED_FIX::"Use environment variable"]
+  [SEVERITY::P1,CONFIDENCE::HIGH,FILE::"db.py",LINES::"20",TITLE::"Null dereference",ISSUE::"Null dereference",IMPACT::"Runtime crash",REQUIRED_FIX::"Add null check"]
+  [SEVERITY::P2,CONFIDENCE::HIGH,FILE::"api.py",LINES::"30-35",TITLE::"Unhandled exception",ISSUE::"Unhandled exception",IMPACT::"500 error in production",REQUIRED_FIX::"Add try-except block"]
+  [SEVERITY::P3,CONFIDENCE::MODERATE,FILE::"models.py",LINES::"40",TITLE::"God object",ISSUE::"God object pattern",IMPACT::"Maintenance burden",REQUIRED_FIX::"Extract responsibilities"]
+  [SEVERITY::P4,CONFIDENCE::MODERATE,FILE::"utils.py",LINES::"50",TITLE::"N+1 query",ISSUE::"N+1 query",IMPACT::"Slow page load",REQUIRED_FIX::"Use eager loading"]
+  [SEVERITY::P5,CONFIDENCE::MODERATE,FILE::"views.py",LINES::"60",TITLE::"Naming",ISSUE::"Inconsistent naming",IMPACT::"Readability",REQUIRED_FIX::"Follow naming convention"]
 
 §4::SUMMARY
   ASSESSMENT::"Multiple issues across all severity tiers"
