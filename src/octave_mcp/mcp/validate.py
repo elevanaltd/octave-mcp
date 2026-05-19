@@ -282,10 +282,7 @@ def _validate_turn_schema(
                 errors.append(
                     ValidationError(
                         code="E_TURN_FIELD",
-                        message=(
-                            f"Turn '{turn_key}' is missing required TURN_SCHEMA "
-                            f"field '{req_name}' (GH-427)."
-                        ),
+                        message=(f"Turn '{turn_key}' is missing required TURN_SCHEMA " f"field '{req_name}' (GH-427)."),
                         field_path=f"{turn_path_prefix}.{req_name}",
                     )
                 )
@@ -298,9 +295,7 @@ def _validate_turn_schema(
                 continue
 
             value = turn_fields[fname]
-            result = fdef.pattern.constraints.evaluate(
-                value=value, path=f"{turn_path_prefix}.{fname}"
-            )
+            result = fdef.pattern.constraints.evaluate(value=value, path=f"{turn_path_prefix}.{fname}")
             if not result.valid:
                 for err in result.errors:
                     # Wrap constraint failures under the stable E_TURN_FIELD

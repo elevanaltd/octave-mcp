@@ -30,7 +30,6 @@ import pytest
 from octave_mcp.mcp.validate import ValidateTool
 from octave_mcp.schemas.loader import load_schema_by_name
 
-
 SCHEMA_PATH = (
     Path(__file__).parent.parent.parent
     / "src"
@@ -66,9 +65,7 @@ class TestTurnSchemaExtraction:
         )
         # Required turn fields per GH-427 acceptance criteria.
         for required_key in ("ROLE", "CONTENT", "TURN_INDEX"):
-            assert required_key in turn_schema, (
-                f"turn_schema must declare REQ field '{required_key}' (GH-427)."
-            )
+            assert required_key in turn_schema, f"turn_schema must declare REQ field '{required_key}' (GH-427)."
         # Optional fields preserved.
         assert "SPEAKER" in turn_schema, "turn_schema must declare OPT field 'SPEAKER' (GH-427)."
 
@@ -88,8 +85,7 @@ class TestTurnSchemaExtraction:
         raw = role_field.raw_value or ""
         for required_value in ("Wind", "Wall", "Door", "Synthesis", "Human", "Mediator"):
             assert required_value in raw, (
-                f"TURN_SCHEMA.ROLE enum must include '{required_value}' "
-                f"(GH-427 expanded enum); got raw={raw!r}"
+                f"TURN_SCHEMA.ROLE enum must include '{required_value}' " f"(GH-427 expanded enum); got raw={raw!r}"
             )
 
 
@@ -232,18 +228,14 @@ class TestTurnSchemaValidatorEnforcement:
         # E_TURN_FIELD is the GH-427 enforcement code for missing REQ turn fields.
         codes = {err.get("code") for err in validation_errors}
         assert "E_TURN_FIELD" in codes, (
-            f"Expected E_TURN_FIELD validation error for missing ROLE; "
-            f"got codes={codes!r}"
+            f"Expected E_TURN_FIELD validation error for missing ROLE; " f"got codes={codes!r}"
         )
         # Field path must be specific enough to identify the offending turn.
         offending = [
-            err
-            for err in validation_errors
-            if err.get("code") == "E_TURN_FIELD" and "ROLE" in (err.get("field") or "")
+            err for err in validation_errors if err.get("code") == "E_TURN_FIELD" and "ROLE" in (err.get("field") or "")
         ]
         assert offending, (
-            "Missing-ROLE error must reference the ROLE field path; "
-            f"got validation_errors={validation_errors!r}"
+            "Missing-ROLE error must reference the ROLE field path; " f"got validation_errors={validation_errors!r}"
         )
 
     def test_duplicate_turn_index_is_rejected(self) -> None:
@@ -256,8 +248,7 @@ class TestTurnSchemaValidatorEnforcement:
         )
         codes = {err.get("code") for err in result.get("validation_errors", [])}
         assert "E_TURN_INDEX" in codes, (
-            f"Expected E_TURN_INDEX validation error for duplicate TURN_INDEX; "
-            f"got codes={codes!r}"
+            f"Expected E_TURN_INDEX validation error for duplicate TURN_INDEX; " f"got codes={codes!r}"
         )
 
     def test_invalid_role_enum_is_rejected(self) -> None:
@@ -271,8 +262,7 @@ class TestTurnSchemaValidatorEnforcement:
         codes = {err.get("code") for err in result.get("validation_errors", [])}
         # E_TURN_FIELD wraps per-turn constraint violations including enum.
         assert "E_TURN_FIELD" in codes, (
-            f"Expected E_TURN_FIELD validation error for invalid ROLE enum; "
-            f"got codes={codes!r}"
+            f"Expected E_TURN_FIELD validation error for invalid ROLE enum; " f"got codes={codes!r}"
         )
 
 
