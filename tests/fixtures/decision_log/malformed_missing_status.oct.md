@@ -1,0 +1,11 @@
+===DECISIONS_OCTAVE_v20260417===
+META:
+  TYPE::DECISION_LOG
+  VERSION::"1.0"
+MALFORMED_DECISION:
+  TOKEN::HO-MALFORMED-MISSING-STATUS-20260515
+  TIER::ARCHITECTURAL
+  DECISION::malformed_record_missing_STATUS_should_reject
+  BECAUSE::[test_REQ_constraint_enforcement_on_missing_STATUS]
+  ISSUE_REF::"#999"
+===END===

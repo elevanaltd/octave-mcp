@@ -1,0 +1,11 @@
+===DECISIONS_OCTAVE_v20260417===
+META:
+  TYPE::DECISION_LOG
+  VERSION::"1.0"
+MALFORMED_DECISION:
+  TIER::ARCHITECTURAL
+  STATUS::BINDING
+  DECISION::malformed_record_missing_TOKEN_field_should_reject
+  BECAUSE::[test_REQ_constraint_enforcement_on_missing_required_field]
+  ISSUE_REF::"#999"
+===END===

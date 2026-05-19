@@ -1,0 +1,11 @@
+===DECISIONS_OCTAVE_v20260417===
+META:
+  TYPE::DECISION_LOG
+  VERSION::"1.0"
+TEST_CONVENTION:
+  TOKEN::HO-TEST-CONVENTION-20260515
+  TIER::CONVENTION
+  STATUS::ACTIVE
+  DECISION::minimal_convention_record_no_issue_ref_required
+  BECAUSE::[convention_tier_is_inline_only_per_schema_tier_definitions]
+===END===
