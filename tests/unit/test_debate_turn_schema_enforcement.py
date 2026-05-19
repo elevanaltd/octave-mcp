@@ -153,7 +153,7 @@ PARTICIPANTS::[Wind, Wall, Door]
 
 TURNS:
   T1:
-    CONTENT::No role declared — should be rejected.
+    CONTENT::No role declared, should be rejected.
     TURN_INDEX::1
   T2:
     ROLE::Wall
