@@ -169,20 +169,41 @@ def load_schema_by_name(schema_name: str) -> SchemaDefinition | None:
 
 
 def load_builtin_schemas() -> dict[str, SchemaDefinition]:
-    """Load all builtin schemas from schemas/builtin/ directory.
+    """Load all builtin schemas for discovery (e.g. grammar resource listing).
+
+    Scans BOTH the historical ``schemas/builtin/`` directory AND the
+    canonical ``resources/specs/schemas/`` directory (GH-428: SKILL and
+    siblings migrated here per the agent_definition / decision_log
+    precedent). Earlier entries win on name collision — the builtin
+    directory remains authoritative for legacy schemas (META, CRS_REVIEW,
+    TEST_HOLOGRAPHIC), and the resources path adds the newer canonical
+    schemas (SKILL, AGENT_DEFINITION, DECISION_LOG, COGNITION_DEFINITION,
+    DEBATE_TRANSCRIPT).
 
     Returns:
-        Dictionary of schema name -> SchemaDefinition
+        Dictionary of schema name -> SchemaDefinition.
     """
     schemas: dict[str, SchemaDefinition] = {}
 
-    # Load from builtin directory
+    # Load from historical builtin directory first (legacy precedence).
     builtin_dir = Path(__file__).parent / "builtin"
     if builtin_dir.exists():
         for schema_file in builtin_dir.glob("*.oct.md"):
             try:
                 schema = load_schema(schema_file)
-                schemas[schema.name] = schema
+                schemas.setdefault(schema.name, schema)
+            except Exception:
+                # Skip files that fail to parse
+                pass
+
+    # Then load from the canonical resources directory so consumers like
+    # the grammar resource listing surface the newer canonical schemas.
+    resources_dir = Path(__file__).parent.parent / "resources" / "specs" / "schemas"
+    if resources_dir.exists():
+        for schema_file in resources_dir.glob("*.oct.md"):
+            try:
+                schema = load_schema(schema_file)
+                schemas.setdefault(schema.name, schema)
             except Exception:
                 # Skip files that fail to parse
                 pass

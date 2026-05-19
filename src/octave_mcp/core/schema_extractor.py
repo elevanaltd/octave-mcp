@@ -189,11 +189,21 @@ class PolicyDefinition:
         version: Schema version from POLICY block
         unknown_fields: How to handle unknown fields (REJECT|IGNORE|WARN)
         targets: List of valid extraction targets (without section markers)
+        required_section_ids: Section ids (e.g. "1", "2b") whose presence
+            the validator MUST surface (GH-428). Absence emits
+            W_MISSING_REQUIRED_SECTION. Empty list disables the check.
+        section_conditional_required: Map of section key -> list of field
+            names that MUST appear inside that section IF the section is
+            present in the document (GH-428). The check is conditional:
+            documents without the section are unaffected. Missing field
+            members emit W_INCOMPLETE_SECTION_FIELDS naming the gaps.
     """
 
     version: str = "1.0"
     unknown_fields: str = "REJECT"
     targets: list[str] = field(default_factory=list)
+    required_section_ids: list[str] = field(default_factory=list)
+    section_conditional_required: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -289,6 +299,14 @@ def _extract_policy(sections: list[Any]) -> tuple[PolicyDefinition, str | None]:
                         if target_value.startswith("§"):
                             target_value = target_value[1:]
                         default_target = target_value
+                    elif child.key == "REQUIRED_SECTION_IDS":
+                        # GH-428: Section presence requirement (e.g., ["1"]).
+                        policy.required_section_ids = _parse_string_list(child.value)
+                elif isinstance(child, Block) and child.key == "SECTION_CONDITIONAL_REQUIRED":
+                    # GH-428: Section-conditional field requirement.
+                    # SECTION_CONDITIONAL_REQUIRED:
+                    #   ANCHOR_KERNEL::["TARGET","NEVER","MUST","GATE"]
+                    policy.section_conditional_required = _parse_conditional_required(child)
 
     return policy, default_target
 
@@ -320,6 +338,55 @@ def _parse_targets(value: Any) -> list[str]:
         targets.append(target_str)
 
     return targets
+
+
+def _parse_string_list(value: Any) -> list[str]:
+    """Parse a list-shaped Assignment value into a list of plain strings.
+
+    Used by GH-428 POLICY.REQUIRED_SECTION_IDS extraction. Section ids in
+    OCTAVE source are stored as strings ("1", "2b"); numeric ids may
+    arrive as ints from the parser, so we coerce defensively. Non-list
+    values yield an empty list rather than raising — lenient parsing
+    philosophy (PROD::I5: SCHEMA_SOVEREIGNTY surfaces malformed schemas
+    via missing-fields warnings downstream, not extractor exceptions).
+    """
+    if hasattr(value, "items"):
+        items = value.items
+    elif isinstance(value, list):
+        items = value
+    else:
+        return []
+
+    result: list[str] = []
+    for item in items:
+        if item is None:
+            continue
+        s = str(item).strip().strip('"').strip("'")
+        if s:
+            result.append(s)
+    return result
+
+
+def _parse_conditional_required(block: Any) -> dict[str, list[str]]:
+    """Parse a SECTION_CONDITIONAL_REQUIRED block into a mapping.
+
+    Source shape (Block value):
+        SECTION_CONDITIONAL_REQUIRED:
+          ANCHOR_KERNEL::["TARGET","NEVER","MUST","GATE"]
+          OTHER_SECTION::["FIELD_A","FIELD_B"]
+
+    Each Assignment child maps a section key (the key as it appears in
+    the document, without the §N:: prefix — e.g. ``ANCHOR_KERNEL``) to a
+    list of field names that must be present inside that section IF the
+    section is present (GH-428).
+    """
+    result: dict[str, list[str]] = {}
+    for child in getattr(block, "children", []):
+        if isinstance(child, Assignment):
+            fields = _parse_string_list(child.value)
+            if fields:
+                result[child.key] = fields
+    return result
 
 
 def _extract_fields(sections: list[Any]) -> tuple[dict[str, FieldDefinition], list[SchemaExtractionWarning]]:

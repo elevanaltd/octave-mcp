@@ -113,6 +113,19 @@ def _build_deep_section_schemas(
                 _walk(children)
 
     _walk(doc.sections)
+
+    # GH-428: Policy-driven section-body coverage warnings
+    # (W_MISSING_REQUIRED_SECTION, W_INCOMPLETE_SECTION_FIELDS) read
+    # POLICY off the schema in ``section_schemas``. If the document has
+    # no sections matching schema fields, the dict above can be empty —
+    # leaving the validator with nothing to read POLICY from. Register
+    # the full schema under a sentinel key so policy-driven walks always
+    # discover it, regardless of section presence. The sentinel is
+    # distinct from any real Section key (no §-section is named
+    # ``__schema__``) so per-section validation is not affected.
+    if schema_definition.policy.required_section_ids or schema_definition.policy.section_conditional_required:
+        schemas.setdefault("__schema__", schema_definition)
+
     return schemas
 
 
@@ -147,9 +160,15 @@ def _check_required_field_coverage(
 
     errors: list[ValidationError] = []
 
-    # Collect all fields covered across all section schemas
+    # Collect all fields covered across all section schemas. The
+    # ``__schema__`` sentinel (GH-428) carries the full schema for
+    # policy-driven walks and would otherwise mark every field as covered;
+    # skip it so legitimate "missing required field" errors are still
+    # surfaced for §-section-less documents.
     covered_fields: set[str] = set()
-    for section_schema in section_schemas.values():
+    for section_key, section_schema in section_schemas.items():
+        if section_key == "__schema__":
+            continue
         covered_fields.update(section_schema.fields.keys())
 
     # GH#344: Fields present in doc.meta are also covered.

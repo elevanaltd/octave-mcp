@@ -193,6 +193,20 @@ class Validator:
         # inside §1::COGNITIVE_IDENTITY) are also validated against section_schemas.
         self._validate_sections_recursive(doc.sections, strict, section_schemas)
 
+        # GH-428: §-section body coverage warnings.
+        # Run once per document against any schema in section_schemas that
+        # declares POLICY.REQUIRED_SECTION_IDS or
+        # POLICY.SECTION_CONDITIONAL_REQUIRED. The policy lives on the full
+        # SchemaDefinition (and is preserved through ``dataclasses.replace``
+        # in ``_build_deep_section_schemas``), so the same emit-once
+        # contract holds for both envelope and document-type schemas.
+        # PROD::I4 (TRANSFORM_AUDITABILITY: stable warning codes
+        # W_MISSING_REQUIRED_SECTION, W_INCOMPLETE_SECTION_FIELDS).
+        # PROD::I5 (SCHEMA_SOVEREIGNTY: surfaces what the Zone 2 frontmatter
+        # check surfaces for #244, but for Zone 1 §-section content).
+        if section_schemas is not None:
+            self._validate_section_body_coverage(doc, section_schemas)
+
         # Issue #244: Validate Zone 2 (YAML frontmatter) when schema defines frontmatter
         # This is opt-in: only schemas with frontmatter defs trigger validation.
         # I1: Read-only inspection, never alters Zone 2 content.
@@ -505,6 +519,140 @@ class Validator:
                 self._check_duplicate_semantic_targets(node.children)
             elif isinstance(node, Section):
                 self._check_duplicate_semantic_targets(node.children)
+
+    def _validate_section_body_coverage(
+        self,
+        doc: Document,
+        section_schemas: dict[str, SchemaDefinition],
+    ) -> None:
+        """Emit W_MISSING_REQUIRED_SECTION / W_INCOMPLETE_SECTION_FIELDS (GH-428).
+
+        Two complementary section-body checks driven entirely by POLICY:
+
+        1. ``REQUIRED_SECTION_IDS``: For each id (e.g. ``"1"``) declared in
+           any schema's POLICY, surface ``W_MISSING_REQUIRED_SECTION`` when
+           no top-level :class:`Section` in ``doc.sections`` carries that
+           ``section_id``. The id is a string to support both plain numbers
+           and suffix forms (e.g. ``"2b"``); see
+           :class:`octave_mcp.core.grammar.cst.Section.section_id`.
+
+        2. ``SECTION_CONDITIONAL_REQUIRED``: For each ``(section_key,
+           required_fields)`` entry, IF a section/block with matching key
+           is present in the document, ensure every required field appears
+           as an Assignment among its direct children. Missing members
+           surface ``W_INCOMPLETE_SECTION_FIELDS`` naming the gap. The
+           check is conditional — documents without the section are
+           unaffected (the policy expresses *coverage when present*, not
+           *presence requirement*).
+
+        Emit-once contract: each policy aggregate is unioned across all
+        section_schemas before walking, so duplicated schemas (envelope
+        plus per-section copies from ``_build_deep_section_schemas``) do
+        not produce duplicate warnings.
+
+        PROD::I4 stable warning codes; PROD::I5 schema-sovereignty surface.
+        """
+        # Aggregate policy fields across all schemas in the map. Duplicates
+        # collapse via set / dict semantics so we emit once.
+        required_ids: set[str] = set()
+        conditional: dict[str, list[str]] = {}
+        for schema_def in section_schemas.values():
+            policy = getattr(schema_def, "policy", None)
+            if policy is None:
+                continue
+            for sid in getattr(policy, "required_section_ids", []) or []:
+                required_ids.add(str(sid))
+            for section_key, fields in (getattr(policy, "section_conditional_required", {}) or {}).items():
+                # Later entries overwrite earlier — schemas are not expected
+                # to declare conflicting field sets for the same section key
+                # within a single validation pass.
+                if fields:
+                    conditional[section_key] = list(fields)
+
+        if not required_ids and not conditional:
+            return
+
+        # Collect the section_ids present at the document top level. We do
+        # not recurse: REQUIRED_SECTION_IDS expresses envelope-level
+        # presence (e.g. "§1 must exist"), not nested presence.
+        present_section_ids: set[str] = set()
+
+        # Collect, for each section_key, the set of Assignment keys that
+        # belong to that section. The OCTAVE parser models §-sections as
+        # flat siblings in ``doc.sections``: a ``Section`` node carries
+        # only its header (key + section_id), and the assignments that
+        # appear *after* it (until the next ``Section``) are its body.
+        # The same flat model applies inside any Block/Section ``children``
+        # list (we recurse for completeness, though the SKILL §5 pattern
+        # is exclusively top-level today).
+        section_field_keys: dict[str, set[str]] = {}
+
+        def _walk_flat(nodes: list[ASTNode]) -> None:
+            current_section_key: str | None = None
+            for node in nodes:
+                if isinstance(node, Section):
+                    current_section_key = node.key
+                    # First sight wins — duplicate §-headers within one
+                    # parent are pathological; later occurrences union
+                    # into the same bucket so a single Section "body"
+                    # collects every assignment authored under that key.
+                    section_field_keys.setdefault(current_section_key, set())
+                elif isinstance(node, Assignment) and current_section_key is not None:
+                    section_field_keys[current_section_key].add(node.key)
+                # Recurse into Block children so nested §-sections (rare
+                # but legal) are also discovered. Children of a Block do
+                # not belong to the enclosing Section, so we reset the
+                # current_section_key tracker for the nested walk.
+                if isinstance(node, Block) and hasattr(node, "children"):
+                    _walk_flat(node.children)
+                elif isinstance(node, Section) and hasattr(node, "children") and node.children:
+                    # Some parser shapes nest siblings; recurse to be safe
+                    # but keep current_section_key as the enclosing key so
+                    # nested Assignments attribute correctly.
+                    _walk_flat(node.children)
+
+        for node in doc.sections:
+            if isinstance(node, Section):
+                present_section_ids.add(str(node.section_id))
+
+        _walk_flat(doc.sections)
+
+        # REQUIRED_SECTION_IDS check.
+        for sid in sorted(required_ids):
+            if sid not in present_section_ids:
+                self.errors.append(
+                    ValidationError(
+                        code="W_MISSING_REQUIRED_SECTION",
+                        message=(
+                            f"Required §-section id '{sid}' is missing from the document body. "
+                            f"The schema declares POLICY.REQUIRED_SECTION_IDS — without this "
+                            f"section the Zone 1 body is structurally incomplete (GH-428)."
+                        ),
+                        field_path=f"§{sid}",
+                        severity="warning",
+                    )
+                )
+
+        # SECTION_CONDITIONAL_REQUIRED check (only fires when section is present).
+        for section_key, required_fields in conditional.items():
+            if section_key not in section_field_keys:
+                continue  # Section absent — conditional check does not fire.
+
+            present_field_keys = section_field_keys[section_key]
+            missing = [f for f in required_fields if f not in present_field_keys]
+            if missing:
+                self.errors.append(
+                    ValidationError(
+                        code="W_INCOMPLETE_SECTION_FIELDS",
+                        message=(
+                            f"Section '{section_key}' present but missing required field(s): "
+                            f"{', '.join(missing)}. POLICY.SECTION_CONDITIONAL_REQUIRED declares "
+                            f"the full set as {', '.join(required_fields)} (GH-428)."
+                        ),
+                        field_path=section_key,
+                        severity="warning",
+                    )
+                )
 
     def _validate_unknown_fields(
         self,
