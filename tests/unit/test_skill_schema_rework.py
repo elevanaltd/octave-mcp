@@ -426,6 +426,78 @@ class TestItem5SectionContextThreading:
         for needed in ("NEVER", "MUST", "GATE"):
             assert needed in joined, f"Warning should name missing field {needed!r}; got {joined!r}"
 
+    def test_deeply_nested_block_anchor_kernel_quartet_warning(self) -> None:
+        """Depth>1 nesting regression for the walker's enclosing_key threading.
+
+        CE re-review CONDITIONAL (PR #444 follow-up): the earlier
+        ``test_nested_block_anchor_kernel_missing_quartet_fires_warning``
+        only exercises depth=1 nesting (``§1::WRAPPER -> ANCHOR_KERNEL``).
+        This test persists the depth>1 regression by wrapping the
+        ANCHOR_KERNEL inside an additional OUTER block so the parser
+        produces ``Section WRAPPER -> Block OUTER -> Block ANCHOR_KERNEL
+        -> Assignment TARGET``. The walker must thread ``enclosing_key``
+        through the OUTER recursion AND independently register
+        ANCHOR_KERNEL as a bucket so the conditional fires.
+
+        Falsifiability proof: if the walker's ``_walk_flat`` Block branch
+        is patched to skip the recursive call (i.e., no
+        ``_walk_flat(node.children, enclosing_key=node.key)`` for Blocks),
+        the inner ANCHOR_KERNEL Block is never reached, no bucket is
+        registered, and the conditional check silently passes — this
+        test then fails with ``errors=[]``. Verified empirically during
+        the rework (see commit message for c0f2814 follow-up).
+        """
+        from octave_mcp.core.parser import parse as _parse
+        from octave_mcp.core.schema_extractor import PolicyDefinition, SchemaDefinition
+        from octave_mcp.core.validator import Validator
+
+        schema = SchemaDefinition(
+            name="X",
+            version="1.0",
+            policy=PolicyDefinition(
+                version="1.0",
+                unknown_fields="WARN",
+                required_section_ids=[],
+                section_conditional_required={"ANCHOR_KERNEL": ["TARGET", "NEVER", "MUST", "GATE"]},
+            ),
+            fields={},
+        )
+
+        # Depth-2 nesting: §1::WRAPPER -> OUTER block -> ANCHOR_KERNEL block.
+        # ANCHOR_KERNEL has only TARGET, missing NEVER + MUST + GATE.
+        src = (
+            "===DOC===\n"
+            "META:\n"
+            "  TYPE::X\n"
+            '  VERSION::"1.0"\n'
+            "§1::WRAPPER\n"
+            "OUTER:\n"
+            "  ANCHOR_KERNEL:\n"
+            "    TARGET::only_target\n"
+            "===END===\n"
+        )
+        doc = _parse(src)
+        validator = Validator({})
+        errors = validator.validate(doc, strict=False, section_schemas={"X": schema})
+
+        incomplete = [e for e in errors if e.code == "W_INCOMPLETE_SECTION_FIELDS" and e.field_path == "ANCHOR_KERNEL"]
+        assert incomplete, (
+            f"Depth>1 nested ANCHOR_KERNEL (inside OUTER block under §1) missing "
+            f"NEVER/MUST/GATE must surface W_INCOMPLETE_SECTION_FIELDS. Without the "
+            f"walker's enclosing_key threading + Block-key bucket registration, the "
+            f"inner ANCHOR_KERNEL is never reached and the conditional silently "
+            f"passes. Got errors={errors!r}"
+        )
+        joined = " ".join(e.message for e in incomplete)
+        for needed in ("NEVER", "MUST", "GATE"):
+            assert needed in joined, f"Warning should name missing field {needed!r}; got {joined!r}"
+
+        # Defensive: the OUTER bucket should also exist (Block-key registration)
+        # but is not required to fire any conditional — it's just present.
+        # The TARGET assignment lives in ANCHOR_KERNEL's bucket, not OUTER's,
+        # because the walker threads ANCHOR_KERNEL as the enclosing_key on
+        # its inner recursion.
+
     def test_nested_block_anchor_kernel_complete_does_not_warn(self) -> None:
         from octave_mcp.core.parser import parse as _parse
         from octave_mcp.core.schema_extractor import PolicyDefinition, SchemaDefinition
