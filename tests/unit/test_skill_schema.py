@@ -232,6 +232,33 @@ KNOWN_MISSING_SECTION_1_GAPS: frozenset[str] = frozenset(
 )
 
 
+# PR #444 rework (TMG BLOCKED) — second allowlist for
+# W_INCOMPLETE_SECTION_FIELDS gaps in the SKILL corpus. The previous
+# coverage assertion in ``test_existing_skill_file_validates_no_missing_section_1``
+# filtered warnings to ``W_MISSING_REQUIRED_SECTION`` only and silently
+# masked the second class of §-section warning.
+#
+# Two skills currently author ``§5::ANCHOR_KERNEL`` with TARGET + GATE
+# but omit NEVER and MUST. The gaps are real (TMG-flagged corpus gaps)
+# and are pinned here so:
+#   * Validation-status visibility is preserved (PROD::I5) — the
+#     warnings still surface, just allowlisted out of the integration
+#     assertion.
+#   * The allowlist auto-retires: a separate pinned-diagnostic test
+#     (``test_known_incomplete_anchor_kernel_gap_skills_surface_diagnostic``)
+#     asserts the warning DOES fire today; when the gap is closed upstream
+#     and the file gains NEVER+MUST, the pinned test starts failing and
+#     directs the maintainer to remove the entry here.
+#
+# Allowlist precedent: PR #437 AUTHORITY_MANDATE for AGENT_DEFINITION.
+KNOWN_INCOMPLETE_ANCHOR_KERNEL_GAPS: frozenset[str] = frozenset(
+    {
+        "gap-ownership",
+        "operating-discipline",
+    }
+)
+
+
 def _skill_dirname(p: Path) -> str:
     """Return the parent directory name for a SKILL.md path."""
     return p.parent.name
@@ -266,6 +293,38 @@ class TestExistingSkillFilesValidate:
         )
 
     @pytest.mark.parametrize(
+        "skill_path",
+        [
+            p
+            for p in _skill_files()
+            if _skill_dirname(p) not in KNOWN_INCOMPLETE_ANCHOR_KERNEL_GAPS
+            and _skill_dirname(p) not in KNOWN_MISSING_SECTION_1_GAPS
+        ],
+        ids=lambda p: p.parent.name,
+    )
+    def test_existing_skill_file_validates_no_incomplete_anchor_kernel(self, skill_path: Path) -> None:
+        """Non-allowlisted on-disk SKILL files must not surface W_INCOMPLETE_SECTION_FIELDS.
+
+        PR #444 TMG rework: prior coverage assertion filtered to
+        W_MISSING_REQUIRED_SECTION only, silently masking the second
+        class of §-section warning. Asserts here that no non-allowlisted
+        SKILL emits W_INCOMPLETE_SECTION_FIELDS (the
+        ``KNOWN_INCOMPLETE_ANCHOR_KERNEL_GAPS`` set pins the two known
+        offenders: gap-ownership and operating-discipline).
+        """
+        content = skill_path.read_text(encoding="utf-8")
+        result = _validate_content(content)
+
+        warnings = result.get("warnings", []) or []
+        incomplete_warnings = [
+            w for w in warnings if isinstance(w, dict) and w.get("code") == "W_INCOMPLETE_SECTION_FIELDS"
+        ]
+        assert not incomplete_warnings, (
+            f"{skill_path.parent.name}/SKILL.md unexpectedly has incomplete §-section "
+            f"fields. Warnings: {incomplete_warnings!r}"
+        )
+
+    @pytest.mark.parametrize(
         "skill_dirname",
         sorted(KNOWN_MISSING_SECTION_1_GAPS),
     )
@@ -291,3 +350,33 @@ class TestExistingSkillFilesValidate:
         assert section_warnings, (
             f"{skill_dirname}/SKILL.md: expected W_MISSING_REQUIRED_SECTION diagnostic, " f"got warnings={warnings!r}"
         )
+
+    @pytest.mark.parametrize(
+        "skill_dirname",
+        sorted(KNOWN_INCOMPLETE_ANCHOR_KERNEL_GAPS),
+    )
+    def test_known_incomplete_anchor_kernel_gap_skills_surface_diagnostic(self, skill_dirname: str) -> None:
+        """Known-gap SKILL files surface W_INCOMPLETE_SECTION_FIELDS.
+
+        PR #444 TMG rework: pins the schema-sovereignty signal (PROD::I5)
+        for the ANCHOR_KERNEL quartet allowlist. If this test starts
+        failing because the file now validates clean (gained NEVER+MUST),
+        the gap has been closed upstream — remove the entry from
+        ``KNOWN_INCOMPLETE_ANCHOR_KERNEL_GAPS``.
+        """
+        skill_path = _SKILLS_DIR / skill_dirname / "SKILL.md"
+        if not skill_path.exists():
+            pytest.skip(f"{skill_dirname}/SKILL.md no longer exists on disk")
+
+        content = skill_path.read_text(encoding="utf-8")
+        result = _validate_content(content)
+
+        warnings = result.get("warnings", []) or []
+        incomplete = [w for w in warnings if isinstance(w, dict) and w.get("code") == "W_INCOMPLETE_SECTION_FIELDS"]
+        assert incomplete, (
+            f"{skill_dirname}/SKILL.md: expected W_INCOMPLETE_SECTION_FIELDS diagnostic "
+            f"naming missing NEVER/MUST in ANCHOR_KERNEL; got warnings={warnings!r}"
+        )
+        joined = " ".join(w.get("message", "") for w in incomplete)
+        for needed in ("NEVER", "MUST"):
+            assert needed in joined, f"{skill_dirname}: warning should name missing field {needed!r}; got {joined!r}"
