@@ -362,6 +362,188 @@ class TestTurnIndexNonHashableGuard:
         assert "validation_status" in result
 
 
+# ---------------------------------------------------------------------------
+# TMG rework — explicit coverage of REQ fields and boundary cases.
+#
+# TMG verdict on PR #442 flagged four missing coverage gaps:
+#   1. Missing CONTENT (REQ) — validator must reject a TURN with no CONTENT.
+#   2. Missing TURN_INDEX (REQ) — validator must reject a TURN with no
+#      TURN_INDEX.
+#   3. Empty TURNS block — must be a graceful INVALID OR a deliberate-policy
+#      VALIDATED; either way it must be documented and pinned.
+#   4. Single-turn bounds — a well-formed single-TURN debate must validate.
+#
+# These tests pin the empirical observed behaviour at the time of the CE
+# rework so any future drift surfaces as a test failure rather than a silent
+# semantic shift.
+# ---------------------------------------------------------------------------
+
+
+MISSING_CONTENT_TRANSCRIPT = """===DEBATE_TRANSCRIPT===
+META:
+  TYPE::DEBATE_TRANSCRIPT
+  VERSION::"1.0"
+
+THREAD_ID::test-debate-gh427-missing-content
+TOPIC::TURN_SCHEMA enforcement missing CONTENT
+MODE::fixed
+STATUS::closed
+PARTICIPANTS::[Wind, Wall]
+
+TURNS:
+  T1:
+    ROLE::Wind
+    TURN_INDEX::1
+===END==="""
+
+
+MISSING_TURN_INDEX_TRANSCRIPT = """===DEBATE_TRANSCRIPT===
+META:
+  TYPE::DEBATE_TRANSCRIPT
+  VERSION::"1.0"
+
+THREAD_ID::test-debate-gh427-missing-turn-index
+TOPIC::TURN_SCHEMA enforcement missing TURN_INDEX
+MODE::fixed
+STATUS::closed
+PARTICIPANTS::[Wind, Wall]
+
+TURNS:
+  T1:
+    ROLE::Wind
+    CONTENT::Turn without a TURN_INDEX.
+===END==="""
+
+
+EMPTY_TURNS_TRANSCRIPT = """===DEBATE_TRANSCRIPT===
+META:
+  TYPE::DEBATE_TRANSCRIPT
+  VERSION::"1.0"
+
+THREAD_ID::test-debate-gh427-empty-turns
+TOPIC::TURN_SCHEMA enforcement empty TURNS block
+MODE::fixed
+STATUS::closed
+PARTICIPANTS::[Wind]
+
+TURNS:
+
+===END==="""
+
+
+SINGLE_TURN_TRANSCRIPT = """===DEBATE_TRANSCRIPT===
+META:
+  TYPE::DEBATE_TRANSCRIPT
+  VERSION::"1.0"
+
+THREAD_ID::test-debate-gh427-single-turn
+TOPIC::TURN_SCHEMA enforcement single-turn bounds
+MODE::fixed
+STATUS::closed
+PARTICIPANTS::[Wind]
+
+TURNS:
+  T1:
+    ROLE::Wind
+    CONTENT::Only turn in the transcript.
+    TURN_INDEX::1
+===END==="""
+
+
+class TestTurnSchemaCoverageRework:
+    """TMG rework: pin REQ-field coverage and boundary cases for PR #442."""
+
+    def test_missing_content_is_rejected(self) -> None:
+        """A TURN with no CONTENT MUST surface an E_TURN_FIELD validation error.
+
+        CONTENT is REQ in the DEBATE_TRANSCRIPT TURN_SCHEMA; a turn that
+        omits it must produce a visible INVALID envelope pointing at the
+        offending field path.
+        """
+        result = _run_validate(MISSING_CONTENT_TRANSCRIPT)
+        assert result["validation_status"] == "INVALID", (
+            f"Expected INVALID for missing CONTENT, got "
+            f"{result['validation_status']}: "
+            f"validation_errors={result.get('validation_errors')!r}"
+        )
+        validation_errors = result.get("validation_errors") or []
+        codes = {err.get("code") for err in validation_errors}
+        assert "E_TURN_FIELD" in codes, f"Expected E_TURN_FIELD for missing CONTENT; got codes={codes!r}"
+        offending = [
+            err
+            for err in validation_errors
+            if err.get("code") == "E_TURN_FIELD" and "CONTENT" in (err.get("field") or "")
+        ]
+        assert offending, (
+            "Missing-CONTENT error must reference the CONTENT field path; "
+            f"got validation_errors={validation_errors!r}"
+        )
+
+    def test_missing_turn_index_is_rejected(self) -> None:
+        """A TURN with no TURN_INDEX MUST surface an E_TURN_FIELD validation error.
+
+        TURN_INDEX is REQ in the DEBATE_TRANSCRIPT TURN_SCHEMA; omission
+        must surface a visible INVALID envelope pinned to the TURN_INDEX
+        field path.
+        """
+        result = _run_validate(MISSING_TURN_INDEX_TRANSCRIPT)
+        assert result["validation_status"] == "INVALID", (
+            f"Expected INVALID for missing TURN_INDEX, got "
+            f"{result['validation_status']}: "
+            f"validation_errors={result.get('validation_errors')!r}"
+        )
+        validation_errors = result.get("validation_errors") or []
+        codes = {err.get("code") for err in validation_errors}
+        assert "E_TURN_FIELD" in codes, f"Expected E_TURN_FIELD for missing TURN_INDEX; got codes={codes!r}"
+        offending = [
+            err
+            for err in validation_errors
+            if err.get("code") == "E_TURN_FIELD" and "TURN_INDEX" in (err.get("field") or "")
+        ]
+        assert offending, (
+            "Missing-TURN_INDEX error must reference the TURN_INDEX field path; "
+            f"got validation_errors={validation_errors!r}"
+        )
+
+    def test_empty_turns_block_is_graceful(self) -> None:
+        """A DEBATE_TRANSCRIPT with TURNS: but no child turns is deliberate-policy
+        VALIDATED.
+
+        Rationale: an empty TURNS block is structurally well-formed — it
+        commits to the structured shape but contains zero entries, which
+        violates no REQ per-turn invariant (there are no turns to fail).
+        The validator MUST NOT raise on this shape, and MUST surface a
+        visible terminal validation_status. The pinned-here policy is
+        VALIDATED with empty validation_errors; if future product policy
+        decides empty TURNS should be INVALID, this test must be updated
+        in the same commit that flips the policy so the choice is explicit.
+        """
+        result = _run_validate(EMPTY_TURNS_TRANSCRIPT)
+        # Boundary contract: must surface a terminal status, never crash.
+        assert "validation_status" in result, f"Empty TURNS envelope missing validation_status: {result!r}"
+        # Deliberate-policy: empty block validates clean.
+        assert result["validation_status"] == "VALIDATED", (
+            f"Empty TURNS policy is VALIDATED (no turns → no REQ violations); "
+            f"got {result['validation_status']}: "
+            f"validation_errors={result.get('validation_errors')!r}"
+        )
+
+    def test_single_turn_positive_validates(self) -> None:
+        """A well-formed single-TURN debate MUST validate clean.
+
+        Pins the lower-bound of the per-turn enforcement: the validator
+        must not produce false-positive errors on a transcript that
+        contains exactly one well-formed turn.
+        """
+        result = _run_validate(SINGLE_TURN_TRANSCRIPT)
+        assert result["status"] == "success", result
+        assert result["validation_status"] == "VALIDATED", (
+            f"Expected VALIDATED for single-turn positive, got "
+            f"{result['validation_status']}: "
+            f"errors={result.get('validation_errors')!r}"
+        )
+
+
 def test_schema_source_declares_turn_schema_block() -> None:
     """The schema source MUST continue to declare a TURN_SCHEMA block (I1 fidelity)."""
     text = SCHEMA_PATH.read_text(encoding="utf-8")
