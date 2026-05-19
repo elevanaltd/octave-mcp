@@ -472,3 +472,129 @@ class TestCrsReviewEmptyFindingsSection:
             f"{result.get('validation_status')!r}; warnings={warnings!r}; "
             f"errors={validation_errors!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# §8: Walker refinement regression pin (SKILL upward-compatibility)
+#
+# Pins the upward-compatibility claim for the walker refinement landed in
+# this PR. The refinement adds ``if not present_field_keys: continue``
+# inside the SECTION_CONDITIONAL_REQUIRED loop. The same code path drives
+# SKILL §5::ANCHOR_KERNEL coverage; an empty ANCHOR_KERNEL block now
+# silently passes (no W_INCOMPLETE_SECTION_FIELDS).
+#
+# This is an INTENTIONAL behaviour change shared with CRS_REVIEW §3 by
+# design. In practice no SKILL author writes an empty kernel block; the
+# refinement is therefore upward-compatible with every existing SKILL
+# test and on-disk SKILL document. If a future SKILL change introduces a
+# regression where an empty ANCHOR_KERNEL needs to surface a warning, the
+# correct response is to extend the walker with a per-section semantic
+# toggle rather than revert this refinement.
+#
+# This regression-pin test exists so the shared-behaviour-change is
+# discoverable: if someone reverts ``if not present_field_keys: continue``
+# this test fails immediately with a CRS_REVIEW-context error message,
+# making the linkage between the two schemas visible.
+# ---------------------------------------------------------------------------
+
+
+class TestWalkerEmptySectionRefinementRegressionPin:
+    """Regression pin: the walker's empty-section pass-through must NOT regress."""
+
+    def test_empty_arbitrary_conditional_section_passes_for_any_schema(self) -> None:
+        """A SECTION_CONDITIONAL_REQUIRED section with zero assignment children
+        MUST silently pass for ANY schema using the walker.
+
+        Constructs a minimal synthetic schema declaring
+        SECTION_CONDITIONAL_REQUIRED::["A","B","C"] for a section keyed
+        ``MARKER``, then validates a document where the ``MARKER:`` block
+        is present-but-empty. Pre-refinement (PR #444 baseline) emits
+        W_INCOMPLETE_SECTION_FIELDS naming A,B,C. Post-refinement the
+        check is skipped because present_field_keys is empty.
+
+        Pinning this contract at the synthetic-schema level (not just for
+        CRS_REVIEW) makes the regression discoverable from any schema's
+        test surface — the empty-section pass-through is a walker
+        invariant, not a CRS_REVIEW special case.
+        """
+        from octave_mcp.core.parser import parse as _parse
+        from octave_mcp.core.schema_extractor import PolicyDefinition, SchemaDefinition
+        from octave_mcp.core.validator import Validator
+
+        schema = SchemaDefinition(
+            name="DOC",
+            version="1.0",
+            policy=PolicyDefinition(
+                version="1.0",
+                unknown_fields="WARN",
+                required_section_ids=[],
+                section_conditional_required={"MARKER": ["A", "B", "C"]},
+            ),
+            fields={},
+        )
+
+        src = "===DOC===\n" "META:\n" "  TYPE::DOC\n" '  VERSION::"1.0"\n' "§1::WRAPPER\n" "MARKER:\n" "===END===\n"
+        doc = _parse(src)
+        validator = Validator({})
+        errors = validator.validate(doc, strict=False, section_schemas={"DOC": schema})
+
+        incomplete = [e for e in errors if e.code == "W_INCOMPLETE_SECTION_FIELDS" and e.field_path == "MARKER"]
+        assert not incomplete, (
+            f"Empty MARKER block must silently pass per GH-426 walker refinement "
+            f"(present_field_keys is empty → SECTION_CONDITIONAL_REQUIRED check "
+            f"skipped). If this test fails, the refinement at "
+            f"core/validator.py _validate_section_body_coverage was reverted. "
+            f"Got errors: {errors!r}"
+        )
+
+    def test_populated_section_still_surfaces_missing_field_warning(self) -> None:
+        """The refinement MUST NOT regress the populated-but-incomplete case.
+
+        Defensive twin of the test above: a section with at least one
+        Assignment child but missing other REQ members must still surface
+        W_INCOMPLETE_SECTION_FIELDS naming the gap. If a maintainer
+        accidentally extends the refinement to ``if not all required
+        fields present: continue`` instead of ``if not present_field_keys:
+        continue``, the malformed-finding cases (covered by the
+        TestCrsReviewNegativeFixtures parametrised matrix above) would
+        silently pass.
+        """
+        from octave_mcp.core.parser import parse as _parse
+        from octave_mcp.core.schema_extractor import PolicyDefinition, SchemaDefinition
+        from octave_mcp.core.validator import Validator
+
+        schema = SchemaDefinition(
+            name="DOC",
+            version="1.0",
+            policy=PolicyDefinition(
+                version="1.0",
+                unknown_fields="WARN",
+                required_section_ids=[],
+                section_conditional_required={"MARKER": ["A", "B", "C"]},
+            ),
+            fields={},
+        )
+
+        src = (
+            "===DOC===\n"
+            "META:\n"
+            "  TYPE::DOC\n"
+            '  VERSION::"1.0"\n'
+            "§1::WRAPPER\n"
+            "MARKER:\n"
+            "  A::present\n"
+            "===END===\n"
+        )
+        doc = _parse(src)
+        validator = Validator({})
+        errors = validator.validate(doc, strict=False, section_schemas={"DOC": schema})
+
+        incomplete = [e for e in errors if e.code == "W_INCOMPLETE_SECTION_FIELDS" and e.field_path == "MARKER"]
+        assert incomplete, (
+            f"Populated MARKER block missing B+C must surface "
+            f"W_INCOMPLETE_SECTION_FIELDS. The walker refinement must only "
+            f"skip TRULY empty sections, not partial ones. Got errors: {errors!r}"
+        )
+        joined = " ".join(e.message for e in incomplete)
+        for needed in ("B", "C"):
+            assert needed in joined, f"Warning should name missing field {needed!r}; got {joined!r}"
