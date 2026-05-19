@@ -163,7 +163,7 @@ class Validator:
         self,
         doc: Document,
         strict: bool = False,
-        section_schemas: dict[str, SchemaDefinition] | None = None,
+        section_schemas: dict[Any, SchemaDefinition] | None = None,
     ) -> list[ValidationError]:
         """Validate document against schema.
 
@@ -523,7 +523,7 @@ class Validator:
     def _validate_section_body_coverage(
         self,
         doc: Document,
-        section_schemas: dict[str, SchemaDefinition],
+        section_schemas: dict[Any, SchemaDefinition],
     ) -> None:
         """Emit W_MISSING_REQUIRED_SECTION / W_INCOMPLETE_SECTION_FIELDS (GH-428).
 
@@ -585,10 +585,21 @@ class Validator:
         # The same flat model applies inside any Block/Section ``children``
         # list (we recurse for completeness, though the SKILL §5 pattern
         # is exclusively top-level today).
+        #
+        # PR #444 cubic P2 #2 rework: previously this walker registered
+        # only top-level Section keys as buckets and reset the active
+        # section context on every recursive call into a Block's
+        # children. That meant a SECTION_CONDITIONAL_REQUIRED entry for a
+        # key authored as a nested Block (e.g., ``§1::WRAPPER`` then
+        # ``ANCHOR_KERNEL:`` block carrying the quartet) silently passed
+        # because ``ANCHOR_KERNEL not in section_field_keys``. The walker
+        # now registers both Section and keyed-Block nodes as buckets and
+        # threads the active key into the recursive call so nested
+        # Assignments attribute to their enclosing container.
         section_field_keys: dict[str, set[str]] = {}
 
-        def _walk_flat(nodes: list[ASTNode]) -> None:
-            current_section_key: str | None = None
+        def _walk_flat(nodes: list[ASTNode], enclosing_key: str | None = None) -> None:
+            current_section_key: str | None = enclosing_key
             for node in nodes:
                 if isinstance(node, Section):
                     current_section_key = node.key
@@ -597,19 +608,29 @@ class Validator:
                     # into the same bucket so a single Section "body"
                     # collects every assignment authored under that key.
                     section_field_keys.setdefault(current_section_key, set())
+                elif isinstance(node, Block):
+                    # PR #444 cubic P2 #2: a keyed Block is a legitimate
+                    # SECTION_CONDITIONAL_REQUIRED target. Register its
+                    # key as a bucket so the conditional check fires.
+                    section_field_keys.setdefault(node.key, set())
+                    # Record any direct Assignment children of the Block.
+                    for child in getattr(node, "children", []) or []:
+                        if isinstance(child, Assignment):
+                            section_field_keys[node.key].add(child.key)
+                    # Recurse with the Block's key as the enclosing
+                    # context so deeper Assignments attribute correctly.
+                    if hasattr(node, "children") and node.children:
+                        _walk_flat(node.children, enclosing_key=node.key)
+                    # A keyed Block does not change the enclosing Section
+                    # bucket for subsequent siblings — restore tracker.
+                    continue
                 elif isinstance(node, Assignment) and current_section_key is not None:
                     section_field_keys[current_section_key].add(node.key)
-                # Recurse into Block children so nested §-sections (rare
-                # but legal) are also discovered. Children of a Block do
-                # not belong to the enclosing Section, so we reset the
-                # current_section_key tracker for the nested walk.
-                if isinstance(node, Block) and hasattr(node, "children"):
-                    _walk_flat(node.children)
-                elif isinstance(node, Section) and hasattr(node, "children") and node.children:
-                    # Some parser shapes nest siblings; recurse to be safe
-                    # but keep current_section_key as the enclosing key so
-                    # nested Assignments attribute correctly.
-                    _walk_flat(node.children)
+                # Recurse into nested Section children, threading the
+                # enclosing Section key so any deeper Assignments still
+                # attribute to it.
+                if isinstance(node, Section) and hasattr(node, "children") and node.children:
+                    _walk_flat(node.children, enclosing_key=node.key)
 
         for node in doc.sections:
             if isinstance(node, Section):
@@ -708,7 +729,7 @@ class Validator:
         self,
         nodes: list[ASTNode],
         strict: bool,
-        section_schemas: dict[str, SchemaDefinition] | None,
+        section_schemas: dict[Any, SchemaDefinition] | None,
     ) -> None:
         """Walk document tree and validate each section/block against section_schemas.
 

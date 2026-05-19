@@ -41,10 +41,30 @@ VALID_PROFILES = {"STRICT", "STANDARD", "LENIENT", "ULTRA"}
 DEFAULT_PROFILE = "STANDARD"
 
 
+class _PolicyWalkSentinel:
+    """Marker class for the policy-walk schema slot in ``section_schemas``.
+
+    PR #444 cubic P2 #1 rework: the previous implementation used the
+    string ``"__schema__"`` as the dict key. A document that legitimately
+    authors a Block keyed ``__schema__`` would collide with the sentinel
+    — ``_check_required_field_coverage`` filtered by string match and
+    silently dropped the user's fields from coverage, producing false
+    E003 errors. Using a dedicated class as the key makes the sentinel
+    structurally inseparable from any user-author-able string key.
+
+    The class itself is used as the dict key (not an instance) so it is
+    hashable and identity-comparable across imports.
+    """
+
+
+# Single module-level marker used as the dict key for the policy-walk slot.
+POLICY_WALK_SENTINEL: type = _PolicyWalkSentinel
+
+
 def _build_deep_section_schemas(
     doc: Any,
     schema_definition: SchemaDefinition,
-) -> dict[str, SchemaDefinition]:
+) -> dict[Any, SchemaDefinition]:
     """Build per-section schemas from a document-type schema definition.
 
     Issue #325: For document-type schemas where META.TYPE matches the schema name
@@ -67,7 +87,7 @@ def _build_deep_section_schemas(
     from dataclasses import replace
 
     all_fields = schema_definition.fields
-    schemas: dict[str, SchemaDefinition] = {}
+    schemas: dict[Any, SchemaDefinition] = {}
 
     def _collect_child_keys(node: ASTNode) -> set[str]:
         """Collect assignment keys from a node's direct children."""
@@ -120,18 +140,23 @@ def _build_deep_section_schemas(
     # no sections matching schema fields, the dict above can be empty —
     # leaving the validator with nothing to read POLICY from. Register
     # the full schema under a sentinel key so policy-driven walks always
-    # discover it, regardless of section presence. The sentinel is
-    # distinct from any real Section key (no §-section is named
-    # ``__schema__``) so per-section validation is not affected.
+    # discover it, regardless of section presence.
+    #
+    # PR #444 cubic P2 #1 rework: the sentinel was previously the string
+    # ``"__schema__"``. A user-author-able section/block literally keyed
+    # ``__schema__`` then collided with the sentinel and had its fields
+    # silently excluded from coverage. The sentinel is now a non-string
+    # class (POLICY_WALK_SENTINEL) — structurally inseparable from any
+    # user string key.
     if schema_definition.policy.required_section_ids or schema_definition.policy.section_conditional_required:
-        schemas.setdefault("__schema__", schema_definition)
+        schemas.setdefault(POLICY_WALK_SENTINEL, schema_definition)
 
     return schemas
 
 
 def _check_required_field_coverage(
     full_schema: SchemaDefinition,
-    section_schemas: dict[str, SchemaDefinition],
+    section_schemas: dict[Any, SchemaDefinition],
     doc: Any | None = None,
 ) -> list[ValidationError]:
     """Check that all required schema fields appear in at least one section.
@@ -161,13 +186,18 @@ def _check_required_field_coverage(
     errors: list[ValidationError] = []
 
     # Collect all fields covered across all section schemas. The
-    # ``__schema__`` sentinel (GH-428) carries the full schema for
+    # POLICY_WALK_SENTINEL slot (GH-428) carries the full schema for
     # policy-driven walks and would otherwise mark every field as covered;
     # skip it so legitimate "missing required field" errors are still
     # surfaced for §-section-less documents.
+    #
+    # PR #444 cubic P2 #1: identity comparison against the class sentinel
+    # (``is POLICY_WALK_SENTINEL``) replaces the previous string match
+    # (``section_key == "__schema__"``) so a user block literally keyed
+    # ``__schema__`` no longer collides with the sentinel.
     covered_fields: set[str] = set()
     for section_key, section_schema in section_schemas.items():
-        if section_key == "__schema__":
+        if section_key is POLICY_WALK_SENTINEL:
             continue
         covered_fields.update(section_schema.fields.keys())
 
@@ -667,7 +697,7 @@ class ValidateTool(BaseTool):
         # Gap_1: Also try to load SchemaDefinition for section constraint validation
         # This enables holographic pattern constraint evaluation via section_schemas
         schema_definition: SchemaDefinition | None = None
-        section_schemas: dict[str, SchemaDefinition] | None = None
+        section_schemas: dict[Any, SchemaDefinition] | None = None
         try:
             schema_definition = load_schema_by_name(schema_name)
             if schema_definition is not None and schema_definition.fields:
