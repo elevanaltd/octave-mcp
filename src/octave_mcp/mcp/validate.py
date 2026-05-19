@@ -15,10 +15,11 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import Any
 
+from octave_mcp.core.constraints import RequiredConstraint
 from octave_mcp.core.emitter import emit
 from octave_mcp.core.gbnf_compiler import GBNFCompiler
 from octave_mcp.core.grammar import parse_with_warnings
-from octave_mcp.core.grammar.cst import Assignment, ASTNode
+from octave_mcp.core.grammar.cst import Assignment, ASTNode, Block
 from octave_mcp.core.literal_zone_audit import build_literal_zone_repair_log
 from octave_mcp.core.repair import repair
 from octave_mcp.core.schema_extractor import SchemaDefinition
@@ -84,9 +85,18 @@ def _build_deep_section_schemas(
     # nodes in doc.sections (e.g., THREAD_ID::..., TOPIC::... in DEBATE_TRANSCRIPT).
     # Without this, envelope-style documents produce empty section_schemas and
     # _check_required_field_coverage falsely flags all required fields as missing.
+    #
+    # GH-427: Also collect envelope-level Block keys (e.g., TURNS: as a Block
+    # rather than as an inline list). Without this, structured DEBATE_TRANSCRIPT
+    # documents that emit TURNS as a Block (the canonical shape for per-turn
+    # validation under TURN_SCHEMA) would falsely surface
+    # ``Field 'TURNS' is required but missing`` even though the Block is the
+    # whole point of the per-turn enforcement contract.
     envelope_keys: set[str] = set()
     for node in doc.sections:
         if isinstance(node, Assignment) and node.key != "META":
+            envelope_keys.add(node.key)
+        elif isinstance(node, Block) and node.key != "META":
             envelope_keys.add(node.key)
 
     if envelope_keys:
@@ -176,6 +186,179 @@ def _check_required_field_coverage(
                         field_path=field_name,
                     )
                 )
+
+    return errors
+
+
+def _validate_turn_schema(
+    doc: Any,
+    schema_definition: SchemaDefinition,
+) -> list[ValidationError]:
+    """Validate per-turn structure against TURN_SCHEMA (GH-427).
+
+    The DEBATE_TRANSCRIPT schema declares a ``TURN_SCHEMA:`` block describing
+    the contract each TURN entry must satisfy. Prior to GH-427 this block was
+    documented but not enforced — malformed TURN entries (missing REQ ROLE,
+    duplicate TURN_INDEX, out-of-enum ROLE) silently validated clean.
+
+    This helper closes the gap by:
+
+    1. Locating a top-level ``TURNS:`` Block in the document.
+    2. Treating each child Block of TURNS as one turn entry.
+    3. For each turn:
+       - Checking every REQ field declared in ``schema_definition.turn_schema``
+         is present (emits ``E_TURN_FIELD`` when absent).
+       - Evaluating the holographic constraint chain (ENUM, TYPE, REGEX, etc.)
+         on each present turn field, wrapping any constraint failures as
+         ``E_TURN_FIELD`` so the per-turn error code remains stable for
+         downstream tooling (I4 TRANSFORM_AUDITABILITY: stable error IDs).
+    4. Tracking ``TURN_INDEX`` values across all turns and emitting
+       ``E_TURN_INDEX`` on any duplicate (uniqueness invariant).
+
+    Args:
+        doc: Parsed Document AST.
+        schema_definition: Loaded SchemaDefinition whose ``turn_schema`` is the
+            per-item sub-schema. Caller MUST verify ``turn_schema is not None``
+            before invoking this helper — passing ``None`` is a programming
+            error and surfaces as no-op.
+
+    Returns:
+        List of ``ValidationError`` instances. Empty when no TURNS block is
+        present (lenient: turn-level validation only fires when the document
+        commits to the structured shape) or when every turn validates clean.
+    """
+    errors: list[ValidationError] = []
+
+    turn_schema = schema_definition.turn_schema
+    if not turn_schema:
+        return errors
+
+    # Locate the top-level TURNS: Block. If TURNS is emitted as a flat list
+    # assignment instead, per-turn validation cannot run (turn structure is
+    # opaque); we intentionally do not surface a warning here — the FIELDS-level
+    # TYPE[LIST] constraint already covers the "TURNS is present in some shape"
+    # contract, and treating bare lists as enforceable would conflict with the
+    # documented schema fixture ``TURNS::[[turn1,turn2]∧...]``.
+    turns_block: Block | None = None
+    for node in doc.sections:
+        if isinstance(node, Block) and node.key == "TURNS":
+            turns_block = node
+            break
+
+    if turns_block is None:
+        return errors
+
+    # Pre-compute REQ field names from turn_schema for O(1) lookup.
+    required_turn_fields = {
+        fname
+        for fname, fdef in turn_schema.items()
+        if fdef.pattern
+        and fdef.pattern.constraints
+        and any(isinstance(c, RequiredConstraint) for c in fdef.pattern.constraints.constraints)
+    }
+
+    # Track TURN_INDEX values across all turns for uniqueness enforcement.
+    seen_turn_indices: dict[Any, str] = {}
+
+    for child in turns_block.children:
+        if not isinstance(child, Block):
+            # Skip non-Block children (e.g., stray Assignments inside TURNS:).
+            # A stricter policy could surface these as warnings, but the issue
+            # acceptance criteria only require per-turn field enforcement.
+            continue
+
+        turn_key = child.key
+        turn_path_prefix = f"TURNS.{turn_key}"
+
+        # Collect field assignments for this turn.
+        turn_fields: dict[str, Any] = {}
+        for grandchild in child.children:
+            if isinstance(grandchild, Assignment):
+                turn_fields[grandchild.key] = grandchild.value
+
+        # REQ field coverage check.
+        for req_name in required_turn_fields:
+            if req_name not in turn_fields:
+                errors.append(
+                    ValidationError(
+                        code="E_TURN_FIELD",
+                        message=(f"Turn '{turn_key}' is missing required TURN_SCHEMA " f"field '{req_name}' (GH-427)."),
+                        field_path=f"{turn_path_prefix}.{req_name}",
+                    )
+                )
+
+        # Per-field constraint evaluation (ENUM, TYPE, REGEX, etc.).
+        for fname, fdef in turn_schema.items():
+            if fname not in turn_fields:
+                continue  # absent fields handled above (REQ) or skipped (OPT)
+            if not fdef.pattern or not fdef.pattern.constraints:
+                continue
+
+            value = turn_fields[fname]
+            result = fdef.pattern.constraints.evaluate(value=value, path=f"{turn_path_prefix}.{fname}")
+            if not result.valid:
+                for err in result.errors:
+                    # Wrap constraint failures under the stable E_TURN_FIELD
+                    # code so per-turn enforcement uses ONE discriminant
+                    # regardless of which underlying constraint fired. The
+                    # original code is preserved in the message tail for
+                    # diagnostic depth.
+                    errors.append(
+                        ValidationError(
+                            code="E_TURN_FIELD",
+                            message=(
+                                f"Turn '{turn_key}' field '{fname}' failed "
+                                f"TURN_SCHEMA constraint [{err.code}]: {err.message}"
+                            ),
+                            field_path=err.path,
+                        )
+                    )
+
+        # TURN_INDEX uniqueness invariant.
+        if "TURN_INDEX" in turn_fields:
+            ti_value = turn_fields["TURN_INDEX"]
+            # CE rework: guard the duplicate-tracking dict lookup against
+            # non-hashable TURN_INDEX values (e.g. a malformed
+            # ``TURN_INDEX::[1,2]`` parses as ``ListValue`` — an unhashable
+            # dataclass). Without this guard, the ``in seen_turn_indices``
+            # probe raised ``TypeError: unhashable type`` and escaped the
+            # validator entirely, bypassing the INVALID envelope contract
+            # and silently breaking PROD::I5 SCHEMA_SOVEREIGNTY
+            # (validation_status_visible_in_output).
+            try:
+                hash(ti_value)
+            except TypeError:
+                errors.append(
+                    ValidationError(
+                        code="E_TURN_INDEX_TYPE",
+                        message=(
+                            f"Turn '{turn_key}' TURN_INDEX value {ti_value!r} "
+                            f"is not a hashable scalar (got "
+                            f"{type(ti_value).__name__}); TURN_INDEX must be a "
+                            f"scalar value to participate in uniqueness "
+                            f"enforcement (GH-427 CE rework)."
+                        ),
+                        field_path=f"{turn_path_prefix}.TURN_INDEX",
+                    )
+                )
+                # Skip duplicate tracking for this turn and continue with
+                # remaining siblings — the surfaced error is sufficient to
+                # mark the document INVALID.
+                continue
+            if ti_value in seen_turn_indices:
+                errors.append(
+                    ValidationError(
+                        code="E_TURN_INDEX",
+                        message=(
+                            f"Duplicate TURN_INDEX value {ti_value!r} across "
+                            f"turns '{seen_turn_indices[ti_value]}' and "
+                            f"'{turn_key}' (GH-427: TURN_INDEX must be unique)."
+                        ),
+                        field_path=f"{turn_path_prefix}.TURN_INDEX",
+                    )
+                )
+            else:
+                seen_turn_indices[ti_value] = turn_key
 
     return errors
 
@@ -715,6 +898,14 @@ class ValidateTool(BaseTool):
             if section_schemas is not None and schema_definition is not None and doc.meta.get("TYPE") == schema_name:
                 coverage_errors = _check_required_field_coverage(schema_definition, section_schemas, doc=doc)
                 validation_errors.extend(coverage_errors)
+
+            # GH-427: Per-turn TURN_SCHEMA enforcement for DEBATE_TRANSCRIPT and
+            # any other schema declaring a ``TURN_SCHEMA:`` block. Prior to this
+            # hook the block was extracted but never consulted, leaving a
+            # documented-but-not-enforced contract drift (PROD::I5).
+            if schema_definition is not None and schema_definition.turn_schema:
+                turn_errors = _validate_turn_schema(doc, schema_definition)
+                validation_errors.extend(turn_errors)
 
             if validation_errors:
                 # Convert errors to dicts for reporting

@@ -165,7 +165,7 @@ class TestDebateSchemaLoading:
         schema = load_schema_by_name("DEBATE_TRANSCRIPT")
         assert schema is not None
         assert schema.version is not None
-        assert schema.version == "1.0"
+        assert schema.version == "1.1"
 
 
 class TestDebateSchemaValidation:
