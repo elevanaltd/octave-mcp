@@ -113,11 +113,7 @@ class TestSkillMalformedRejection:
     """Negative path: malformed SKILL §-section bodies surface diagnostics."""
 
     _FRONTMATTER = (
-        "---\n"
-        "name: bogus\n"
-        "description: bogus skill for validation coverage\n"
-        'allowed-tools: "*"\n'
-        "---\n\n"
+        "---\n" "name: bogus\n" "description: bogus skill for validation coverage\n" "allowed-tools: [Bash]\n" "---\n\n"
     )
 
     def test_skill_missing_section_1_surfaces_warning(self) -> None:
@@ -127,12 +123,7 @@ class TestSkillMalformedRejection:
         Post-fix, the validator surfaces W_MISSING_REQUIRED_SECTION.
         """
         content = (
-            self._FRONTMATTER
-            + "===SKILL:BOGUS===\n"
-            "META:\n"
-            "  TYPE::SKILL\n"
-            '  VERSION::"1.0"\n'
-            "===END===\n"
+            self._FRONTMATTER + "===SKILL:BOGUS===\n" "META:\n" "  TYPE::SKILL\n" '  VERSION::"1.0"\n' "===END===\n"
         )
         result = _validate_content(content)
 
@@ -152,8 +143,7 @@ class TestSkillMalformedRejection:
         W_INCOMPLETE_SECTION_FIELDS naming the missing fields.
         """
         content = (
-            self._FRONTMATTER
-            + "===SKILL:BOGUS===\n"
+            self._FRONTMATTER + "===SKILL:BOGUS===\n"
             "META:\n"
             "  TYPE::SKILL\n"
             '  VERSION::"1.0"\n'
@@ -166,9 +156,7 @@ class TestSkillMalformedRejection:
         result = _validate_content(content)
 
         warnings = result.get("warnings", []) or []
-        incomplete = [
-            w for w in warnings if isinstance(w, dict) and w.get("code") == "W_INCOMPLETE_SECTION_FIELDS"
-        ]
+        incomplete = [w for w in warnings if isinstance(w, dict) and w.get("code") == "W_INCOMPLETE_SECTION_FIELDS"]
         assert incomplete, (
             f"Expected W_INCOMPLETE_SECTION_FIELDS warning. "
             f"Got status={result.get('validation_status')!r} warnings={warnings!r}"
@@ -188,7 +176,7 @@ class TestSkillMinimalValid:
             "---\n"
             "name: minimal-skill\n"
             "description: minimal skill exercising §-section body coverage\n"
-            'allowed-tools: "*"\n'
+            "allowed-tools: [Bash]\n"
             "---\n\n"
             "===SKILL:MINIMAL===\n"
             "META:\n"
@@ -209,8 +197,7 @@ class TestSkillMinimalValid:
         unexpected = [
             w
             for w in warnings
-            if isinstance(w, dict)
-            and w.get("code") in {"W_MISSING_REQUIRED_SECTION", "W_INCOMPLETE_SECTION_FIELDS"}
+            if isinstance(w, dict) and w.get("code") in {"W_MISSING_REQUIRED_SECTION", "W_INCOMPLETE_SECTION_FIELDS"}
         ]
         assert not unexpected, (
             f"Minimal valid SKILL should not surface §-section body warnings. "
@@ -220,15 +207,26 @@ class TestSkillMinimalValid:
         assert result.get("valid") is True
 
 
-# Empirically-surfaced gaps in the existing SKILL corpus (WAVE_3 finding).
-# These two SKILL files genuinely lack a §1 section — every other on-disk
-# skill carries one. Pinned via allowlist precedent established in PR #437
-# (AUTHORITY_MANDATE for AGENT_DEFINITION): the schema does not relax to
-# paper over upstream omissions; instead the diagnostic is pinned so the
-# gap remains visible (PROD::I5).
+# Empirically-surfaced gap in the existing SKILL corpus (WAVE_3 finding).
+# ``stub-detection`` declares a SKILL envelope but lacks a §1 section; the
+# validator surfaces ``W_MISSING_REQUIRED_SECTION`` against it.
+#
+# Allowlist precedent: PR #437 (AUTHORITY_MANDATE for AGENT_DEFINITION) —
+# the schema does not relax to paper over upstream omissions; instead the
+# diagnostic is pinned so the gap remains visible (PROD::I5).
+#
+# Note on the GH-428 RED snapshot: the original RED commit included
+# ``github-labels`` here. Empirical GREEN inspection (this PR) reclassified
+# that file: ``github-labels/SKILL.md`` is pure Markdown — it never opens
+# a ``===SKILL===`` envelope — so the validator returns ``UNVALIDATED``
+# rather than emitting a ``W_MISSING_REQUIRED_SECTION`` warning. The Zone 1
+# §-section coverage check only applies to documents that parse as OCTAVE.
+# Removing ``github-labels`` from the allowlist therefore reflects the
+# observed behaviour: it is not a "§1-less SKILL", it is "not an OCTAVE
+# SKILL document". The schema-bypass visibility (PROD::I5 "Schema bypass
+# shall be visible, never silent") is preserved via the UNVALIDATED status.
 KNOWN_MISSING_SECTION_1_GAPS: frozenset[str] = frozenset(
     {
-        "github-labels",
         "stub-detection",
     }
 )
@@ -261,13 +259,10 @@ class TestExistingSkillFilesValidate:
 
         warnings = result.get("warnings", []) or []
         section_warnings = [
-            w
-            for w in warnings
-            if isinstance(w, dict) and w.get("code") == "W_MISSING_REQUIRED_SECTION"
+            w for w in warnings if isinstance(w, dict) and w.get("code") == "W_MISSING_REQUIRED_SECTION"
         ]
         assert not section_warnings, (
-            f"{skill_path.parent.name}/SKILL.md unexpectedly missing §1. "
-            f"Warnings: {section_warnings!r}"
+            f"{skill_path.parent.name}/SKILL.md unexpectedly missing §1. " f"Warnings: {section_warnings!r}"
         )
 
     @pytest.mark.parametrize(
@@ -291,11 +286,8 @@ class TestExistingSkillFilesValidate:
 
         warnings = result.get("warnings", []) or []
         section_warnings = [
-            w
-            for w in warnings
-            if isinstance(w, dict) and w.get("code") == "W_MISSING_REQUIRED_SECTION"
+            w for w in warnings if isinstance(w, dict) and w.get("code") == "W_MISSING_REQUIRED_SECTION"
         ]
         assert section_warnings, (
-            f"{skill_dirname}/SKILL.md: expected W_MISSING_REQUIRED_SECTION diagnostic, "
-            f"got warnings={warnings!r}"
+            f"{skill_dirname}/SKILL.md: expected W_MISSING_REQUIRED_SECTION diagnostic, " f"got warnings={warnings!r}"
         )

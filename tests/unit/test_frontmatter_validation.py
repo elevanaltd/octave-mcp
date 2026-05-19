@@ -313,7 +313,12 @@ class TestSkillSchemaBuiltin:
 
         schema = load_schema_by_name("SKILL")
         assert schema is not None
-        assert schema.name == "SKILL_SCHEMA"
+        # GH-428: SKILL schema source migrated to
+        # ``src/octave_mcp/resources/specs/schemas/skill.oct.md`` with
+        # canonical envelope name ``SKILL`` (matching META.TYPE and the
+        # agent_definition / decision_log precedent). Previously the
+        # builtin envelope was ``SKILL_SCHEMA``.
+        assert schema.name == "SKILL"
 
     def test_skill_schema_has_frontmatter(self):
         """SKILL schema should define frontmatter requirements."""

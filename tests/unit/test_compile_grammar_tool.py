@@ -74,7 +74,10 @@ class TestCompileGrammarFromSchema:
         result = await tool.execute(schema="SKILL")
 
         assert result["status"] == "success"
-        assert result["schema_name"] == "SKILL_SCHEMA"
+        # GH-428: SKILL schema source migrated to resources/specs/schemas
+        # with canonical envelope name SKILL (matching META.TYPE). Previously
+        # the builtin envelope was SKILL_SCHEMA.
+        assert result["schema_name"] == "SKILL"
         assert result["format"] == "gbnf"
         assert "grammar" in result
         assert "::=" in result["grammar"]
