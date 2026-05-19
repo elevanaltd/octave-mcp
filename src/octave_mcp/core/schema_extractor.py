@@ -267,6 +267,12 @@ class SchemaDefinition:
     frontmatter: dict[str, FrontmatterFieldDef] = field(default_factory=dict)
     default_target: str | None = None
     warnings: list[SchemaExtractionWarning] = field(default_factory=list)
+    # GH-427: Per-item sub-schema for repeated structures. The DEBATE_TRANSCRIPT
+    # schema declares ``TURN_SCHEMA:`` describing the structure each TURN must
+    # satisfy. When populated the validator enforces that each child block of
+    # the matching repeated-structure parent (TURNS) conforms to this sub-schema.
+    # ``None`` means the schema does not declare a TURN_SCHEMA block.
+    turn_schema: dict[str, FieldDefinition] | None = None
 
 
 def _extract_policy(
@@ -537,6 +543,55 @@ def _extract_fields(sections: list[Any]) -> tuple[dict[str, FieldDefinition], li
                         warnings.append(warning)
 
     return fields, warnings
+
+
+def _extract_turn_schema(
+    sections: list[Any],
+) -> tuple[dict[str, FieldDefinition] | None, list[SchemaExtractionWarning]]:
+    """Extract TURN_SCHEMA block as a per-item sub-schema (GH-427).
+
+    DEBATE_TRANSCRIPT declares a ``TURN_SCHEMA:`` block describing the
+    structure each TURN entry must satisfy (ROLE REQ ENUM, CONTENT REQ,
+    TURN_INDEX REQ, SPEAKER OPT, etc.). Prior to GH-427 this block was silently
+    discarded by ``_extract_fields`` — only the top-level ``FIELDS:`` block
+    reached the validator, leaving documented-but-not-enforced contract drift
+    (PROD::I5 SCHEMA_SOVEREIGNTY violation).
+
+    This helper parses each TURN_SCHEMA child Assignment as a holographic
+    pattern field, reusing ``_parse_field_assignment`` so the validator can
+    apply standard constraint evaluation (REQ, ENUM, TYPE, etc.) per turn
+    without bespoke logic.
+
+    Args:
+        sections: List of document sections.
+
+    Returns:
+        Tuple of (turn_schema dict or None, warnings list).
+        Returns ``(None, [])`` when no TURN_SCHEMA block is present so callers
+        can distinguish "schema declares no per-item structure" from "schema
+        declares an empty per-item structure".
+    """
+    turn_fields: dict[str, FieldDefinition] = {}
+    warnings: list[SchemaExtractionWarning] = []
+    found = False
+
+    for section in sections:
+        if isinstance(section, Block) and section.key == "TURN_SCHEMA":
+            found = True
+            for child in section.children:
+                if isinstance(child, Assignment):
+                    field_def, warning = _parse_field_assignment(child)
+                    if field_def:
+                        turn_fields[field_def.name] = field_def
+                    if warning:
+                        # Re-scope warning path under TURN_SCHEMA so audit
+                        # trails distinguish it from FIELDS-level warnings.
+                        warning.field_path = f"TURN_SCHEMA.{field_def.name if field_def else '?'}"
+                        warnings.append(warning)
+
+    if not found:
+        return None, warnings
+    return turn_fields, warnings
 
 
 def _parse_field_assignment(
@@ -912,6 +967,12 @@ def extract_schema_from_document(doc: Document) -> SchemaDefinition:
     # Extract FRONTMATTER block (Issue #244: Zone 2 validation)
     frontmatter = _extract_frontmatter_defs(doc.sections)
 
+    # GH-427: Extract TURN_SCHEMA block as per-item sub-schema (e.g., for
+    # DEBATE_TRANSCRIPT). None when the schema does not declare one.
+    turn_schema, turn_warnings = _extract_turn_schema(doc.sections)
+    if turn_warnings:
+        warnings = warnings + turn_warnings
+
     return SchemaDefinition(
         name=name,
         version=version,
@@ -920,4 +981,5 @@ def extract_schema_from_document(doc: Document) -> SchemaDefinition:
         frontmatter=frontmatter,
         default_target=default_target,
         warnings=warnings,
+        turn_schema=turn_schema,
     )
