@@ -56,41 +56,60 @@ def get_builtin_schema(schema_name: str) -> dict[str, Any] | None:
     return BUILTIN_SCHEMA_DEFINITIONS.get(schema_name)
 
 
-def get_schema_search_paths() -> list[Path]:
-    """Get list of paths to search for schema files.
+def _canonical_schema_dirs() -> list[Path]:
+    """Return the canonical schema-directory search list, resources-first.
 
-    Returns paths in priority order:
-    1. resources/specs/schemas/ in package directory (installed package)
-    2. src/octave_mcp/resources/specs/schemas/ in project root (development)
-    3. specs/schemas/ in project root (backward compatibility)
-    4. schemas/builtin/ in package directory
+    PR #444 CE rework: prior to this change, ``load_schema_by_name`` used
+    resources-first precedence (via the legacy ``get_schema_search_paths``
+    ordering) while ``load_builtin_schemas`` used builtin-first precedence
+    (hard-coded directory scan order). Discovery and validation could
+    therefore disagree on which file wins under a name collision.
 
-    Returns:
-        List of Path objects for schema search directories
+    Both loaders now read from this single helper so the precedence is
+    auditable and cannot drift. Order matches PR #431/#437/#438: new
+    canonical schemas live in ``src/octave_mcp/resources/specs/schemas/``,
+    so the resources directory takes precedence over the legacy builtin
+    directory.
+
+    Returned directories (in winning order):
+      1. Package resources: ``<pkg>/resources/specs/schemas/``
+      2. Development resources: ``<cwd>/src/octave_mcp/resources/specs/schemas/``
+      3. Legacy ``<cwd>/specs/schemas/`` (backwards compatibility).
+      4. Legacy ``<pkg>/schemas/builtin/``.
     """
     paths: list[Path] = []
 
-    # 1. Package resources location (for installed package)
     package_resources = Path(__file__).parent.parent / "resources" / "specs" / "schemas"
     if package_resources.exists():
         paths.append(package_resources)
 
-    # 2. New consolidated location in resources (development)
     resources_dir = Path.cwd() / "src" / "octave_mcp" / "resources" / "specs" / "schemas"
-    if resources_dir.exists():
+    if resources_dir.exists() and resources_dir not in paths:
         paths.append(resources_dir)
 
-    # 3. specs/schemas/ for backward compatibility
     specs_dir = Path.cwd() / "specs" / "schemas"
-    if specs_dir.exists():
+    if specs_dir.exists() and specs_dir not in paths:
         paths.append(specs_dir)
 
-    # 4. schemas/builtin/ in package directory
     builtin_dir = Path(__file__).parent / "builtin"
-    if builtin_dir.exists():
+    if builtin_dir.exists() and builtin_dir not in paths:
         paths.append(builtin_dir)
 
     return paths
+
+
+def get_schema_search_paths() -> list[Path]:
+    """Get list of paths to search for schema files (resources-first).
+
+    Delegates to ``_canonical_schema_dirs`` so ``load_schema_by_name``
+    and ``load_builtin_schemas`` share a single source of truth for
+    schema directory precedence. See ``_canonical_schema_dirs`` for the
+    full ordering rationale.
+
+    Returns:
+        List of Path objects for schema search directories.
+    """
+    return _canonical_schema_dirs()
 
 
 def load_schema(schema_path: str | Path) -> SchemaDefinition:
@@ -169,20 +188,30 @@ def load_schema_by_name(schema_name: str) -> SchemaDefinition | None:
 
 
 def load_builtin_schemas() -> dict[str, SchemaDefinition]:
-    """Load all builtin schemas from schemas/builtin/ directory.
+    """Load all builtin schemas for discovery (e.g. grammar resource listing).
+
+    PR #444 CE rework: this loader now delegates directory enumeration
+    to ``_canonical_schema_dirs`` so it shares precedence with
+    ``load_schema_by_name``. Prior behaviour was builtin-first (legacy
+    directory wins on name collision); the canonical direction is
+    resources-first per PR #431/#437/#438 (new schemas live in
+    ``src/octave_mcp/resources/specs/schemas/``).
+
+    ``dict.setdefault`` is preserved, so the first directory in
+    ``_canonical_schema_dirs`` (resources) wins on name collision.
 
     Returns:
-        Dictionary of schema name -> SchemaDefinition
+        Dictionary of schema name -> SchemaDefinition.
     """
     schemas: dict[str, SchemaDefinition] = {}
 
-    # Load from builtin directory
-    builtin_dir = Path(__file__).parent / "builtin"
-    if builtin_dir.exists():
-        for schema_file in builtin_dir.glob("*.oct.md"):
+    for directory in _canonical_schema_dirs():
+        if not directory.exists():
+            continue
+        for schema_file in directory.glob("*.oct.md"):
             try:
                 schema = load_schema(schema_file)
-                schemas[schema.name] = schema
+                schemas.setdefault(schema.name, schema)
             except Exception:
                 # Skip files that fail to parse
                 pass

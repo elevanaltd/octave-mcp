@@ -4102,7 +4102,7 @@ class WriteTool(BaseTool):
 
             # New-style SchemaDefinition schemas (constraint validation via section_schemas)
             schema_definition: SchemaDefinition | None = None
-            section_schemas: dict[str, SchemaDefinition] | None = None
+            section_schemas: dict[Any, SchemaDefinition] | None = None
 
             # Issue #150: Hermetic resolution for frozen@ and latest schema references
             if schema_name.startswith("frozen@") or schema_name == "latest":

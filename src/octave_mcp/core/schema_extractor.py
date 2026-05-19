@@ -189,11 +189,21 @@ class PolicyDefinition:
         version: Schema version from POLICY block
         unknown_fields: How to handle unknown fields (REJECT|IGNORE|WARN)
         targets: List of valid extraction targets (without section markers)
+        required_section_ids: Section ids (e.g. "1", "2b") whose presence
+            the validator MUST surface (GH-428). Absence emits
+            W_MISSING_REQUIRED_SECTION. Empty list disables the check.
+        section_conditional_required: Map of section key -> list of field
+            names that MUST appear inside that section IF the section is
+            present in the document (GH-428). The check is conditional:
+            documents without the section are unaffected. Missing field
+            members emit W_INCOMPLETE_SECTION_FIELDS naming the gaps.
     """
 
     version: str = "1.0"
     unknown_fields: str = "REJECT"
     targets: list[str] = field(default_factory=list)
+    required_section_ids: list[str] = field(default_factory=list)
+    section_conditional_required: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -265,18 +275,23 @@ class SchemaDefinition:
     turn_schema: dict[str, FieldDefinition] | None = None
 
 
-def _extract_policy(sections: list[Any]) -> tuple[PolicyDefinition, str | None]:
+def _extract_policy(
+    sections: list[Any],
+) -> tuple[PolicyDefinition, str | None, list[SchemaExtractionWarning]]:
     """Extract POLICY block from document sections.
 
     Args:
         sections: List of document sections (Assignment, Block, Section)
 
     Returns:
-        Tuple of (PolicyDefinition, default_target).
+        Tuple of (PolicyDefinition, default_target, warnings).
         default_target is extracted from POLICY.DEFAULT_TARGET for feudal inheritance.
+        warnings carries ``W_MALFORMED_POLICY`` diagnostics for shape errors
+        per PROD::I4 TRANSFORM_AUDITABILITY — every transformation logged.
     """
     policy = PolicyDefinition()
     default_target: str | None = None
+    warnings: list[SchemaExtractionWarning] = []
 
     for section in sections:
         if isinstance(section, Block) and section.key == "POLICY":
@@ -295,8 +310,36 @@ def _extract_policy(sections: list[Any]) -> tuple[PolicyDefinition, str | None]:
                         if target_value.startswith("§"):
                             target_value = target_value[1:]
                         default_target = target_value
+                    elif child.key == "REQUIRED_SECTION_IDS":
+                        # GH-428: Section presence requirement (e.g., ["1"]).
+                        ids, item_warnings = _parse_string_list_audited(child.value, "REQUIRED_SECTION_IDS")
+                        policy.required_section_ids = ids
+                        warnings.extend(item_warnings)
+                    elif child.key == "SECTION_CONDITIONAL_REQUIRED":
+                        # CE rework: a SECTION_CONDITIONAL_REQUIRED authored as a
+                        # scalar Assignment (rather than a Block) is malformed.
+                        # Pre-fix this was silently dropped; emit
+                        # W_MALFORMED_POLICY so the gap is visible (PROD::I4).
+                        warnings.append(
+                            SchemaExtractionWarning(
+                                code="W_MALFORMED_POLICY",
+                                message=(
+                                    "POLICY.SECTION_CONDITIONAL_REQUIRED must be a block of "
+                                    "section_key -> [field_names]; got a scalar Assignment value. "
+                                    "The conditional-required check is disabled for this schema."
+                                ),
+                                field_path="POLICY.SECTION_CONDITIONAL_REQUIRED",
+                            )
+                        )
+                elif isinstance(child, Block) and child.key == "SECTION_CONDITIONAL_REQUIRED":
+                    # GH-428: Section-conditional field requirement.
+                    # SECTION_CONDITIONAL_REQUIRED:
+                    #   ANCHOR_KERNEL::["TARGET","NEVER","MUST","GATE"]
+                    mapping, block_warnings = _parse_conditional_required_audited(child)
+                    policy.section_conditional_required = mapping
+                    warnings.extend(block_warnings)
 
-    return policy, default_target
+    return policy, default_target, warnings
 
 
 def _parse_targets(value: Any) -> list[str]:
@@ -326,6 +369,153 @@ def _parse_targets(value: Any) -> list[str]:
         targets.append(target_str)
 
     return targets
+
+
+def _parse_string_list(value: Any) -> list[str]:
+    """Parse a list-shaped Assignment value into a list of plain strings.
+
+    Used by GH-428 POLICY.REQUIRED_SECTION_IDS extraction. Section ids in
+    OCTAVE source are stored as strings ("1", "2b"); numeric ids may
+    arrive as ints from the parser, so we coerce defensively. Non-list
+    values yield an empty list rather than raising — lenient parsing
+    philosophy (PROD::I5: SCHEMA_SOVEREIGNTY surfaces malformed schemas
+    via missing-fields warnings downstream, not extractor exceptions).
+
+    Backwards-compat wrapper: discards audit. New callers should use
+    ``_parse_string_list_audited`` to capture ``W_MALFORMED_POLICY``
+    diagnostics per PROD::I4 TRANSFORM_AUDITABILITY.
+    """
+    result, _ = _parse_string_list_audited(value, field_path="")
+    return result
+
+
+def _parse_string_list_audited(value: Any, field_path: str) -> tuple[list[str], list[SchemaExtractionWarning]]:
+    """Audited variant of ``_parse_string_list``.
+
+    Emits ``W_MALFORMED_POLICY`` for shapes that deviate from
+    list-of-strings:
+      * Non-list scalar (e.g., a bare string).
+      * Non-string, non-numeric list elements (booleans, nulls, nested
+        structures): the element is dropped AND a warning fires naming
+        the field_path.
+
+    PROD::I4 TRANSFORM_AUDITABILITY: every transformation logged.
+    """
+    warnings: list[SchemaExtractionWarning] = []
+
+    # Shape A: not a list at all.
+    if not hasattr(value, "items") and not isinstance(value, list):
+        # ``None``/empty cases are legitimately absent — only warn for
+        # truthy scalars (a bare string is the canonical malformed shape).
+        if value is not None and str(value).strip():
+            warnings.append(
+                SchemaExtractionWarning(
+                    code="W_MALFORMED_POLICY",
+                    message=(
+                        f"POLICY.{field_path} must be a list of strings; got "
+                        f"scalar value {value!r}. The list is treated as empty."
+                    ),
+                    field_path=f"POLICY.{field_path}" if field_path else "POLICY",
+                )
+            )
+        return [], warnings
+
+    items = value.items if hasattr(value, "items") else value
+
+    result: list[str] = []
+    for index, item in enumerate(items):
+        if item is None:
+            warnings.append(
+                SchemaExtractionWarning(
+                    code="W_MALFORMED_POLICY",
+                    message=(f"POLICY.{field_path}[{index}] must be a string; got null. " f"Element dropped."),
+                    field_path=f"POLICY.{field_path}[{index}]" if field_path else f"POLICY[{index}]",
+                )
+            )
+            continue
+        # Booleans are an int subclass in Python — reject explicitly before
+        # the str() coercion silently turns ``True`` into ``"True"``.
+        if isinstance(item, bool):
+            warnings.append(
+                SchemaExtractionWarning(
+                    code="W_MALFORMED_POLICY",
+                    message=(
+                        f"POLICY.{field_path}[{index}] must be a string; got " f"boolean {item!r}. Element dropped."
+                    ),
+                    field_path=f"POLICY.{field_path}[{index}]" if field_path else f"POLICY[{index}]",
+                )
+            )
+            continue
+        if not isinstance(item, str | int | float):
+            warnings.append(
+                SchemaExtractionWarning(
+                    code="W_MALFORMED_POLICY",
+                    message=(
+                        f"POLICY.{field_path}[{index}] must be a string; got "
+                        f"{type(item).__name__}. Element dropped."
+                    ),
+                    field_path=f"POLICY.{field_path}[{index}]" if field_path else f"POLICY[{index}]",
+                )
+            )
+            continue
+        s = str(item).strip().strip('"').strip("'")
+        if s:
+            result.append(s)
+    return result, warnings
+
+
+def _parse_conditional_required(block: Any) -> dict[str, list[str]]:
+    """Backwards-compat wrapper that discards audit warnings.
+
+    New callers should use ``_parse_conditional_required_audited``.
+    """
+    result, _ = _parse_conditional_required_audited(block)
+    return result
+
+
+def _parse_conditional_required_audited(
+    block: Any,
+) -> tuple[dict[str, list[str]], list[SchemaExtractionWarning]]:
+    """Parse a SECTION_CONDITIONAL_REQUIRED block into a mapping.
+
+    Source shape (Block value):
+        SECTION_CONDITIONAL_REQUIRED:
+          ANCHOR_KERNEL::["TARGET","NEVER","MUST","GATE"]
+          OTHER_SECTION::["FIELD_A","FIELD_B"]
+
+    Each Assignment child maps a section key (the key as it appears in
+    the document, without the §N:: prefix — e.g. ``ANCHOR_KERNEL``) to a
+    list of field names that must be present inside that section IF the
+    section is present (GH-428).
+
+    Per PROD::I4 TRANSFORM_AUDITABILITY, malformed children (non-list
+    values, non-string elements) emit ``W_MALFORMED_POLICY`` warnings.
+    """
+    result: dict[str, list[str]] = {}
+    warnings: list[SchemaExtractionWarning] = []
+    for child in getattr(block, "children", []):
+        if isinstance(child, Assignment):
+            field_path = f"SECTION_CONDITIONAL_REQUIRED.{child.key}"
+            fields, child_warnings = _parse_string_list_audited(child.value, field_path)
+            warnings.extend(child_warnings)
+            if fields:
+                result[child.key] = fields
+        else:
+            # Nested Block under SECTION_CONDITIONAL_REQUIRED is unexpected:
+            # the canonical shape is flat Assignment children.
+            child_key = getattr(child, "key", "<unknown>")
+            warnings.append(
+                SchemaExtractionWarning(
+                    code="W_MALFORMED_POLICY",
+                    message=(
+                        f"POLICY.SECTION_CONDITIONAL_REQUIRED expects flat Assignment "
+                        f"children (section_key::[field,...]); got nested "
+                        f"{type(child).__name__} for key {child_key!r}. Entry skipped."
+                    ),
+                    field_path=f"POLICY.SECTION_CONDITIONAL_REQUIRED.{child_key}",
+                )
+            )
+    return result, warnings
 
 
 def _extract_fields(sections: list[Any]) -> tuple[dict[str, FieldDefinition], list[SchemaExtractionWarning]]:
@@ -765,11 +955,14 @@ def extract_schema_from_document(doc: Document) -> SchemaDefinition:
     if doc.meta and "VERSION" in doc.meta:
         version = str(doc.meta["VERSION"]).strip('"')
 
-    # Extract POLICY block and default_target (Issue #103: feudal inheritance)
-    policy, default_target = _extract_policy(doc.sections)
+    # Extract POLICY block and default_target (Issue #103: feudal inheritance).
+    # PR #444 rework: POLICY extraction now returns W_MALFORMED_POLICY
+    # warnings per PROD::I4 TRANSFORM_AUDITABILITY.
+    policy, default_target, policy_warnings = _extract_policy(doc.sections)
 
     # Extract FIELDS block (M3 CE violation #3: now returns warnings)
     fields, warnings = _extract_fields(doc.sections)
+    warnings.extend(policy_warnings)
 
     # Extract FRONTMATTER block (Issue #244: Zone 2 validation)
     frontmatter = _extract_frontmatter_defs(doc.sections)
