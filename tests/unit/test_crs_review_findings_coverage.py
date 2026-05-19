@@ -122,12 +122,7 @@ class TestCrsReviewCanonicalEnvelopeName:
         )
 
         legacy = (
-            Path(__file__).parent.parent.parent
-            / "src"
-            / "octave_mcp"
-            / "schemas"
-            / "builtin"
-            / "crs_review.oct.md"
+            Path(__file__).parent.parent.parent / "src" / "octave_mcp" / "schemas" / "builtin" / "crs_review.oct.md"
         )
         assert not legacy.exists(), (
             f"Legacy schema source MUST be deleted by the migration "
@@ -170,8 +165,7 @@ class TestCrsReviewPolicy:
         assert schema is not None
         conditional = schema.policy.section_conditional_required
         assert "FINDINGS" in conditional, (
-            f"POLICY.SECTION_CONDITIONAL_REQUIRED MUST declare a FINDINGS key. "
-            f"Got: {conditional!r}"
+            f"POLICY.SECTION_CONDITIONAL_REQUIRED MUST declare a FINDINGS key. " f"Got: {conditional!r}"
         )
         findings_required = set(conditional["FINDINGS"])
         expected = set(_REQUIRED_FINDING_FIELDS)
@@ -291,9 +285,7 @@ class TestCrsReviewNegativeFixtures:
             ("malformed_missing_issue.oct.md", "ISSUE"),
         ],
     )
-    def test_malformed_fixture_emits_named_warning(
-        self, fixture_name: str, missing_field: str
-    ) -> None:
+    def test_malformed_fixture_emits_named_warning(self, fixture_name: str, missing_field: str) -> None:
         """Each malformed fixture MUST surface W_INCOMPLETE_SECTION_FIELDS naming its gap.
 
         The walker (``_validate_section_body_coverage`` in core/validator.py)
@@ -386,4 +378,97 @@ class TestCrsReviewMissingRequiredSection:
             f"Document omitting §3::FINDINGS must surface "
             f"W_MISSING_REQUIRED_SECTION naming section '3'. "
             f"Got messages: {all_messages!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# §7: Empty §3::FINDINGS section (legitimate APPROVED-review-with-zero-findings)
+#
+# Per IL→HO Surprise 5 / HO Option E direction: PR #444's walker treats an
+# empty Section as "missing all REQ fields" because present_field_keys is the
+# empty set. For SKILL §5::ANCHOR_KERNEL that semantic is correct (authors
+# don't write empty kernel blocks). For CRS_REVIEW §3::FINDINGS it is wrong —
+# an APPROVED review with TOTAL::0 legitimately carries an empty §3 header
+# meaning "no findings to report".
+#
+# The walker is refined here to add a single condition: if the section is
+# present but contains zero Assignment children, the SECTION_CONDITIONAL_REQUIRED
+# check is skipped (empty section is not malformed). The REQUIRED_SECTION_IDS
+# check still fires (section must exist). This is upward-compatible with the
+# SKILL precedent because no existing SKILL test exercises the empty-block
+# path (verified by Grep; the two known-gap SKILLs in
+# KNOWN_INCOMPLETE_ANCHOR_KERNEL_GAPS author TARGET + GATE — non-empty).
+# ---------------------------------------------------------------------------
+
+
+class TestCrsReviewEmptyFindingsSection:
+    """An empty §3::FINDINGS section MUST validate clean (no W_INCOMPLETE_SECTION_FIELDS)."""
+
+    def test_empty_findings_section_with_zero_total_validates_clean(self) -> None:
+        """An APPROVED review with TOTAL::0 and an empty §3 MUST validate clean.
+
+        This is the canonical "no findings to report" shape — the existing
+        in-test ``VALID_CRS_REVIEW_APPROVED`` fixture (test_crs_review_schema.py)
+        is its functional twin. Without the walker refinement
+        (``if not present_field_keys: continue`` inside the
+        SECTION_CONDITIONAL_REQUIRED loop of _validate_section_body_coverage),
+        the empty §3 emits W_INCOMPLETE_SECTION_FIELDS listing all three
+        REQ triple members (SEVERITY+FILE+ISSUE) as missing — which would
+        reject every legitimate APPROVED-with-zero-findings review.
+
+        Per HO Option E (IL→HO Surprise 5 resolution): empty section is not
+        malformed. The REQUIRED_SECTION_IDS check still fires (§3 must exist),
+        but the SECTION_CONDITIONAL_REQUIRED check skips empty sections.
+        """
+        content = (
+            "===CRS_REVIEW===\n"
+            "META:\n"
+            "  TYPE::CRS_REVIEW\n"
+            '  VERSION::"1.0.0"\n'
+            "\n"
+            "§1::VERDICT\n"
+            "  ROLE::CRS\n"
+            '  PROVIDER::"test-model"\n'
+            "  VERDICT::APPROVED\n"
+            '  SHA::"def5678"\n'
+            "  TIER::T1\n"
+            "\n"
+            "§2::DISTRIBUTION\n"
+            "  TOTAL::0\n"
+            "  BLOCKING::0\n"
+            "  TRIAGED::false\n"
+            "  OMITTED::0\n"
+            "  P0::0\n"
+            "  P1::0\n"
+            "  P2::0\n"
+            "  P3::0\n"
+            "  P4::0\n"
+            "  P5::0\n"
+            "\n"
+            "§3::FINDINGS\n"
+            "\n"
+            "§4::SUMMARY\n"
+            '  ASSESSMENT::"No issues found in this change"\n'
+            "  TOP_RISKS::[]\n"
+            "\n"
+            "===END===\n"
+        )
+        result = _validate_content(content)
+
+        warnings = result.get("warnings", []) or []
+        validation_errors = result.get("validation_errors", []) or []
+
+        all_records = list(warnings) + list(validation_errors)
+        incomplete = [r for r in all_records if isinstance(r, dict) and r.get("code") == "W_INCOMPLETE_SECTION_FIELDS"]
+        assert not incomplete, (
+            f"Empty §3::FINDINGS section MUST validate clean per HO Option E "
+            f"(empty section is not malformed). Got "
+            f"W_INCOMPLETE_SECTION_FIELDS: {incomplete!r}"
+        )
+
+        # And the document must validate overall (status VALIDATED), not INVALID.
+        assert result["validation_status"] == "VALIDATED", (
+            f"APPROVED review with empty §3 MUST validate clean. Got status="
+            f"{result.get('validation_status')!r}; warnings={warnings!r}; "
+            f"errors={validation_errors!r}"
         )
