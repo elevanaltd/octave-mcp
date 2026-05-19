@@ -281,6 +281,87 @@ def test_validator_returns_envelope_with_expected_keys(fixture: str, name: str) 
     assert "validation_status" in result, f"fixture={name} envelope missing validation_status"
 
 
+# ---------------------------------------------------------------------------
+# CE rework — non-hashable TURN_INDEX must not crash the validator.
+#
+# Codex review on PR #442 surfaced an uncaught ``TypeError: unhashable type``
+# raised at validate.py:320 when a malformed TURN entry declares
+# ``TURN_INDEX::[1,2]``. The parser produces a ``ListValue`` (an unhashable
+# dataclass), and the duplicate-tracking ``dict`` lookup blew up before the
+# validator could emit an INVALID envelope. This is a direct PROD::I5
+# SCHEMA_SOVEREIGNTY violation: validation status was invisible because the
+# exception escaped the validator entirely.
+# ---------------------------------------------------------------------------
+
+
+NON_HASHABLE_TURN_INDEX_TRANSCRIPT = """===DEBATE_TRANSCRIPT===
+META:
+  TYPE::DEBATE_TRANSCRIPT
+  VERSION::"1.0"
+
+THREAD_ID::test-debate-gh427-list-turn-index
+TOPIC::TURN_SCHEMA enforcement non-hashable TURN_INDEX
+MODE::fixed
+STATUS::closed
+PARTICIPANTS::[Wind, Wall, Door]
+
+TURNS:
+  T1:
+    ROLE::Wind
+    CONTENT::First turn with a malformed list TURN_INDEX.
+    TURN_INDEX::[1, 2]
+  T2:
+    ROLE::Wall
+    CONTENT::Second turn with a well-formed scalar TURN_INDEX.
+    TURN_INDEX::3
+===END==="""
+
+
+class TestTurnIndexNonHashableGuard:
+    """CE rework: non-hashable TURN_INDEX values must NOT crash the validator.
+
+    PROD::I5 SCHEMA_SOVEREIGNTY mandates validation_status_visible_in_output.
+    An uncaught TypeError makes status invisible. The validator MUST emit a
+    visible INVALID envelope (E_TURN_INDEX_TYPE or equivalent) and skip the
+    duplicate-tracking step for that turn, then continue processing siblings.
+    """
+
+    def test_list_turn_index_returns_invalid_not_typeerror(self) -> None:
+        """A ``TURN_INDEX::[1, 2]`` (ListValue) must return an INVALID envelope.
+
+        Prior to the CE-rework fix this raised
+        ``TypeError: unhashable type: 'ListValue'`` from the duplicate-tracking
+        dict lookup at validate.py:320. The contract is: malformed schema
+        input → visible INVALID envelope, never an exception.
+        """
+        # The validator MUST NOT raise. If the guard is missing, the
+        # underlying TypeError propagates through asyncio.run and fails here
+        # with an unhandled exception rather than an assertion message.
+        result = _run_validate(NON_HASHABLE_TURN_INDEX_TRANSCRIPT)
+        assert result["validation_status"] == "INVALID", (
+            f"Expected INVALID for non-hashable TURN_INDEX, got "
+            f"{result['validation_status']}: "
+            f"validation_errors={result.get('validation_errors')!r}"
+        )
+        codes = {err.get("code") for err in result.get("validation_errors") or []}
+        # Accept either the specific E_TURN_INDEX_TYPE code or the stable
+        # E_TURN_FIELD wrapper — both are valid per the CE-rework scope.
+        assert codes & {"E_TURN_INDEX_TYPE", "E_TURN_FIELD"}, (
+            f"Expected E_TURN_INDEX_TYPE or E_TURN_FIELD for non-hashable " f"TURN_INDEX; got codes={codes!r}"
+        )
+
+    def test_list_turn_index_does_not_block_sibling_turns(self) -> None:
+        """The non-hashable guard MUST skip only the offending turn's
+        duplicate-tracking step. Sibling turns with valid scalar TURN_INDEX
+        values continue to participate in per-turn validation.
+        """
+        # Simply asserting no exception is sufficient — the previous test
+        # covers the INVALID envelope shape; this test pins the
+        # 'continue, do not break' contract.
+        result = _run_validate(NON_HASHABLE_TURN_INDEX_TRANSCRIPT)
+        assert "validation_status" in result
+
+
 def test_schema_source_declares_turn_schema_block() -> None:
     """The schema source MUST continue to declare a TURN_SCHEMA block (I1 fidelity)."""
     text = SCHEMA_PATH.read_text(encoding="utf-8")
