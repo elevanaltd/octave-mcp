@@ -317,6 +317,34 @@ def _validate_turn_schema(
         # TURN_INDEX uniqueness invariant.
         if "TURN_INDEX" in turn_fields:
             ti_value = turn_fields["TURN_INDEX"]
+            # CE rework: guard the duplicate-tracking dict lookup against
+            # non-hashable TURN_INDEX values (e.g. a malformed
+            # ``TURN_INDEX::[1,2]`` parses as ``ListValue`` — an unhashable
+            # dataclass). Without this guard, the ``in seen_turn_indices``
+            # probe raised ``TypeError: unhashable type`` and escaped the
+            # validator entirely, bypassing the INVALID envelope contract
+            # and silently breaking PROD::I5 SCHEMA_SOVEREIGNTY
+            # (validation_status_visible_in_output).
+            try:
+                hash(ti_value)
+            except TypeError:
+                errors.append(
+                    ValidationError(
+                        code="E_TURN_INDEX_TYPE",
+                        message=(
+                            f"Turn '{turn_key}' TURN_INDEX value {ti_value!r} "
+                            f"is not a hashable scalar (got "
+                            f"{type(ti_value).__name__}); TURN_INDEX must be a "
+                            f"scalar value to participate in uniqueness "
+                            f"enforcement (GH-427 CE rework)."
+                        ),
+                        field_path=f"{turn_path_prefix}.TURN_INDEX",
+                    )
+                )
+                # Skip duplicate tracking for this turn and continue with
+                # remaining siblings — the surfaced error is sufficient to
+                # mark the document INVALID.
+                continue
             if ti_value in seen_turn_indices:
                 errors.append(
                     ValidationError(
