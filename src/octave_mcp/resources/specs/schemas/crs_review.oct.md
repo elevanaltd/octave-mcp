@@ -15,6 +15,7 @@ POLICY:
     "§SUMMARY"
   ]
   REQUIRED_SECTION_IDS::["3"]
+  SECTION_ALLOWS_EMPTY::["FINDINGS"]
   SECTION_CONDITIONAL_REQUIRED:
     FINDINGS::["SEVERITY","FILE","ISSUE"]
 FIELDS:
@@ -69,6 +70,7 @@ USAGE_NOTES::[
   "REQ triple: every finding entry should carry SEVERITY, FILE, ISSUE. Missing members surface W_INCOMPLETE_SECTION_FIELDS naming the gap (PR #444 walker).",
   "FIX vs REQUIRED_FIX: both names are accepted as OPT fields. REQUIRED_FIX is the recommended canonical name. The alias is validator-only — octave_write does NOT rewrite FIX to REQUIRED_FIX at emit time (PROD::I1 bijective_on_semantic_space; HO final-final AC GH-426).",
   "REQUIRED_SECTION_IDS::[3]: documents omitting §3::FINDINGS entirely surface W_MISSING_REQUIRED_SECTION (PROD::I5 SCHEMA_SOVEREIGNTY; closes the WAVE_3 silent-gap defect).",
+  "SECTION_ALLOWS_EMPTY::[FINDINGS]: a §3::FINDINGS section that is present-but-empty (header followed by zero finding entries) validates clean. This is the canonical 'no findings to report' shape — an APPROVED review with TOTAL::0 legitimately authors an empty findings section. The opt-in is per-schema (PR #446 cubic P2 fix); sibling schemas like SKILL do NOT opt-in, so their empty §-blocks still surface W_INCOMPLETE_SECTION_FIELDS.",
   "SEVERITY ENUM[P0..P5] is documentary until GH#435 (octave_validate ENUM enforcement PARTIAL) lands — the constraint is parsed and exposed via the GBNF compiler but is not yet a validator-level rejection axis.",
   "SCHEMA_REQUIRED_EXCEPTIONS (per GH#439) not yet consumed by the validator surface; declared empty here intentionally — the per-finding contract has no stub-pointer mode analogous to DECISION_LOG archived entries."
 ]
