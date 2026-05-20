@@ -571,3 +571,79 @@ class TestItem5SectionContextThreading:
         assert not unexpected, (
             f"Complete nested ANCHOR_KERNEL should not surface W_INCOMPLETE_SECTION_FIELDS. " f"Got: {unexpected!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Item 6 — cubic P2 (PR #446 rework): empty SKILL ANCHOR_KERNEL MUST reject
+#
+# PR #446 first attempt added a universal ``if not present_field_keys:
+# continue`` bypass to ``_validate_section_body_coverage`` to support the
+# legitimate CRS_REVIEW empty-§3-FINDINGS case. cubic correctly flagged
+# this as a cubic P2: the universal bypass weakens
+# SECTION_CONDITIONAL_REQUIRED enforcement for SKILL — an author writing
+# an empty §5::ANCHOR_KERNEL block almost certainly meant to populate it,
+# and silent-pass is wrong.
+#
+# Fix: scope the empty-pass per-schema via a new POLICY opt-in field
+# ``SECTION_ALLOWS_EMPTY::[<section_keys>]``. CRS_REVIEW opts in for
+# FINDINGS; SKILL does NOT opt in for ANCHOR_KERNEL. Walker becomes:
+# ``if not present_field_keys and section_key in
+# policy.section_allows_empty: continue``.
+#
+# This test pins the post-fix SKILL contract: an empty §5::ANCHOR_KERNEL
+# block MUST surface W_INCOMPLETE_SECTION_FIELDS naming all four quartet
+# members (TARGET/NEVER/MUST/GATE). The test gap cubic correctly
+# identified — no prior test exercised the empty-block path — is closed
+# here.
+# ---------------------------------------------------------------------------
+
+
+class TestItem6EmptyAnchorKernelMustReject:
+    """Empty §5::ANCHOR_KERNEL must surface W_INCOMPLETE_SECTION_FIELDS (cubic P2 reproducer)."""
+
+    _FRONTMATTER = (
+        "---\n"
+        "name: empty-kernel-skill\n"
+        "description: SKILL exercising the empty-ANCHOR_KERNEL rejection contract\n"
+        "allowed-tools: [Bash]\n"
+        "---\n\n"
+    )
+
+    def test_empty_anchor_kernel_block_surfaces_incomplete_quartet_warning(self) -> None:
+        """An empty §5::ANCHOR_KERNEL section MUST reject (cubic P2).
+
+        SKILL does NOT declare POLICY.SECTION_ALLOWS_EMPTY, so the walker's
+        empty-section pass-through (opt-in by schema) does NOT apply. An
+        empty ANCHOR_KERNEL block — header present, zero Assignment
+        children — must still surface W_INCOMPLETE_SECTION_FIELDS naming
+        the full quartet (TARGET, NEVER, MUST, GATE) as missing.
+
+        This is the test gap cubic correctly identified in PR #446 review:
+        no prior test exercised the empty-block path because authors don't
+        write empty kernel blocks in practice. Closing the gap here.
+        """
+        content = (
+            self._FRONTMATTER + "===SKILL:EMPTY_KERNEL===\n"
+            "META:\n"
+            "  TYPE::SKILL\n"
+            '  VERSION::"1.0"\n'
+            "§1::CORE\n"
+            "PURPOSE::test empty kernel block\n"
+            "§5::ANCHOR_KERNEL\n"
+            "===END===\n"
+        )
+        result = _validate_content(content)
+
+        warnings = result.get("warnings", []) or []
+        incomplete = [w for w in warnings if isinstance(w, dict) and w.get("code") == "W_INCOMPLETE_SECTION_FIELDS"]
+        assert incomplete, (
+            f"Empty §5::ANCHOR_KERNEL block MUST surface W_INCOMPLETE_SECTION_FIELDS "
+            f"(cubic P2 contract: empty kernel is malformed, not 'no entries to report'). "
+            f"Got status={result.get('validation_status')!r} warnings={warnings!r}"
+        )
+        joined = " ".join(w.get("message", "") for w in incomplete)
+        for needed in ("TARGET", "NEVER", "MUST", "GATE"):
+            assert needed in joined, (
+                f"Warning should name missing quartet member {needed!r} in empty-kernel case; "
+                f"got message={joined!r}"
+            )
