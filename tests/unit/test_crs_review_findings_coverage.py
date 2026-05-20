@@ -475,53 +475,50 @@ class TestCrsReviewEmptyFindingsSection:
 
 
 # ---------------------------------------------------------------------------
-# §8: Walker refinement regression pin (SKILL upward-compatibility)
+# §8: Walker empty-section opt-in mechanism regression pin
 #
-# Pins the upward-compatibility claim for the walker refinement landed in
-# this PR. The refinement adds ``if not present_field_keys: continue``
-# inside the SECTION_CONDITIONAL_REQUIRED loop. The same code path drives
-# SKILL §5::ANCHOR_KERNEL coverage; an empty ANCHOR_KERNEL block now
-# silently passes (no W_INCOMPLETE_SECTION_FIELDS).
+# Pins the per-schema POLICY opt-in (``SECTION_ALLOWS_EMPTY``) introduced
+# as the cubic P2 fix on PR #446. The walker's empty-section pass-through
+# is conditional on whether at least one schema in the validation pass
+# declared the section in POLICY.SECTION_ALLOWS_EMPTY.
 #
-# This is an INTENTIONAL behaviour change shared with CRS_REVIEW §3 by
-# design. In practice no SKILL author writes an empty kernel block; the
-# refinement is therefore upward-compatible with every existing SKILL
-# test and on-disk SKILL document. If a future SKILL change introduces a
-# regression where an empty ANCHOR_KERNEL needs to surface a warning, the
-# correct response is to extend the walker with a per-section semantic
-# toggle rather than revert this refinement.
+# Three branches exercised here:
 #
-# This regression-pin test exists so the shared-behaviour-change is
-# discoverable: if someone reverts ``if not present_field_keys: continue``
-# this test fails immediately with a CRS_REVIEW-context error message,
-# making the linkage between the two schemas visible.
+# 1. ``section_allows_empty`` EMPTY (no opt-in) → empty section MUST
+#    fire W_INCOMPLETE_SECTION_FIELDS. Mirrors the SKILL ANCHOR_KERNEL
+#    contract (no opt-in → strict). Cubic P2 contract preserved.
+#
+# 2. ``section_allows_empty`` declares the section → empty section MUST
+#    validate clean (no W_INCOMPLETE_SECTION_FIELDS). Mirrors the
+#    CRS_REVIEW FINDINGS contract (opt-in → empty allowed).
+#
+# 3. ``section_allows_empty`` declares the section BUT the section is
+#    populated-but-incomplete (some REQ fields present, others missing)
+#    → the walker MUST still fire W_INCOMPLETE_SECTION_FIELDS naming
+#    the missing fields. Opt-in covers ONLY the truly-empty case;
+#    partial sections remain validated.
+#
+# If a maintainer regresses to the PR #446 first-attempt universal
+# bypass (``if not present_field_keys: continue`` without the
+# ``and section_key in allows_empty`` clause), test 1 here fires
+# immediately with a "SKILL strictness broken" error message making
+# the regression discoverable from CRS_REVIEW's test surface.
 # ---------------------------------------------------------------------------
 
 
-class TestWalkerEmptySectionRefinementRegressionPin:
-    """Regression pin: the walker's empty-section pass-through must NOT regress."""
+class TestWalkerSectionAllowsEmptyOptInRegressionPin:
+    """Regression pin: the per-schema empty-section opt-in must NOT regress."""
 
-    def test_empty_arbitrary_conditional_section_passes_for_any_schema(self) -> None:
-        """A SECTION_CONDITIONAL_REQUIRED section with zero assignment children
-        MUST silently pass for ANY schema using the walker.
+    @staticmethod
+    def _make_schema(*, allow_empty: bool) -> object:
+        """Build a minimal synthetic schema with or without the opt-in.
 
-        Constructs a minimal synthetic schema declaring
-        SECTION_CONDITIONAL_REQUIRED::["A","B","C"] for a section keyed
-        ``MARKER``, then validates a document where the ``MARKER:`` block
-        is present-but-empty. Pre-refinement (PR #444 baseline) emits
-        W_INCOMPLETE_SECTION_FIELDS naming A,B,C. Post-refinement the
-        check is skipped because present_field_keys is empty.
-
-        Pinning this contract at the synthetic-schema level (not just for
-        CRS_REVIEW) makes the regression discoverable from any schema's
-        test surface — the empty-section pass-through is a walker
-        invariant, not a CRS_REVIEW special case.
+        Used by the three tests below to exercise the opt-in mechanism
+        without coupling to any concrete production schema's evolution.
         """
-        from octave_mcp.core.parser import parse as _parse
         from octave_mcp.core.schema_extractor import PolicyDefinition, SchemaDefinition
-        from octave_mcp.core.validator import Validator
 
-        schema = SchemaDefinition(
+        return SchemaDefinition(
             name="DOC",
             version="1.0",
             policy=PolicyDefinition(
@@ -529,10 +526,57 @@ class TestWalkerEmptySectionRefinementRegressionPin:
                 unknown_fields="WARN",
                 required_section_ids=[],
                 section_conditional_required={"MARKER": ["A", "B", "C"]},
+                section_allows_empty={"MARKER"} if allow_empty else set(),
             ),
             fields={},
         )
 
+    def test_empty_section_without_opt_in_fires_incomplete_warning(self) -> None:
+        """No opt-in branch: empty MARKER block MUST surface W_INCOMPLETE_SECTION_FIELDS.
+
+        Cubic P2 contract: a schema that does NOT declare
+        ``SECTION_ALLOWS_EMPTY`` keeps the strict default — empty
+        sections are treated as missing-all-required-fields. This is
+        the SKILL §5::ANCHOR_KERNEL contract pinned at the synthetic
+        level so a regression to the PR #446 first-attempt universal
+        bypass is caught immediately from CRS_REVIEW's test surface.
+        """
+        from octave_mcp.core.parser import parse as _parse
+        from octave_mcp.core.validator import Validator
+
+        schema = self._make_schema(allow_empty=False)
+        src = "===DOC===\n" "META:\n" "  TYPE::DOC\n" '  VERSION::"1.0"\n' "§1::WRAPPER\n" "MARKER:\n" "===END===\n"
+        doc = _parse(src)
+        validator = Validator({})
+        errors = validator.validate(doc, strict=False, section_schemas={"DOC": schema})
+
+        incomplete = [e for e in errors if e.code == "W_INCOMPLETE_SECTION_FIELDS" and e.field_path == "MARKER"]
+        assert incomplete, (
+            f"Empty MARKER block in a schema WITHOUT SECTION_ALLOWS_EMPTY opt-in "
+            f"MUST surface W_INCOMPLETE_SECTION_FIELDS naming all REQ fields "
+            f"(cubic P2 contract on PR #446: empty is not opt-in by default). "
+            f"If this test fails, the walker has regressed to a universal "
+            f"empty-bypass — restore the ``and section_key in allows_empty`` "
+            f"clause in core/validator.py _validate_section_body_coverage. "
+            f"Got errors: {errors!r}"
+        )
+        joined = " ".join(e.message for e in incomplete)
+        for needed in ("A", "B", "C"):
+            assert needed in joined, (
+                f"Empty no-opt-in section warning should name missing field " f"{needed!r}; got {joined!r}"
+            )
+
+    def test_empty_section_with_opt_in_validates_clean(self) -> None:
+        """Opt-in branch: empty MARKER block in opt-in schema MUST validate clean.
+
+        Mirrors the CRS_REVIEW FINDINGS contract at the synthetic
+        schema level so the opt-in mechanism is discoverable
+        independently of CRS_REVIEW's schema evolution.
+        """
+        from octave_mcp.core.parser import parse as _parse
+        from octave_mcp.core.validator import Validator
+
+        schema = self._make_schema(allow_empty=True)
         src = "===DOC===\n" "META:\n" "  TYPE::DOC\n" '  VERSION::"1.0"\n' "§1::WRAPPER\n" "MARKER:\n" "===END===\n"
         doc = _parse(src)
         validator = Validator({})
@@ -540,41 +584,27 @@ class TestWalkerEmptySectionRefinementRegressionPin:
 
         incomplete = [e for e in errors if e.code == "W_INCOMPLETE_SECTION_FIELDS" and e.field_path == "MARKER"]
         assert not incomplete, (
-            f"Empty MARKER block must silently pass per GH-426 walker refinement "
-            f"(present_field_keys is empty → SECTION_CONDITIONAL_REQUIRED check "
-            f"skipped). If this test fails, the refinement at "
-            f"core/validator.py _validate_section_body_coverage was reverted. "
-            f"Got errors: {errors!r}"
+            f"Empty MARKER block in a schema WITH SECTION_ALLOWS_EMPTY::['MARKER'] "
+            f"MUST validate clean (opt-in honoured). Got errors: {errors!r}"
         )
 
-    def test_populated_section_still_surfaces_missing_field_warning(self) -> None:
-        """The refinement MUST NOT regress the populated-but-incomplete case.
+    def test_populated_section_still_fires_even_with_opt_in(self) -> None:
+        """Opt-in covers ONLY the truly-empty case.
 
-        Defensive twin of the test above: a section with at least one
-        Assignment child but missing other REQ members must still surface
-        W_INCOMPLETE_SECTION_FIELDS naming the gap. If a maintainer
-        accidentally extends the refinement to ``if not all required
-        fields present: continue`` instead of ``if not present_field_keys:
-        continue``, the malformed-finding cases (covered by the
-        TestCrsReviewNegativeFixtures parametrised matrix above) would
-        silently pass.
+        A schema that declares SECTION_ALLOWS_EMPTY::['MARKER'] but where
+        the document authors MARKER: with at least one assignment present
+        (and other REQ members missing) MUST still surface
+        W_INCOMPLETE_SECTION_FIELDS for the missing members. Opt-in is
+        scoped to "empty is allowed", NOT "missing fields ignored".
+
+        Guards against a maintainer accidentally widening the opt-in
+        check to ``if section_key in allows_empty: continue`` (which
+        would silently pass malformed entries).
         """
         from octave_mcp.core.parser import parse as _parse
-        from octave_mcp.core.schema_extractor import PolicyDefinition, SchemaDefinition
         from octave_mcp.core.validator import Validator
 
-        schema = SchemaDefinition(
-            name="DOC",
-            version="1.0",
-            policy=PolicyDefinition(
-                version="1.0",
-                unknown_fields="WARN",
-                required_section_ids=[],
-                section_conditional_required={"MARKER": ["A", "B", "C"]},
-            ),
-            fields={},
-        )
-
+        schema = self._make_schema(allow_empty=True)
         src = (
             "===DOC===\n"
             "META:\n"
@@ -591,10 +621,13 @@ class TestWalkerEmptySectionRefinementRegressionPin:
 
         incomplete = [e for e in errors if e.code == "W_INCOMPLETE_SECTION_FIELDS" and e.field_path == "MARKER"]
         assert incomplete, (
-            f"Populated MARKER block missing B+C must surface "
-            f"W_INCOMPLETE_SECTION_FIELDS. The walker refinement must only "
-            f"skip TRULY empty sections, not partial ones. Got errors: {errors!r}"
+            f"Populated MARKER block missing B+C MUST surface "
+            f"W_INCOMPLETE_SECTION_FIELDS even when SECTION_ALLOWS_EMPTY "
+            f"declared the section. Opt-in covers only the truly-empty case; "
+            f"partial sections remain validated. Got errors: {errors!r}"
         )
         joined = " ".join(e.message for e in incomplete)
         for needed in ("B", "C"):
-            assert needed in joined, f"Warning should name missing field {needed!r}; got {joined!r}"
+            assert needed in joined, (
+                f"Populated opt-in section warning should name missing field " f"{needed!r}; got {joined!r}"
+            )
