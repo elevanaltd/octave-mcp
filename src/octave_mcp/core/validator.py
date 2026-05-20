@@ -556,6 +556,7 @@ class Validator:
         # collapse via set / dict semantics so we emit once.
         required_ids: set[str] = set()
         conditional: dict[str, list[str]] = {}
+        allows_empty: set[str] = set()
         for schema_def in section_schemas.values():
             policy = getattr(schema_def, "policy", None)
             if policy is None:
@@ -568,6 +569,13 @@ class Validator:
                 # within a single validation pass.
                 if fields:
                     conditional[section_key] = list(fields)
+            # GH-426 cubic P2 fix on PR #446: per-schema empty-section opt-in.
+            # Aggregated across schemas with the same set-union semantic as
+            # required_ids / conditional (if any schema in the map opts a
+            # section in, that section is treated as empty-allowed for this
+            # validation pass).
+            for section_key in getattr(policy, "section_allows_empty", set()) or set():
+                allows_empty.add(section_key)
 
         if not required_ids and not conditional:
             return
@@ -661,34 +669,36 @@ class Validator:
 
             present_field_keys = section_field_keys[section_key]
 
-            # GH-426 refinement (HO Option E, IL→HO Surprise 5 resolution):
-            # an empty section — present in the document body but carrying
-            # zero Assignment children — is NOT malformed; it semantically
-            # means "no entries to report" (e.g. a CRS_REVIEW APPROVED
-            # review with TOTAL::0 legitimately authors an empty
-            # §3::FINDINGS header). The PR #444 walker landed without
-            # this distinction because SKILL §5::ANCHOR_KERNEL does not
-            # exhibit the empty-but-meaningful pattern in practice
-            # (authors either author the quartet or omit the block
-            # entirely).
+            # GH-426 cubic P2 fix on PR #446 — per-schema empty-section opt-in.
             #
-            # SKILL upward-compat check (verified by Grep + on-disk audit
-            # at the time of authoring): no existing test synthesises a
-            # SKILL with an empty ``§5::ANCHOR_KERNEL`` block (all RED
-            # and regression tests author ``TARGET::...`` at minimum);
-            # the two allowlisted SKILLs in
-            # KNOWN_INCOMPLETE_ANCHOR_KERNEL_GAPS carry TARGET + GATE.
-            # The refinement therefore changes no observable SKILL
-            # validation outcome.
+            # Background: PR #446 first attempt added a universal
+            # ``if not present_field_keys: continue`` bypass here to
+            # support the legitimate CRS_REVIEW empty-§3-FINDINGS case
+            # (an APPROVED review with TOTAL::0 authors an empty
+            # findings section meaning "no findings to report"). cubic
+            # correctly flagged this as a P2: the universal bypass
+            # weakened SECTION_CONDITIONAL_REQUIRED enforcement for
+            # SKILL — an author writing an empty §5::ANCHOR_KERNEL
+            # block almost certainly meant to populate it; silent-pass
+            # is wrong.
             #
-            # The REQUIRED_SECTION_IDS check above still fires (the
-            # section MUST exist — empty is fine, absent is not).
-            # PROD::I5 SCHEMA_SOVEREIGNTY is preserved: missing-finding
-            # fields are surfaced when at least one finding entry is
-            # authored; the "no findings to report" case is structurally
-            # distinct from the "malformed finding" case.
-            if not present_field_keys:
-                continue  # GH-426: empty section is not malformed.
+            # Fix: scope the empty-pass per-schema via the POLICY opt-in
+            # field SECTION_ALLOWS_EMPTY. A section is treated as
+            # empty-allowed iff at least one schema in this validation
+            # pass's section_schemas declared the section in
+            # POLICY.SECTION_ALLOWS_EMPTY. CRS_REVIEW declares
+            # ``SECTION_ALLOWS_EMPTY::["FINDINGS"]``; SKILL does not
+            # declare the field at all, so its ANCHOR_KERNEL stays
+            # strict.
+            #
+            # The REQUIRED_SECTION_IDS check above still fires
+            # independently (the section MUST exist — empty is fine
+            # only if opted in, absent is not allowed regardless).
+            # PROD::I5 SCHEMA_SOVEREIGNTY preserved on both axes:
+            # missing-finding fields are surfaced when entries are
+            # present, AND the SKILL strict-empty contract is restored.
+            if not present_field_keys and section_key in allows_empty:
+                continue  # GH-426 opt-in: schema declared this section empty-allowed.
 
             missing = [f for f in required_fields if f not in present_field_keys]
             if missing:

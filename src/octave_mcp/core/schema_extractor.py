@@ -197,6 +197,16 @@ class PolicyDefinition:
             present in the document (GH-428). The check is conditional:
             documents without the section are unaffected. Missing field
             members emit W_INCOMPLETE_SECTION_FIELDS naming the gaps.
+        section_allows_empty: Set of section keys for which a present-but-empty
+            section (zero Assignment children) is semantically valid and
+            should NOT surface W_INCOMPLETE_SECTION_FIELDS (GH-426, cubic P2
+            fix on PR #446). Default is the empty set — every schema's
+            SECTION_CONDITIONAL_REQUIRED enforcement stays strict unless the
+            schema explicitly opts a section in via
+            POLICY.SECTION_ALLOWS_EMPTY::["SECTION_KEY", ...]. CRS_REVIEW
+            opts in for FINDINGS (an APPROVED review with TOTAL::0
+            legitimately authors an empty §3); SKILL does NOT opt in for
+            ANCHOR_KERNEL (an empty kernel block is malformed by intent).
     """
 
     version: str = "1.0"
@@ -204,6 +214,7 @@ class PolicyDefinition:
     targets: list[str] = field(default_factory=list)
     required_section_ids: list[str] = field(default_factory=list)
     section_conditional_required: dict[str, list[str]] = field(default_factory=dict)
+    section_allows_empty: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -314,6 +325,20 @@ def _extract_policy(
                         # GH-428: Section presence requirement (e.g., ["1"]).
                         ids, item_warnings = _parse_string_list_audited(child.value, "REQUIRED_SECTION_IDS")
                         policy.required_section_ids = ids
+                        warnings.extend(item_warnings)
+                    elif child.key == "SECTION_ALLOWS_EMPTY":
+                        # GH-426 (cubic P2 fix on PR #446): per-schema opt-in
+                        # for the walker's empty-section pass-through. Sections
+                        # listed here may be authored present-but-empty without
+                        # surfacing W_INCOMPLETE_SECTION_FIELDS for their
+                        # SECTION_CONDITIONAL_REQUIRED triple. Default
+                        # (omitted/empty list) keeps every schema strict — only
+                        # an explicit opt-in changes behaviour. Reuses
+                        # ``_parse_string_list_audited`` for shape validation
+                        # (W_MALFORMED_POLICY on non-list / non-string-element
+                        # values, mirroring REQUIRED_SECTION_IDS).
+                        allow_list, item_warnings = _parse_string_list_audited(child.value, "SECTION_ALLOWS_EMPTY")
+                        policy.section_allows_empty = set(allow_list)
                         warnings.extend(item_warnings)
                     elif child.key == "SECTION_CONDITIONAL_REQUIRED":
                         # CE rework: a SECTION_CONDITIONAL_REQUIRED authored as a
