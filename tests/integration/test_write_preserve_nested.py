@@ -583,3 +583,109 @@ class TestGH447ChangesModeMutateInPlace:
         # Each sibling atom appears exactly once and unchanged.
         assert written.count("TYPE::FRAME_CARD") == 1
         assert written.count("ID::TEST_CARD") == 1
+
+    # ------------------------------------------------------------------ #
+    # CE REWORK regression tests (PR #449 CE BLOCKING findings)          #
+    # ------------------------------------------------------------------ #
+
+    # CE BLOCKING #1: cross-envelope scope leak. The original fix's
+    # flat-atom scan at write.py:3149 iterated ALL ``doc.sections`` rather
+    # than being constrained to the ``===META===`` envelope shape. With a
+    # document whose envelope is NOT META (e.g. ``===DOC===``) but which
+    # happens to carry a same-named flat atom (``STATUS::content_status``),
+    # the resolver silently mutated that other envelope's content. Per the
+    # GH #447 contract, ``META.<field>`` means "the flat-atom inside the
+    # ``===META===`` envelope" -- not "any top-level atom with the matching
+    # key anywhere in the document".
+    _NON_META_ENVELOPE_WITH_FLAT_STATUS = "===DOC===\nSTATUS::content_status\n===END===\n"
+
+    def test_gh447_meta_field_does_not_leak_into_non_meta_envelope(self) -> None:
+        """CE BLOCKING #1: META.<field> change MUST NOT mutate a non-META envelope.
+
+        Repro shape from CE rework:
+
+            ===DOC===
+            STATUS::content_status
+            ===END===
+
+        With ``changes={"META.STATUS": "meta_status"}`` the resolver MUST NOT
+        silently rewrite ``STATUS::meta_status`` inside ``===DOC===``. The
+        original content's ``STATUS::content_status`` atom (which lives in the
+        DOC envelope, not META) is OUT OF SCOPE for a ``META.<field>`` change.
+        """
+        status, written = _run_write_changes(
+            content=self._NON_META_ENVELOPE_WITH_FLAT_STATUS,
+            changes={"META.STATUS": "meta_status"},
+            format_style="preserve",
+        )
+        assert status == "success", f"WriteTool failed: status={status!r}"
+        # The DOC envelope's pre-existing flat atom MUST NOT be mutated to
+        # the META.STATUS value -- that is CE's exact BLOCKING repro.
+        assert "STATUS::meta_status" not in written or "STATUS::content_status" in written, (
+            "CE BLOCKING #1 regression: META.STATUS resolver leaked into "
+            "the ===DOC=== envelope and silently overwrote its STATUS atom. "
+            f"file is: {written!r}"
+        )
+        # The DOC envelope's pre-existing flat STATUS atom must survive intact.
+        assert "STATUS::content_status" in written, (
+            "CE BLOCKING #1 regression: the DOC envelope's original "
+            "STATUS::content_status atom was destroyed by an unrelated "
+            f"META.<field> change. file is: {written!r}"
+        )
+        # The ===DOC=== envelope wrapper must remain.
+        assert "===DOC===" in written
+
+    def test_gh447_meta_field_delete_on_flat_meta_envelope(self) -> None:
+        """CE BLOCKING #3 (also CRS gap): ``{"$op": "DELETE"}`` on a flat META atom.
+
+        Document shape: single ``===META===`` envelope with flat atoms.
+        Change: ``{"META.STATUS": {"$op": "DELETE"}}``.
+
+        Expected: the ``STATUS::proposed`` atom is removed entirely; no
+        duplicate remains anywhere in the output; no ``META:`` block stub
+        appears alongside the now-empty slot.
+        """
+        status, written = _run_write_changes(
+            content=self._SINGLE_ENVELOPE_FLAT,
+            changes={"META.STATUS": {"$op": "DELETE"}},
+            format_style="preserve",
+        )
+        assert status == "success", f"WriteTool failed: status={status!r}"
+        # The atom must be gone, in every form.
+        assert "STATUS::proposed" not in written, (
+            "CE BLOCKING #3 regression: $op DELETE failed to remove the "
+            f"original flat STATUS atom. file is: {written!r}"
+        )
+        assert "STATUS::" not in written, (
+            "CE BLOCKING #3 regression: $op DELETE left a STATUS:: atom "
+            f"(possibly a duplicate, possibly the original). file is: {written!r}"
+        )
+        # No stray nested-block META: fragment with STATUS inside it.
+        assert "META:" not in written or "STATUS" not in written.split("META:", 1)[1], (
+            "CE BLOCKING #3 regression: $op DELETE left a stub " f"META: block referencing STATUS. file is: {written!r}"
+        )
+        # Sibling atoms must still be intact and not duplicated.
+        assert written.count("TYPE::FRAME_CARD") == 1
+        assert written.count("ID::TEST_CARD") == 1
+
+    def test_gh447_meta_field_delete_does_not_leak_into_non_meta_envelope(self) -> None:
+        """CE BLOCKING #1 + #3 cross-product: DELETE on META.<field> must not
+        delete a same-named flat atom from a non-META envelope.
+
+        Repro shape: ``===DOC===`` envelope with ``STATUS::content_status``.
+        Change: ``{"META.STATUS": {"$op": "DELETE"}}``.
+        Expected: DOC's flat atom survives (META.STATUS isn't its address).
+        """
+        status, written = _run_write_changes(
+            content=self._NON_META_ENVELOPE_WITH_FLAT_STATUS,
+            changes={"META.STATUS": {"$op": "DELETE"}},
+            format_style="preserve",
+        )
+        assert status == "success", f"WriteTool failed: status={status!r}"
+        # The DOC envelope's flat STATUS atom MUST survive: META.STATUS does
+        # not address it.
+        assert "STATUS::content_status" in written, (
+            "CE BLOCKING #1 regression (DELETE variant): the DOC envelope's "
+            "STATUS::content_status atom was deleted by an unrelated "
+            f"META.<field> DELETE change. file is: {written!r}"
+        )

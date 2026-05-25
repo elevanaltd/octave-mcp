@@ -3146,20 +3146,40 @@ class WriteTool(BaseTool):
                 # only when no flat atom exists do we fall through to the
                 # ``doc.meta`` dict path (preserving today's behaviour for
                 # documents whose META is parsed into the dict).
+                #
+                # PR #449 CE REWORK BLOCKING #1: the flat-atom scan MUST be
+                # constrained to the ``===META===`` envelope shape only.
+                # ``META.<field>`` addresses the flat-atom inside an envelope
+                # whose name is "META", NOT any top-level atom with the
+                # matching key anywhere in the document. CE's repro showed
+                # that without this constraint a document like
+                # ``===DOC===\nSTATUS::content_status\n===END===`` would have
+                # its DOC envelope's ``STATUS`` atom silently mutated by
+                # ``changes={"META.STATUS": ...}`` -- a cross-envelope scope
+                # leak. We gate the scan on ``doc.name == "META"`` so that
+                # only true META envelopes participate in the flat-atom path.
                 flat_idx: int | None = None
-                for idx, section in enumerate(doc.sections):
-                    if isinstance(section, Assignment) and section.key == field_name:
-                        flat_idx = idx
-                        break
+                if doc.name == "META":
+                    for idx, section in enumerate(doc.sections):
+                        if isinstance(section, Assignment) and section.key == field_name:
+                            flat_idx = idx
+                            break
 
                 if flat_idx is not None:
                     if _is_delete_sentinel(new_value):
                         # Remove the flat top-level Assignment in place.
                         del doc.sections[flat_idx]
-                        # The sections list shape changed; mark whole-doc
-                        # dirty so the preserve-mode emitter falls back
-                        # to canonical re-emit for this envelope rather
-                        # than slicing the now-stale baseline.
+                        # PR #449 CE REWORK observation #4: the deletion
+                        # mechanism is OMISSION -- removing the Assignment
+                        # node from ``doc.sections`` means the emitter
+                        # cannot re-emit what is no longer there. We also
+                        # mark ``doc.dirty=True`` so the preserve-mode
+                        # emitter cannot splice the now-stale baseline
+                        # bytes for this envelope; instead it re-emits
+                        # canonically, naturally skipping the deleted
+                        # atom. (No section-emission consults
+                        # ``doc.dirty`` directly; the flag fences the
+                        # baseline-slice path in ``emit()`` instead.)
                         doc.dirty = True
                     else:
                         # I1 (Syntactic Fidelity): normalise the value.
