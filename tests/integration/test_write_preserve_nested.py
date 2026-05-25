@@ -425,3 +425,161 @@ class TestPreserveParserRepairPropagation:
         assert (
             getattr(block, "body_dirty", False) is False
         ), "body_dirty was set on a clean parse — parser-side over-propagation regression"
+
+
+# ---------------------------------------------------------------------------
+# GH #447: changes_mode resolver must mutate existing FLAT META atom in place
+# rather than injecting a new nested ``META:`` block alongside it.
+# ---------------------------------------------------------------------------
+#
+# Pre-fix repro: a META envelope containing flat-form atoms (no ``META:`` block
+# prefix) parses such atoms as top-level ``Assignment`` nodes in
+# ``doc.sections``, with ``doc.meta`` left EMPTY. The ``META.<field>``
+# resolver branch in ``_apply_changes`` unconditionally wrote to
+# ``doc.meta[field]``, which on emit produced a NEW canonical
+# ``META:\n  STATUS::ratified`` block, while the original flat ``STATUS::``
+# Assignment in ``doc.sections`` remained untouched. Net result: duplicate
+# atoms with conflicting values, and an I3 (MIRROR_CONSTRAINT) +
+# I1 (SYNTACTIC_FIDELITY) violation under ``format_style="preserve"``.
+#
+# The fix locates the existing flat-form Assignment for the META field and
+# mutates it in place BEFORE falling back to the ``doc.meta`` dict path,
+# preserving the atom's source form across all four ``format_style`` modes
+# (``preserve``, ``expanded``, ``compact``, and omitted/default).
+
+
+def _run_write_changes_omitted(content: str, changes: dict) -> tuple[str, str]:
+    """Variant of ``_run_write_changes`` that does NOT pass ``format_style``.
+
+    Required by GH #447 acceptance criterion 3 — the mutate-in-place
+    contract must hold across ``format_style ∈ {preserve, expanded,
+    compact, omitted}``. The "omitted" case exercises today's default
+    (canonical re-emit) code path; the resolver must still find the
+    existing flat atom and not duplicate it.
+    """
+    tool = WriteTool()
+
+    async def _execute() -> tuple[str, str]:
+        with tempfile.NamedTemporaryFile(suffix=".oct.md", mode="w", delete=False, encoding="utf-8") as f:
+            f.write(content)
+            path = f.name
+        try:
+            result = await tool.execute(target_path=path, changes=changes)
+            with open(path, encoding="utf-8") as fp:
+                written = fp.read()
+            return result.get("status", "<missing>"), written
+        finally:
+            os.unlink(path)
+
+    return asyncio.run(_execute())
+
+
+class TestGH447ChangesModeMutateInPlace:
+    """GH #447 regression: ``META.<field>`` change must mutate existing flat atom.
+
+    Document shape under test (issue body repro):
+
+        ===META===
+        TYPE::FRAME_CARD
+        ID::TEST_CARD
+        STATUS::proposed
+        ===END===
+
+    With ``changes={"META.STATUS": "ratified"}`` the resolver MUST:
+      (a) mutate the existing ``STATUS::proposed`` flat atom in place;
+      (b) introduce NO new ``STATUS`` atom (no duplicate key);
+      (c) preserve atom form when ``format_style="preserve"`` (flat stays flat);
+      (d) hold across ``format_style ∈ {preserve, expanded, compact, omitted}``.
+    """
+
+    _SINGLE_ENVELOPE_FLAT = "===META===\n" "TYPE::FRAME_CARD\n" "ID::TEST_CARD\n" "STATUS::proposed\n" "===END===\n"
+
+    def _assert_mutate_in_place(self, written: str, *, expect_flat: bool) -> None:
+        """Shared assertion bundle for the four format_style variants."""
+        # (a) new value present
+        assert "STATUS::ratified" in written, (
+            "META.STATUS resolver did NOT land the new value. " f"file is: {written!r}"
+        )
+        # (b) old value gone — the existing atom must be mutated, not duplicated
+        assert "STATUS::proposed" not in written, (
+            "GH #447 regression: original flat STATUS::proposed atom "
+            "survived alongside the new value (duplicate-key shape). "
+            f"file is: {written!r}"
+        )
+        # No duplicate STATUS atom anywhere in output.
+        assert written.count("STATUS::") == 1, (
+            f"GH #447 regression: expected exactly one STATUS:: atom, "
+            f"found {written.count('STATUS::')}; file is: {written!r}"
+        )
+        # The injected nested-block META:\n  STATUS:: form must NOT appear
+        # when an existing flat atom is being mutated.
+        if expect_flat:
+            # (c) atom form unchanged — flat stays flat under preserve
+            assert "META:\n  STATUS::" not in written, (
+                "GH #447 regression: resolver injected a nested-block "
+                "META: form instead of mutating the flat atom in place. "
+                f"file is: {written!r}"
+            )
+            # The flat atom must remain at the top level of the envelope.
+            assert "\nSTATUS::ratified" in written or written.startswith("STATUS::ratified"), (
+                "GH #447 regression: flat-form STATUS atom lost its " f"flat shape. file is: {written!r}"
+            )
+        # Sibling atoms unchanged.
+        assert "TYPE::FRAME_CARD" in written
+        assert "ID::TEST_CARD" in written
+
+    def test_gh447_preserve_mutates_flat_meta_atom_in_place(self) -> None:
+        status, written = _run_write_changes(
+            content=self._SINGLE_ENVELOPE_FLAT,
+            changes={"META.STATUS": "ratified"},
+            format_style="preserve",
+        )
+        assert status == "success", f"WriteTool failed: status={status!r}"
+        self._assert_mutate_in_place(written, expect_flat=True)
+
+    def test_gh447_expanded_does_not_duplicate_meta_atom(self) -> None:
+        status, written = _run_write_changes(
+            content=self._SINGLE_ENVELOPE_FLAT,
+            changes={"META.STATUS": "ratified"},
+            format_style="expanded",
+        )
+        assert status == "success", f"WriteTool failed: status={status!r}"
+        # Under expanded canonical re-emit the atom may legitimately be
+        # promoted to a ``META:`` block, but it MUST NOT coexist with the
+        # original flat atom — that is the #447 bug.
+        self._assert_mutate_in_place(written, expect_flat=False)
+
+    def test_gh447_compact_does_not_duplicate_meta_atom(self) -> None:
+        status, written = _run_write_changes(
+            content=self._SINGLE_ENVELOPE_FLAT,
+            changes={"META.STATUS": "ratified"},
+            format_style="compact",
+        )
+        assert status == "success", f"WriteTool failed: status={status!r}"
+        self._assert_mutate_in_place(written, expect_flat=False)
+
+    def test_gh447_omitted_format_style_does_not_duplicate_meta_atom(self) -> None:
+        """No-format_style call exercises today's default canonical re-emit path.
+
+        The resolver still must NOT inject a duplicate atom; the existing
+        flat atom MUST be located and mutated before any nested-block
+        fallback fires.
+        """
+        status, written = _run_write_changes_omitted(
+            content=self._SINGLE_ENVELOPE_FLAT,
+            changes={"META.STATUS": "ratified"},
+        )
+        assert status == "success", f"WriteTool failed: status={status!r}"
+        self._assert_mutate_in_place(written, expect_flat=False)
+
+    def test_gh447_preserve_unchanged_siblings_intact(self) -> None:
+        """The mutate-in-place fix must NOT disturb sibling flat atoms."""
+        status, written = _run_write_changes(
+            content=self._SINGLE_ENVELOPE_FLAT,
+            changes={"META.STATUS": "ratified"},
+            format_style="preserve",
+        )
+        assert status == "success"
+        # Each sibling atom appears exactly once and unchanged.
+        assert written.count("TYPE::FRAME_CARD") == 1
+        assert written.count("ID::TEST_CARD") == 1

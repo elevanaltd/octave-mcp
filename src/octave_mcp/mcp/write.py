@@ -3132,8 +3132,48 @@ class WriteTool(BaseTool):
             if key.startswith("META."):
                 # Extract the field name after "META."
                 field_name = key[5:]  # Remove "META." prefix
-                if _is_delete_sentinel(new_value):
-                    # Delete field from doc.meta
+
+                # GH #447: I3 (MIRROR_CONSTRAINT) + I1 (SYNTACTIC_FIDELITY)
+                # mutate-in-place contract. When a META envelope was parsed
+                # with FLAT-form atoms (no ``META:`` block prefix), the
+                # parser puts each atom in ``doc.sections`` as a top-level
+                # ``Assignment`` rather than into the ``doc.meta`` dict. The
+                # original ``META.<field>`` resolver wrote unconditionally
+                # to ``doc.meta`` which on emit produced a NEW canonical
+                # ``META:`` block alongside the surviving flat atom —
+                # duplicate-key, form switch, I3 violation. We must locate
+                # the existing flat atom FIRST and mutate it in place;
+                # only when no flat atom exists do we fall through to the
+                # ``doc.meta`` dict path (preserving today's behaviour for
+                # documents whose META is parsed into the dict).
+                flat_idx: int | None = None
+                for idx, section in enumerate(doc.sections):
+                    if isinstance(section, Assignment) and section.key == field_name:
+                        flat_idx = idx
+                        break
+
+                if flat_idx is not None:
+                    if _is_delete_sentinel(new_value):
+                        # Remove the flat top-level Assignment in place.
+                        del doc.sections[flat_idx]
+                        # The sections list shape changed; mark whole-doc
+                        # dirty so the preserve-mode emitter falls back
+                        # to canonical re-emit for this envelope rather
+                        # than slicing the now-stale baseline.
+                        doc.dirty = True
+                    else:
+                        # I1 (Syntactic Fidelity): normalise the value.
+                        normalized_value = _normalize_value_for_ast(new_value)
+                        target_assignment = doc.sections[flat_idx]
+                        assert isinstance(target_assignment, Assignment)
+                        target_assignment.value = normalized_value
+                        # PR-2 T6: paired-write — mark only this leaf
+                        # dirty so the preserve-mode emitter re-emits
+                        # just this atom and splices the rest of the
+                        # envelope verbatim.
+                        _mark_dirty(target_assignment)
+                elif _is_delete_sentinel(new_value):
+                    # No flat atom; fall through to doc.meta dict deletion.
                     if field_name in doc.meta:
                         del doc.meta[field_name]
                     # PR-2 T6: per-key META dirty map captures the
