@@ -320,6 +320,18 @@ NEW content's bytes, not the old baseline. Slicing the old baseline
 with new-content spans would produce garbage; the discriminator forces
 fall-through to canonical `emit()` in that case.
 
+##### Multi-envelope documents (#420, PR #451)
+
+As of **v1.13.0**, OCTAVE documents containing two or more sibling
+top-level `===NAME===…===END===` envelopes round-trip without data loss.
+Under `format_style="preserve"`, unchanged sibling envelopes (including
+inter-envelope whitespace) slice verbatim from the baseline; only the
+mutated envelope re-emits canonically. The `META.<field>` change-path
+resolver targets envelope #1's META by construction — per-envelope
+`META` scoping and atom mutation on additional envelopes are deferred
+to v1.14+. See the [Multi-envelope documents](usage.md#multi-envelope-documents-v1130)
+walkthrough in the Usage Guide for a worked example.
+
 ---
 
 ### octave_eject
@@ -539,6 +551,37 @@ class Node:
 class Envelope:
     meta: dict[str, Any]    # META fields (TYPE, VERSION, etc.)
 ```
+
+#### Multi-envelope documents (#420, PR #451 — v1.13.0)
+
+Documents with two or more sibling top-level `===NAME===…===END===`
+envelopes are parsed via the additive `Envelope` AST node introduced in
+v1.13.0. Envelope #1 continues to populate `Document.name`,
+`Document.meta`, and `Document.sections` exactly as before; sibling
+envelopes (#2..N) become `Envelope` nodes appended to
+`Document.additional_envelopes: list[Envelope]`. Each `Envelope` carries
+its own name, sections, meta, independent `dirty` flag, baseline span
+tracking, and `pre_trivia` byte-range fields used to preserve verbatim
+inter-envelope whitespace under `format_style="preserve"`.
+
+```python
+from octave_mcp.core.parser import parse
+
+content = (
+    "===META===\nTYPE::FRAME_CARD\nSTATUS::proposed\n===END===\n\n"
+    "===FRAME===\nTITLE::\"Worked example\"\n===END===\n"
+)
+doc = parse(content)
+assert doc.name == "META"
+assert len(doc.additional_envelopes) == 1
+assert doc.additional_envelopes[0].name == "FRAME"
+```
+
+**v1.13.0 support surface:** parse + emit (round-trip byte-stable under
+`format_style="preserve"`). **Deferred to v1.14+:** per-envelope `META`
+scope in change-path resolution, and `changes`-mode atom mutation on
+additional envelopes. The `META.<field>` change-path continues to mean
+"envelope #1's META" by construction (see #449).
 
 ---
 
