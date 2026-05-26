@@ -19,6 +19,9 @@ This release lands the Strategy A span-aware preserve-mode engine (#418), the ME
 - **Passing `format_style=None` *explicitly* now emits a `DeprecationWarning`** at both the MCP `octave_write` tool surface and the CLI `octave write` command (via the new `--format-style none` literal choice). In **v1.14.0** the default will change from full canonical re-emit to span-aware `"preserve"` mode. To keep the current canonical re-emit behaviour across the flip, pass `format_style="expanded"` explicitly. To opt in to preserve mode now, pass `format_style="preserve"`. **OMITTING the parameter does NOT emit a warning** — that is the supported way to accept the future default silently. See ADR-0006 Sprint 2 addendum §5 Shape B for the rationale.
 - **Notice.** v1.14.0 will flip the `format_style` default. Callers asserting byte-shape of `octave_write` outputs SHOULD review their integration and pin a `format_style` value explicitly before the v1.14.0 upgrade.
 
+### Fixed
+- **`octave_write` changes_mode mutate-in-place on flat `===META===` atoms (#447, PR #449).** When `changes={"META.<field>": <value>}` targets a flat-form atom inside a `===META===` envelope (e.g. existing `STATUS::proposed`), the resolver now mutates that atom in-place instead of injecting a duplicate nested-block atom alongside it. Behaviour verified across `format_style ∈ {preserve, expanded, compact, omitted}`. The flat-atom scan is strictly gated on `doc.name == "META"`, so non-META envelopes with same-named flat atoms (e.g. `===DOC===\nSTATUS::content\n===END===`) are not affected and continue to route via the existing `doc.meta` create path. `$op DELETE` against flat META atoms is covered by the same code path and pinned by regression tests.
+
 ### Migration
 - No code changes required to upgrade from v1.12.0 to v1.13.0. Behaviour on the default path (`format_style` omitted) is byte-identical to v1.12.0.
 - To silence the new `DeprecationWarning` while intentionally keeping v1.12.0 behaviour, replace any `format_style=None` explicit pass with `format_style="expanded"`.
@@ -32,6 +35,7 @@ PR #418 (Strategy A engine) explicitly does NOT subsume #411 defects 1 and 2 (`$
 - **#419** — META audit-marker admission (GH#384 / SR2-T3).
 - **#421** — Sprint 2 EC coordination (EC-1 + EC-2 SATISFIED).
 - **PR-4 (this release)** — Shape B `format_style` deprecation warning + v1.13.0 documentation (T10 + T11).
+- **#449** — `octave_write` changes_mode mutate-in-place on flat `===META===` atoms (closes #447, PR-A of two pre-v1.13.0 release blockers; PR-B = #420 multi-envelope parsing/emission follows separately).
 
 ## [1.12.0] - 2026-05-11 - "Writer/Reader Symmetry" Release (ADR-0006 SR0 + SR1-T1)
 
