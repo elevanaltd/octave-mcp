@@ -378,9 +378,13 @@ class Envelope(ASTNode):
     # or the prior sibling envelope's ``===END===`` end) and the START of
     # THIS envelope's ``===NAME===`` header.  Under preserve mode the
     # emitter slices these bytes verbatim from baseline so noncanonical
-    # whitespace (extra blank lines, trailing spaces, etc.) survives the
-    # round-trip — PROD::I1 SYNTACTIC_FIDELITY on the inter-envelope
-    # surface.  ``None`` on both fields means "no captured trivia"; the
+    # whitespace (extra blank lines, trailing spaces, etc.) — and any
+    # inter-envelope comments (``# ...`` lines between envelopes) — survive
+    # the round-trip byte-identical.  See PR #451 cubic #1 rework: the
+    # parser scan loop advances through COMMENT tokens without consuming
+    # their bytes, so the comment bytes remain inside this captured band.
+    # PROD::I1 SYNTACTIC_FIDELITY on the inter-envelope surface.
+    # ``None`` on both fields means "no captured trivia"; the
     # emitter then falls back to the canonical ``\n\n`` blank-line
     # separator (matching pre-rework behaviour for normalize / canonical
     # modes).  This field is parser-populated only; mutation is not part
