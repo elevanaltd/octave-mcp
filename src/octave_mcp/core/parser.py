@@ -677,15 +677,43 @@ class Parser:
         # indexes the next not-yet-consumed token; the previous token's
         # ``end_byte`` is the trivia start.
         prev_end_byte = self.tokens[self.pos - 1].end_byte if self.pos > 0 and self.tokens else None
+        # GH #420 cubic-dev-ai P1 rework (PR #451): the scan loop MUST iterate
+        # through ANY non-``ENVELOPE_START`` token (NEWLINE / INDENT / COMMENT
+        # / etc.) until it hits ``ENVELOPE_START`` (continue → parse the
+        # sibling) or ``EOF`` (break).  Pre-rework: ``skip_whitespace`` did NOT
+        # skip ``COMMENT`` tokens (we intentionally pass ``skip_comments=False``
+        # so the comment's bytes remain inside the ``pre_trivia`` byte band
+        # captured at lines below).  If inter-envelope trivia contained a
+        # comment, the loop's ``ENVELOPE_START`` check saw the comment token
+        # instead, broke out, and silently dropped envelopes #2..N — the SAME
+        # CLASS of bug as the original #420 silent envelope drop (PROD::I3
+        # MIRROR_CONSTRAINT violation: parser created an absence by inventing
+        # an end-of-document that did not exist in source).
+        #
+        # Option A fix: explicit token-cursor advance through any
+        # non-``ENVELOPE_START`` token until either ``ENVELOPE_START`` or
+        # ``EOF``.  The byte-range capture in ``parse_additional_envelope``
+        # (``[prev_end_byte, envelope_start_tok.start_byte)``) naturally
+        # encloses the comment bytes because the parser does NOT modify
+        # source bytes — it only advances ``self.pos``.  Comment bytes
+        # therefore survive verbatim in ``pre_trivia`` under preserve mode
+        # (PROD::I1 SYNTACTIC_FIDELITY).
         while True:
-            self.skip_whitespace(skip_comments=False)
-            if self.current().type != TokenType.ENVELOPE_START:
+            tok_type = self.current().type
+            if tok_type == TokenType.ENVELOPE_START:
+                envelope = self.parse_additional_envelope(prev_end_byte=prev_end_byte)
+                doc.additional_envelopes.append(envelope)
+                # After this envelope, the trivia for the NEXT sibling (if
+                # any) begins at THIS envelope's end_byte.
+                prev_end_byte = envelope.end_byte
+                continue
+            if tok_type == TokenType.EOF:
                 break
-            envelope = self.parse_additional_envelope(prev_end_byte=prev_end_byte)
-            doc.additional_envelopes.append(envelope)
-            # After this envelope, the trivia for the NEXT sibling (if any)
-            # begins at THIS envelope's end_byte.
-            prev_end_byte = envelope.end_byte
+            # Any other token (NEWLINE / INDENT / COMMENT / stray content):
+            # advance the cursor without consuming bytes from the source.
+            # The byte-range capture on the NEXT envelope's pre_trivia will
+            # span these bytes verbatim.
+            self.advance()
 
         return doc
 

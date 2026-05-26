@@ -46,7 +46,7 @@ import tempfile
 
 import pytest
 
-from octave_mcp.core.emitter import emit
+from octave_mcp.core.emitter import FormatOptions, emit
 from octave_mcp.core.grammar.cst import Envelope
 from octave_mcp.core.parser import parse
 from octave_mcp.mcp.write import WriteTool
@@ -343,16 +343,50 @@ class TestGH420AC2RealWorldFrameCard:
     """AC2: realistic FRAME_CARD documents byte-stable under preserve mode.
 
     The hestai-context-mcp FRAME_CARD fixtures are not resolvable from
-    this repo.  We construct a representative 8-envelope card (same
-    structure documented in the #420 issue body) and assert byte
-    stability under preserve.  This is the in-repo proxy for the
-    cross-repo AC.
+    this repo.  AC2 exercises a DIFFERENT surface than AC1 (which uses
+    the synthetic 8-envelope shape): a smaller 3-envelope FRAME_CARD-
+    style fixture with embedded inline ``KEY<annotation>`` annotations
+    and mixed inter-envelope trivia widths.  This exercises the
+    annotation parser interaction with multi-envelope trivia capture,
+    a distinct concern from AC1's pure-envelope-count check.
+
+    Cubic P2 rework: previously AC2 used the same EIGHT_ENVELOPE_FIXTURE
+    and same format_style as AC1 — collapsing the two acceptance criteria
+    into duplicate coverage.  This fixture restores AC2 distinctness.
     """
 
-    def test_ac2_eight_envelope_card_preserve_byte_stable(self) -> None:
-        status, written = _run_write_normalize(EIGHT_ENVELOPE_FIXTURE, format_style="preserve")
+    _ANNOTATED_FRAME_CARD_FIXTURE = (
+        "===META===\n"
+        "TYPE::FRAME_CARD\n"
+        "ID::ANNOTATED_CARD\n"
+        "STATUS<approved>::proposed\n"
+        "===END===\n"
+        "\n"
+        "===EXACT===\n"
+        "IDS::[FRAME_A, FRAME_B<active>]\n"
+        "PROD_IMMUTABLES<enforced>::[I1, I2]\n"
+        "===END===\n"
+        "\n"
+        "\n"  # noncanonical extra blank line — must survive
+        "===FACETS===\n"
+        'INTENT::"annotated frame card distinct from AC1"\n'
+        "===END===\n"
+    )
+
+    def test_ac2_annotated_frame_card_preserve_byte_stable(self) -> None:
+        """AC2 (distinct from AC1): annotated FRAME_CARD with mixed
+        inter-envelope trivia widths MUST round-trip byte-identical
+        under preserve.  Exercises the annotation parser interaction
+        with multi-envelope trivia capture.
+        """
+        status, written = _run_write_normalize(self._ANNOTATED_FRAME_CARD_FIXTURE, format_style="preserve")
         assert status == "success"
-        assert written == EIGHT_ENVELOPE_FIXTURE
+        assert written == self._ANNOTATED_FRAME_CARD_FIXTURE, (
+            "GH #420 AC2 regression (cubic-distinct fixture): annotated "
+            "FRAME_CARD round-trip not byte-stable. "
+            f"input_bytes={len(self._ANNOTATED_FRAME_CARD_FIXTURE)} "
+            f"output_bytes={len(written)}"
+        )
 
     def test_ac2_idempotent_second_pass(self) -> None:
         """Two consecutive preserve-mode passes MUST produce identical bytes.
@@ -776,31 +810,51 @@ class TestGH420CEReworkCycle2BoundaryPreservation:
             "PROD::I1 SYNTACTIC_FIDELITY violation — canon is not bijective."
         )
 
+    def test_zero_byte_boundary_parse_result(self) -> None:
+        """Zero-byte adjacency parse result: either accepts cleanly (and
+        produces exactly one additional envelope named EXACT) OR raises
+        ParserError.  Any other outcome — including malformed acceptance
+        (wrong envelope count) — is a regression.
+
+        Cubic P2 (rework): the previous test wrapped acceptance-branch
+        assertions in ``try/except Exception``, which would silently
+        swallow an ``AssertionError`` raised by a malformed-shape check
+        and re-route to the ``parser_accepts = False`` branch.  Split
+        into two strict tests so assertion failures cannot be swallowed.
+        """
+        from octave_mcp.core.parser import ParserError, parse
+
+        try:
+            doc = parse(self._ZERO_BYTE_FIXTURE)
+        except ParserError:
+            # Acceptable resolution: parser rejected zero-byte adjacency.
+            return
+        # Acceptance branch: assertions OUTSIDE any try/except so a wrong
+        # shape surfaces as a real test failure, not silent rejection.
+        assert len(doc.additional_envelopes) == 1, (
+            f"Zero-byte adjacency parsed but produced wrong envelope count: "
+            f"expected 1 additional envelope, got {len(doc.additional_envelopes)}"
+        )
+        assert doc.additional_envelopes[0].name == "EXACT", (
+            f"Zero-byte adjacency parsed but envelope #2 name is wrong: "
+            f"expected 'EXACT', got {doc.additional_envelopes[0].name!r}"
+        )
+
     def test_zero_byte_boundary_preserved_or_rejected(self) -> None:
         """Zero-byte adjacency ``===END======NAME===`` either round-trips
         byte-identical under preserve OR is rejected at parse time.
 
-        The lexer currently accepts this (verified by ``parse()`` returning
-        a valid Document with one additional envelope).  Under preserve
-        mode the emitter MUST therefore emit the zero-byte boundary
-        verbatim — pre-rework it inflated to ``\\n\\n`` (added 2 bytes).
+        Cubic P2 (rework): only ``ParserError`` (the documented parse
+        rejection type) is treated as a rejection signal.  Any other
+        exception — and any malformed-acceptance shape — propagates as a
+        real test failure.
         """
-        # First confirm the parser accepts the input (sets the baseline
-        # for the assertion we make next).
-        from octave_mcp.core.parser import parse
+        from octave_mcp.core.parser import ParserError, parse
 
         try:
-            doc = parse(self._ZERO_BYTE_FIXTURE)
-            parser_accepts = True
-            assert len(doc.additional_envelopes) == 1
-            assert doc.additional_envelopes[0].name == "EXACT"
-        except Exception:
-            parser_accepts = False
-
-        if not parser_accepts:
+            parse(self._ZERO_BYTE_FIXTURE)
+        except ParserError:
             # Acceptable resolution: parser rejected zero-byte adjacency.
-            # If a future hardening pass closes this hole at parse time,
-            # this branch documents the contract.
             return
 
         status, written = _run_write_normalize(self._ZERO_BYTE_FIXTURE, format_style="preserve")
@@ -814,3 +868,244 @@ class TestGH420CEReworkCycle2BoundaryPreservation:
             f"INPUT  = {self._ZERO_BYTE_FIXTURE!r}\n"
             f"OUTPUT = {written!r}"
         )
+
+
+# --------------------------------------------------------------------------- #
+# Cubic advisory rework (PR #451): inter-envelope comment handling            #
+# --------------------------------------------------------------------------- #
+
+
+class TestGH420CubicReworkInterEnvelopeComments:
+    """Cubic P1 (parser.py:681): the post-parse_document scan loop MUST NOT
+    silently drop envelope #2..N when inter-envelope trivia contains a
+    comment token.
+
+    Pre-rework: ``self.skip_whitespace(skip_comments=False)`` left a
+    ``COMMENT`` token at ``self.current()`` when inter-envelope trivia
+    contained one; the subsequent ``current().type != ENVELOPE_START``
+    check was True (current is the comment, not envelope-start), the
+    loop broke, and envelope #2..N was silently dropped.  Same defect
+    class as the original GH-420 silent envelope drop.
+
+    Post-rework (Option A): the loop iterates through ANY non-
+    ``ENVELOPE_START`` token (including ``COMMENT`` / ``NEWLINE`` /
+    ``INDENT``) until it hits either ``ENVELOPE_START`` (continue and
+    parse the sibling) or ``EOF`` (terminate).  The byte-range capture
+    (``prev_end_byte → envelope_start_tok.start_byte``) naturally encloses
+    the comment bytes because the parser does not modify source bytes;
+    it just advances the token cursor.
+    """
+
+    # Variant 1: comment immediately AFTER ===END=== of envelope #1 (the
+    # canonical "next line" position).  Pre-rework: silent drop of
+    # envelope #2.
+    _COMMENT_AFTER_END_FIXTURE = (
+        "===META===\n"
+        "TYPE::FRAME_CARD\n"
+        "ID::COMMENT_AFTER_END\n"
+        "STATUS::proposed\n"
+        "===END===\n"
+        "# comment between envelopes\n"
+        "===EXACT===\n"
+        "IDS::[A]\n"
+        "===END===\n"
+    )
+
+    # Variant 2: comment immediately BEFORE ===NAME=== of envelope #2,
+    # preceded by a blank line.
+    _COMMENT_BEFORE_NAME_FIXTURE = (
+        "===META===\n"
+        "TYPE::FRAME_CARD\n"
+        "ID::COMMENT_BEFORE_NAME\n"
+        "STATUS::proposed\n"
+        "===END===\n"
+        "\n"
+        "# comment immediately before envelope #2\n"
+        "===EXACT===\n"
+        "IDS::[A]\n"
+        "===END===\n"
+    )
+
+    # Variant 3: multiple comments between envelopes, interleaved with
+    # blank lines.
+    _MULTIPLE_COMMENTS_FIXTURE = (
+        "===META===\n"
+        "TYPE::FRAME_CARD\n"
+        "ID::MULTI_COMMENT\n"
+        "STATUS::proposed\n"
+        "===END===\n"
+        "# first comment between envelopes\n"
+        "\n"
+        "# second comment between envelopes\n"
+        "===EXACT===\n"
+        "IDS::[A]\n"
+        "===END===\n"
+        "\n"
+        "# comment between envelopes #2 and #3\n"
+        "===FACETS===\n"
+        'INTENT::"comment preservation"\n'
+        "===END===\n"
+    )
+
+    def test_inter_envelope_comment_preserved(self) -> None:
+        """Canonical case: comment between ===END=== and ===NAME=== MUST
+        NOT cause envelope #2 to be silently dropped.
+
+        Asserts both halves of the invariant:
+        1. Parser produces env_count == 2 (envelope #1 + 1 additional).
+        2. Preserve-mode round-trip is byte-identical (comment bytes
+           survive in pre_trivia).
+        """
+        doc = parse(self._COMMENT_AFTER_END_FIXTURE)
+        assert doc.name == "META", f"envelope #1 name wrong: {doc.name!r}"
+        assert len(doc.additional_envelopes) == 1, (
+            "Cubic P1 regression: parser dropped envelope #2 when "
+            "inter-envelope trivia contained a comment token. "
+            f"got {len(doc.additional_envelopes)} additional envelopes, "
+            f"expected 1."
+        )
+        assert doc.additional_envelopes[0].name == "EXACT"
+
+        status, written = _run_write_normalize(self._COMMENT_AFTER_END_FIXTURE, format_style="preserve")
+        assert status == "success", f"octave_write status={status!r}"
+        assert written == self._COMMENT_AFTER_END_FIXTURE, (
+            "Cubic P1 regression: preserve-mode round-trip not byte-stable "
+            "for inter-envelope-comment fixture (comment bytes lost from "
+            "pre_trivia OR envelope #2 dropped).\n"
+            f"  input_bytes  = {len(self._COMMENT_AFTER_END_FIXTURE)}\n"
+            f"  output_bytes = {len(written)}\n"
+            f"INPUT  = {self._COMMENT_AFTER_END_FIXTURE!r}\n"
+            f"OUTPUT = {written!r}"
+        )
+
+    def test_comment_immediately_before_envelope_name(self) -> None:
+        """Comment positioned immediately before ===NAME=== of envelope #2
+        MUST NOT drop envelope #2 and MUST round-trip byte-identical.
+        """
+        doc = parse(self._COMMENT_BEFORE_NAME_FIXTURE)
+        assert len(doc.additional_envelopes) == 1, (
+            "Cubic P1 regression: comment immediately before envelope #2 "
+            f"caused silent drop. got {len(doc.additional_envelopes)}."
+        )
+        status, written = _run_write_normalize(self._COMMENT_BEFORE_NAME_FIXTURE, format_style="preserve")
+        assert status == "success"
+        assert written == self._COMMENT_BEFORE_NAME_FIXTURE
+
+    def test_multiple_inter_envelope_comments(self) -> None:
+        """Multiple comments interleaved with blank lines between envelopes
+        MUST preserve ALL envelopes and round-trip byte-identical.
+        """
+        doc = parse(self._MULTIPLE_COMMENTS_FIXTURE)
+        assert len(doc.additional_envelopes) == 2, (
+            "Cubic P1 regression: multiple inter-envelope comments caused "
+            f"drop. got {len(doc.additional_envelopes)} additional envelopes, "
+            "expected 2 (EXACT and FACETS)."
+        )
+        names = [env.name for env in doc.additional_envelopes]
+        assert names == ["EXACT", "FACETS"], f"envelope names wrong: {names!r}"
+
+        status, written = _run_write_normalize(self._MULTIPLE_COMMENTS_FIXTURE, format_style="preserve")
+        assert status == "success"
+        assert written == self._MULTIPLE_COMMENTS_FIXTURE, (
+            "Cubic P1 regression: multi-comment fixture not byte-stable.\n"
+            f"INPUT  = {self._MULTIPLE_COMMENTS_FIXTURE!r}\n"
+            f"OUTPUT = {written!r}"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Cubic advisory rework (PR #451): emitter fail-fast on invalid pre_trivia    #
+# --------------------------------------------------------------------------- #
+
+
+class TestGH420CubicReworkEmitterFailFast:
+    """Cubic P2 (emitter.py:1118): when both pre_trivia byte spans are set
+    (non-None) AND preserve mode is enabled AND baseline_bytes is
+    available, but the bounds are invalid (start > end, or out-of-range),
+    the emitter MUST raise an explicit error rather than silently
+    degrade to canonical ``"\\n\\n"`` separator.
+
+    Rationale: silent degradation masks AST corruption.  PROD::I4
+    TRANSFORM_AUDITABILITY requires that invariant violations surface
+    rather than fail-silent.  The ``spans not set`` (None) case
+    continues to fall through to canonical separator as a legitimate
+    non-preserve path; the fail-fast only triggers on the
+    "spans-set-but-corrupt" combination.
+    """
+
+    def test_invalid_pre_trivia_bytes_raises(self) -> None:
+        """Envelope with pre_trivia_start_byte > pre_trivia_end_byte under
+        preserve mode MUST raise with a descriptive error.
+        """
+        # Parse a valid two-envelope fixture, then corrupt the AST.
+        fixture = (
+            "===META===\n"
+            "TYPE::FRAME_CARD\n"
+            "ID::CORRUPT_TEST\n"
+            "STATUS::proposed\n"
+            "===END===\n"
+            "\n"
+            "===EXACT===\n"
+            "IDS::[A]\n"
+            "===END===\n"
+        )
+        doc = parse(fixture)
+        assert len(doc.additional_envelopes) == 1
+        env = doc.additional_envelopes[0]
+        # Corrupt: start > end (impossible in a well-formed AST).
+        env.pre_trivia_start_byte = 10
+        env.pre_trivia_end_byte = 5
+
+        baseline_bytes = fixture.encode("utf-8")
+        opts = FormatOptions(baseline_bytes=baseline_bytes, enable_preserve=True)
+        with pytest.raises(ValueError, match=r"pre_trivia"):
+            emit(doc, format_options=opts)
+
+    def test_out_of_range_pre_trivia_bytes_raises(self) -> None:
+        """Envelope with pre_trivia_end_byte > len(baseline_bytes) under
+        preserve mode MUST raise with a descriptive error.
+        """
+        fixture = (
+            "===META===\n"
+            "TYPE::FRAME_CARD\n"
+            "ID::OOR_TEST\n"
+            "STATUS::proposed\n"
+            "===END===\n"
+            "\n"
+            "===EXACT===\n"
+            "IDS::[A]\n"
+            "===END===\n"
+        )
+        doc = parse(fixture)
+        env = doc.additional_envelopes[0]
+        baseline_bytes = fixture.encode("utf-8")
+        env.pre_trivia_start_byte = 0
+        env.pre_trivia_end_byte = len(baseline_bytes) + 100  # out of range
+
+        opts = FormatOptions(baseline_bytes=baseline_bytes, enable_preserve=True)
+        with pytest.raises(ValueError, match=r"pre_trivia"):
+            emit(doc, format_options=opts)
+
+    def test_unset_pre_trivia_bytes_falls_through_to_canonical(self) -> None:
+        """When BOTH pre_trivia spans are None, emitter MUST fall through
+        to canonical ``"\\n\\n"`` separator (legitimate non-preserve path).
+        """
+        fixture = (
+            "===META===\n"
+            "TYPE::FRAME_CARD\n"
+            "ID::UNSET_TEST\n"
+            "STATUS::proposed\n"
+            "===END===\n"
+            "\n"
+            "===EXACT===\n"
+            "IDS::[A]\n"
+            "===END===\n"
+        )
+        doc = parse(fixture)
+        env = doc.additional_envelopes[0]
+        env.pre_trivia_start_byte = None
+        env.pre_trivia_end_byte = None
+        # Must not raise; falls through to canonical separator.
+        out = emit(doc)
+        assert "===META===" in out
+        assert "===EXACT===" in out

@@ -1110,24 +1110,53 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     output = "\n".join(lines)
     for envelope in additional_envelopes:
         boundary: str
-        if (
-            _enable_preserve
-            and _baseline_bytes is not None
-            and envelope.pre_trivia_start_byte is not None
-            and envelope.pre_trivia_end_byte is not None
-            and 0 <= envelope.pre_trivia_start_byte <= envelope.pre_trivia_end_byte <= len(_baseline_bytes)
-        ):
+        # GH #420 cubic-dev-ai P2 rework (PR #451): fail-fast on invalid
+        # pre_trivia byte spans under preserve mode.  Pre-rework: the
+        # combined predicate ``and 0 <= start <= end <= len(baseline)``
+        # silently fell through to the canonical ``"\n\n"`` separator on
+        # ANY failure mode — including the impossible-AST case where
+        # spans are SET but corrupt (start > end, end > len).  That
+        # silent degradation masked AST corruption rather than surfacing
+        # it (PROD::I4 TRANSFORM_AUDITABILITY violation; bugs become
+        # silent canonical-form drift instead of explicit errors).
+        #
+        # Post-rework: separate the "spans not set" (None → legitimate
+        # non-preserve fallback) case from the "spans set but invalid"
+        # (corrupt AST → must raise) case.
+        _pt_start = envelope.pre_trivia_start_byte
+        _pt_end = envelope.pre_trivia_end_byte
+        _spans_set = _pt_start is not None and _pt_end is not None
+        if _enable_preserve and _baseline_bytes is not None and _spans_set:
+            # Validate bounds.  We've already established both spans are
+            # non-None; mypy narrows them here.
+            assert _pt_start is not None and _pt_end is not None  # narrow for mypy
+            _baseline_len = len(_baseline_bytes)
+            if not (0 <= _pt_start <= _pt_end <= _baseline_len):
+                raise ValueError(
+                    f"Invalid pre_trivia byte span on envelope "
+                    f"{getattr(envelope, 'name', '<unnamed>')!r}: "
+                    f"start={_pt_start}, end={_pt_end}, "
+                    f"baseline_len={_baseline_len}. "
+                    f"Required: 0 <= start <= end <= baseline_len. "
+                    f"This indicates AST corruption — pre_trivia spans "
+                    f"set but bounds-invalid is an impossible state for "
+                    f"a parser-produced Envelope under preserve mode."
+                )
             # Preserve mode with captured band: the band IS the boundary.
             # Empty band (start == end) means the source had zero bytes
             # between ===END=== and ===NAME=== (zero-byte adjacency,
             # accepted by the lexer) — emit no separator at all.  Any
             # other width (1 byte, 2 bytes, "\n\n  \n", etc.) is emitted
             # byte-for-byte.  No strip, no join, no transformation.
-            boundary = _baseline_bytes[envelope.pre_trivia_start_byte : envelope.pre_trivia_end_byte].decode("utf-8")
+            boundary = _baseline_bytes[_pt_start:_pt_end].decode("utf-8")
         else:
-            # Canonical / non-preserve / no-band fallback: single blank
-            # line between envelopes (one ``\n`` closes the previous
-            # ===END=== line, second ``\n`` is the blank line).
+            # Canonical / non-preserve / spans-not-set fallback: single
+            # blank line between envelopes (one ``\n`` closes the previous
+            # ===END=== line, second ``\n`` is the blank line).  This
+            # path is reached when (a) preserve mode is off, (b) no
+            # baseline_bytes were supplied, or (c) the envelope's
+            # pre_trivia spans were never populated (both None) — all
+            # legitimate non-preserve fallbacks.
             boundary = "\n\n"
 
         env_text = _emit_envelope(
