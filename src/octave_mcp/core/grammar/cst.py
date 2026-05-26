@@ -107,6 +107,11 @@ class NodeKind(Enum):
     SECTION = "SECTION"
     DOCUMENT = "DOCUMENT"
     COMMENT = "COMMENT"
+    # GH #420 Option D: additional top-level envelopes (#2..N) carried on
+    # ``Document.additional_envelopes`` as ``Envelope`` nodes.  Envelope #1
+    # remains the ``Document`` itself; this discriminator only appears on
+    # siblings.  See ``Envelope`` dataclass below for the contract.
+    ENVELOPE = "ENVELOPE"
 
 
 class Absent:
@@ -305,7 +310,69 @@ class Document(ASTNode):
     # subsection.
     trailing_comments_start_byte: int | None = None
     trailing_comments_end_byte: int | None = None
+    # GH #420 Option D: additional top-level envelopes (#2..N).  When the
+    # source contains multiple consecutive ``===NAME===...===END===``
+    # blocks at the document root, the FIRST envelope populates the
+    # Document directly (``name`` / ``meta`` / ``sections`` /
+    # ``trailing_comments`` / ``has_separator``) — preserving today's
+    # single-envelope contract by construction — and any siblings are
+    # appended here as ``Envelope`` nodes.  Default empty list keeps every
+    # single-envelope code path unchanged.  See ``Envelope`` below.
+    additional_envelopes: list[Envelope] = field(default_factory=list)
     kind: NodeKind = field(default=NodeKind.DOCUMENT, init=False)
+
+
+@dataclass
+class Envelope(ASTNode):
+    """Additional top-level envelope (#2..N) on a multi-envelope Document.
+
+    GH #420 (Option D, scope-locked by HO 2026-05-26): when the source
+    contains multiple top-level ``===NAME===...===END===`` blocks, the
+    first envelope populates the ``Document`` directly and any siblings
+    become ``Envelope`` nodes carried on ``Document.additional_envelopes``.
+
+    The field layout mirrors ``Document``'s envelope-scoped state
+    (``name`` / ``meta`` / ``sections`` / ``has_separator`` /
+    ``trailing_comments``) and per-envelope audit/preserve tracking
+    (``dirty`` inherited from ``ASTNode``, ``meta_dirty`` /
+    ``meta_start_byte`` / ``meta_end_byte`` /
+    ``trailing_comments_start_byte`` / ``trailing_comments_end_byte``).
+    This is the per-envelope granularity needed for Strategy A preserve
+    mode to slice unchanged sibling envelopes verbatim from baseline
+    while only re-emitting mutated envelopes (#420 AC1).
+
+    Scope (v1.13.0, per HO Q3 answer):
+
+    * Read + emit only.  ``META.<field>`` change-paths continue to target
+      envelope #1's META (``doc.name == "META"`` gate in
+      ``write.py:_apply_changes``); additional envelopes are NOT
+      candidates for atom mutation via ``changes_mode``.  Per-envelope
+      mutation is a v1.14+ extension.
+    * Document-level schema validation continues to apply to envelope #1
+      only (HO Q2 deferred); multi-envelope-aware schema validation is
+      post-v1.13.0.
+
+    Attributes mirror ``Document`` exactly for the envelope-scoped
+    fields, so visitors that already know how to walk a ``Document``'s
+    envelope body can reuse the same logic on each ``Envelope``.
+    """
+
+    name: str = "INFERRED"
+    meta: dict[str, Any] = field(default_factory=dict)
+    sections: list[ASTNode] = field(default_factory=list)
+    has_separator: bool = False
+    trailing_comments: list[str] = field(default_factory=list)
+    # Per-envelope META block byte range (parallel to Document.meta_*).
+    meta_start_byte: int | None = None
+    meta_end_byte: int | None = None
+    # Per-envelope META per-key dirty map (parallel to Document.meta_dirty).
+    # Reserved for future per-envelope mutation work; not consumed in
+    # v1.13.0 (additional envelopes are emit-only).
+    meta_dirty: dict[str, bool] = field(default_factory=dict)
+    # Per-envelope trailing-comments byte band.
+    trailing_comments_start_byte: int | None = None
+    trailing_comments_end_byte: int | None = None
+    kind: NodeKind = field(default=NodeKind.ENVELOPE, init=False)
 
 
 @dataclass

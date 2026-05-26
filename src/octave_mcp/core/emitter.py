@@ -33,6 +33,7 @@ from octave_mcp.core.grammar.cst import (
     Block,
     Comment,
     Document,
+    Envelope,
     HolographicValue,
     InlineMap,
     ListValue,
@@ -801,6 +802,104 @@ def _apply_format_options(output: str, format_options: FormatOptions) -> str:
     return "\n".join(lines)
 
 
+def _emit_envelope(
+    envelope: Envelope,
+    *,
+    baseline_bytes: bytes | None,
+    enable_preserve: bool,
+    format_options: FormatOptions | None,
+    strip_comments: bool,
+) -> str:
+    """Emit a single additional envelope (GH #420 Option D).
+
+    Mirrors the envelope-scoped portion of ``emit()`` for the
+    ``Document`` (===NAME=== header, optional META, sections, optional
+    trailing comments, ===END=== footer) but operates on an
+    ``Envelope`` node.  Returns the envelope's bytes as one ``\\n``-
+    separated string with NO trailing newline (the caller joins envelopes
+    with ``\\n``).
+
+    Strategy A preserve mode (#420 AC1): when ``enable_preserve=True``
+    AND ``baseline_bytes is not None`` AND the envelope is clean
+    (``not dirty``) AND has valid byte spans
+    (``start_byte``/``end_byte``), slice the WHOLE envelope verbatim
+    from baseline.  This is the per-envelope analogue of the per-section
+    slice path in ``emit()``.  Any mutation to the envelope (currently
+    out-of-scope for v1.13.0 via changes_mode, per HO Q3) would set
+    ``envelope.dirty=True`` and force canonical re-emit.
+
+    Re-emit path: produces the canonical bytes from the AST using the
+    same ``emit_meta`` / ``emit_assignment`` / ``emit_block`` /
+    ``emit_section`` helpers that ``emit()`` uses for the primary
+    Document.  Layout is byte-identical to a single-envelope canonical
+    document containing the same content.
+    """
+    # Slice path: clean envelope with valid spans under preserve mode.
+    if (
+        enable_preserve
+        and baseline_bytes is not None
+        and not envelope.dirty
+        and envelope.start_byte is not None
+        and envelope.end_byte is not None
+    ):
+        # R4 structural integrity check (I4 audit trail; ADR §5 R4).
+        assert 0 <= envelope.start_byte < envelope.end_byte <= len(baseline_bytes), (
+            f"Envelope {envelope.name!r} span "
+            f"[{envelope.start_byte}:{envelope.end_byte}] out of bounds "
+            f"for baseline ({len(baseline_bytes)} bytes). "
+            "NFC contract violated."
+        )
+        sliced_text = baseline_bytes[envelope.start_byte : envelope.end_byte].decode("utf-8")
+        # Trim a single trailing newline so the caller's "\n".join
+        # produces exactly one boundary newline between this envelope
+        # and the next.
+        return sliced_text.removesuffix("\n")
+
+    # Re-emit path: produce canonical bytes from the envelope AST.
+    env_lines: list[str] = []
+    env_lines.append(f"==={envelope.name}===")
+
+    if envelope.meta:
+        env_lines.append(emit_meta(envelope.meta, format_options))
+
+    if envelope.has_separator:
+        env_lines.append("---")
+
+    for section in envelope.sections:
+        # Per-section slice path inside an additional envelope: same
+        # contract as the primary Document loop.  An unchanged section
+        # whose spans are valid relative to ``baseline_bytes`` slices
+        # verbatim; otherwise canonical re-emit.
+        if (
+            enable_preserve
+            and baseline_bytes is not None
+            and not section.dirty
+            and not section.repaired
+            and not getattr(section, "body_dirty", False)
+            and section.start_byte is not None
+            and section.end_byte is not None
+            and 0 <= section.start_byte < section.end_byte <= len(baseline_bytes)
+        ):
+            sliced_text = baseline_bytes[section.start_byte : section.end_byte].decode("utf-8")
+            env_lines.append(sliced_text.removesuffix("\n"))
+            continue
+
+        if isinstance(section, Assignment):
+            if is_absent(section.value):
+                continue
+            env_lines.append(emit_assignment(section, 0, format_options))
+        elif isinstance(section, Block):
+            env_lines.append(emit_block(section, 0, format_options))
+        elif isinstance(section, Section):
+            env_lines.append(emit_section(section, 0, format_options))
+
+    if envelope.trailing_comments and not strip_comments:
+        env_lines.extend(_emit_leading_comments(envelope.trailing_comments, 0, strip_comments))
+
+    env_lines.append("===END===")
+    return "\n".join(env_lines)
+
+
 def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     """Emit canonical OCTAVE from AST.
 
@@ -972,6 +1071,30 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
 
     # Always emit END envelope
     lines.append("===END===")
+
+    # GH #420 Option D: emit additional top-level envelopes (#2..N).
+    # Single-envelope documents have ``additional_envelopes == []`` (the
+    # dataclass default), so this loop is a no-op there.  For each sibling
+    # envelope we either slice it verbatim from baseline (preserve mode,
+    # clean envelope, valid spans) or re-emit it canonically.
+    additional_envelopes = getattr(doc, "additional_envelopes", None) or []
+    for envelope in additional_envelopes:
+        # Blank line separator between envelopes (canonical form mirrors
+        # the typical multi-envelope source layout).
+        lines.append("")
+        env_text = _emit_envelope(
+            envelope,
+            baseline_bytes=_baseline_bytes,
+            enable_preserve=_enable_preserve,
+            format_options=format_options,
+            strip_comments=strip_comments,
+        )
+        # _emit_envelope returns a fully-formed envelope text block
+        # (===NAME===\n...===END===), no trailing newline.  Append as a
+        # single element so the "\n".join below produces one newline
+        # between this envelope's last line and the next envelope's
+        # blank-line separator (or document end).
+        lines.append(env_text)
 
     output = "\n".join(lines)
 
