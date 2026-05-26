@@ -51,7 +51,6 @@ from octave_mcp.core.grammar.cst import Envelope
 from octave_mcp.core.parser import parse
 from octave_mcp.mcp.write import WriteTool
 
-
 # --------------------------------------------------------------------------- #
 # Test fixtures                                                               #
 # --------------------------------------------------------------------------- #
@@ -200,8 +199,7 @@ class TestGH420ParserMultiEnvelope:
         assert len(doc.additional_envelopes) == 3
         names = [env.name for env in doc.additional_envelopes]
         assert names == ["EXACT", "FACETS", "EDGES"], (
-            f"GH #420 regression: parser dropped or reordered "
-            f"sibling envelopes. got={names!r}"
+            f"GH #420 regression: parser dropped or reordered " f"sibling envelopes. got={names!r}"
         )
 
     def test_parser_consumes_all_eight_envelopes(self) -> None:
@@ -388,8 +386,7 @@ class TestGH420EmitterMultiEnvelope:
         out = emit(doc)
         for name in ("META", "EXACT", "FACETS", "EDGES"):
             assert f"==={name}===" in out, (
-                f"GH #420 emitter regression: envelope {name!r} missing from "
-                f"canonical output."
+                f"GH #420 emitter regression: envelope {name!r} missing from " f"canonical output."
             )
 
     def test_emit_envelope_count_matches_parser(self) -> None:
@@ -542,3 +539,111 @@ class TestGH420AC4DocumentationHonest:
         # Must explicitly note that additional envelopes are read+emit only
         # (no atom mutation via changes_mode) in v1.13.0.
         assert "v1.13.0" in doc or "v1.14" in doc or "Read + emit only" in doc.replace("\n", " ")
+
+
+# --------------------------------------------------------------------------- #
+# CE rework: inter-envelope trivia preservation                               #
+# --------------------------------------------------------------------------- #
+
+
+class TestGH420CEReworkInterEnvelopeTrivia:
+    """CE BLOCKING (PR #451 rework): inter-envelope whitespace MUST be preserved
+    under preserve mode.
+
+    CE evidence pre-rework:
+        - parser.py:669 ``skip_whitespace()`` discarded inter-envelope trivia.
+        - emitter.py:1084 ``lines.append("")`` emitted a FIXED ``\\n\\n``
+          separator regardless of original input.
+        - Repro: input boundary ``\\n\\n\\n===EXACT`` emitted as
+          ``\\n\\n===EXACT`` — byte-loss for noncanonical inter-envelope
+          whitespace — violating AC1 (byte-stable under all four
+          ``format_style`` values) and PROD::I1 SYNTACTIC_FIDELITY (canon
+          MUST be bijective on semantic space; whitespace between
+          envelopes IS part of the source's syntactic surface under
+          preserve mode).
+    """
+
+    # Three newlines between envelope #1 and envelope #2 (extra blank line);
+    # two newlines with trailing spaces between envelope #2 and envelope #3
+    # (a trailing-whitespace variant CE explicitly called out).
+    _NONCANONICAL_BOUNDARY_FIXTURE = (
+        "===META===\n"
+        "TYPE::FRAME_CARD\n"
+        "ID::REWORK_BOUNDARY\n"
+        "STATUS::proposed\n"
+        "===END===\n"
+        "\n"  # boundary newline #1
+        "\n"  # boundary newline #2
+        "\n"  # boundary newline #3 (extra blank line — must survive)
+        "===EXACT===\n"
+        "IDS::[A, B]\n"
+        "===END===\n"
+        "  \n"  # trailing-whitespace line (must survive verbatim)
+        "===FACETS===\n"
+        'INTENT::"trivia preservation"\n'
+        "===END===\n"
+    )
+
+    def test_inter_envelope_whitespace_preserved(self) -> None:
+        """Preserve-mode round-trip with NO changes MUST be byte-identical.
+
+        Pre-rework failure: ``\\n\\n\\n`` between envelopes #1 and #2 collapses
+        to ``\\n\\n`` (byte loss = 1); ``  \\n`` between envelopes #2 and #3
+        collapses to ``\\n`` (byte loss = 2 trailing spaces) — total loss
+        of 3 bytes from a 145-byte fixture.
+
+        Post-rework: every inter-envelope byte threads through emit
+        unchanged.
+        """
+        status, written = _run_write_normalize(self._NONCANONICAL_BOUNDARY_FIXTURE, format_style="preserve")
+        assert status == "success", f"octave_write returned status={status!r}"
+        assert written == self._NONCANONICAL_BOUNDARY_FIXTURE, (
+            "Preserve-mode round-trip is NOT byte-identical (CE rework "
+            "regression): inter-envelope trivia was modified. "
+            f"input_bytes={len(self._NONCANONICAL_BOUNDARY_FIXTURE)} "
+            f"output_bytes={len(written)}. "
+            f"\nINPUT  = {self._NONCANONICAL_BOUNDARY_FIXTURE!r}"
+            f"\nOUTPUT = {written!r}"
+        )
+
+    def test_inter_envelope_whitespace_preserved_with_change_to_envelope_1(self) -> None:
+        """Envelopes #2 and #3 (including the trivia preceding each) must
+        remain byte-stable even when envelope #1's META is mutated.
+
+        This proves the per-envelope dirty flag still gates trivia
+        emission correctly: envelope #1 re-emits canonically, while
+        envelopes #2 and #3 and ALL inter-envelope trivia between them
+        slice verbatim from baseline.
+        """
+        status, written = _run_write_changes(
+            self._NONCANONICAL_BOUNDARY_FIXTURE,
+            {"META.STATUS": "approved"},
+            format_style="preserve",
+        )
+        assert status == "success", f"octave_write returned status={status!r}"
+
+        # Envelope #1 changed STATUS proposed -> approved.
+        assert "STATUS::approved" in written
+        assert "STATUS::proposed" not in written
+
+        # Envelopes #2 and #3 plus the inter-envelope trivia between them
+        # must survive byte-identical.  We anchor on the substring starting
+        # at envelope #1's ===END=== through the document end.  The bytes
+        # between ===END=== of envelope #1 and ===END=== of envelope #3
+        # (inclusive of the noncanonical \n\n\n and "  \n" boundaries)
+        # must equal the original.
+        original_tail_start = self._NONCANONICAL_BOUNDARY_FIXTURE.find("===END===\n") + len("===END===\n")
+        original_tail = self._NONCANONICAL_BOUNDARY_FIXTURE[original_tail_start:]
+
+        # Locate the corresponding tail in the written output (envelope #1's
+        # ===END=== still exists, just preceded by mutated META).
+        written_tail_start = written.find("===END===\n") + len("===END===\n")
+        written_tail = written[written_tail_start:]
+
+        assert written_tail == original_tail, (
+            "Envelopes #2/#3 and their preceding trivia were NOT byte-stable "
+            "after a change to envelope #1.  PROD::I1 violation "
+            "(per-envelope dirty propagation must NOT touch sibling trivia)."
+            f"\nORIGINAL TAIL = {original_tail!r}"
+            f"\nWRITTEN  TAIL = {written_tail!r}"
+        )

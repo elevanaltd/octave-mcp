@@ -70,9 +70,7 @@ def _run_octave_write_normalize(content_bytes: bytes, *, format_style: str | Non
             if format_style is not None:
                 kwargs["format_style"] = format_style
             result = await tool.execute(**kwargs)
-            assert result.get("status") == "success", (
-                f"octave_write normalize-mode failed: {result.get('errors')!r}"
-            )
+            assert result.get("status") == "success", f"octave_write normalize-mode failed: {result.get('errors')!r}"
             with open(path, "rb") as fp:
                 return fp.read()
         finally:
@@ -170,9 +168,7 @@ def test_multi_envelope_canonical_form_is_idempotent_fixed_point(fixture_path: P
     _FIXTURE_FILES,
     ids=lambda p: p.name,
 )
-def test_multi_envelope_all_envelopes_survive_format_style_matrix(
-    fixture_path: Path, format_style: str | None
-) -> None:
+def test_multi_envelope_all_envelopes_survive_format_style_matrix(fixture_path: Path, format_style: str | None) -> None:
     """AC1: across the full ``format_style`` matrix, every envelope name survives.
 
     Even though canonical-form differences are expected between modes
@@ -185,11 +181,15 @@ def test_multi_envelope_all_envelopes_survive_format_style_matrix(
     # Extract every envelope name from the source.  The shape is
     # ``===NAME===`` on its own line; we accept any non-empty identifier.
     envelope_headers = [
-        line for line in original_text.splitlines() if line.startswith("===") and line.endswith("===") and line != "===END==="
+        line
+        for line in original_text.splitlines()
+        if line.startswith("===") and line.endswith("===") and line != "===END==="
     ]
     assert envelope_headers, f"Fixture {fixture_path.name} contains no envelope headers"
 
-    round_tripped = _run_octave_write_normalize(original_text.encode("utf-8"), format_style=format_style).decode("utf-8")
+    round_tripped = _run_octave_write_normalize(original_text.encode("utf-8"), format_style=format_style).decode(
+        "utf-8"
+    )
 
     missing = [h for h in envelope_headers if h not in round_tripped]
     if missing:

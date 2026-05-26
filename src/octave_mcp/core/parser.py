@@ -665,16 +665,31 @@ class Parser:
         # is present.  See ``parse_additional_envelope`` for the body
         # contract (which mirrors envelope-#1 parsing minus document-level
         # surface — no grammar sentinel, no YAML frontmatter).
+        #
+        # GH #420 CE rework (PR #451): record the end_byte of the PREVIOUS
+        # envelope's ``===END===`` (or, if that token was absent, the last
+        # token consumed by envelope-#1 parsing) BEFORE skip_whitespace
+        # advances past the inter-envelope trivia.  The trivia byte band
+        # ``[prev_end_byte, current_envelope.start_byte)`` is stored on the
+        # envelope so the emitter can slice it verbatim under preserve mode
+        # (PROD::I1 SYNTACTIC_FIDELITY).  ``self.pos`` after the END-envelope
+        # consumption above (or, lenient mode, after the last section token)
+        # indexes the next not-yet-consumed token; the previous token's
+        # ``end_byte`` is the trivia start.
+        prev_end_byte = self.tokens[self.pos - 1].end_byte if self.pos > 0 and self.tokens else None
         while True:
             self.skip_whitespace(skip_comments=False)
             if self.current().type != TokenType.ENVELOPE_START:
                 break
-            envelope = self.parse_additional_envelope()
+            envelope = self.parse_additional_envelope(prev_end_byte=prev_end_byte)
             doc.additional_envelopes.append(envelope)
+            # After this envelope, the trivia for the NEXT sibling (if any)
+            # begins at THIS envelope's end_byte.
+            prev_end_byte = envelope.end_byte
 
         return doc
 
-    def parse_additional_envelope(self) -> Envelope:
+    def parse_additional_envelope(self, *, prev_end_byte: int | None = None) -> Envelope:
         """Parse a sibling top-level envelope into an ``Envelope`` node.
 
         GH #420 Option D (additive multi-envelope support).  Called by
@@ -692,12 +707,33 @@ class Parser:
         Document-level surface (YAML frontmatter, grammar sentinel) is
         intentionally NOT recognised here — those belong on envelope #1
         only, before the first ``===NAME===``.
+
+        Args:
+            prev_end_byte: end_byte of the previous envelope's
+                ``===END===`` token (envelope #1's, or the prior
+                sibling's).  Used to capture the inter-envelope trivia
+                byte band on this envelope so preserve mode can emit it
+                verbatim.  See GH #420 CE rework (PR #451).
         """
         envelope = Envelope()
 
         # Capture the envelope's start_byte at the ENVELOPE_START token.
         envelope_start_tok = self.current()
         envelope.start_byte = envelope_start_tok.start_byte
+
+        # GH #420 CE rework (PR #451): capture the inter-envelope trivia
+        # byte band.  The band is the half-open range
+        # ``[prev_end_byte, envelope_start_tok.start_byte)`` in the
+        # original (NFC) source.  Under preserve mode the emitter slices
+        # these bytes verbatim from baseline so noncanonical whitespace
+        # (extra blank lines, trailing spaces, etc.) survives the
+        # round-trip (PROD::I1 SYNTACTIC_FIDELITY).  We only populate
+        # the band when ``prev_end_byte`` is provided AND non-empty; a
+        # zero-length band leaves the fields ``None`` so the emitter
+        # falls back to the canonical ``\n\n`` separator.
+        if prev_end_byte is not None and prev_end_byte < envelope_start_tok.start_byte:
+            envelope.pre_trivia_start_byte = prev_end_byte
+            envelope.pre_trivia_end_byte = envelope_start_tok.start_byte
 
         # Consume ===NAME=== and record the envelope name.
         token = self.advance()

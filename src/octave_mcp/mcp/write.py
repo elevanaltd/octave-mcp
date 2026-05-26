@@ -1416,9 +1416,23 @@ def _emit_with_style(
         # Strategy A: span-aware emit. FormatOptions threads baseline_bytes
         # and enable_preserve=True into emit(), which dispatches per-node via
         # dirty/repaired flags. EC-1b: no parse(emit) or emit(parse) calls.
+        #
+        # GH #420 CE rework (PR #451): preserve mode is now byte-stable on
+        # inter-envelope trivia, including lines containing only trailing
+        # whitespace (e.g. ``  \n``).  The default ``trailing_whitespace=
+        # "strip"`` on FormatOptions would rstrip those lines and violate
+        # PROD::I1 SYNTACTIC_FIDELITY.  When the caller explicitly opts
+        # into preserve mode, opt into trailing-whitespace preservation
+        # too — the semantic intent of "preserve" is to thread the
+        # original bytes through emit, and trailing whitespace is part of
+        # the original bytes.
         from octave_mcp.core.emitter import FormatOptions
 
-        fmt = FormatOptions(baseline_bytes=baseline_bytes, enable_preserve=True)
+        fmt = FormatOptions(
+            baseline_bytes=baseline_bytes,
+            enable_preserve=True,
+            trailing_whitespace="preserve",
+        )
         return emit(doc, fmt)
     if format_style in ("expanded", "compact"):
         projected = _apply_format_style(doc, format_style, corrections)

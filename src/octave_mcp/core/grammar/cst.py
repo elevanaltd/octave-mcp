@@ -372,6 +372,21 @@ class Envelope(ASTNode):
     # Per-envelope trailing-comments byte band.
     trailing_comments_start_byte: int | None = None
     trailing_comments_end_byte: int | None = None
+    # GH #420 CE rework (PR #451): inter-envelope trivia byte band.
+    # Holds the byte range, in the original (NFC) source, between the END
+    # of the PREVIOUS top-level envelope (envelope #1's ``===END===`` end,
+    # or the prior sibling envelope's ``===END===`` end) and the START of
+    # THIS envelope's ``===NAME===`` header.  Under preserve mode the
+    # emitter slices these bytes verbatim from baseline so noncanonical
+    # whitespace (extra blank lines, trailing spaces, etc.) survives the
+    # round-trip — PROD::I1 SYNTACTIC_FIDELITY on the inter-envelope
+    # surface.  ``None`` on both fields means "no captured trivia"; the
+    # emitter then falls back to the canonical ``\n\n`` blank-line
+    # separator (matching pre-rework behaviour for normalize / canonical
+    # modes).  This field is parser-populated only; mutation is not part
+    # of v1.13.0 (additional envelopes are read+emit only per HO Q3).
+    pre_trivia_start_byte: int | None = None
+    pre_trivia_end_byte: int | None = None
     kind: NodeKind = field(default=NodeKind.ENVELOPE, init=False)
 
 
