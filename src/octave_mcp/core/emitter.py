@@ -33,6 +33,7 @@ from octave_mcp.core.grammar.cst import (
     Block,
     Comment,
     Document,
+    Envelope,
     HolographicValue,
     InlineMap,
     ListValue,
@@ -801,6 +802,104 @@ def _apply_format_options(output: str, format_options: FormatOptions) -> str:
     return "\n".join(lines)
 
 
+def _emit_envelope(
+    envelope: Envelope,
+    *,
+    baseline_bytes: bytes | None,
+    enable_preserve: bool,
+    format_options: FormatOptions | None,
+    strip_comments: bool,
+) -> str:
+    """Emit a single additional envelope (GH #420 Option D).
+
+    Mirrors the envelope-scoped portion of ``emit()`` for the
+    ``Document`` (===NAME=== header, optional META, sections, optional
+    trailing comments, ===END=== footer) but operates on an
+    ``Envelope`` node.  Returns the envelope's bytes as one ``\\n``-
+    separated string with NO trailing newline (the caller joins envelopes
+    with ``\\n``).
+
+    Strategy A preserve mode (#420 AC1): when ``enable_preserve=True``
+    AND ``baseline_bytes is not None`` AND the envelope is clean
+    (``not dirty``) AND has valid byte spans
+    (``start_byte``/``end_byte``), slice the WHOLE envelope verbatim
+    from baseline.  This is the per-envelope analogue of the per-section
+    slice path in ``emit()``.  Any mutation to the envelope (currently
+    out-of-scope for v1.13.0 via changes_mode, per HO Q3) would set
+    ``envelope.dirty=True`` and force canonical re-emit.
+
+    Re-emit path: produces the canonical bytes from the AST using the
+    same ``emit_meta`` / ``emit_assignment`` / ``emit_block`` /
+    ``emit_section`` helpers that ``emit()`` uses for the primary
+    Document.  Layout is byte-identical to a single-envelope canonical
+    document containing the same content.
+    """
+    # Slice path: clean envelope with valid spans under preserve mode.
+    if (
+        enable_preserve
+        and baseline_bytes is not None
+        and not envelope.dirty
+        and envelope.start_byte is not None
+        and envelope.end_byte is not None
+    ):
+        # R4 structural integrity check (I4 audit trail; ADR §5 R4).
+        assert 0 <= envelope.start_byte < envelope.end_byte <= len(baseline_bytes), (
+            f"Envelope {envelope.name!r} span "
+            f"[{envelope.start_byte}:{envelope.end_byte}] out of bounds "
+            f"for baseline ({len(baseline_bytes)} bytes). "
+            "NFC contract violated."
+        )
+        sliced_text = baseline_bytes[envelope.start_byte : envelope.end_byte].decode("utf-8")
+        # Trim a single trailing newline so the caller's "\n".join
+        # produces exactly one boundary newline between this envelope
+        # and the next.
+        return sliced_text.removesuffix("\n")
+
+    # Re-emit path: produce canonical bytes from the envelope AST.
+    env_lines: list[str] = []
+    env_lines.append(f"==={envelope.name}===")
+
+    if envelope.meta:
+        env_lines.append(emit_meta(envelope.meta, format_options))
+
+    if envelope.has_separator:
+        env_lines.append("---")
+
+    for section in envelope.sections:
+        # Per-section slice path inside an additional envelope: same
+        # contract as the primary Document loop.  An unchanged section
+        # whose spans are valid relative to ``baseline_bytes`` slices
+        # verbatim; otherwise canonical re-emit.
+        if (
+            enable_preserve
+            and baseline_bytes is not None
+            and not section.dirty
+            and not section.repaired
+            and not getattr(section, "body_dirty", False)
+            and section.start_byte is not None
+            and section.end_byte is not None
+            and 0 <= section.start_byte < section.end_byte <= len(baseline_bytes)
+        ):
+            sliced_text = baseline_bytes[section.start_byte : section.end_byte].decode("utf-8")
+            env_lines.append(sliced_text.removesuffix("\n"))
+            continue
+
+        if isinstance(section, Assignment):
+            if is_absent(section.value):
+                continue
+            env_lines.append(emit_assignment(section, 0, format_options))
+        elif isinstance(section, Block):
+            env_lines.append(emit_block(section, 0, format_options))
+        elif isinstance(section, Section):
+            env_lines.append(emit_section(section, 0, format_options))
+
+    if envelope.trailing_comments and not strip_comments:
+        env_lines.extend(_emit_leading_comments(envelope.trailing_comments, 0, strip_comments))
+
+    env_lines.append("===END===")
+    return "\n".join(env_lines)
+
+
 def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     """Emit canonical OCTAVE from AST.
 
@@ -973,7 +1072,105 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
     # Always emit END envelope
     lines.append("===END===")
 
+    # GH #420 Option D: emit additional top-level envelopes (#2..N).
+    # Single-envelope documents have ``additional_envelopes == []`` (the
+    # dataclass default), so this branch is a no-op there.  For each
+    # sibling envelope we either slice it verbatim from baseline (preserve
+    # mode, clean envelope, valid spans) or re-emit it canonically.
+    #
+    # GH #420 CE rework cycle 2 (PR #451): Option A — explicit verbatim
+    # byte assembly.  Cycle 1's strip-then-``"\n".join(...)`` approach
+    # collapsed distinct accepted source boundaries (raw ``"\n"`` vs raw
+    # ``"\n\n"`` BOTH became ``""`` after trimming, producing identical
+    # canonical-blank-line output for both — an I1 SYNTACTIC_FIDELITY
+    # violation: canon is no longer bijective on the inter-envelope
+    # trivia space).
+    #
+    # The fix is to emit the captured ``pre_trivia`` byte band VERBATIM
+    # — every byte between the previous envelope's ``===END===`` end_byte
+    # and the next envelope's ``===NAME===`` start_byte threads through
+    # the emitter unchanged.  We exit the ``"\n".join`` regime for the
+    # multi-envelope tail and build the output by direct concatenation:
+    #
+    #   primary_output = "\n".join(lines)            # envelope #1 (no \n suffix)
+    #   for env in additional_envelopes:
+    #       primary_output += boundary_bytes(env)    # raw band OR canonical "\n\n"
+    #       primary_output += env_text(env)          # ===NAME===...===END=== (no \n suffix)
+    #
+    # ``boundary_bytes`` is the raw ``pre_trivia`` slice under preserve
+    # mode when the band is well-formed (including empty bands, which
+    # signal zero-byte adjacency and emit no separator).  Otherwise we
+    # fall back to ``"\n\n"`` — the canonical single-blank-line separator
+    # — which matches pre-rework canonical-form behaviour exactly:
+    # envelope #1's last element ``===END===`` is followed by ``\n`` (the
+    # ``\n`` between ===END=== line and the blank line) and then ``\n``
+    # (the blank line itself) then ``===NAME===``.
+    additional_envelopes = getattr(doc, "additional_envelopes", None) or []
+
     output = "\n".join(lines)
+    for envelope in additional_envelopes:
+        boundary: str
+        # GH #420 cubic-dev-ai P2 rework (PR #451): fail-fast on invalid
+        # pre_trivia byte spans under preserve mode.  Pre-rework: the
+        # combined predicate ``and 0 <= start <= end <= len(baseline)``
+        # silently fell through to the canonical ``"\n\n"`` separator on
+        # ANY failure mode — including the impossible-AST case where
+        # spans are SET but corrupt (start > end, end > len).  That
+        # silent degradation masked AST corruption rather than surfacing
+        # it (PROD::I4 TRANSFORM_AUDITABILITY violation; bugs become
+        # silent canonical-form drift instead of explicit errors).
+        #
+        # Post-rework: separate the "spans not set" (None → legitimate
+        # non-preserve fallback) case from the "spans set but invalid"
+        # (corrupt AST → must raise) case.
+        _pt_start = envelope.pre_trivia_start_byte
+        _pt_end = envelope.pre_trivia_end_byte
+        _spans_set = _pt_start is not None and _pt_end is not None
+        if _enable_preserve and _baseline_bytes is not None and _spans_set:
+            # Validate bounds.  We've already established both spans are
+            # non-None; mypy narrows them here.
+            assert _pt_start is not None and _pt_end is not None  # narrow for mypy
+            _baseline_len = len(_baseline_bytes)
+            if not (0 <= _pt_start <= _pt_end <= _baseline_len):
+                raise ValueError(
+                    f"Invalid pre_trivia byte span on envelope "
+                    f"{getattr(envelope, 'name', '<unnamed>')!r}: "
+                    f"start={_pt_start}, end={_pt_end}, "
+                    f"baseline_len={_baseline_len}. "
+                    f"Required: 0 <= start <= end <= baseline_len. "
+                    f"This indicates AST corruption — pre_trivia spans "
+                    f"set but bounds-invalid is an impossible state for "
+                    f"a parser-produced Envelope under preserve mode."
+                )
+            # Preserve mode with captured band: the band IS the boundary.
+            # Empty band (start == end) means the source had zero bytes
+            # between ===END=== and ===NAME=== (zero-byte adjacency,
+            # accepted by the lexer) — emit no separator at all.  Any
+            # other width (1 byte, 2 bytes, "\n\n  \n", etc.) is emitted
+            # byte-for-byte.  No strip, no join, no transformation.
+            boundary = _baseline_bytes[_pt_start:_pt_end].decode("utf-8")
+        else:
+            # Canonical / non-preserve / spans-not-set fallback: single
+            # blank line between envelopes (one ``\n`` closes the previous
+            # ===END=== line, second ``\n`` is the blank line).  This
+            # path is reached when (a) preserve mode is off, (b) no
+            # baseline_bytes were supplied, or (c) the envelope's
+            # pre_trivia spans were never populated (both None) — all
+            # legitimate non-preserve fallbacks.
+            boundary = "\n\n"
+
+        env_text = _emit_envelope(
+            envelope,
+            baseline_bytes=_baseline_bytes,
+            enable_preserve=_enable_preserve,
+            format_options=format_options,
+            strip_comments=strip_comments,
+        )
+        # ``env_text`` is a fully-formed envelope text block
+        # (``===NAME===\n...===END===``) with no trailing newline.
+        # Direct concatenation — NO ``"\n".join`` to introduce a phantom
+        # newline between boundary and env_text.
+        output += boundary + env_text
 
     # Issue #193: Apply format options if provided
     if format_options:

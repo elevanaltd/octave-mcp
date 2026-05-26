@@ -19,6 +19,7 @@ from octave_mcp.core.grammar.cst import (
     Block,
     Comment,
     Document,
+    Envelope,
     HolographicValue,
     InlineMap,
     ListValue,
@@ -657,7 +658,235 @@ class Parser:
         # post-pass chokepoint.
         _propagate_repaired_to_body_dirty(doc)
 
+        # GH #420 Option D: consume any additional top-level envelopes that
+        # follow the first ===END===.  Each becomes an ``Envelope`` node on
+        # ``doc.additional_envelopes``.  Single-envelope documents are
+        # unaffected: the loop body only runs when another ``ENVELOPE_START``
+        # is present.  See ``parse_additional_envelope`` for the body
+        # contract (which mirrors envelope-#1 parsing minus document-level
+        # surface — no grammar sentinel, no YAML frontmatter).
+        #
+        # GH #420 CE rework (PR #451): record the end_byte of the PREVIOUS
+        # envelope's ``===END===`` (or, if that token was absent, the last
+        # token consumed by envelope-#1 parsing) BEFORE skip_whitespace
+        # advances past the inter-envelope trivia.  The trivia byte band
+        # ``[prev_end_byte, current_envelope.start_byte)`` is stored on the
+        # envelope so the emitter can slice it verbatim under preserve mode
+        # (PROD::I1 SYNTACTIC_FIDELITY).  ``self.pos`` after the END-envelope
+        # consumption above (or, lenient mode, after the last section token)
+        # indexes the next not-yet-consumed token; the previous token's
+        # ``end_byte`` is the trivia start.
+        prev_end_byte = self.tokens[self.pos - 1].end_byte if self.pos > 0 and self.tokens else None
+        # GH #420 cubic-dev-ai P1 rework (PR #451): the scan loop MUST iterate
+        # through ANY non-``ENVELOPE_START`` token (NEWLINE / INDENT / COMMENT
+        # / etc.) until it hits ``ENVELOPE_START`` (continue → parse the
+        # sibling) or ``EOF`` (break).  Pre-rework: ``skip_whitespace`` did NOT
+        # skip ``COMMENT`` tokens (we intentionally pass ``skip_comments=False``
+        # so the comment's bytes remain inside the ``pre_trivia`` byte band
+        # captured at lines below).  If inter-envelope trivia contained a
+        # comment, the loop's ``ENVELOPE_START`` check saw the comment token
+        # instead, broke out, and silently dropped envelopes #2..N — the SAME
+        # CLASS of bug as the original #420 silent envelope drop (PROD::I3
+        # MIRROR_CONSTRAINT violation: parser created an absence by inventing
+        # an end-of-document that did not exist in source).
+        #
+        # Option A fix: explicit token-cursor advance through any
+        # non-``ENVELOPE_START`` token until either ``ENVELOPE_START`` or
+        # ``EOF``.  The byte-range capture in ``parse_additional_envelope``
+        # (``[prev_end_byte, envelope_start_tok.start_byte)``) naturally
+        # encloses the comment bytes because the parser does NOT modify
+        # source bytes — it only advances ``self.pos``.  Comment bytes
+        # therefore survive verbatim in ``pre_trivia`` under preserve mode
+        # (PROD::I1 SYNTACTIC_FIDELITY).
+        while True:
+            tok_type = self.current().type
+            if tok_type == TokenType.ENVELOPE_START:
+                envelope = self.parse_additional_envelope(prev_end_byte=prev_end_byte)
+                doc.additional_envelopes.append(envelope)
+                # After this envelope, the trivia for the NEXT sibling (if
+                # any) begins at THIS envelope's end_byte.
+                prev_end_byte = envelope.end_byte
+                continue
+            if tok_type == TokenType.EOF:
+                break
+            # Any other token (NEWLINE / INDENT / COMMENT / stray content):
+            # advance the cursor without consuming bytes from the source.
+            # The byte-range capture on the NEXT envelope's pre_trivia will
+            # span these bytes verbatim.
+            self.advance()
+
         return doc
+
+    def parse_additional_envelope(self, *, prev_end_byte: int | None = None) -> Envelope:
+        """Parse a sibling top-level envelope into an ``Envelope`` node.
+
+        GH #420 Option D (additive multi-envelope support).  Called by
+        ``parse_document`` for each envelope #2..N after the first
+        ``===END===`` is consumed.  The body logic mirrors the
+        single-envelope parsing in ``parse_document`` (META block,
+        optional separator, section/comment/newline loop, trailing
+        comments, ``===END===``) and populates the same per-envelope
+        audit/preserve fields (``meta_start_byte`` / ``meta_end_byte`` /
+        ``trailing_comments_start_byte`` / ``trailing_comments_end_byte``
+        and ``start_byte`` / ``end_byte`` on the envelope itself) so that
+        Strategy A preserve mode can slice unchanged sibling envelopes
+        verbatim from baseline (#420 AC1) on emission.
+
+        Document-level surface (YAML frontmatter, grammar sentinel) is
+        intentionally NOT recognised here — those belong on envelope #1
+        only, before the first ``===NAME===``.
+
+        Args:
+            prev_end_byte: end_byte of the previous envelope's
+                ``===END===`` token (envelope #1's, or the prior
+                sibling's).  Used to capture the inter-envelope trivia
+                byte band on this envelope so preserve mode can emit it
+                verbatim.  See GH #420 CE rework (PR #451).
+        """
+        envelope = Envelope()
+
+        # Capture the envelope's start_byte at the ENVELOPE_START token.
+        envelope_start_tok = self.current()
+        envelope.start_byte = envelope_start_tok.start_byte
+
+        # GH #420 CE rework (PR #451, cycle 2): capture the inter-envelope
+        # trivia byte band.  The band is the half-open range
+        # ``[prev_end_byte, envelope_start_tok.start_byte)`` in the
+        # original (NFC) source.  Under preserve mode the emitter slices
+        # these bytes verbatim from baseline so EVERY accepted boundary
+        # width (zero bytes, single ``\n``, ``\n\n``, ``\n\n\n``, trailing
+        # whitespace, etc.) survives the round-trip (PROD::I1
+        # SYNTACTIC_FIDELITY — canon MUST be bijective on the semantic
+        # space, including the zero-width boundary).  We populate the band
+        # whenever ``prev_end_byte`` is provided and the range is
+        # well-ordered (``prev_end_byte <= envelope_start_tok.start_byte``);
+        # an empty band (``start == end``) signals zero-byte adjacency,
+        # which the emitter must honour by emitting NO separator.
+        if prev_end_byte is not None and prev_end_byte <= envelope_start_tok.start_byte:
+            envelope.pre_trivia_start_byte = prev_end_byte
+            envelope.pre_trivia_end_byte = envelope_start_tok.start_byte
+
+        # Consume ===NAME=== and record the envelope name.
+        token = self.advance()
+        envelope.name = token.value
+        envelope.line = token.line
+        envelope.column = token.column
+        self.skip_whitespace(skip_comments=False)
+
+        # Parse META block if present (parallel to parse_document META
+        # handling — see lines ~546-556 there for the source).
+        if self.current().type == TokenType.IDENTIFIER and self.current().value == "META":
+            meta_start_tok = self.current()
+            meta_block = self.parse_meta_block()
+            envelope.meta = meta_block
+            envelope.meta_start_byte = meta_start_tok.start_byte
+            prev_idx = max(0, self.pos - 1)
+            envelope.meta_end_byte = self.tokens[prev_idx].end_byte
+            self.skip_whitespace(skip_comments=False)
+
+        # Optional separator.
+        if self.current().type == TokenType.SEPARATOR:
+            envelope.has_separator = True
+            self.advance()
+            self.skip_whitespace(skip_comments=False)
+
+        # Body parse — same comment/section/newline pattern as
+        # parse_document, scoped to this envelope.
+        pending_comments: list[str] = []
+        pending_comments_start_byte: int | None = None
+        env_key_positions: dict[str, list[int]] = {}
+
+        while self.current().type != TokenType.ENVELOPE_END and self.current().type != TokenType.EOF:
+            if self.current().type == TokenType.INDENT:
+                self.advance()
+                continue
+
+            if self.current().type == TokenType.COMMENT:
+                if not pending_comments:
+                    pending_comments_start_byte = self.current().start_byte
+                pending_comments.append(self.current().value)
+                self.advance()
+                continue
+
+            if self.current().type == TokenType.NEWLINE:
+                self.advance()
+                continue
+
+            section = self.parse_section(
+                0,
+                pending_comments,
+                leading_comments_start_byte=pending_comments_start_byte,
+            )
+            pending_comments = []
+            pending_comments_start_byte = None
+            if section:
+                if isinstance(section, Assignment):
+                    sec_key = section.key
+                    sec_line = section.line
+                    if sec_key in env_key_positions:
+                        env_key_positions[sec_key].append(sec_line)
+                        self._emit_duplicate_key_warning(sec_key, sec_line, env_key_positions)
+                    else:
+                        env_key_positions[sec_key] = [sec_line]
+                envelope.sections.append(section)
+            elif self.current().type not in (TokenType.ENVELOPE_END, TokenType.EOF):
+                self.advance()
+
+        # Trailing comments band (band that lives between the last
+        # section's end_byte and the ===END=== marker).
+        if pending_comments:
+            envelope.trailing_comments = pending_comments
+            envelope.trailing_comments_start_byte = pending_comments_start_byte
+            _band_end_idx = max(0, self.pos - 1)
+            envelope.trailing_comments_end_byte = self.tokens[_band_end_idx].end_byte
+
+        # Consume ===END=== (lenient — allow missing for symmetry with
+        # parse_document's tolerance).
+        if self.current().type == TokenType.ENVELOPE_END:
+            end_tok = self.current()
+            envelope.end_byte = end_tok.end_byte
+            self.advance()
+        else:
+            # Lenient: stamp end_byte from the last token seen so the
+            # slice path still has a usable bound.  Strategy A preserve
+            # mode then conservatively re-emits this envelope canonically
+            # (no baseline slice) until structural invariants are
+            # restored.
+            prev_idx = max(0, self.pos - 1)
+            envelope.end_byte = self.tokens[prev_idx].end_byte
+
+        # Extend trail-anchored spans inside this envelope's sections,
+        # parallel to the post-pass on doc.sections in parse_document.
+        self._extend_trail_anchored_spans_sections(envelope.sections)
+
+        # Propagate any descendant repaired=True up to body_dirty signals
+        # on this envelope's sections, mirroring the Document post-pass.
+        # The helper recurses ``sections`` (which Envelope shares with
+        # Document) so a single call covers the whole envelope subtree.
+        _propagate_repaired_to_body_dirty(envelope)
+
+        return envelope
+
+    def _extend_trail_anchored_spans_sections(self, sections: list[ASTNode]) -> None:
+        """Trail-anchored span extension scoped to a sibling list.
+
+        Mirrors ``_extend_trail_anchored_spans`` but operates directly on
+        a ``sections`` list (used by ``parse_additional_envelope`` since
+        that path does not own a full ``Document``).
+        """
+
+        def _adjust(siblings: list[Any]) -> None:
+            for i, node in enumerate(siblings):
+                if isinstance(node, (Block, Section)):
+                    _adjust(node.children)
+                if i + 1 >= len(siblings):
+                    continue
+                next_start = getattr(siblings[i + 1], "start_byte", None)
+                cur_end = getattr(node, "end_byte", None)
+                if next_start is not None and cur_end is not None and cur_end <= next_start:
+                    node.end_byte = next_start
+
+        _adjust(sections)
 
     def _extend_trail_anchored_spans(self, doc: Document) -> None:
         """Extend each node's ``end_byte`` to its successor's ``start_byte``.
