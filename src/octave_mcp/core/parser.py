@@ -721,17 +721,20 @@ class Parser:
         envelope_start_tok = self.current()
         envelope.start_byte = envelope_start_tok.start_byte
 
-        # GH #420 CE rework (PR #451): capture the inter-envelope trivia
-        # byte band.  The band is the half-open range
+        # GH #420 CE rework (PR #451, cycle 2): capture the inter-envelope
+        # trivia byte band.  The band is the half-open range
         # ``[prev_end_byte, envelope_start_tok.start_byte)`` in the
         # original (NFC) source.  Under preserve mode the emitter slices
-        # these bytes verbatim from baseline so noncanonical whitespace
-        # (extra blank lines, trailing spaces, etc.) survives the
-        # round-trip (PROD::I1 SYNTACTIC_FIDELITY).  We only populate
-        # the band when ``prev_end_byte`` is provided AND non-empty; a
-        # zero-length band leaves the fields ``None`` so the emitter
-        # falls back to the canonical ``\n\n`` separator.
-        if prev_end_byte is not None and prev_end_byte < envelope_start_tok.start_byte:
+        # these bytes verbatim from baseline so EVERY accepted boundary
+        # width (zero bytes, single ``\n``, ``\n\n``, ``\n\n\n``, trailing
+        # whitespace, etc.) survives the round-trip (PROD::I1
+        # SYNTACTIC_FIDELITY — canon MUST be bijective on the semantic
+        # space, including the zero-width boundary).  We populate the band
+        # whenever ``prev_end_byte`` is provided and the range is
+        # well-ordered (``prev_end_byte <= envelope_start_tok.start_byte``);
+        # an empty band (``start == end``) signals zero-byte adjacency,
+        # which the emitter must honour by emitting NO separator.
+        if prev_end_byte is not None and prev_end_byte <= envelope_start_tok.start_byte:
             envelope.pre_trivia_start_byte = prev_end_byte
             envelope.pre_trivia_end_byte = envelope_start_tok.start_byte
 

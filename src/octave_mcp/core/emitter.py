@@ -1074,59 +1074,61 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
 
     # GH #420 Option D: emit additional top-level envelopes (#2..N).
     # Single-envelope documents have ``additional_envelopes == []`` (the
-    # dataclass default), so this loop is a no-op there.  For each sibling
-    # envelope we either slice it verbatim from baseline (preserve mode,
-    # clean envelope, valid spans) or re-emit it canonically.
+    # dataclass default), so this branch is a no-op there.  For each
+    # sibling envelope we either slice it verbatim from baseline (preserve
+    # mode, clean envelope, valid spans) or re-emit it canonically.
     #
-    # GH #420 CE rework (PR #451): inter-envelope trivia.  Under preserve
-    # mode, when an envelope carries a captured ``pre_trivia`` byte band,
-    # slice that band verbatim from baseline INSTEAD OF emitting a fixed
-    # ``\n\n`` separator.  This restores PROD::I1 SYNTACTIC_FIDELITY on
-    # the inter-envelope surface (extra blank lines, trailing spaces, and
-    # any other noncanonical inter-envelope whitespace survive the
-    # round-trip).  Outside preserve mode (or when no band was captured)
-    # we fall back to the canonical single-blank-line separator,
-    # matching pre-rework canonical-form behaviour.
+    # GH #420 CE rework cycle 2 (PR #451): Option A — explicit verbatim
+    # byte assembly.  Cycle 1's strip-then-``"\n".join(...)`` approach
+    # collapsed distinct accepted source boundaries (raw ``"\n"`` vs raw
+    # ``"\n\n"`` BOTH became ``""`` after trimming, producing identical
+    # canonical-blank-line output for both — an I1 SYNTACTIC_FIDELITY
+    # violation: canon is no longer bijective on the inter-envelope
+    # trivia space).
+    #
+    # The fix is to emit the captured ``pre_trivia`` byte band VERBATIM
+    # — every byte between the previous envelope's ``===END===`` end_byte
+    # and the next envelope's ``===NAME===`` start_byte threads through
+    # the emitter unchanged.  We exit the ``"\n".join`` regime for the
+    # multi-envelope tail and build the output by direct concatenation:
+    #
+    #   primary_output = "\n".join(lines)            # envelope #1 (no \n suffix)
+    #   for env in additional_envelopes:
+    #       primary_output += boundary_bytes(env)    # raw band OR canonical "\n\n"
+    #       primary_output += env_text(env)          # ===NAME===...===END=== (no \n suffix)
+    #
+    # ``boundary_bytes`` is the raw ``pre_trivia`` slice under preserve
+    # mode when the band is well-formed (including empty bands, which
+    # signal zero-byte adjacency and emit no separator).  Otherwise we
+    # fall back to ``"\n\n"`` — the canonical single-blank-line separator
+    # — which matches pre-rework canonical-form behaviour exactly:
+    # envelope #1's last element ``===END===`` is followed by ``\n`` (the
+    # ``\n`` between ===END=== line and the blank line) and then ``\n``
+    # (the blank line itself) then ``===NAME===``.
     additional_envelopes = getattr(doc, "additional_envelopes", None) or []
+
+    output = "\n".join(lines)
     for envelope in additional_envelopes:
-        trivia_text: str | None = None
+        boundary: str
         if (
             _enable_preserve
             and _baseline_bytes is not None
             and envelope.pre_trivia_start_byte is not None
             and envelope.pre_trivia_end_byte is not None
-            and 0 <= envelope.pre_trivia_start_byte < envelope.pre_trivia_end_byte <= len(_baseline_bytes)
+            and 0 <= envelope.pre_trivia_start_byte <= envelope.pre_trivia_end_byte <= len(_baseline_bytes)
         ):
-            raw = _baseline_bytes[envelope.pre_trivia_start_byte : envelope.pre_trivia_end_byte].decode("utf-8")
-            # The previous envelope's text already ended with a ``\n``
-            # consumed by ``\n``.join (the prior ``lines.append`` block
-            # ends with ===END===; join inserts the single newline
-            # between it and our next element).  ``raw`` is the literal
-            # source between the previous ===END=== END_BYTE and this
-            # envelope's ===NAME=== START_BYTE — it begins with the
-            # newline that terminates the previous ===END=== line.
-            # Strip exactly one leading newline so the join doesn't
-            # duplicate it; what remains (extra blank lines, trailing
-            # whitespace, etc.) is the inter-envelope trivia proper.
-            trivia_text = raw[1:] if raw.startswith("\n") else raw
-            # Drop the trailing newline that immediately precedes
-            # ``===NAME===`` for the same join-duplication reason; the
-            # join below inserts one back between trivia_text and
-            # env_text.
-            if trivia_text.endswith("\n"):
-                trivia_text = trivia_text[:-1]
-
-        if trivia_text is None:
-            # Canonical / non-preserve / no-band fallback: single blank
-            # line between envelopes.
-            lines.append("")
+            # Preserve mode with captured band: the band IS the boundary.
+            # Empty band (start == end) means the source had zero bytes
+            # between ===END=== and ===NAME=== (zero-byte adjacency,
+            # accepted by the lexer) — emit no separator at all.  Any
+            # other width (1 byte, 2 bytes, "\n\n  \n", etc.) is emitted
+            # byte-for-byte.  No strip, no join, no transformation.
+            boundary = _baseline_bytes[envelope.pre_trivia_start_byte : envelope.pre_trivia_end_byte].decode("utf-8")
         else:
-            # Preserve mode with captured band: emit the band verbatim.
-            # ``trivia_text`` may be empty (envelopes back-to-back with
-            # exactly the canonical ``\n\n`` boundary — i.e. one blank
-            # line — in which case the join produces ``...===END===\n\n===NAME===``
-            # equivalent to the canonical fallback).
-            lines.append(trivia_text)
+            # Canonical / non-preserve / no-band fallback: single blank
+            # line between envelopes (one ``\n`` closes the previous
+            # ===END=== line, second ``\n`` is the blank line).
+            boundary = "\n\n"
 
         env_text = _emit_envelope(
             envelope,
@@ -1135,14 +1137,11 @@ def emit(doc: Document, format_options: FormatOptions | None = None) -> str:
             format_options=format_options,
             strip_comments=strip_comments,
         )
-        # _emit_envelope returns a fully-formed envelope text block
-        # (===NAME===\n...===END===), no trailing newline.  Append as a
-        # single element so the "\n".join below produces one newline
-        # between this envelope's last line and the next envelope's
-        # separator (or document end).
-        lines.append(env_text)
-
-    output = "\n".join(lines)
+        # ``env_text`` is a fully-formed envelope text block
+        # (``===NAME===\n...===END===``) with no trailing newline.
+        # Direct concatenation — NO ``"\n".join`` to introduce a phantom
+        # newline between boundary and env_text.
+        output += boundary + env_text
 
     # Issue #193: Apply format options if provided
     if format_options:

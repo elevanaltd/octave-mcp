@@ -647,3 +647,170 @@ class TestGH420CEReworkInterEnvelopeTrivia:
             f"\nORIGINAL TAIL = {original_tail!r}"
             f"\nWRITTEN  TAIL = {written_tail!r}"
         )
+
+
+# --------------------------------------------------------------------------- #
+# CE rework cycle 2: pre_trivia emitted VERBATIM (no strip + "\n".join)       #
+# --------------------------------------------------------------------------- #
+
+
+class TestGH420CEReworkCycle2BoundaryPreservation:
+    """CE rework cycle 2 (PR #451): the emitter MUST emit ``pre_trivia``
+    verbatim and MUST NOT transform distinct accepted source boundaries
+    (single ``\\n`` vs ``\\n\\n`` vs zero-byte) into a single canonical
+    blank-line boundary.
+
+    CE evidence (cycle 2):
+        - emitter.py:1108-1117 stripped one leading + one trailing newline
+          from the raw ``pre_trivia`` slice, then joined with ``"\\n".join``.
+          Raw ``"\\n"`` and raw ``"\\n\\n"`` BOTH became ``""`` after
+          trimming, so the final join produced an identical
+          ``===END===\\n\\n===NAME===`` canonical-blank-line boundary for
+          both — collapsing distinct accepted source bytes (I1
+          SYNTACTIC_FIDELITY violation; bijection on semantic space broken).
+
+    Post-rework: each input boundary width round-trips byte-identical
+    AND distinct widths remain distinguishable in the output.
+    """
+
+    # CE's concrete failing case: tight adjacency, exactly one ``\n`` between
+    # envelopes #1 and #2.  Pre-rework emitter inflated this to ``\n\n``.
+    _SINGLE_NEWLINE_FIXTURE = (
+        "===META===\n"
+        "TYPE::FRAME_CARD\n"
+        "ID::TIGHT\n"
+        "STATUS::proposed\n"
+        "===END===\n"  # single newline terminates envelope #1
+        "===EXACT===\n"  # no blank line between envelopes
+        "IDS::[A]\n"
+        "===END===\n"
+    )
+
+    # Canonical-style: exactly one blank line (``\n\n`` between ===END=== and
+    # next ===NAME===).  Identical content to ``_SINGLE_NEWLINE_FIXTURE``
+    # except for the boundary width — so the distinguishability test below
+    # can prove the two outputs differ ONLY in boundary, not content.
+    _DOUBLE_NEWLINE_FIXTURE = (
+        "===META===\n"
+        "TYPE::FRAME_CARD\n"
+        "ID::TIGHT\n"
+        "STATUS::proposed\n"
+        "===END===\n"
+        "\n"  # one blank line between envelopes (canonical)
+        "===EXACT===\n"
+        "IDS::[A]\n"
+        "===END===\n"
+    )
+
+    # Zero-byte adjacency: parser currently ACCEPTS this (lexer recognises
+    # ``===END======NAME===`` as two adjacent tokens).  Under preserve mode
+    # the round-trip must either be byte-identical OR the parser must reject
+    # at lex/parse time.  We assert byte-identity; if the parser later
+    # tightens to a hard reject, this test moves to a parser-error
+    # assertion.
+    _ZERO_BYTE_FIXTURE = (
+        "===META===\n"
+        "TYPE::FRAME_CARD\n"
+        "ID::ZB\n"
+        "STATUS::proposed\n"
+        "===END======EXACT===\n"  # no separator at all between envelopes
+        "IDS::[A]\n"
+        "===END===\n"
+    )
+
+    def test_single_newline_boundary_preserved(self) -> None:
+        """Tight ``===END===\\n===NAME===`` boundary MUST round-trip byte-identical.
+
+        Pre-rework emitter inflated ``\\n`` → ``\\n\\n`` (added 1 byte).
+        Post-rework: verbatim pre_trivia emission preserves the single
+        newline.
+        """
+        status, written = _run_write_normalize(self._SINGLE_NEWLINE_FIXTURE, format_style="preserve")
+        assert status == "success", f"octave_write returned status={status!r}"
+        assert written == self._SINGLE_NEWLINE_FIXTURE, (
+            "CE rework cycle 2 regression: single-newline inter-envelope "
+            "boundary was NOT preserved verbatim.\n"
+            f"  input_bytes  = {len(self._SINGLE_NEWLINE_FIXTURE)}\n"
+            f"  output_bytes = {len(written)}\n"
+            f"INPUT  = {self._SINGLE_NEWLINE_FIXTURE!r}\n"
+            f"OUTPUT = {written!r}"
+        )
+
+    def test_double_newline_boundary_preserved(self) -> None:
+        """Canonical ``===END===\\n\\n===NAME===`` boundary MUST round-trip byte-identical.
+
+        Distinct from the single-newline case: this is the canonical
+        blank-line form.  Pre-rework happened to be byte-identical here
+        (the strip+join collapsed to ``\\n\\n`` matching the canonical
+        form), but the fix MUST NOT regress this case.
+        """
+        status, written = _run_write_normalize(self._DOUBLE_NEWLINE_FIXTURE, format_style="preserve")
+        assert status == "success", f"octave_write returned status={status!r}"
+        assert written == self._DOUBLE_NEWLINE_FIXTURE, (
+            "CE rework cycle 2 regression: double-newline (canonical) "
+            "inter-envelope boundary was NOT preserved verbatim.\n"
+            f"  input_bytes  = {len(self._DOUBLE_NEWLINE_FIXTURE)}\n"
+            f"  output_bytes = {len(written)}\n"
+            f"INPUT  = {self._DOUBLE_NEWLINE_FIXTURE!r}\n"
+            f"OUTPUT = {written!r}"
+        )
+
+    def test_single_and_double_newline_outputs_remain_distinguishable(self) -> None:
+        """The two boundary widths MUST produce distinct outputs.
+
+        The pre-rework bug collapsed both single-newline and double-newline
+        inputs to identical canonical-form outputs.  This test asserts
+        the two outputs remain distinguishable — i.e. the canon is
+        bijective on the semantic space of inter-envelope trivia widths
+        (PROD::I1).
+        """
+        _, single_out = _run_write_normalize(self._SINGLE_NEWLINE_FIXTURE, format_style="preserve")
+        _, double_out = _run_write_normalize(self._DOUBLE_NEWLINE_FIXTURE, format_style="preserve")
+        # Both must be byte-identical to their respective inputs (the two
+        # tests above prove this independently).  Here we additionally
+        # assert the outputs remain DISTINGUISHABLE — the canon does not
+        # collapse two inputs to one output.
+        assert single_out != double_out, (
+            "CE rework cycle 2 regression: single-newline and double-newline "
+            "inter-envelope boundaries collapsed to an identical output. "
+            "PROD::I1 SYNTACTIC_FIDELITY violation — canon is not bijective."
+        )
+
+    def test_zero_byte_boundary_preserved_or_rejected(self) -> None:
+        """Zero-byte adjacency ``===END======NAME===`` either round-trips
+        byte-identical under preserve OR is rejected at parse time.
+
+        The lexer currently accepts this (verified by ``parse()`` returning
+        a valid Document with one additional envelope).  Under preserve
+        mode the emitter MUST therefore emit the zero-byte boundary
+        verbatim — pre-rework it inflated to ``\\n\\n`` (added 2 bytes).
+        """
+        # First confirm the parser accepts the input (sets the baseline
+        # for the assertion we make next).
+        from octave_mcp.core.parser import parse
+
+        try:
+            doc = parse(self._ZERO_BYTE_FIXTURE)
+            parser_accepts = True
+            assert len(doc.additional_envelopes) == 1
+            assert doc.additional_envelopes[0].name == "EXACT"
+        except Exception:
+            parser_accepts = False
+
+        if not parser_accepts:
+            # Acceptable resolution: parser rejected zero-byte adjacency.
+            # If a future hardening pass closes this hole at parse time,
+            # this branch documents the contract.
+            return
+
+        status, written = _run_write_normalize(self._ZERO_BYTE_FIXTURE, format_style="preserve")
+        assert status == "success", f"octave_write returned status={status!r}"
+        assert written == self._ZERO_BYTE_FIXTURE, (
+            "CE rework cycle 2 regression: zero-byte inter-envelope "
+            "adjacency was NOT preserved verbatim (parser accepted the "
+            "input, so the emitter must round-trip identically).\n"
+            f"  input_bytes  = {len(self._ZERO_BYTE_FIXTURE)}\n"
+            f"  output_bytes = {len(written)}\n"
+            f"INPUT  = {self._ZERO_BYTE_FIXTURE!r}\n"
+            f"OUTPUT = {written!r}"
+        )
