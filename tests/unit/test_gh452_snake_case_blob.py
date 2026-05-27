@@ -288,6 +288,14 @@ class TestSnakeCaseBlobDetectorUnit:
 
     # --- Known v1 miss --------------------------------------------------
 
+    # strict=False (was strict=True) per CE non-blocking advisory on PR #456:
+    # https://github.com/elevanaltd/octave-mcp/pull/456#issuecomment-4550543834
+    # The assertion is phrased for the v2 contract (W_SNAKE_CASE_BLOB in codes).
+    # Under v1 the token does not trip either trigger → xfail. When v2 refines
+    # the heuristic to catch this token the test would XPASS, and strict=True
+    # would convert XPASS into a suite failure (time bomb). strict=False makes
+    # the eventual XPASS a warning instead, signalling "v2 closed the gap"
+    # without breaking CI.
     @pytest.mark.xfail(
         reason=(
             "v1 known miss per operator contract 4549996376: "
@@ -296,7 +304,7 @@ class TestSnakeCaseBlobDetectorUnit:
             "meet either the bulk trigger (>40 chars) or the semantic trigger "
             "(>=2 stopwords). v2 may close this with a refined heuristic."
         ),
-        strict=True,
+        strict=False,
     )
     def test_known_v1_miss_progressive_replacement(self):
         """Documented v1 limitation — caught by skill review, not validator."""
