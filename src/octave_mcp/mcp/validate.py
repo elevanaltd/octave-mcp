@@ -26,6 +26,7 @@ from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import ValidationError, Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 from octave_mcp.mcp.compile_grammar import USAGE_HINTS
+from octave_mcp.mcp.write import _detect_snake_case_blob
 from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
 
 # Gap_6: Regex pattern to extract spec error codes (E001-E007) from error messages
@@ -839,6 +840,15 @@ class ValidateTool(BaseTool):
                 result["literal_zone_repair_log"] = build_literal_zone_repair_log(
                     zones, doc, "octave_validate"
                 ).to_dict()
+
+            # GH#452: Detect snake-case prose blobs in reasoning-field positions.
+            # Refined contract per operator comment 4549996376. v1 ADVISORY only —
+            # surfaces in warnings[] alongside other non-blocking validator output.
+            # Same audit path as W_ANNOTATION_TOO_LONG (in WriteTool); here we
+            # route into the validator's ``warnings`` channel so ``octave_validate``
+            # callers see the discipline guidance (I4/I5).
+            snake_case_blob_warnings = _detect_snake_case_blob(content)
+            result["warnings"].extend(snake_case_blob_warnings)
 
         except Exception as e:
             result["status"] = "error"
