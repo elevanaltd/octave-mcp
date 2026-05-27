@@ -496,6 +496,75 @@ async def agent_communication():
     return result["canonical"]
 ```
 
+### Workflow 5: Multi-envelope documents (v1.13.0)
+
+**Goal:** Edit a single field inside a FRAME_CARD-style document that
+contains multiple top-level envelopes, without disturbing sibling
+envelopes.
+
+A *multi-envelope document* is a single `.oct.md` file with two or more
+top-level `===NAME===…===END===` envelopes — common for FRAME_CARDs,
+decision packets, and other artifacts that group related-but-distinct
+sections under one file. As of v1.13.0 (PR #451, closes #420),
+multi-envelope documents round-trip byte-stable under
+`format_style="preserve"`.
+
+Worked example — a three-envelope FRAME_CARD with a status field flip:
+
+```octave
+===META===
+TYPE::FRAME_CARD
+ID::"FRAME-001"
+STATUS::proposed
+===END===
+
+===FRAME===
+TITLE::"Multi-envelope worked example"
+SCOPE::"3-envelope demonstration document"
+===END===
+
+===NOTES===
+NOTE_1::"Each top-level envelope is parsed as a sibling"
+NOTE_2::"Unchanged envelopes slice verbatim under preserve mode"
+===END===
+```
+
+Mutate `META.STATUS` in place:
+
+```python
+result = await client.call_tool("octave_write", {
+    "target_path": "/path/to/frame-001.oct.md",
+    "changes": {"META.STATUS": "ratified"},
+    "format_style": "preserve",
+})
+```
+
+Expected behaviour (empirically verified — input 321 bytes → output
+321 bytes):
+
+- A single-line surgical edit: `STATUS::proposed` → `STATUS::ratified`.
+- The `===FRAME===` and `===NOTES===` sibling envelopes (and the blank
+  lines between envelopes) are byte-identical to the input.
+- Diff footprint matches `octave_write`'s Strategy A contract
+  (≤0.5% of file size on representative documents).
+
+**Mutate-in-place on flat `===META===` atoms (PR #449, closes #447).**
+When the existing META envelope contains a flat-form atom like
+`STATUS::proposed`, `changes={"META.STATUS": "ratified"}` mutates that
+atom *in place* rather than injecting a duplicate nested-block atom
+alongside it. This applies across `format_style ∈ {preserve, expanded,
+compact, omitted}` and keeps change diffs minimal. The flat-atom scan
+is gated on `doc.name == "META"`, so non-META envelopes containing
+same-named atoms are unaffected.
+
+**Deferred to v1.14+.** Per-envelope `META` scope in change-path
+resolution (e.g. `FRAME.META.X`) and `changes`-mode atom mutation on
+additional envelopes (#2..N) are intentionally **not** in v1.13.0 —
+the `META.<field>` resolver targets envelope #1's META by construction.
+Tracked under v1.14+ in [#420 follow-ups](https://github.com/elevanaltd/octave-mcp/issues/420).
+For today, mutate additional envelopes via content-mode rewrite or by
+serialising the parsed `Document.additional_envelopes` list yourself.
+
 ## Troubleshooting
 
 ### Issue: "ModuleNotFoundError: No module named 'octave_mcp'"
