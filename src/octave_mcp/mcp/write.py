@@ -122,6 +122,98 @@ W_ANNOTATION_TOO_LONG = "W_ANNOTATION_TOO_LONG"
 _ANNOTATION_TOO_LONG_CHAR_LIMIT = 32
 _ANNOTATION_TOO_LONG_TOKEN_LIMIT = 5  # >= 5 underscore-delimited tokens
 
+# GH#452: Snake-case prose blob discipline warning.
+# Fires (non-blocking, advisory) when a value (or list-element) appearing in
+# the position of a reasoning field carries a snake_case prose token that
+# matches the bulk OR semantic trigger.  The canonical name for the pattern
+# the validator is steering authors away from is ``TELEGRAPHIC_PHRASE``
+# (primer landed in #453 / PR #455) — short prose belongs in a quoted
+# RATIONALE/NOTE, not in an identifier-shaped snake_case blob.
+#
+# v1 severity: ADVISORY only (warnings[]). v2 blocking semantics ship ~30
+# days later as a separate PR.
+W_SNAKE_CASE_BLOB = "W_SNAKE_CASE_BLOB"
+
+# 18 reasoning fields per refined contract (operator comment 4549996376):
+# value (or list-element) in the position of one of these KEYs is checked.
+_W_SNAKE_CASE_BLOB_REASONING_FIELDS: frozenset[str] = frozenset(
+    {
+        "DECISION",
+        "BECAUSE",
+        "RATIONALE",
+        "RETAINS",
+        "GUIDANCE",
+        "WHY",
+        "NOTE",
+        "PRINCIPLE",
+        "ESCAPE_HATCH",
+        "CONTEXT",
+        "EVIDENCE",
+        "OBSERVATION",
+        "FINDING",
+        "CONSEQUENCES",
+        "TRADEOFFS",
+        "NEXT_STEPS",
+        "CAVEAT",
+        "ASSUMPTION",
+    }
+)
+
+# Content triggers
+_W_SNAKE_CASE_BLOB_BULK_CHAR_LIMIT = 40  # length > 40
+_W_SNAKE_CASE_BLOB_BULK_UNDERSCORE_LIMIT = 4  # underscores >= 4
+_W_SNAKE_CASE_BLOB_SEMANTIC_STOPWORD_LIMIT = 2  # stopword_count >= 2
+
+# Semantic stopwords (lowercased, compared case-insensitively against
+# underscore-delimited tokens of the candidate token).
+_W_SNAKE_CASE_BLOB_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "and",
+        "or",
+        "of",
+        "to",
+        "the",
+        "with",
+        "is",
+        "are",
+        "via",
+        "for",
+        "from",
+        "at",
+        "by",
+        "on",
+        "in",
+        "into",
+        "when",
+        "if",
+        "not",
+        "no",
+        "plus",
+        "as",
+        "then",
+    }
+)
+
+# Exclusion regex: ALL-CAPS short idiom (first char A-Z, then up to 15 more
+# A-Z/0-9/_). Matches SUPERSEDED_BY, NEXT_ACTIONS, etc.
+_W_SNAKE_CASE_BLOB_ALLCAPS_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,15}$")
+
+# A candidate token in value position is matched by this regex. We deliberately
+# require at least one underscore in the token body so we never have to scan
+# bare words — the zero-underscore exclusion would drop them anyway.
+# Tokens may contain letters, digits, underscores, hyphens, and dots; the
+# hyphen/dot exclusions are applied after extraction.
+_W_SNAKE_CASE_BLOB_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_./\-]*")
+
+# A reasoning-field assignment opener: ``  KEY::``  (with optional indent).
+# Capture group 1 is the KEY.
+_W_SNAKE_CASE_BLOB_OPENER_RE = re.compile(r"^[ \t]*([A-Z][A-Z0-9_]*)\s*:\s*:", re.MULTILINE)
+
+# Standalone reasoning-field block header: ``KEY:[`` or ``KEY:`` opening a
+# children block. Capture group 1 is the KEY. Used to recognise inline-list
+# headers like ``DECISION:[`` where the list opens on the same line.
+_W_SNAKE_CASE_BLOB_BLOCK_OPEN_RE = re.compile(r"^[ \t]*([A-Z][A-Z0-9_]*)\s*:\s*(\[)?", re.MULTILINE)
+
 # Regex to extract annotation qualifier content (inside angle brackets).
 # Matches NAME<qualifier> at word boundaries within a line; captures the
 # qualifier content only.  The outer name part is not restricted here
@@ -708,6 +800,234 @@ def _detect_annotation_too_long(content: str) -> list[dict[str, Any]]:
                     "semantics_changed": False,
                 }
             )
+    return warnings
+
+
+def _w_snake_case_blob_token_excluded(token: str) -> bool:
+    """Return True if ``token`` is excluded from W_SNAKE_CASE_BLOB consideration.
+
+    Exclusions (refined contract, operator comment 4549996376):
+      * Token contains ``-`` or ``.`` (hyphen/dot identifiers are not snake-position)
+      * Token matches ``^[A-Z][A-Z0-9_]{0,15}$`` (short ALL-CAPS idiom)
+      * Token has zero underscores
+    """
+    if "-" in token or "." in token:
+        return True
+    if "_" not in token:
+        return True
+    if _W_SNAKE_CASE_BLOB_ALLCAPS_RE.match(token):
+        return True
+    return False
+
+
+def _w_snake_case_blob_token_triggers(token: str) -> bool:
+    """Apply bulk OR semantic content trigger to ``token``.
+
+    Bulk:     ``len(token) > 40`` AND ``underscore_count >= 4``.
+    Semantic: ``stopword_count >= 2`` where stopwords are matched
+              case-insensitively against the underscore-delimited token parts.
+    """
+    underscore_count = token.count("_")
+
+    # Bulk trigger
+    if len(token) > _W_SNAKE_CASE_BLOB_BULK_CHAR_LIMIT and underscore_count >= _W_SNAKE_CASE_BLOB_BULK_UNDERSCORE_LIMIT:
+        return True
+
+    # Semantic trigger
+    parts = token.lower().split("_")
+    stopword_hits = sum(1 for p in parts if p in _W_SNAKE_CASE_BLOB_STOPWORDS)
+    if stopword_hits >= _W_SNAKE_CASE_BLOB_SEMANTIC_STOPWORD_LIMIT:
+        return True
+
+    return False
+
+
+def _w_snake_case_blob_build_warning(*, token: str, line_num: int, parent_field: str) -> dict[str, Any]:
+    """Construct a W_SNAKE_CASE_BLOB warning dict (I4: stable provenance)."""
+    return {
+        "code": W_SNAKE_CASE_BLOB,
+        # STRUCTURAL_CHECK tier: this is an informational diagnostic — no text
+        # transformation is applied to the document. The HARD_SYMMETRY
+        # invariant (ADR-0006 / I4) requires that "transformation tier"
+        # corrections agree with the emitted diff; a no-op advisory belongs
+        # in the STRUCTURAL_CHECK bucket so the diff-iff-corrections check
+        # remains exact. See ``tests/unit/test_writer_reader_symmetry.py``.
+        "tier": "STRUCTURAL_CHECK",
+        "discipline": "REASONING_FIELD",
+        "message": (
+            f"W_SNAKE_CASE_BLOB at line {line_num}: snake-case prose blob "
+            f"'{token}' in reasoning field '{parent_field}' — this is the "
+            f"TELEGRAPHIC_PHRASE anti-pattern (snake_case prose masquerading "
+            f"as an identifier). Extract to a quoted RATIONALE/NOTE string "
+            f"value, or split into structured sub-fields. Advisory only."
+        ),
+        "line": line_num,
+        "token": token,
+        "parent_field": parent_field,
+        "safe": True,
+        "semantics_changed": False,
+    }
+
+
+def _detect_snake_case_blob(content: str) -> list[dict[str, Any]]:
+    """Detect snake-case prose blobs in reasoning-field positions (GH#452).
+
+    Refined contract (operator comment 4549996376):
+
+    POSITION_TRIGGER ::
+        * value-of-reasoning-field (``KEY::<value>`` where KEY is a reasoning field), OR
+        * list-element-within-reasoning-field-list (each comma-separated element
+          inside ``KEY::[...]`` or ``KEY:[...]`` where KEY is a reasoning field).
+
+    CONTENT_TRIGGER (bulk OR semantic):
+        * bulk: ``len(token) > 40`` AND ``underscore_count >= 4``
+        * semantic: ``>=2`` stopword hits among underscore-delimited token parts
+
+    EXCLUSIONS (any one suppresses the warning):
+        * token contains ``-`` or ``.`` (path/hyphen identifiers are not snake-position)
+        * token matches ``^[A-Z][A-Z0-9_]{0,15}$`` (short ALL-CAPS idiom)
+        * token has zero underscores
+
+    Protected zones (mirrors ``_detect_annotation_too_long``):
+        * Fenced literal zones (Zone 3)
+        * Quoted string values (Zone 2 preserving container)
+        * ``//`` comment spans
+
+    Severity v1: ADVISORY only — non-blocking, routed to corrections/warnings.
+    Severity v2 (deferred): blocking enforcement ships in a separate PR ~30
+    days later.
+
+    Args:
+        content: Raw OCTAVE document content string.
+
+    Returns:
+        List of correction dicts with code ``W_SNAKE_CASE_BLOB``, one per
+        offending token (file:line provenance for I4 audit completeness).
+    """
+    warnings: list[dict[str, Any]] = []
+
+    # Reuse the same zone-aware protected ranges as W_ANNOTATION_TOO_LONG so
+    # comments, quoted strings, and literal fences are exempt by construction.
+    protected = _build_annotation_protected_ranges(content)
+
+    lines = content.split("\n")
+
+    # Build cumulative line-start offsets so we can map (line_idx, col) -> offset
+    # for protected-zone checks without re-walking the content each time.
+    line_offsets: list[int] = [0]
+    for ln in lines:
+        line_offsets.append(line_offsets[-1] + len(ln) + 1)  # +1 for \n
+
+    def _scan_value_span(value_text: str, base_offset: int, line_num: int, parent_field: str) -> None:
+        """Scan a value-position span for snake-case prose blobs."""
+        for tok_match in _W_SNAKE_CASE_BLOB_TOKEN_RE.finditer(value_text):
+            tok = tok_match.group(0)
+            # Strip trailing punctuation that the regex may have grabbed
+            # (commas/closing brackets are not part of the regex char class,
+            # but defensive trim in case of grammar drift).
+            tok = tok.rstrip(",;]")
+            if not tok:
+                continue
+            absolute_pos = base_offset + tok_match.start()
+            if _is_in_protected_range(absolute_pos, protected):
+                continue
+            if _w_snake_case_blob_token_excluded(tok):
+                continue
+            if not _w_snake_case_blob_token_triggers(tok):
+                continue
+            warnings.append(_w_snake_case_blob_build_warning(token=tok, line_num=line_num, parent_field=parent_field))
+
+    # Walk lines, tracking reasoning-field list context across line boundaries.
+    in_reasoning_list = False
+    list_parent_field = ""
+    list_bracket_depth = 0
+
+    i = 0
+    while i < len(lines):
+        raw_line = lines[i]
+        line_num = i + 1
+        line_offset = line_offsets[i]
+
+        # Skip the entire line if it is wholly protected (e.g. comment line,
+        # literal-fence line). A line is wholly protected if its first non-
+        # whitespace character is inside a protected zone.
+        first_nonws = len(raw_line) - len(raw_line.lstrip())
+        line_start_pos = line_offset + first_nonws
+        if first_nonws < len(raw_line) and _is_in_protected_range(line_start_pos, protected):
+            # Inside literal zone or comment-only — but list-bracket tracking
+            # must NOT advance through this line (protected zone is opaque).
+            i += 1
+            continue
+
+        if in_reasoning_list:
+            # We're inside an open KEY::[ ... ] list opened on a prior line.
+            # Each element on this line is candidate token territory.
+            _scan_value_span(raw_line, line_offset, line_num, list_parent_field)
+            # Track bracket balance to detect end of the list.
+            list_bracket_depth += raw_line.count("[") - raw_line.count("]")
+            if list_bracket_depth <= 0:
+                in_reasoning_list = False
+                list_parent_field = ""
+                list_bracket_depth = 0
+            i += 1
+            continue
+
+        # Not currently in a list context — look for a reasoning-field opener.
+        m = _W_SNAKE_CASE_BLOB_OPENER_RE.match(raw_line)
+        if m:
+            key = m.group(1)
+            if key in _W_SNAKE_CASE_BLOB_REASONING_FIELDS:
+                # The value portion begins right after the second colon.
+                value_start_col = m.end()
+                value_text = raw_line[value_start_col:]
+                value_base_offset = line_offset + value_start_col
+
+                # Detect whether the value opens a list across multiple lines.
+                stripped_value = value_text.lstrip()
+                opens_list = stripped_value.startswith("[")
+                if opens_list:
+                    # Inline-list-on-same-line OR multi-line list. Compute net
+                    # bracket depth across this line.
+                    bracket_depth = value_text.count("[") - value_text.count("]")
+                    if bracket_depth <= 0:
+                        # Entire inline list on this single line — scan and done.
+                        _scan_value_span(value_text, value_base_offset, line_num, key)
+                    else:
+                        # Multi-line list — scan this line as the opener and
+                        # enter list context for subsequent lines.
+                        _scan_value_span(value_text, value_base_offset, line_num, key)
+                        in_reasoning_list = True
+                        list_parent_field = key
+                        list_bracket_depth = bracket_depth
+                else:
+                    # Plain scalar value on the same line.
+                    _scan_value_span(value_text, value_base_offset, line_num, key)
+                i += 1
+                continue
+
+        # Check for block-opener form ``DECISION:[`` (single colon followed by
+        # ``[``) which the contract treats identically to ``KEY::[`` for the
+        # purpose of list-element recursion.
+        bm = _W_SNAKE_CASE_BLOB_BLOCK_OPEN_RE.match(raw_line)
+        if bm and bm.group(2) == "[":
+            key = bm.group(1)
+            if key in _W_SNAKE_CASE_BLOB_REASONING_FIELDS:
+                value_start_col = bm.end() - 1  # include the [
+                value_text = raw_line[value_start_col:]
+                value_base_offset = line_offset + value_start_col
+                bracket_depth = value_text.count("[") - value_text.count("]")
+                if bracket_depth <= 0:
+                    _scan_value_span(value_text, value_base_offset, line_num, key)
+                else:
+                    _scan_value_span(value_text, value_base_offset, line_num, key)
+                    in_reasoning_list = True
+                    list_parent_field = key
+                    list_bracket_depth = bracket_depth
+                i += 1
+                continue
+
+        i += 1
+
     return warnings
 
 
@@ -3982,6 +4302,11 @@ class WriteTool(BaseTool):
             # Non-blocking advisory — goes to corrections only, not errors.
             annotation_discipline_warnings = _detect_annotation_too_long(parse_input)
             corrections.extend(annotation_discipline_warnings)
+
+            # GH#452: Detect snake-case prose blobs in reasoning-field positions.
+            # Refined contract per operator comment 4549996376. v1 ADVISORY only.
+            snake_case_blob_warnings = _detect_snake_case_blob(parse_input)
+            corrections.extend(snake_case_blob_warnings)
 
             # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)
