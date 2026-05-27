@@ -5,7 +5,7 @@ META:
   PROJECT::"OCTAVE-MCP"
   STATUS::APPROVED
   APPROVED_DATE::"2025-12-28"
-  UPDATED::"2026-02-22"
+  UPDATED::"2026-05-27"
   FULL_DOC::".hestai/north-star/000-OCTAVE-MCP-NORTH-STAR.md"
   COMPRESSION_TIER::AGGRESSIVE
   LOSS_PROFILE::"drop_narrative_preserve_protocol⊕examples"
@@ -26,7 +26,7 @@ INTERPRETATION_LITERAL_ZONES::exemption_from_normalization_preserves_meaning
 STATUS::ENFORCED
 I2::DETERMINISTIC_ABSENCE
 STATEMENT::"distinguish_absent∨"
-RATIONALE::downstream_must_know_didnt_check_vs_not_there
+RATIONALE::"downstream must know — didn't check vs. not there"
 INTERPRETATION_LITERAL_ZONES::empty_code_block_distinct_from_absent
 STATUS::ENFORCED
 I3::MIRROR_CONSTRAINT
