@@ -1,8 +1,8 @@
 ===OCTAVE_LITERACY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.2.0"
-  TOKENS::"~240"
+  VERSION::"6.3.0"
+  TOKENS::"~250"
   TIER::ULTRA
 §1::ESSENCE
 PURPOSE::"Read and write OCTAVE"
@@ -28,7 +28,10 @@ OPERATORS::
 →     flow / sequence
 ⊕     synthesis / combine
 ⇌     tension / opposition
+∧     conjunction / all-required
+∨     disjunction / alternative
 ```
+TELEGRAPHIC_PHRASE::"see octave-compression-primer §1::ESSENCE — quoted value, stopwords dropped, operators carry English connectives"
 §4::ONE_SHOT
 IN::"flow from A to B"
 OUT::A→B

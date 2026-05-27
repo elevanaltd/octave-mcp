@@ -1,8 +1,8 @@
 ===OCTAVE_MASTERY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.1.0"
-  TOKENS::"~250"
+  VERSION::"6.2.0"
+  TOKENS::"~270"
   TIER::ULTRA
 §1::ESSENCE
 PURPOSE::"Master OCTAVE patterns"
@@ -19,8 +19,12 @@ REGISTER→CREATE∨UPDATE∨DELETE
 §3::SYNTAX
 OPERATORS::
 ```
-⊕     synthesis
-⇌     tension→resolution
+::    assign (no spaces around)
+→     flow / sequence
+⊕     synthesis / combine
+⇌     tension / opposition
+∧     conjunction / all-required
+∨     disjunction / alternative
 §     target_reference
 CONTRACT[]  enforcement
 ```

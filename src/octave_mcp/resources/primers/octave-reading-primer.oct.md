@@ -1,8 +1,8 @@
 ===OCTAVE_READING_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"1.2.0"
-  TOKENS::"~80"
+  VERSION::"1.3.0"
+  TOKENS::"~90"
   TIER::ULTRA
 §1::ESSENCE
 PURPOSE::"Understand OCTAVE format when you receive it"
@@ -13,6 +13,8 @@ ASSIGN::"::"
 FLOW::"→"
 TENSION::"⇌"
 SYNTHESIS::"⊕"
+CONJUNCTION::"∧"
+DISJUNCTION::"∨"
 CONTEXT::"Adjacent text determines which aspect of a myth applies"
 FALLBACK::"If a term is unclear, translate literally and note the ambiguity"
 §3::SYNTAX

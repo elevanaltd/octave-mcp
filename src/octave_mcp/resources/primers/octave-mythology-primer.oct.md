@@ -1,8 +1,8 @@
 ===OCTAVE_MYTHOLOGY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.1.0"
-  TOKENS::"~250"
+  VERSION::"6.2.0"
+  TOKENS::"~270"
   TIER::ULTRA
 §1::ESSENCE
 PURPOSE::"Map concepts→mythological"
@@ -25,10 +25,12 @@ TIME_PRESSURE → CHRONOS
 §3::SYNTAX
 OPERATORS::
 ```
-ATOM[role]::archetype
-⊕  unify atoms
-⇌  opposing forces
-→  becomes / maps to
+::    assign / atom-binding (ATOM[role]::archetype)
+→     becomes / maps to
+⊕     unify atoms
+⇌     opposing forces
+∧     conjunction / all-required
+∨     disjunction / alternative
 ```
 §3b::DOMAIN_LABELS
   // Use as KEY prefixes for fidelity — agents translate each field separately
