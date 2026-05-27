@@ -1,9 +1,9 @@
 ===ULTRA_MYTHIC_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.2.0"
+  VERSION::"6.3.0"
   TIER::ULTRA
-  TOKENS::"~260"
+  TOKENS::"~280"
 §1::ESSENCE
 PURPOSE::"Convert prose→OCTAVE"
 OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
@@ -19,9 +19,11 @@ ARCHETYPE::pick_relevant_myth[ZEUS,ARES,ATLAS,HERMES]
 OPERATORS::
 ```
 ::    maps_to  definition
+→     maps_to  flow
 ⊕     maps_to  synthesis
 ⇌     maps_to  tension
-→     maps_to  flow
+∧     maps_to  conjunction / all-required
+∨     maps_to  disjunction / alternative
 NEVER[]  maps_to  constraint
 ```
 §4::ONE_SHOT

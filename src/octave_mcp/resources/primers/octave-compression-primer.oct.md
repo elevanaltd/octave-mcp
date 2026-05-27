@@ -1,13 +1,14 @@
 ===OCTAVE_COMPRESSION_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.3.0"
+  VERSION::"6.4.0"
   TOKENS::"~300"
   TIER::ULTRA
 §1::ESSENCE
 PURPOSE::"Compress prose→OCTAVE with tier judgment"
 OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
 METHOD::"READ→SELECT_TIER→EXTRACT[why,evidence]→COMPRESS→VALIDATE"
+TELEGRAPHIC_PHRASE::"quoted value, stopwords dropped, operators carry English connectives — e.g. 'security ⇌ usability' not 'security at odds with usability'"
 §2::MAP
 TIER_SELECTION::
 ```
@@ -33,6 +34,8 @@ OPERATORS::
 →     flow / sequence
 ⊕     synthesis / combine
 ⇌     tension / opposition
+∧     conjunction / all-required
+∨     disjunction / alternative
 [,]   list
 ```
 §4::ONE_SHOT
