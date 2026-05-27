@@ -3511,7 +3511,7 @@ class TestDetectUnquotedSectionUnit:
 
     def test_basic_detection(self):
         """Basic unquoted § after :: is detected."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values("KEY::§2_BEHAVIOR")
         assert len(warnings) == 1
@@ -3519,21 +3519,21 @@ class TestDetectUnquotedSectionUnit:
 
     def test_quoted_no_detection(self):
         """Quoted § is not detected."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values('KEY::"§2_BEHAVIOR"')
         assert len(warnings) == 0
 
     def test_space_before_quote_no_detection(self):
         """Space before quote: KEY:: "§2" should not be detected."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values('KEY:: "§2_BEHAVIOR"')
         assert len(warnings) == 0, f"False positive with space before quote: {warnings}"
 
     def test_literal_zone_excluded(self):
         """§ inside ``` fenced block should not be detected."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         content = "BEFORE::value\n```\nKEY::§2_BEHAVIOR\n```\nAFTER::value"
         warnings = _detect_unquoted_section_in_values(content)
@@ -3541,84 +3541,84 @@ class TestDetectUnquotedSectionUnit:
 
     def test_hyphenated_key_detected(self):
         """Hyphenated keys like my-key::§2 should be detected."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values("my-key::§2_BEHAVIOR")
         assert len(warnings) == 1
 
     def test_unicode_key_detected(self):
         """Unicode identifier keys should be detected."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values("CLEF::§2_BEHAVIOR")
         assert len(warnings) == 1
 
     def test_dotted_key_detected(self):
         """Dotted keys like my.key::§2 should be detected."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values("my.key::§2_BEHAVIOR")
         assert len(warnings) == 1
 
     def test_section_operator_not_detected(self):
         """§1::SECTION_NAME at line start is not a key-value, should not warn."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values("§1::SECTION_NAME")
         assert len(warnings) == 0
 
     def test_array_with_quoted_section_no_detection(self):
         """KEY::["§2_BEHAVIOR"] should NOT warn — § is inside quotes in array."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values('KEY::["§2_BEHAVIOR"]')
         assert len(warnings) == 0, f"False positive: quoted § inside array brackets: {warnings}"
 
     def test_array_with_spaced_quoted_section_no_detection(self):
         """KEY:: [ "§2_BEHAVIOR" ] should NOT warn — § is inside quotes."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values('KEY:: [ "§2_BEHAVIOR" ]')
         assert len(warnings) == 0, f"False positive: spaced quoted § in array: {warnings}"
 
     def test_array_with_mixed_quoted_unquoted_section_warns(self):
         """KEY::["§2_BEHAVIOR", other_§_unquoted] SHOULD warn — mixed case."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values('KEY::["§2_BEHAVIOR", other_§_unquoted]')
         assert len(warnings) == 1, f"Expected warning for unquoted § in mixed array: {warnings}"
 
     def test_array_with_unquoted_section_warns(self):
         """KEY::[§2_unquoted, "other"] SHOULD warn — unquoted § in array."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values('KEY::[§2_unquoted, "other"]')
         assert len(warnings) == 1, f"Expected warning for unquoted § in array: {warnings}"
 
     def test_non_ascii_unicode_key_detected(self):
         """Non-ASCII unicode key like clé::§2_BEHAVIOR should be detected."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values("clé::§2_BEHAVIOR")
         assert len(warnings) == 1, f"Expected warning for unicode key with unquoted §: {warnings}"
 
     def test_section_in_comment_no_detection(self):
         """§ in a comment (after //) should NOT trigger warning."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values('KEY::"value" // see §2_BEHAVIOR')
         assert len(warnings) == 0, f"False positive: § in comment should not warn: {warnings}"
 
     def test_unquoted_section_before_comment_still_warns(self):
         """Unquoted § in value before // comment should still warn."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values("KEY::unquoted_§_value // comment")
         assert len(warnings) == 1, f"Expected warning for unquoted § before comment: {warnings}"
 
     def test_quoted_section_with_section_in_comment_no_detection(self):
         """§ quoted in value + § in comment should NOT warn."""
-        from octave_mcp.mcp.write import _detect_unquoted_section_in_values
+        from octave_mcp.mcp.write_detection import _detect_unquoted_section_in_values
 
         warnings = _detect_unquoted_section_in_values('KEY::"§_in_quotes" // §_in_comment')
         assert len(warnings) == 0, f"False positive: quoted § + comment § should not warn: {warnings}"
@@ -3790,7 +3790,7 @@ class TestAutoQuoteSectionRefsUnit:
 
     def test_bare_section_ref_in_value(self):
         """KEY::§5::ANCHOR_KERNEL -> KEY::"§5::ANCHOR_KERNEL"."""
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         result, corrections = _auto_quote_section_refs_in_values("KEY::§5::ANCHOR_KERNEL")
         assert '"§5::ANCHOR_KERNEL"' in result
@@ -3799,7 +3799,7 @@ class TestAutoQuoteSectionRefsUnit:
 
     def test_section_ref_in_list(self):
         """SEQUENCE::[A, §5::B] -> SEQUENCE::[A, "§5::B"]."""
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         result, corrections = _auto_quote_section_refs_in_values("SEQUENCE::[YAML_FRONTMATTER, §5::ANCHOR_KERNEL]")
         assert '"§5::ANCHOR_KERNEL"' in result
@@ -3808,7 +3808,7 @@ class TestAutoQuoteSectionRefsUnit:
 
     def test_already_quoted_unchanged(self):
         """KEY::"§5::ANCHOR_KERNEL" -> no change."""
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         result, corrections = _auto_quote_section_refs_in_values('KEY::"§5::ANCHOR_KERNEL"')
         assert result == 'KEY::"§5::ANCHOR_KERNEL"'
@@ -3816,7 +3816,7 @@ class TestAutoQuoteSectionRefsUnit:
 
     def test_section_declaration_unchanged(self):
         """§1::SECTION_NAME at line start is NOT auto-quoted."""
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         result, corrections = _auto_quote_section_refs_in_values("§1::SECTION_NAME")
         assert result == "§1::SECTION_NAME"
@@ -3824,7 +3824,7 @@ class TestAutoQuoteSectionRefsUnit:
 
     def test_multiple_section_refs_in_list(self):
         """Multiple unquoted § refs in one list are all auto-quoted."""
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         result, corrections = _auto_quote_section_refs_in_values("SEQ::[§1::INTRO, §2::BODY, §3::END]")
         assert '"§1::INTRO"' in result
@@ -3833,7 +3833,7 @@ class TestAutoQuoteSectionRefsUnit:
 
     def test_literal_zone_excluded(self):
         """§ inside ``` fenced block should NOT be auto-quoted."""
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         content = "BEFORE::value\n```\nKEY::§2::BEHAVIOR\n```\nAFTER::value"
         result, corrections = _auto_quote_section_refs_in_values(content)
@@ -3844,7 +3844,7 @@ class TestAutoQuoteSectionRefsUnit:
 
     def test_mixed_quoted_and_unquoted_in_list(self):
         """List with mix of quoted and unquoted § refs: only unquoted are auto-quoted."""
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         result, corrections = _auto_quote_section_refs_in_values('SEQ::["§1::ALREADY_QUOTED", §2::NEEDS_QUOTING]')
         # Already-quoted should remain as-is
@@ -3862,7 +3862,7 @@ class TestAutoQuoteSectionRefsUnit:
         in a single pair of quotes, not each § reference individually.
         Fragmented quoting produces "§1_through_""§4" which is broken.
         """
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         result, corrections = _auto_quote_section_refs_in_values("BODY_SECTIONS::§1_through_§4")
         # Must NOT produce fragmented quoting like "§1_through_""§4"
@@ -3877,7 +3877,7 @@ class TestAutoQuoteSectionRefsUnit:
         GH#334: The auto-quoting should handle cases where § references appear
         alongside bracket expressions in the same value.
         """
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         result, corrections = _auto_quote_section_refs_in_values("ANCHOR::required[§5::ANCHOR_KERNEL_section_header]")
         # The § reference inside brackets should be quoted
@@ -3889,7 +3889,7 @@ class TestAutoQuoteSectionRefsUnit:
         GH#334: BODY_SECTIONS::§1_through_§4 must produce valid output
         that doesn't cause parser errors.
         """
-        from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+        from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
         # This is the exact content from the failing spec file
         content = (

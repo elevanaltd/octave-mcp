@@ -26,7 +26,8 @@ from pathlib import Path
 import pytest
 
 from octave_mcp.mcp.validate import ValidateTool
-from octave_mcp.mcp.write import WriteTool, _detect_snake_case_blob
+from octave_mcp.mcp.write import WriteTool
+from octave_mcp.mcp.write_detection import _detect_snake_case_blob
 
 FIXTURE_PATH = Path(__file__).parent.parent / "fixtures" / "w_snake_case_blob_corpus.oct.md"
 

@@ -10,7 +10,8 @@ TDD RED phase: these tests FAIL before implementation.
 
 import pytest
 
-from octave_mcp.mcp.write import WriteTool, _detect_annotation_too_long
+from octave_mcp.mcp.write import WriteTool
+from octave_mcp.mcp.write_detection import _detect_annotation_too_long
 
 
 class TestDetectAnnotationTooLong:

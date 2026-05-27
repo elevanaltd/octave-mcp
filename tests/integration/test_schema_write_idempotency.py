@@ -246,7 +246,7 @@ def test_holographic_operator_chain_survives_auto_quote_pass() -> None:
     catalogue (which would silently re-introduce the same bug whenever a
     new operator is added to the OCTAVE meta-grammar).
     """
-    from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+    from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
     holographic_line = '  THREAD_ID::["example-debate-001"∧REQ→§INDEXER]'
     content = "===TEST===\n" "META:\n" f"{holographic_line}\n" "===END===\n"
@@ -276,7 +276,7 @@ def test_ascii_arrow_holographic_pattern_also_protected() -> None:
     must defer to the parser for BOTH forms — otherwise a schema source
     using ASCII operators would still be silently destroyed.
     """
-    from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+    from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
     ascii_line = '  THREAD_ID::["example"∧REQ->§INDEXER]'
     content = f"===TEST===\nMETA:\n{ascii_line}\n===END===\n"
@@ -318,7 +318,7 @@ def test_holographic_sanctuary_handles_even_backslash_run_before_quote() -> None
     to recognise them as holographic and ``_auto_quote_section_refs_in_values``
     wraps ``§T`` in quotes, destroying the operator chain.
     """
-    from octave_mcp.mcp.write import _auto_quote_section_refs_in_values, _build_holographic_line_set
+    from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values, _build_holographic_line_set
 
     # Case 1: even backslash-run of length 2.
     # Raw OCTAVE bytes on disk:  K::["a\\"∧REQ→§T]
@@ -403,7 +403,7 @@ def test_sanctuary_protects_target_only_holographic_with_backslash_run() -> None
     accidental over-protection regressions.
     Case D — run_len=3 — odd parity, same negative expectation as C.
     """
-    from octave_mcp.mcp.write import _auto_quote_section_refs_in_values, _build_holographic_line_set
+    from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values, _build_holographic_line_set
 
     # Positive cases: even parity → holographic, must be protected.
     for run_len in (2, 4):
@@ -452,7 +452,7 @@ def test_non_holographic_section_ref_still_gets_quoted() -> None:
     pins the boundary: lift the sanctuary too widely and the original
     silent-data-loss bug (GH#329, GH#334) returns.
     """
-    from octave_mcp.mcp.write import _auto_quote_section_refs_in_values
+    from octave_mcp.mcp.write_detection import _auto_quote_section_refs_in_values
 
     content = "===TEST===\nMETA:\n  KEY::§SOMETHING\n===END===\n"
     output, corrections = _auto_quote_section_refs_in_values(content)
