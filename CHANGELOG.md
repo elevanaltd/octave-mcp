@@ -25,6 +25,7 @@ This release lands the Strategy A span-aware preserve-mode engine (#418), the ME
 - **Notice.** v1.14.0 will flip the `format_style` default. Callers asserting byte-shape of `octave_write` outputs SHOULD review their integration and pin a `format_style` value explicitly before the v1.14.0 upgrade.
 
 ### Fixed
+- **North Star summary I2 `RATIONALE` self-application cleanup (#457).** The sole project-owned offender surfaced by the new `W_SNAKE_CASE_BLOB` advisory (in `.hestai/north-star/000-OCTAVE-MCP-NORTH-STAR-SUMMARY.oct.md:29`) is rewritten from snake-blob to quoted English prose (`"downstream must know — didn't check vs. not there"`), bringing octave-mcp's own `.oct.md` corpus to zero `W_SNAKE_CASE_BLOB` warnings.
 - **`octave_write` changes_mode mutate-in-place on flat `===META===` atoms (#447, PR #449).** When `changes={"META.<field>": <value>}` targets a flat-form atom inside a `===META===` envelope (e.g. existing `STATUS::proposed`), the resolver now mutates that atom in-place instead of injecting a duplicate nested-block atom alongside it. Behaviour verified across `format_style ∈ {preserve, expanded, compact, omitted}`. The flat-atom scan is strictly gated on `doc.name == "META"`, so non-META envelopes with same-named flat atoms (e.g. `===DOC===\nSTATUS::content\n===END===`) are not affected and continue to route via the existing `doc.meta` create path. `$op DELETE` against flat META atoms is covered by the same code path and pinned by regression tests.
 
 ### Migration
