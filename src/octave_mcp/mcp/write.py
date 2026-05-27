@@ -729,6 +729,28 @@ def _is_in_protected_range(pos: int, protected: list[tuple[int, int]]) -> bool:
     return False
 
 
+def _count_brackets_outside_protected(line: str, line_offset: int, protected: list[tuple[int, int]]) -> int:
+    """Return net bracket depth delta (``[`` minus ``]``) considering ONLY
+    characters of ``line`` whose absolute offset falls OUTSIDE every
+    protected range.
+
+    Protected zones (literal fences, quoted strings, ``//`` comments) are
+    opaque syntax-wise: brackets inside them are text, not list-open/close
+    tokens. Used by ``_detect_snake_case_blob`` to keep multiline list
+    state honest when a line begins in a protected zone but still contains
+    a real ``[`` or ``]`` outside it (cubic P2 fix for PR #456 — see
+    discussion_r3307813188).
+    """
+    delta = 0
+    for col, ch in enumerate(line):
+        if ch != "[" and ch != "]":
+            continue
+        if _is_in_protected_range(line_offset + col, protected):
+            continue
+        delta += 1 if ch == "[" else -1
+    return delta
+
+
 def _detect_annotation_too_long(content: str) -> list[dict[str, Any]]:
     """Detect annotation identifier content that violates discipline thresholds.
 
@@ -948,14 +970,23 @@ def _detect_snake_case_blob(content: str) -> list[dict[str, Any]]:
         line_num = i + 1
         line_offset = line_offsets[i]
 
-        # Skip the entire line if it is wholly protected (e.g. comment line,
-        # literal-fence line). A line is wholly protected if its first non-
-        # whitespace character is inside a protected zone.
+        # Skip token scanning on lines that are wholly protected (e.g.
+        # comment line, literal-fence line). A line is wholly protected if
+        # its first non-whitespace character is inside a protected zone.
+        # NOTE (cubic P2 / PR #456 discussion_r3307813188): bracket
+        # accounting must STILL run on the non-protected substring of the
+        # line, otherwise a real ``]`` sitting outside the protected range
+        # (e.g. after a closing quote on the same line) would be missed
+        # and ``in_reasoning_list`` would leak past the actual list close.
         first_nonws = len(raw_line) - len(raw_line.lstrip())
         line_start_pos = line_offset + first_nonws
         if first_nonws < len(raw_line) and _is_in_protected_range(line_start_pos, protected):
-            # Inside literal zone or comment-only — but list-bracket tracking
-            # must NOT advance through this line (protected zone is opaque).
+            if in_reasoning_list:
+                list_bracket_depth += _count_brackets_outside_protected(raw_line, line_offset, protected)
+                if list_bracket_depth <= 0:
+                    in_reasoning_list = False
+                    list_parent_field = ""
+                    list_bracket_depth = 0
             i += 1
             continue
 
@@ -963,8 +994,11 @@ def _detect_snake_case_blob(content: str) -> list[dict[str, Any]]:
             # We're inside an open KEY::[ ... ] list opened on a prior line.
             # Each element on this line is candidate token territory.
             _scan_value_span(raw_line, line_offset, line_num, list_parent_field)
-            # Track bracket balance to detect end of the list.
-            list_bracket_depth += raw_line.count("[") - raw_line.count("]")
+            # Track bracket balance to detect end of the list. Count only
+            # brackets that sit outside protected ranges (cubic P2 fix):
+            # ``]`` inside a comment or literal zone on this line is text,
+            # not list syntax.
+            list_bracket_depth += _count_brackets_outside_protected(raw_line, line_offset, protected)
             if list_bracket_depth <= 0:
                 in_reasoning_list = False
                 list_parent_field = ""
@@ -987,8 +1021,10 @@ def _detect_snake_case_blob(content: str) -> list[dict[str, Any]]:
                 opens_list = stripped_value.startswith("[")
                 if opens_list:
                     # Inline-list-on-same-line OR multi-line list. Compute net
-                    # bracket depth across this line.
-                    bracket_depth = value_text.count("[") - value_text.count("]")
+                    # bracket depth across this line, counting only brackets
+                    # that sit outside protected ranges (cubic P2 fix —
+                    # PR #456 discussion_r3307813188).
+                    bracket_depth = _count_brackets_outside_protected(value_text, value_base_offset, protected)
                     if bracket_depth <= 0:
                         # Entire inline list on this single line — scan and done.
                         _scan_value_span(value_text, value_base_offset, line_num, key)
@@ -1015,7 +1051,7 @@ def _detect_snake_case_blob(content: str) -> list[dict[str, Any]]:
                 value_start_col = bm.end() - 1  # include the [
                 value_text = raw_line[value_start_col:]
                 value_base_offset = line_offset + value_start_col
-                bracket_depth = value_text.count("[") - value_text.count("]")
+                bracket_depth = _count_brackets_outside_protected(value_text, value_base_offset, protected)
                 if bracket_depth <= 0:
                     _scan_value_span(value_text, value_base_offset, line_num, key)
                 else:

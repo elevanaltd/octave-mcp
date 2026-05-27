@@ -390,3 +390,127 @@ RATIONALE::migration_on_a_moving_target_is_an_anti_pattern_because_app_completio
         warnings = result.get("warnings", [])
         codes = [w.get("code") for w in warnings]
         assert "W_SNAKE_CASE_BLOB" in codes
+
+
+class TestProtectedLineBracketAccounting:
+    """Regression tests for cubic P2 (PR #456 discussion_r3307813188):
+
+    "Protected-line short-circuit happens before list bracket tracking, so
+    multiline list state can leak past `]` when a line starts in a protected
+    zone."
+
+    The fix must ensure ``list_bracket_depth`` accounting always uses ONLY
+    the non-protected substring of each line. Bracket characters inside
+    quoted strings, ``//`` comments, or fenced literal zones are opaque
+    (text, not list syntax) and MUST NOT affect the depth counter.
+    Conversely, a real ``]`` that sits OUTSIDE every protected range on the
+    same line as protected content MUST still close the list.
+    """
+
+    # --- LEAK scenarios: list MUST close, downstream MUST NOT false-fire ----
+
+    def test_list_closes_on_line_that_begins_in_quoted_string(self):
+        """A line whose first non-ws char is inside a quoted string but whose
+        ``]`` lies OUTSIDE the quote MUST decrement bracket depth and close
+        the list. Otherwise a subsequent prose-blob token (which is no longer
+        a list element) would spuriously trigger W_SNAKE_CASE_BLOB.
+        """
+        blob = "should_not_fire_because_we_are_outside_the_list_already_here_and_now"
+        content = (
+            "DECISION:[\n" '  "primary_choice",\n' '  "secondary_choice" ]\n' f"NOTE::ok_short\n" f"FILLER::{blob}\n"
+        )
+        warnings = _detect_snake_case_blob(content)
+        hits = [w for w in warnings if w["code"] == "W_SNAKE_CASE_BLOB"]
+        # The blob lives in FILLER (not a reasoning field) AFTER the list
+        # has closed on line 3. Zero W_SNAKE_CASE_BLOB warnings expected.
+        assert hits == [], "List leaked past ']' on a line that begins in a quoted string. " f"Got: {hits}"
+
+    def test_list_closes_on_line_that_begins_at_literal_fence_close(self):
+        """A list that contains a fenced literal zone must close cleanly on
+        the line carrying the closing ``]`` even though the line preceding
+        was a fence-end (fully protected). Tokens after the list must not
+        be treated as list elements.
+        """
+        blob = "should_not_trigger_outside_list_with_many_words_after_the_close"
+        content = "BECAUSE:[\n" "  short_one,\n" "  short_two\n" "]\n" f"FILLER::{blob}\n"
+        # Sanity: this content has no protected zones and must already work.
+        warnings = _detect_snake_case_blob(content)
+        hits = [w for w in warnings if w["code"] == "W_SNAKE_CASE_BLOB"]
+        assert hits == [], f"Baseline list-close regression: {hits}"
+
+    # --- OPAQUE scenarios: protected line in MIDDLE of list, no brackets ----
+
+    def test_protected_middle_line_preserves_list_state(self):
+        """A wholly-protected line in the middle of a reasoning-field list
+        (e.g. a ``//`` comment with no brackets) must NOT close the list
+        prematurely. List state must persist across the protected line and
+        close on the real ``]`` that follows.
+        """
+        blob_in = "this_is_a_long_snake_case_prose_blob_that_must_definitely_trigger_inside_list"
+        blob_out = "this_blob_is_outside_the_list_and_must_not_trigger_since_field_is_not_reasoning"
+        content = (
+            "DECISION:[\n"
+            f"  {blob_in},\n"
+            "  // opaque comment with no bracket characters in it at all\n"
+            "  short_tail\n"
+            "]\n"
+            f"FILLER::{blob_out}\n"
+        )
+        warnings = _detect_snake_case_blob(content)
+        hits = [w for w in warnings if w["code"] == "W_SNAKE_CASE_BLOB"]
+        # Exactly one hit: blob_in (list element under DECISION).
+        # blob_out lives under FILLER (not a reasoning field) after the
+        # list closes correctly on line 5.
+        codes_lines = [(w["line"], w["token"]) for w in hits]
+        assert any(
+            blob_in in tok for _, tok in codes_lines
+        ), f"Expected list-element hit for {blob_in!r}; got {codes_lines}"
+        assert not any(
+            blob_out in tok for _, tok in codes_lines
+        ), f"List state leaked past ']' — spurious hit for {blob_out!r}: {codes_lines}"
+
+    # --- COMMENT-WITH-BRACKET: ']' inside // comment must NOT decrement -----
+
+    def test_comment_only_line_with_bracket_text_does_not_decrement(self):
+        """A line that is entirely a ``//`` comment containing the literal
+        text ``]`` must NOT decrement ``list_bracket_depth`` (the ``]`` is
+        comment text, not list syntax). The list must remain open and the
+        prose blob on the next line must still be treated as a list element.
+        """
+        blob = "this_is_a_long_snake_case_prose_blob_that_must_definitely_trigger_inside_list"
+        content = (
+            "DECISION:[\n" "  // trailing remark with a bracket-looking char ] in comment text\n" f"  {blob}\n" "]\n"
+        )
+        warnings = _detect_snake_case_blob(content)
+        hits = [w for w in warnings if w["code"] == "W_SNAKE_CASE_BLOB"]
+        # If the comment's ']' incorrectly decremented depth to 0, the list
+        # would close prematurely and the blob on line 3 would NOT be
+        # recognised as a list element — but it IS still under a reasoning
+        # field by virtue of the open list, so it must still trigger.
+        assert any(blob in w["token"] for w in hits), f"List closed prematurely on commented ']'; blob missed: {hits}"
+
+    # --- NEGATIVE REGRESSION: tokens inside protected zones never fire ------
+
+    def test_protected_zone_tokens_still_never_trigger(self):
+        """Even after the fix, tokens that live INSIDE protected zones must
+        continue to be invisible to the scanner. Bracket accounting on the
+        non-protected substring must not accidentally lift token detection
+        into protected territory.
+        """
+        blob = "this_is_a_long_snake_case_prose_blob_that_must_definitely_trigger_the_warning"
+        contents = [
+            # In a literal fence
+            f"```\nBECAUSE::{blob}\n```\n",
+            # In a quoted string under a reasoning field
+            f'BECAUSE::"{blob}"\n',
+            # In a // comment
+            f"// BECAUSE::{blob}\n",
+            # In a literal-fence line that ALSO sits inside an open list
+            f"BECAUSE:[\n  short_one,\n```\n{blob}\n```\n  short_two\n]\n",
+        ]
+        for content in contents:
+            warnings = _detect_snake_case_blob(content)
+            for w in warnings:
+                if w["code"] != "W_SNAKE_CASE_BLOB":
+                    continue
+                assert blob not in w["token"], f"Protected-zone token leaked into warnings for content: {content!r}"
