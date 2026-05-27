@@ -329,7 +329,7 @@ inter-envelope whitespace) slice verbatim from the baseline; only the
 mutated envelope re-emits canonically. The `META.<field>` change-path
 resolver targets envelope #1's META by construction — per-envelope
 `META` scoping and atom mutation on additional envelopes are deferred
-to v1.14+. See the [Multi-envelope documents](usage.md#multi-envelope-documents-v1130)
+to v1.14+. See the [Multi-envelope documents](usage.md#workflow-5-multi-envelope-documents-v1130)
 walkthrough in the Usage Guide for a worked example.
 
 ---
