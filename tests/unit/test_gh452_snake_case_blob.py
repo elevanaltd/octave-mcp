@@ -489,7 +489,87 @@ class TestProtectedLineBracketAccounting:
         # field by virtue of the open list, so it must still trigger.
         assert any(blob in w["token"] for w in hits), f"List closed prematurely on commented ']'; blob missed: {hits}"
 
-    # --- NEGATIVE REGRESSION: tokens inside protected zones never fire ------
+    # --- CRS PR #456 REWORK (regex underscore enforcement + digit-prefix) ---
+    #
+    # CRS-CONDITIONAL findings on PR #456 (comment 4550471154):
+    #   1) [HIGH] Token regex did not enforce >=1 underscore (comment-vs-code
+    #      mismatch); bare words were scanned and only later dropped.
+    #   2) [HIGH] Token regex required ``[A-Za-z]`` at start, truncating
+    #      empirical offenders prefixed with a digit (``5_to_10_active...``).
+    #   3) [MODERATE] ``re.MULTILINE`` on opener regexes was redundant in a
+    #      line-by-line walker; optional ``(\[)?`` group was always required.
+    #   4) [SPECULATIVE] Tokens on a line whose first non-ws char sits in a
+    #      protected zone are skipped wholesale (inherited heuristic). Bounded
+    #      because protected-prefixed lines cannot be ``KEY::`` openers.
+    # See: https://github.com/elevanaltd/octave-mcp/pull/456#issuecomment-4550471154
+
+    def test_digit_prefix_token_captured_in_reasoning_field(self):
+        """Token starting with a digit must be matched by the regex and surfaced
+        verbatim — the leading digit prefix must NOT be truncated.
+
+        Empirical offender from operator comment 4549996376:
+        ``5_to_10_active_projects`` was being matched as
+        ``to_10_active_projects`` (the leading ``5_`` was dropped). To force a
+        trigger we wrap the digit-prefix token in a body long enough to satisfy
+        the semantic stopword threshold (>=2 stopwords: ``of``, ``to``, ``in``).
+        """
+        # 50 chars, 7 underscores, stopwords: of, to, in -> semantic trigger.
+        blob = "5_to_10_active_projects_in_scope_of_the_q3_migration"
+        content = f"GUIDANCE::{blob}\n"
+        warnings = _detect_snake_case_blob(content)
+        hits = [w for w in warnings if w["code"] == "W_SNAKE_CASE_BLOB"]
+        assert hits, f"Digit-prefix token did not trigger W_SNAKE_CASE_BLOB; got {warnings!r}"
+        # The token reported MUST include the leading ``5_`` — otherwise the
+        # provenance receipt (I4) lies about which substring offended.
+        assert any(
+            w["token"].startswith("5_") for w in hits
+        ), f"Digit-prefix truncated by regex; reported tokens: {[w['token'] for w in hits]}"
+
+    def test_bare_word_no_underscore_does_not_trigger(self):
+        """A bare word with no underscore in a reasoning field MUST NOT trigger.
+
+        The downstream zero-underscore exclusion already drops these, but the
+        token regex SHOULD also refuse to match them so we never waste a
+        scan on bare-word territory. This test will continue to pass either
+        way; it is here to lock in the behavioural contract.
+        """
+        # Long bare word with no underscores anywhere in the value.
+        content = "BECAUSE::xenomorphologicallypreposterous\n"
+        warnings = _detect_snake_case_blob(content)
+        codes = [w["code"] for w in warnings]
+        assert "W_SNAKE_CASE_BLOB" not in codes
+
+    def test_protected_line_prefix_with_trailing_prose_documented_miss(self):
+        """Documented heuristic limitation: a line whose first non-whitespace
+        character is inside a protected zone (e.g. a quoted string or a fence)
+        is wholly skipped for token scanning, even when the rest of the line
+        contains an unprotected snake-case prose blob.
+
+        This is consistent with the inherited ``_detect_annotation_too_long``
+        line-walker heuristic. In practice the protected-prefix shape can only
+        appear mid-list (a quoted list element followed by an unquoted token
+        on the same line is malformed OCTAVE) so the false-negative surface is
+        empirically empty. We assert the documented behaviour here so any
+        future refactor that changes it must do so deliberately.
+        """
+        blob = "this_is_a_long_snake_case_prose_blob_that_must_definitely_trigger_the_warning"
+        # Line begins with the protected prefix of a quoted string; the blob
+        # appears AFTER the closing quote on the same line. The line walker
+        # short-circuits on the protected line-prefix per the inherited
+        # heuristic (cubic P2 fix preserved bracket accounting but not token
+        # scanning on these lines).
+        content = "DECISION:[\n" f'  "primary" , {blob}\n' "]\n"
+        warnings = _detect_snake_case_blob(content)
+        hits = [w for w in warnings if w["code"] == "W_SNAKE_CASE_BLOB"]
+        # Documented limitation: heuristic misses this shape. If a future
+        # refactor surfaces this case, update the assertion to `assert hits`
+        # and remove this comment block.
+        assert hits == [], (
+            "Heuristic behaviour changed: protected-prefixed lines now scan "
+            "for tokens past the protected zone. Update the documented "
+            "limitation in src/octave_mcp/mcp/write.py and remove this test "
+            "or invert its assertion."
+        )
 
     def test_protected_zone_tokens_still_never_trigger(self):
         """Even after the fix, tokens that live INSIDE protected zones must

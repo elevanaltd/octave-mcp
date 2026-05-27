@@ -200,19 +200,25 @@ _W_SNAKE_CASE_BLOB_ALLCAPS_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,15}$")
 
 # A candidate token in value position is matched by this regex. We deliberately
 # require at least one underscore in the token body so we never have to scan
-# bare words — the zero-underscore exclusion would drop them anyway.
+# bare words — the zero-underscore exclusion would drop them anyway. The start
+# character class permits digits so empirical offenders like
+# ``5_to_10_active_projects`` are matched verbatim, not truncated to
+# ``to_10_active_projects`` (CRS PR #456 finding 2, comment 4550471154).
 # Tokens may contain letters, digits, underscores, hyphens, and dots; the
 # hyphen/dot exclusions are applied after extraction.
-_W_SNAKE_CASE_BLOB_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_./\-]*")
+_W_SNAKE_CASE_BLOB_TOKEN_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_./\-]*_[A-Za-z0-9_./\-]*")
 
 # A reasoning-field assignment opener: ``  KEY::``  (with optional indent).
-# Capture group 1 is the KEY.
-_W_SNAKE_CASE_BLOB_OPENER_RE = re.compile(r"^[ \t]*([A-Z][A-Z0-9_]*)\s*:\s*:", re.MULTILINE)
+# Capture group 1 is the KEY. No ``re.MULTILINE``: the scanner walks lines
+# explicitly and calls ``match(raw_line)`` per line (CRS PR #456 finding 3).
+_W_SNAKE_CASE_BLOB_OPENER_RE = re.compile(r"^[ \t]*([A-Z][A-Z0-9_]*)\s*:\s*:")
 
-# Standalone reasoning-field block header: ``KEY:[`` or ``KEY:`` opening a
-# children block. Capture group 1 is the KEY. Used to recognise inline-list
-# headers like ``DECISION:[`` where the list opens on the same line.
-_W_SNAKE_CASE_BLOB_BLOCK_OPEN_RE = re.compile(r"^[ \t]*([A-Z][A-Z0-9_]*)\s*:\s*(\[)?", re.MULTILINE)
+# Standalone reasoning-field block header: ``KEY:[`` opening a children block.
+# Capture group 1 is the KEY. The opening ``[`` is required (not optional)
+# because the call site only acts when it is present; making it mandatory at
+# the regex level eliminates the redundant group-check (CRS PR #456 finding 3).
+# No ``re.MULTILINE`` for the same reason as the opener above.
+_W_SNAKE_CASE_BLOB_BLOCK_OPEN_RE = re.compile(r"^[ \t]*([A-Z][A-Z0-9_]*)\s*:\s*\[")
 
 # Regex to extract annotation qualifier content (inside angle brackets).
 # Matches NAME<qualifier> at word boundaries within a line; captures the
@@ -1043,9 +1049,11 @@ def _detect_snake_case_blob(content: str) -> list[dict[str, Any]]:
 
         # Check for block-opener form ``DECISION:[`` (single colon followed by
         # ``[``) which the contract treats identically to ``KEY::[`` for the
-        # purpose of list-element recursion.
+        # purpose of list-element recursion. The opening ``[`` is required by
+        # the regex itself (CRS PR #456 finding 3 — eliminating the optional
+        # capture group + post-match check redundancy).
         bm = _W_SNAKE_CASE_BLOB_BLOCK_OPEN_RE.match(raw_line)
-        if bm and bm.group(2) == "[":
+        if bm:
             key = bm.group(1)
             if key in _W_SNAKE_CASE_BLOB_REASONING_FIELDS:
                 value_start_col = bm.end() - 1  # include the [
