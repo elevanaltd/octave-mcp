@@ -53,6 +53,10 @@ _FILES_UNDER_LINT: tuple[Path, ...] = (
     # loop is a parallel mutation surface to mcp/write.py and is subject
     # to the same paired-write discipline under Strategy A T8.
     _ROOT / "src" / "octave_mcp" / "cli" / "main.py",
+    # Added after CE BLOCKER on PR #473: write_mutation.py contains
+    # _apply_array_op_inplace which performs AST value mutations and is
+    # subject to the same paired-write discipline as write.py.
+    _ROOT / "src" / "octave_mcp" / "mcp" / "write_mutation.py",
 )
 
 # Line patterns that COUNT as a mutation site. We match on:
