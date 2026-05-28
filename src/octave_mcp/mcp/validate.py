@@ -26,7 +26,7 @@ from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import ValidationError, Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 from octave_mcp.mcp.compile_grammar import USAGE_HINTS
-from octave_mcp.mcp.write import _detect_snake_case_blob
+from octave_mcp.mcp.write_detection import _detect_snake_case_blob
 from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
 
 # Gap_6: Regex pattern to extract spec error codes (E001-E007) from error messages
