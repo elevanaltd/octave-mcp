@@ -34,13 +34,13 @@ from octave_mcp.core.grammar.cst import (
     Section,
 )
 from octave_mcp.core.parser import parse
-from octave_mcp.mcp.write import (
+from octave_mcp.mcp.write import WriteTool
+from octave_mcp.mcp.write_format import (
     E_AST_CYCLE,
     E_INVALID_FORMAT_STYLE,
     FORMAT_STYLE_VALUES,
     W_COMPACT_REFUSED,
     OctaveASTCycleError,
-    WriteTool,
     _apply_format_style,
     _compact_pass,
     _emit_with_style,
@@ -687,7 +687,7 @@ class TestCycleErrorStructuredSurface:
         """End-to-end MCP path: a cyclic AST inside the pre-pass MUST produce
         an error envelope with ``code='E_AST_CYCLE'``, NOT a generic
         ``E_EMIT`` (cubic C3)."""
-        import octave_mcp.mcp.write as write_mod
+        import octave_mcp.mcp.write_format as write_mod
 
         original_apply = write_mod._apply_format_style
 
@@ -722,7 +722,7 @@ class TestCycleErrorStructuredSurface:
         message containing ``E_AST_CYCLE`` and exit non-zero (cubic C3)."""
         from click.testing import CliRunner
 
-        import octave_mcp.mcp.write as write_mod
+        import octave_mcp.mcp.write_format as write_mod
         from octave_mcp.cli.main import cli
 
         original_apply = write_mod._apply_format_style

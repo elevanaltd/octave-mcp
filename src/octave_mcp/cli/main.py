@@ -443,10 +443,10 @@ def write(
     from octave_mcp.core.grammar.cst import Assignment
     from octave_mcp.core.parser import parse
     from octave_mcp.core.validator import Validator
-    from octave_mcp.mcp.write import (
+    from octave_mcp.mcp.write import _mark_dirty
+    from octave_mcp.mcp.write_format import (
         OctaveASTCycleError,
         _emit_with_style,
-        _mark_dirty,
         _to_baseline_bytes,
     )
     from octave_mcp.schemas.loader import get_builtin_schema
