@@ -211,7 +211,7 @@ def _build_holographic_line_set(content: str) -> set[int]:
     """
     # Lazy import to avoid a module-load cycle: core.holographic imports
     # core.constraints which transitively reaches lexer-adjacent modules.
-    # mcp.write is loaded as part of the MCP tool surface, well after
+    # mcp.write_detection is loaded as part of the MCP tool surface, well after
     # core.holographic, so a function-local import is safe and explicit.
     from octave_mcp.core.holographic import _find_constraint_start, _find_target_start
 
