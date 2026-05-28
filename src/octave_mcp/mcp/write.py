@@ -17,7 +17,6 @@ import hashlib
 import os
 import re
 import tempfile
-from dataclasses import dataclass, field
 from difflib import unified_diff
 from pathlib import Path
 from typing import Any
@@ -51,6 +50,7 @@ from octave_mcp.mcp.write_detection import (
     _detect_snake_case_blob,
     _detect_unquoted_section_in_values,
 )
+from octave_mcp.mcp.write_metrics import StructuralMetrics, extract_structural_metrics
 from octave_mcp.schemas.loader import (
     BUILTIN_SCHEMA_DEFINITIONS,
     get_builtin_schema,
@@ -147,50 +147,6 @@ _REFUSE_REASON_ARITY = "arity_exceeded"
 # GH#352: Guidance hint for UNVALIDATED status (I5)
 # GH#361r3: Base hint text; available schemas appended dynamically at runtime.
 _VALIDATION_HINT_BASE = "Pass schema='META' (or another schema name) to enable I5 schema validation."
-
-
-@dataclass
-class StructuralMetrics:
-    """Metrics for structural comparison of OCTAVE documents.
-
-    Tracks counts of structural elements to detect potential data loss
-    during normalization or transformation.
-    """
-
-    sections: int = 0  # Count of Section nodes
-    section_markers: set[str] = field(default_factory=set)  # Section IDs found
-    blocks: int = 0  # Count of Block nodes
-    assignments: int = 0  # Count of Assignment nodes
-
-
-def extract_structural_metrics(doc: Document) -> StructuralMetrics:
-    """Extract structural metrics from a parsed OCTAVE document.
-
-    Recursively traverses the AST to count structural elements.
-
-    Args:
-        doc: Parsed Document AST
-
-    Returns:
-        StructuralMetrics with counts of structural elements
-    """
-    metrics = StructuralMetrics()
-
-    def traverse(nodes: list[ASTNode]) -> None:
-        """Recursively count structural elements."""
-        for node in nodes:
-            if isinstance(node, Section):
-                metrics.sections += 1
-                metrics.section_markers.add(node.section_id)
-                traverse(node.children)
-            elif isinstance(node, Block):
-                metrics.blocks += 1
-                traverse(node.children)
-            elif isinstance(node, Assignment):
-                metrics.assignments += 1
-
-    traverse(doc.sections)
-    return metrics
 
 
 def _is_delete_sentinel(value: Any) -> bool:

@@ -1611,7 +1611,7 @@ class TestStructuralMetrics:
     def test_extract_structural_metrics_counts_sections(self):
         """Test extract_structural_metrics() counts sections correctly."""
         from octave_mcp.core.parser import parse
-        from octave_mcp.mcp.write import extract_structural_metrics
+        from octave_mcp.mcp.write_metrics import extract_structural_metrics
 
         # Document with 2 numbered sections
         content = """===TEST===
@@ -1632,7 +1632,7 @@ class TestStructuralMetrics:
     def test_extract_structural_metrics_counts_section_markers(self):
         """Test extract_structural_metrics() identifies section markers."""
         from octave_mcp.core.parser import parse
-        from octave_mcp.mcp.write import extract_structural_metrics
+        from octave_mcp.mcp.write_metrics import extract_structural_metrics
 
         # Document with section markers
         content = """===DOC===
@@ -1655,7 +1655,7 @@ class TestStructuralMetrics:
     def test_extract_structural_metrics_counts_blocks(self):
         """Test extract_structural_metrics() counts blocks correctly."""
         from octave_mcp.core.parser import parse
-        from octave_mcp.mcp.write import extract_structural_metrics
+        from octave_mcp.mcp.write_metrics import extract_structural_metrics
 
         # Document with 2 blocks
         content = """===TEST===
@@ -1673,7 +1673,7 @@ SECOND_BLOCK:
     def test_extract_structural_metrics_counts_assignments(self):
         """Test extract_structural_metrics() counts assignments correctly."""
         from octave_mcp.core.parser import parse
-        from octave_mcp.mcp.write import extract_structural_metrics
+        from octave_mcp.mcp.write_metrics import extract_structural_metrics
 
         # Document with 3 assignments (including nested)
         content = """===TEST===
@@ -1691,7 +1691,8 @@ BLOCK:
     def test_generate_diff_no_changes(self):
         """Test _generate_diff() returns 'No changes' for identical documents."""
         from octave_mcp.core.parser import parse
-        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+        from octave_mcp.mcp.write import WriteTool
+        from octave_mcp.mcp.write_metrics import extract_structural_metrics
 
         tool = WriteTool()
 
@@ -1705,7 +1706,8 @@ BLOCK:
     def test_generate_diff_detects_section_marker_removal(self):
         """Test _generate_diff() detects section marker removal (W_STRUCT_001)."""
         from octave_mcp.core.parser import parse
-        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+        from octave_mcp.mcp.write import WriteTool
+        from octave_mcp.mcp.write_metrics import extract_structural_metrics
 
         tool = WriteTool()
 
@@ -1739,7 +1741,8 @@ OTHER::value
     def test_generate_diff_detects_assignment_reduction(self):
         """Test _generate_diff() detects assignment count reduction (W_STRUCT_003)."""
         from octave_mcp.core.parser import parse
-        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+        from octave_mcp.mcp.write import WriteTool
+        from octave_mcp.mcp.write_metrics import extract_structural_metrics
 
         tool = WriteTool()
 
@@ -1767,7 +1770,8 @@ KEY1::value1
     def test_generate_diff_structural_summary_format(self):
         """Test structural summary format in _generate_diff() response."""
         from octave_mcp.core.parser import parse
-        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+        from octave_mcp.mcp.write import WriteTool
+        from octave_mcp.mcp.write_metrics import extract_structural_metrics
 
         tool = WriteTool()
 
@@ -1837,7 +1841,8 @@ KEY::new
         Fix: Add content_changed parameter that the caller computes and passes in.
         """
         from octave_mcp.core.parser import parse
-        from octave_mcp.mcp.write import WriteTool, extract_structural_metrics
+        from octave_mcp.mcp.write import WriteTool
+        from octave_mcp.mcp.write_metrics import extract_structural_metrics
 
         tool = WriteTool()
 
