@@ -74,6 +74,7 @@ META:
   LINE_COMMENT::"// — line start or after value"
   ASCII_RULE::"All operators accept both unicode and ASCII. Always emit unicode."
   VS_RULE::"vs requires word boundaries: 'A vs B' valid, 'AvsB' invalid"
+  TELEGRAPHIC_PHRASE::"see octave-compression §4::R3a — operators carry the English connectives inside quoted values"
 §3::CRITICAL_RULES
   R1::"No spaces around :: (KEY::value not KEY :: value)"
   R2::"Indent exactly 2 spaces per level — NO TABS"
