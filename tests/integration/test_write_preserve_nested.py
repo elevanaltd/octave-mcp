@@ -224,7 +224,7 @@ class TestPreserveRepairNestedPropagation:
         from octave_mcp.core.repair import _apply_schema_repairs
         from octave_mcp.core.repair_log import RepairLog
         from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
-        from octave_mcp.mcp.write import _to_baseline_bytes
+        from octave_mcp.mcp.write_format import _to_baseline_bytes
 
         content = "===TEST===\nBLOCK:\n  STATUS::active\n===END===\n"
         doc = parse(content)
@@ -273,7 +273,7 @@ class TestPreserveRepairNestedPropagation:
         from octave_mcp.core.repair import _apply_schema_repairs
         from octave_mcp.core.repair_log import RepairLog
         from octave_mcp.core.schema_extractor import FieldDefinition, SchemaDefinition
-        from octave_mcp.mcp.write import _to_baseline_bytes
+        from octave_mcp.mcp.write_format import _to_baseline_bytes
 
         content = "===TEST===\n§1::SEC\n  STATUS::active\n===END===\n"
         doc = parse(content)
@@ -353,7 +353,7 @@ class TestPreserveParserRepairPropagation:
         """
         from octave_mcp.core.emitter import FormatOptions, emit
         from octave_mcp.core.parser import parse_with_warnings
-        from octave_mcp.mcp.write import _to_baseline_bytes
+        from octave_mcp.mcp.write_format import _to_baseline_bytes
 
         content = "===TEST===\nBLOCK:\n  CHILD::foo bar\n===END===\n"
         doc, warnings = parse_with_warnings(content, strict_structure=True)
@@ -386,7 +386,7 @@ class TestPreserveParserRepairPropagation:
         """Same propagation contract for Section parents."""
         from octave_mcp.core.emitter import FormatOptions, emit
         from octave_mcp.core.parser import parse_with_warnings
-        from octave_mcp.mcp.write import _to_baseline_bytes
+        from octave_mcp.mcp.write_format import _to_baseline_bytes
 
         content = "===TEST===\n§1::SEC\n  CHILD::foo bar\n===END===\n"
         doc, warnings = parse_with_warnings(content, strict_structure=True)
