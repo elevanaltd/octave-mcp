@@ -43,11 +43,12 @@ jobs:
           DOCS_ONLY=true
           while IFS= read -r file; do
             # Runtime code that must trigger tests:
-            # - src/ directory (including src/octave_mcp/schemas/builtin/*.oct.md)
+            # - src/ Python source files
             # - tests/ directory
             # - pyproject.toml, setup.py, requirements.txt
             # - .github/workflows/
-            if [[ "$file" =~ ^src/ ]] || \
+            # Note: src/**/*.md files (skill docs, READMEs) are treated as docs-only
+            if ( [[ "$file" =~ ^src/ ]] && ! [[ "$file" =~ \.(md|txt)$ ]] ) || \
                [[ "$file" =~ ^tests/ ]] || \
                [[ "$file" =~ ^(pyproject\.toml|setup\.py|requirements.*\.txt)$ ]] || \
                [[ "$file" =~ ^\.github/workflows/ ]]; then
@@ -58,11 +59,13 @@ jobs:
             # Documentation-only paths (safe to skip tests):
             # - specs/ directory (.oct.md specifications)
             # - docs/ directory
+            # - src/ markdown/text files (skill docs, embedded READMEs)
             # - Root-level markdown files (README.md, CHANGELOG.md, etc.)
             # - LICENSE files
             # - Markdown linter configs
             if [[ "$file" =~ ^specs/ ]] || \
                [[ "$file" =~ ^docs/ ]] || \
+               [[ "$file" =~ ^src/.*\.(md|txt)$ ]] || \
                [[ "$file" =~ ^\w+\.(md|txt)$ ]] || \
                [[ "$file" =~ ^LICENSE ]] || \
                [[ "$file" =~ ^\.markdownlint ]]; then
