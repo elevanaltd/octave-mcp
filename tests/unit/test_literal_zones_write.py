@@ -20,7 +20,8 @@ from octave_mcp.core.emitter import is_absent, needs_quotes
 from octave_mcp.core.grammar.cst import LiteralZoneValue
 from octave_mcp.core.parser import parse
 from octave_mcp.core.validator import _count_literal_zones
-from octave_mcp.mcp.write import WriteTool, _normalize_value_for_ast
+from octave_mcp.mcp.write import WriteTool
+from octave_mcp.mcp.write_mutation import _normalize_value_for_ast
 
 _TOOL = WriteTool()
 
