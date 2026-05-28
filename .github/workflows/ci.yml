@@ -144,6 +144,13 @@ jobs:
           mypy src
 
       - name: Run pytest with coverage
+        env:
+          # Force coverage.py to use sys.monitoring (PEP 669) on Python 3.12.
+          # The default CTracer uses sys.settrace, which has a severe perf
+          # regression on 3.12 (~35× slower: ~8min vs ~14s in this repo).
+          # 3.11 has no sys.monitoring; 3.13 restored sys.settrace perf — both
+          # fine on defaults, so this override is scoped to 3.12.
+          COVERAGE_CORE: ${{ matrix.python-version == '3.12' && 'sysmon' || '' }}
         run: |
           pytest --cov=octave_mcp --cov-report=xml --cov-report=term-missing --cov-fail-under=85
 
