@@ -190,7 +190,7 @@ def _quote_is_unescaped(content: str, quote_index: int) -> bool:
     immediately preceding it has ODD length. An even-length run
     (including zero) means the backslashes pair up as escaped backslashes
     and the quote itself stands unescaped. This matches the GH#361r2
-    convention already used by ``mcp/write.py::_all_section_marks_quoted``
+    convention already used by ``mcp/write_detection.py::_all_section_marks_quoted``
     and is the parity contract pinned by GH-432.
 
     A naive single-character lookback (``content[i - 1] != "\\"``)
