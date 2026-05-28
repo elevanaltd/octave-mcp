@@ -59,13 +59,15 @@ jobs:
             # Documentation-only paths (safe to skip tests):
             # - specs/ directory (.oct.md specifications)
             # - docs/ directory
-            # - src/ markdown/text files (skill docs, embedded READMEs)
+            # - src/ plain markdown/text files (skill docs, embedded READMEs)
+            #   NOTE: src/**/*.oct.md are runtime schema package data — excluded here
+            #   so they fall through to the catch-all and trigger full tests
             # - Root-level markdown files (README.md, CHANGELOG.md, etc.)
             # - LICENSE files
             # - Markdown linter configs
             if [[ "$file" =~ ^specs/ ]] || \
                [[ "$file" =~ ^docs/ ]] || \
-               [[ "$file" =~ ^src/.*\.(md|txt)$ ]] || \
+               ( [[ "$file" =~ ^src/.*\.(md|txt)$ ]] && ! [[ "$file" =~ \.oct\.md$ ]] ) || \
                [[ "$file" =~ ^\w+\.(md|txt)$ ]] || \
                [[ "$file" =~ ^LICENSE ]] || \
                [[ "$file" =~ ^\.markdownlint ]]; then
