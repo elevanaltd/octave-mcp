@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-05-28 - "write.py STRATEGY_S1 refactor (god-object decomposition)"
+
+### Changed
+- **STRATEGY_S1 incremental refactor of `src/octave_mcp/mcp/write.py` god object (#459).** The 4887-LOC mutation entrypoint module is decomposed into five cohesive peer modules with **zero behaviour change** and **byte-identical output** on all 3614 baseline tests preserved throughout the four-PR sequence:
+  - **CLUSTER_A** (#463, PR #467) — `write_detection.py` (946 LOC): pure-text detection helpers and W-code warning emitters (`_detect_annotation_too_long`, `_detect_snake_case_blob`, literal-zone/holographic span scanners, lenient repair).
+  - **CLUSTER_B** (#464, PR #469) — `write_metrics.py` (55 LOC): AST `StructuralMetrics` dataclass + `extract_structural_metrics`.
+  - **CLUSTER_D** (#465, PR #471) — `write_format.py` (537 LOC): format-style pipeline (`_emit_with_style`, `_compact_pass`, `_expand_pass`, NFC byte threading, baseline span dispatch) — the Strategy A preserve-mode home.
+  - **CLUSTER_C** (#466, PR #473) — `write_mutation.py` (240 LOC): op-dispatch + AST mutation primitives (`_normalize_value_for_ast`, `_mark_dirty`, `$op` envelope, dirty-flag bookkeeping) — the v1.14.0 hybrid-fix home.
+- After the sequence, `write.py` is **3197 LOC** (down 1690, or 35%). WriteTool external API unchanged. Test counts unchanged (3614 passing, 11 skipped, 3 xfailed). Root architectural pattern `ABSENT_DOMAIN_MUTATION_LAYER` identified in the diagnostic remains; STRATEGY_S3 DocumentMutator extraction deferred to v1.15.0+ pending v1.14.0 evidence (#460).
+
 ### Added
 - **Skills now name `TELEGRAPHIC_PHRASE` (follow-up to #453).** Added the atom + canonical contrast example to `octave-compression/SKILL.md` §4 (R3a) and a cross-ref in `octave-literacy/SKILL.md` §2. Closes the primer-vs-skill gap so agents loading skills-only see the same positive value-form example primers carry.
 
@@ -1016,7 +1026,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.13.1...HEAD
+[1.13.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.10.0...v1.11.0
