@@ -15,7 +15,7 @@ covered:
   unconditionally and only outside top-level brackets.
 
 The contract (matching GH#361r2 already enforced in
-``mcp/write.py::_all_section_marks_quoted``): a ``"`` is unescaped when
+``mcp/write_detection.py::_all_section_marks_quoted``): a ``"`` is unescaped when
 the run of immediately-preceding backslashes is of even length
 (including zero). It is escaped when the run is of odd length.
 
