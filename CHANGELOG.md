@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Skills now name `TELEGRAPHIC_PHRASE` (follow-up to #453).** Added the atom + canonical contrast example to `octave-compression/SKILL.md` §4 (R3a) and a cross-ref in `octave-literacy/SKILL.md` §2. Closes the primer-vs-skill gap so agents loading skills-only see the same positive value-form example primers carry.
+
 ## [1.13.0] - 2026-05-27 - "Strategy A Span-Aware Preserve" (ADR-0006 SR2)
 
 This release lands the Strategy A span-aware preserve-mode engine (#418), the META audit-marker admission policy (#419, GH#384), and the Shape B `format_style` deprecation rollout (PR-4 / addendum §5). The default `format_style` does **not** flip in this release — see "Deprecated" below for the v1.14.0 plan.
