@@ -2094,7 +2094,7 @@ KEY::value
         dicts to proper AST structures.
         """
         from octave_mcp.core.grammar.cst import Block, InlineMap
-        from octave_mcp.mcp.write import _normalize_value_for_ast
+        from octave_mcp.mcp.write_mutation import _normalize_value_for_ast
 
         # Test simple nested dict
         nested_dict = {"key1": "value1", "key2": 42}

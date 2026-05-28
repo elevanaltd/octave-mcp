@@ -443,12 +443,12 @@ def write(
     from octave_mcp.core.grammar.cst import Assignment
     from octave_mcp.core.parser import parse
     from octave_mcp.core.validator import Validator
-    from octave_mcp.mcp.write import _mark_dirty
     from octave_mcp.mcp.write_format import (
         OctaveASTCycleError,
         _emit_with_style,
         _to_baseline_bytes,
     )
+    from octave_mcp.mcp.write_mutation import _mark_dirty
     from octave_mcp.schemas.loader import get_builtin_schema
 
     # ADR-0006 Sprint 2 addendum §5 Shape B (PR-4 T10): the CLI mirrors
