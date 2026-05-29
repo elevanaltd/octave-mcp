@@ -148,8 +148,29 @@ A/B::"original_literal"
         assert "original_literal" not in written
 
     @pytest.mark.asyncio
+    async def test_indexed_anchor_path_rejected(self) -> None:
+        """Indexed KEY[N] notation stays rejected (E_UNRESOLVABLE_PATH).
+
+        The issue mandates that the anchored-path form does NOT introduce
+        indexed addressing: ``KEY[N]`` collides with ``_ARRAY_INDEX_RE`` and
+        would breach PROD::I4 audit-stability and PROD::I3 (real keys, not
+        invented indices). The applier must not silently treat ``[N]`` as a
+        literal key suffix.
+        """
+        result, _ = await _write_and_read(_DOC_FIVE_RATIONALE, {"I1/RATIONALE[0]": "value"})
+        assert result["status"] != "success"
+        codes = {e.get("code") for e in result.get("errors", [])}
+        assert "E_UNRESOLVABLE_PATH" in codes, result.get("errors")
+
+    @pytest.mark.asyncio
     async def test_anchored_path_resolves_only_key_after_anchor(self) -> None:
-        """A KEY appearing BEFORE the anchor is not matched; only after counts."""
+        """A KEY appearing BEFORE the anchor is not matched; only after counts.
+
+        Validates document-order semantics: the assertions below check the
+        content of the RATIONALE BEFORE the anchor (must survive) against the
+        RATIONALE AFTER the anchor (must change), so the anchor's position in
+        the sibling list is what selects the target.
+        """
         doc = """===D===
 RATIONALE::"before_anchor"
 I2::DETERMINISTIC_ABSENCE
