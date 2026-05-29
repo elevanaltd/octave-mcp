@@ -395,3 +395,69 @@ class TestCaseBAnchoredDelete:
         assert result["status"] == "success", result.get("errors")
         assert "DROP::" not in written
         assert "KEEP::" in written
+
+
+# Two ITEMS arrays, the second following anchor I2 (forces anchored-path use).
+_DOC_TWO_ITEMS_TOP = "===NS===\nI1::A\nITEMS::[x, y]\nI2::B\nITEMS::[p, q]\n===END===\n"
+
+_DOC_TWO_ITEMS_SEC = "===NS===\n§1::IMM\n  I1::A\n  ITEMS::[x, y]\n  I2::B\n  ITEMS::[p, q]\n===END===\n"
+
+
+class TestCaseBAnchoredOpDispatch:
+    """REWORK cycle-3 B1 (cubic P1): anchored-path apply must DISPATCH $op.
+
+    The anchored-apply branch previously treated every non-DELETE value as a
+    plain replacement and never called ``_extract_op_descriptor``. A ``$op``
+    descriptor (APPEND/PREPEND) was therefore normalized and written as
+    LITERAL DATA (``ITEMS::[$op::APPEND,value::z]``) instead of being executed
+    — a PROD::I3 violation (control descriptors written as content).
+
+    Supported ops on an anchored path: APPEND/PREPEND (array targets), DELETE
+    (removal), and bare/plain replacement (with literal-zone fence
+    preservation). MERGE on an anchored leaf is rejected upstream by the
+    validator (E_OP_TARGET_MISMATCH) since an anchored path resolves only to an
+    Assignment, never a Block/Section/META target.
+    """
+
+    @pytest.mark.asyncio
+    async def test_anchored_append_executes_on_array_top_level(self) -> None:
+        """APPEND onto the ITEMS following I2 pushes the element; descriptor not written."""
+        result, written = await _write_and_read(_DOC_TWO_ITEMS_TOP, {"I2/ITEMS": {"$op": "APPEND", "value": "z"}})
+        assert result["status"] == "success", result.get("errors")
+        # The descriptor MUST NOT appear as literal data.
+        assert "$op" not in written, f"descriptor written as data:\n{written}"
+        # I2's ITEMS gained z; I1's ITEMS untouched.
+        assert "[x, y]" in written, f"I1 ITEMS wrongly mutated:\n{written}"
+        assert "p" in written and "q" in written and "z" in written
+        # z appended after q in the second array.
+        assert written.index("p") < written.index("z")
+
+    @pytest.mark.asyncio
+    async def test_anchored_prepend_executes_on_array_top_level(self) -> None:
+        """PREPEND onto the ITEMS following I2 unshifts the element."""
+        result, written = await _write_and_read(_DOC_TWO_ITEMS_TOP, {"I2/ITEMS": {"$op": "PREPEND", "value": "z"}})
+        assert result["status"] == "success", result.get("errors")
+        assert "$op" not in written, f"descriptor written as data:\n{written}"
+        assert "[x, y]" in written, f"I1 ITEMS wrongly mutated:\n{written}"
+        # z prepended before p in the second array.
+        assert written.index("z") < written.index("p")
+
+    @pytest.mark.asyncio
+    async def test_anchored_append_executes_on_array_section(self) -> None:
+        """APPEND dispatch also works for an anchored array nested in a section."""
+        result, written = await _write_and_read(_DOC_TWO_ITEMS_SEC, {"I2/ITEMS": {"$op": "APPEND", "value": "z"}})
+        assert result["status"] == "success", result.get("errors")
+        assert "$op" not in written, f"descriptor written as data:\n{written}"
+        assert "z" in written
+        # The first (I1) ITEMS array is untouched: still exactly x and y.
+        assert written.index("x") < written.index("z")
+
+    @pytest.mark.asyncio
+    async def test_anchored_merge_on_array_leaf_rejected(self) -> None:
+        """MERGE on an anchored array leaf is rejected loudly, never written as data."""
+        result, written = await _write_and_read(_DOC_TWO_ITEMS_TOP, {"I2/ITEMS": {"$op": "MERGE", "value": {"k": "v"}}})
+        assert result["status"] != "success"
+        codes = {e.get("code") for e in result.get("errors", [])}
+        assert "E_OP_TARGET_MISMATCH" in codes, result.get("errors")
+        # Document unchanged; no descriptor leaked into content.
+        assert "$op" not in written
