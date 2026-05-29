@@ -35,10 +35,9 @@ import pytest
 from octave_mcp.mcp.validate import ValidateTool
 from octave_mcp.mcp.write import WriteTool
 from octave_mcp.mcp.write_detection import (
-    _detect_inline_array_root,
     _detect_flat_prefix_scalar,
+    _detect_inline_array_root,
 )
-
 
 # ---------------------------------------------------------------------------
 # W_INLINE_ARRAY_ROOT — unit tests
