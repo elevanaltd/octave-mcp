@@ -257,9 +257,10 @@ def _normalize_value_for_ast_preserving(new_value: Any, existing_value: Any) -> 
 
     Form-preservation is intentionally narrow:
       - Only triggers when ``existing_value`` is a ``LiteralZoneValue``.
-      - Only re-wraps plain ``str`` (and ``dict``, stringified to its content)
-        replacements. A caller who passes a ``LiteralZoneValue`` explicitly,
-        or a list, is taken at face value (their intent is explicit).
+      - Only re-wraps plain ``str`` replacements. A caller who passes a
+        ``dict``, a ``list``, or an explicit ``LiteralZoneValue`` is taken at
+        face value and normalized via :func:`_normalize_value_for_ast` (their
+        intent is explicit; a ``dict`` becomes an ``InlineMap``, not a fence).
       - DELETE / op-descriptors never reach here (handled upstream).
 
     Args:

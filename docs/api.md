@@ -237,7 +237,10 @@ Semantics and guarantees:
   character, so a key may literally contain it. If a real assignment whose key
   is exactly `ANCHOR/KEY` exists, it is mutated in place; the anchored-path
   interpretation only applies when no such literal key is present. Bare `KEY`,
-  `META.FIELD`, `PARENT.CHILD`, and `§N.KEY` paths are unchanged.
+  `META.FIELD`, `PARENT.CHILD`, and `§N.KEY` paths are unchanged. This collision
+  is resolved **silently** (no warning is emitted): if you intend the anchored
+  interpretation on a document that *also* contains a literal `ANCHOR/KEY` key,
+  rename the literal key or use a `§N.KEY` section path to disambiguate.
 - **Real keys, not indices.** Indexed addressing (`KEY[N]`) is deliberately
   **not** supported and remains rejected with `E_UNRESOLVABLE_PATH`. Stable
   real-key anchors honour PROD::I4 (Transform Auditability — deleting a sibling
