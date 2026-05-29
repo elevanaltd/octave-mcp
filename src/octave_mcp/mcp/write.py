@@ -1148,6 +1148,30 @@ class WriteTool(BaseTool):
                 errors.append(err)
                 continue
             op_descriptors[key] = (op, payload)
+            # GH#484: Reject MERGE payloads that contain plain nested dict values.
+            # _normalize_value_for_ast wraps any dict as InlineMap unconditionally,
+            # so nested dicts would emit as inline maps (KEY::[K::V]) which fail
+            # strict re-parse with E_NESTED_INLINE_MAP. Strategy S3 (DocumentMutator)
+            # is deferred; the minimum correct fix is rejection at validation time.
+            # I3 (Mirror Constraint): do not silently corrupt the document.
+            if op == "MERGE" and isinstance(payload, dict):
+                nested_dict_keys = [
+                    mk
+                    for mk, mv in payload.items()
+                    if isinstance(mv, dict) and not _is_op_descriptor(mv) and not _is_delete_sentinel(mv)
+                ]
+                if nested_dict_keys:
+                    errors.append(
+                        {
+                            "code": "E_NESTED_DICT_IN_CHANGES_MODE",
+                            "message": (
+                                f"'{key}': nested map values must be written via content_mode + "
+                                f"format_style=preserve (block form). changes-mode dict-merge cannot "
+                                f"emit block nesting. Nested dict keys: {nested_dict_keys}."
+                            ),
+                        }
+                    )
+                    continue
 
         for key in changes:
             # Skip keys that already failed descriptor validation; their target
