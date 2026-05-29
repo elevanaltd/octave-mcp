@@ -1151,7 +1151,10 @@ _W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD = 3
 # Regex matching a top-level (zero-indent or consistent-indent) KEY assignment.
 # Captures the full key name. We restrict to uppercase/underscore keys as those
 # are the primary OCTAVE structural pattern subject to flat-prefix sprawl.
-_W_FLAT_PREFIX_SCALAR_KEY_RE = re.compile(r"^([ \t]*)([A-Z][A-Z0-9_]+)\s*:[:s]")
+# The value-start pattern `:[:\s]` matches either a second `:` (double-colon
+# assignment form `KEY::value`) or whitespace (block-open form `KEY: child`),
+# allowing detection of both sibling-assignment and sibling-block patterns.
+_W_FLAT_PREFIX_SCALAR_KEY_RE = re.compile(r"^([ \t]*)([A-Z][A-Z0-9_]+)\s*:[:\s]")
 
 
 def _w_flat_prefix_scalar_all_prefixes(key: str) -> list[str]:

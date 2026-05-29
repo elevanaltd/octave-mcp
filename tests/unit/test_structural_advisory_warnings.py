@@ -449,3 +449,112 @@ DB_NAME::mydb
         assert result.get("status") != "error"
         errors = result.get("errors", [])
         assert not any(e.get("code") == "W_FLAT_PREFIX_SCALAR" for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# TMG advisory follow-ups (A1–A5 from TMG review)
+# ---------------------------------------------------------------------------
+
+
+class TestInlineArrayRootTMGAdvisory:
+    """TMG A1: tier assertion; TMG A5: long scalar list must NOT fire."""
+
+    def test_warning_tier_is_structural_check(self):
+        """A1: tier field must be STRUCTURAL_CHECK (not silently absent or wrong)."""
+        content = "SECTION::[A::1, B::2, C::3]\n"
+        warnings = _detect_inline_array_root(content)
+        hits = [w for w in warnings if w["code"] == "W_INLINE_ARRAY_ROOT"]
+        assert hits, "Expected W_INLINE_ARRAY_ROOT warning"
+        assert all(w["tier"] == "STRUCTURAL_CHECK" for w in hits)
+
+    def test_long_scalar_list_does_not_fire(self):
+        """A5: a >80-char scalar list (no '::') must NOT trigger — map discriminator guards this."""
+        # Scalars, no K::V syntax. Length > 80 chars.
+        long_scalars = ", ".join([f"item_{i:03d}" for i in range(15)])
+        content = f"LONG_ITEMS::[{long_scalars}]\n"
+        assert len(long_scalars) > 80, "Fixture must be > 80 chars to exercise length branch"
+        warnings = _detect_inline_array_root(content)
+        codes = [w["code"] for w in warnings]
+        assert "W_INLINE_ARRAY_ROOT" not in codes
+
+
+class TestFlatPrefixScalarTMGAdvisory:
+    """TMG A1/A2/A3/A4 follow-ups for W_FLAT_PREFIX_SCALAR."""
+
+    def test_warning_tier_is_structural_check(self):
+        """A1: tier field must be STRUCTURAL_CHECK."""
+        content = (
+            "DB_HOST::localhost\n"
+            "DB_PORT::5432\n"
+            "DB_NAME::mydb\n"
+        )
+        warnings = _detect_flat_prefix_scalar(content)
+        hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
+        assert hits, "Expected W_FLAT_PREFIX_SCALAR warning"
+        assert all(w["tier"] == "STRUCTURAL_CHECK" for w in hits)
+
+    def test_dedup_emits_exactly_one_warning_per_group(self):
+        """A2: deduplication logic — NODE_RUNTIME_* group must emit exactly one warning.
+
+        Without dedup, the multi-prefix algorithm could emit both under
+        prefix 'NODE' and prefix 'NODE_RUNTIME' for the same key set.
+        """
+        content = (
+            "NODE_RUNTIME_FLOOR::3.12\n"
+            "NODE_RUNTIME_PIN_SITES::[a, b]\n"
+            "NODE_RUNTIME_WHY::performance\n"
+        )
+        warnings = _detect_flat_prefix_scalar(content)
+        hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
+        assert len(hits) == 1, (
+            f"Expected exactly 1 W_FLAT_PREFIX_SCALAR warning for NODE_RUNTIME_* group, "
+            f"got {len(hits)}: {[w['prefix'] for w in hits]}"
+        )
+
+    def test_mixed_indent_keys_not_grouped_across_indents(self):
+        """A3: sibling-by-indentation — same prefix at different indent levels must NOT be grouped.
+
+        DB_HOST at indent 0 and indented DB_HOST::... at indent 2 are not siblings.
+        """
+        content = (
+            "DB_HOST::localhost\n"
+            "DB_PORT::5432\n"
+            "SECTION:\n"
+            "  DB_NAME::inner\n"
+            "  DB_USER::inner_user\n"
+            "  DB_PASS::inner_pass\n"
+        )
+        warnings = _detect_flat_prefix_scalar(content)
+        hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
+        # Top-level DB_HOST + DB_PORT = 2 only (below threshold).
+        # Indented DB_NAME + DB_USER + DB_PASS = 3 (triggers for indented group).
+        # They must NOT be merged into one cross-indent group of 5.
+        for hit in hits:
+            key_list = hit["keys"]
+            # No warning should contain keys from BOTH indent levels.
+            has_top_level = any(k in ("DB_HOST", "DB_PORT") for k in key_list)
+            has_indented = any(k in ("DB_NAME", "DB_USER", "DB_PASS") for k in key_list)
+            assert not (has_top_level and has_indented), (
+                f"Cross-indent grouping detected: {key_list}"
+            )
+
+    def test_block_form_siblings_detected(self):
+        """A4: block-form siblings (KEY: child) should also trigger after regex fix.
+
+        After fixing the [:s] typo to [:\\s], a 'KEY: ' (block-open with space)
+        form is also matched. Three such siblings at the same level should trigger.
+        """
+        # Block-open form: DB_HOST: followed by value on next line would be
+        # `DB_HOST:\n  value`, but at the key-scan level we match the opener line.
+        # The simplest form that exercises the \\s branch: `KEY: value` (space after colon).
+        content = (
+            "DB_HOST: localhost\n"
+            "DB_PORT: 5432\n"
+            "DB_NAME: mydb\n"
+        )
+        warnings = _detect_flat_prefix_scalar(content)
+        codes = [w["code"] for w in warnings]
+        assert "W_FLAT_PREFIX_SCALAR" in codes, (
+            "Block-form (KEY: value with space) siblings must also trigger "
+            "W_FLAT_PREFIX_SCALAR after regex fix."
+        )
