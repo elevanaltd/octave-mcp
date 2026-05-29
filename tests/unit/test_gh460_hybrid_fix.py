@@ -283,3 +283,128 @@ class TestCaseALiteralZonePreservation:
         assert result["status"] == "success", result.get("errors")
         assert "new" in written
         assert "```" not in written  # no fence invented for a non-literal target
+
+
+class TestCaseAMergePreservation:
+    """REWORK B1 (CIV): ``$op MERGE`` into a literal-zone child preserves fence.
+
+    The MERGE-into-EXISTING-child replacement sites (Block child + Section
+    child) previously called plain ``_normalize_value_for_ast``, silently
+    downgrading a fenced literal zone to a quoted scalar — the exact PROD::I1
+    SYNTACTIC_FIDELITY regression Case A claims to fix, reachable through a
+    different op.
+    """
+
+    @pytest.mark.asyncio
+    async def test_merge_block_child_literal_zone_keeps_fence(self) -> None:
+        """MERGE into a Block's fenced child preserves the fence form."""
+        doc = "===D===\nPRIMER:\n  OPERATORS::\n  ```\n  old content\n  ```\n===END===\n"
+        result, written = await _write_and_read(
+            doc, {"PRIMER": {"$op": "MERGE", "value": {"OPERATORS": "new content"}}}
+        )
+        assert result["status"] == "success", result.get("errors")
+        assert "```" in written, f"fence form lost on MERGE block child:\n{written}"
+        assert 'OPERATORS::"' not in written, f"fence downgraded to scalar:\n{written}"
+        assert "new content" in written
+        assert "old content" not in written
+
+    @pytest.mark.asyncio
+    async def test_merge_section_child_literal_zone_keeps_fence(self) -> None:
+        """MERGE into a Section's fenced child preserves the fence form."""
+        doc = "===D===\n§3::PRIMER\n  OPERATORS::\n  ```\n  old content\n  ```\n===END===\n"
+        result, written = await _write_and_read(
+            doc, {"PRIMER": {"$op": "MERGE", "value": {"OPERATORS": "new content"}}}
+        )
+        assert result["status"] == "success", result.get("errors")
+        assert "```" in written, f"fence form lost on MERGE section child:\n{written}"
+        assert 'OPERATORS::"' not in written, f"fence downgraded to scalar:\n{written}"
+        assert "new content" in written
+        assert "old content" not in written
+
+    @pytest.mark.asyncio
+    async def test_merge_block_new_child_unaffected(self) -> None:
+        """Sanity: MERGE that ADDS a new (absent) child is a plain scalar, no fence."""
+        doc = "===D===\nPRIMER:\n  OPERATORS::\n  ```\n  old\n  ```\n===END===\n"
+        result, written = await _write_and_read(
+            doc, {"PRIMER": {"$op": "MERGE", "value": {"NEW_KEY": "plain value"}}}
+        )
+        assert result["status"] == "success", result.get("errors")
+        assert "plain value" in written
+        # The pre-existing fenced child is untouched; no fence invented for NEW_KEY.
+        assert "NEW_KEY::" in written
+        assert "```" in written  # the original OPERATORS fence still present
+
+
+# Five immutables, each followed by a sibling RATIONALE (flat top-level form),
+# reused for the anchored-DELETE coverage below.
+_DOC_TWO_RATIONALE_TOP = (
+    "===NS===\n"
+    "I1::FIDELITY\n"
+    'RATIONALE::"r1"\n'
+    "I2::ABSENCE\n"
+    'RATIONALE::"r2"\n'
+    "===END===\n"
+)
+
+_DOC_TWO_RATIONALE_SEC = (
+    "===NS===\n"
+    "§1::IMMUTABLES\n"
+    "  I1::FIDELITY\n"
+    '  RATIONALE::"r1"\n'
+    "  I2::ABSENCE\n"
+    '  RATIONALE::"r2"\n'
+    "===END===\n"
+)
+
+
+class TestCaseBAnchoredDelete:
+    """REWORK B2 (CRS P1 + CIV): anchored-path ``$op DELETE`` must mutate.
+
+    Decision taken: OPTION (a) — SUPPORT anchored DELETE. The bare-DELETE
+    elif branch is gated so a resolvable anchored path falls through to the
+    anchored handler, which deletes the resolved sibling. Contract: NEVER
+    silent-success for a transform that did not happen.
+    """
+
+    @pytest.mark.asyncio
+    async def test_anchored_delete_top_level_removes_resolved_sibling(self) -> None:
+        """ANCHOR/KEY DELETE removes the RATIONALE following I2, not the first."""
+        result, written = await _write_and_read(
+            _DOC_TWO_RATIONALE_TOP, {"I2/RATIONALE": {"$op": "DELETE"}}
+        )
+        assert result["status"] == "success", result.get("errors")
+        # I2's RATIONALE removed; I1's RATIONALE survives.
+        assert '"r2"' not in written, f"I2 RATIONALE not deleted:\n{written}"
+        assert '"r1"' in written, f"I1 RATIONALE wrongly deleted:\n{written}"
+        # Exactly one RATIONALE remains.
+        assert written.count("RATIONALE::") == 1, f"expected exactly one RATIONALE:\n{written}"
+
+    @pytest.mark.asyncio
+    async def test_anchored_delete_section_removes_resolved_sibling(self) -> None:
+        """ANCHOR/KEY DELETE works on siblings nested inside a section."""
+        result, written = await _write_and_read(
+            _DOC_TWO_RATIONALE_SEC, {"I2/RATIONALE": {"$op": "DELETE"}}
+        )
+        assert result["status"] == "success", result.get("errors")
+        assert '"r2"' not in written, f"I2 RATIONALE not deleted:\n{written}"
+        assert "r1" in written, f"I1 RATIONALE wrongly deleted:\n{written}"
+        assert written.count("RATIONALE::") == 1, f"expected exactly one RATIONALE:\n{written}"
+
+    @pytest.mark.asyncio
+    async def test_anchored_delete_unresolvable_still_errors(self) -> None:
+        """Anchored DELETE on a missing anchor errors, never silent-success."""
+        result, _ = await _write_and_read(
+            _DOC_TWO_RATIONALE_TOP, {"I9/RATIONALE": {"$op": "DELETE"}}
+        )
+        assert result["status"] != "success"
+        codes = {e.get("code") for e in result.get("errors", [])}
+        assert "E_UNRESOLVABLE_PATH" in codes, result.get("errors")
+
+    @pytest.mark.asyncio
+    async def test_bare_delete_still_removes_top_level_key(self) -> None:
+        """Backward-compat: a bare (non-anchored) DELETE still removes its key."""
+        doc = '===D===\nKEEP::"k"\nDROP::"d"\n===END===\n'
+        result, written = await _write_and_read(doc, {"DROP": {"$op": "DELETE"}})
+        assert result["status"] == "success", result.get("errors")
+        assert "DROP::" not in written
+        assert "KEEP::" in written
