@@ -9,10 +9,14 @@ Thank you for your interest in contributing!
 git clone https://github.com/elevanaltd/octave-mcp.git
 cd octave-mcp
 uv venv && source .venv/bin/activate
-uv pip install -e ".[dev]"
+uv sync --all-extras   # installs runtime deps + http extra + dev dependency-group
 ```
 
-See [docs/guides/development-setup.md](docs/guides/development-setup.md) for detailed setup instructions.
+`uv sync` installs the `dev` dependency-group by default, so the toolchain
+(`ruff`, `black`, `pytest-cov`, `mypy`, coverage HTML) is always present in
+`.venv/bin`. Run quality gates via `.venv/bin/...` rather than system binaries.
+
+See [docs/guides/development-setup.md](docs/guides/development-setup.md) for detailed setup instructions (including how to verify/repair a `.venv` missing dev tooling — issue #462).
 
 ## Testing
 

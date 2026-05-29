@@ -26,6 +26,20 @@ which python      # Should point to .venv/bin/python
 
 ### 2. Install Package in Development Mode
 
+The **canonical** command (installs runtime deps, all extras, and the dev
+dependency-group in one step) is:
+
+```bash
+uv sync --all-extras
+```
+
+`uv sync` installs the `[dependency-groups]` `dev` group **by default** (no flag
+needed); `--all-extras` additionally pulls the `http` extra. Either way the dev
+toolchain (`ruff`, `black`, `pytest-cov`, `mypy`, coverage HTML files) lands in
+`.venv/bin`.
+
+If you are not using `uv`, the pip equivalent is:
+
 ```bash
 pip install -e ".[dev]"
 ```
@@ -33,6 +47,26 @@ pip install -e ".[dev]"
 This installs:
 - **Core**: `mcp>=1.0.0`, `click>=8.0.0`, `pydantic>=2.0.0`
 - **Development**: `pytest`, `pytest-cov`, `mypy`, `ruff`, `black`, `hypothesis`
+
+#### Verifying / repairing the dev toolchain (issue #462)
+
+A worktree `.venv` can end up with runtime dependencies but **without** the dev
+tooling if a sync was interrupted or run without dev deps (the symptom in
+[#462](https://github.com/elevanaltd/octave-mcp/issues/462): missing
+`.venv/bin/ruff`, `.venv/bin/black`, and the coverage HTML toolchain). Verify
+and repair in place:
+
+```bash
+# Verify the dev toolchain is present in THIS venv (not the system one)
+ls .venv/bin/ruff .venv/bin/black .venv/bin/coverage
+
+# Repair: re-run the canonical sync (idempotent, safe to repeat)
+uv sync --all-extras
+```
+
+Always invoke quality gates through `.venv/bin/...` (e.g.
+`.venv/bin/python -m pytest`, `.venv/bin/ruff check src`) so you exercise the
+project venv rather than a system-installed `ruff`/`black`.
 
 ### 3. Verify Installation
 
