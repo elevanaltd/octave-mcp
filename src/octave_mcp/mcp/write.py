@@ -44,6 +44,8 @@ from octave_mcp.mcp.compile_grammar import USAGE_HINTS
 from octave_mcp.mcp.write_detection import (
     _auto_quote_section_refs_in_values,
     _detect_annotation_too_long,
+    _detect_flat_prefix_scalar,
+    _detect_inline_array_root,
     _detect_snake_case_blob,
     _detect_unquoted_section_in_values,
 )
@@ -1146,6 +1148,32 @@ class WriteTool(BaseTool):
                 errors.append(err)
                 continue
             op_descriptors[key] = (op, payload)
+            # GH#484: Reject MERGE payloads that contain non-DELETE-sentinel dict
+            # values. The MERGE handler in _apply_changes only recognises
+            # _is_delete_sentinel as a special sub-operation; every other dict is
+            # passed to _normalize_value_for_ast which wraps it as InlineMap. A
+            # plain nested dict produces nested InlineMap → E_NESTED_INLINE_MAP on
+            # emit. A non-DELETE op-descriptor dict (e.g. $op:APPEND) produces a
+            # flat InlineMap (valid OCTAVE) but with wrong semantics — the caller
+            # almost certainly intended a sub-operation, not a literal map value.
+            # Reject both cases so failures are loud, not silent.
+            # I3 (Mirror Constraint): do not silently corrupt the document.
+            if op == "MERGE" and isinstance(payload, dict):
+                nested_dict_keys = [
+                    mk for mk, mv in payload.items() if isinstance(mv, dict) and not _is_delete_sentinel(mv)
+                ]
+                if nested_dict_keys:
+                    errors.append(
+                        {
+                            "code": "E_NESTED_DICT_IN_MERGE_PAYLOAD",
+                            "message": (
+                                f"'{key}': nested map values must be written via the content parameter "
+                                f"with format_style=preserve (block form). changes-mode MERGE cannot "
+                                f"emit block nesting. Nested dict keys: {nested_dict_keys}."
+                            ),
+                        }
+                    )
+                    continue
 
         for key in changes:
             # Skip keys that already failed descriptor validation; their target
@@ -2837,6 +2865,16 @@ class WriteTool(BaseTool):
             # Refined contract per operator comment 4549996376. v1 ADVISORY only.
             snake_case_blob_warnings = _detect_snake_case_blob(parse_input)
             corrections.extend(snake_case_blob_warnings)
+
+            # Structural advisory: map-as-inline-array root pattern.
+            # Advisory only — non-blocking, routed to corrections.
+            inline_array_root_warnings = _detect_inline_array_root(parse_input)
+            corrections.extend(inline_array_root_warnings)
+
+            # Structural advisory: flat sibling keys sharing a redundant prefix.
+            # Advisory only — non-blocking, routed to corrections.
+            flat_prefix_warnings = _detect_flat_prefix_scalar(parse_input)
+            corrections.extend(flat_prefix_warnings)
 
             # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)
