@@ -972,38 +972,138 @@ _W_INLINE_ARRAY_ROOT_INLINE_RE = re.compile(r"^[ \t]*[A-Za-z_][A-Za-z0-9_]*\s*::
 _W_INLINE_ARRAY_ROOT_BLOCK_RE = re.compile(r"^[ \t]*[A-Za-z_][A-Za-z0-9_]*\s*:\s*\[")
 
 
-def _w_inline_array_root_array_is_map(array_content: str) -> bool:
-    """Return True if *array_content* (the text between [ and ]) contains
-    K::V map-entry elements.
+def _w_inline_array_root_collect_array(
+    lines: list[str],
+    start_line_idx: int,
+    bracket_col: int,
+    literal_zone_lines: set[int],
+) -> tuple[str, int]:
+    """Collect the full text between the opening ``[`` and its matching ``]``.
 
-    The discriminator: at least one element must contain ``::`` in an
-    identifier-value position (not just a string value).
+    Tracks bracket depth while respecting quoted strings and ``//`` comments so
+    that brackets inside those protected zones are treated as text, not syntax
+    (CRS finding 2: unprotected bracket scan).
+
+    Args:
+        lines: All lines of the document.
+        start_line_idx: Zero-based index of the line containing the opening ``[``.
+        bracket_col: Column index of the opening ``[`` in that line.
+        literal_zone_lines: 1-based line numbers inside literal zones (skipped).
+
+    Returns:
+        Tuple of (array_content_str, last_scan_line_idx).  ``array_content_str``
+        is the raw text between ``[`` and ``]``; ``last_scan_line_idx`` is the
+        zero-based index of the line on which the closing ``]`` was found (or
+        ``start_line_idx`` if not found).
     """
-    return bool(_W_INLINE_ARRAY_ROOT_ENTRY_RE.search(array_content))
-
-
-def _w_inline_array_root_entry_count(array_content: str) -> int:
-    """Count the number of top-level comma-separated elements in *array_content*."""
-    # A simple heuristic: count commas at depth 0 plus 1.
+    chunks: list[str] = []
     depth = 0
-    commas = 0
     in_quote = False
-    for ch in array_content:
-        if ch == '"' and not in_quote:
-            in_quote = True
-        elif ch == '"' and in_quote:
-            in_quote = False
-        elif not in_quote:
+    found_close = False
+    scan_idx = start_line_idx
+
+    while scan_idx < len(lines):
+        scan_line = lines[scan_idx]
+        line_num = scan_idx + 1
+        # Skip literal zone lines mid-array (except the opener line itself,
+        # which was already checked before calling this function).
+        if scan_idx != start_line_idx and line_num in literal_zone_lines:
+            scan_idx += 1
+            continue
+
+        col_start = bracket_col if scan_idx == start_line_idx else 0
+        line_text = scan_line[col_start:]
+        i = 0
+        while i < len(line_text):
+            ch = line_text[i]
+            if in_quote:
+                if ch == '"':
+                    in_quote = False
+                chunks.append(ch)
+                i += 1
+                continue
+            if ch == '"':
+                in_quote = True
+                chunks.append(ch)
+                i += 1
+                continue
+            if ch == "/" and i + 1 < len(line_text) and line_text[i + 1] == "/" and depth <= 1:
+                # OCTAVE line comment at the outermost array level; skip rest of line.
+                break
             if ch == "[":
                 depth += 1
+                if depth == 1:
+                    # Opening bracket — skip it, don't include in content.
+                    i += 1
+                    continue
             elif ch == "]":
                 depth -= 1
-            elif ch == "," and depth == 0:
-                commas += 1
-    stripped = array_content.strip()
-    if not stripped:
-        return 0
-    return commas + 1
+                if depth == 0:
+                    found_close = True
+                    break
+            if depth > 0:
+                chunks.append(ch)
+            i += 1
+
+        if found_close:
+            break
+        if depth > 0 and scan_idx < len(lines) - 1:
+            chunks.append("\n")
+        scan_idx += 1
+
+    return "".join(chunks), scan_idx if found_close else start_line_idx
+
+
+def _w_inline_array_root_count_map_entries(array_content: str) -> int:
+    """Count top-level elements that are K::V map entries (not bare scalars).
+
+    Only top-level (depth-0) comma-separated tokens whose stripped form starts
+    with an identifier followed by ``::`` are counted as map entries. Plain
+    scalars and quoted strings are excluded (CRS finding 3: should count only
+    map-entry elements, not total elements).
+
+    Args:
+        array_content: Raw text between ``[`` and ``]`` of the inline array.
+
+    Returns:
+        Number of top-level map-entry elements.
+    """
+    # Split into top-level comma-separated segments respecting depth and quotes.
+    segments: list[str] = []
+    current: list[str] = []
+    depth = 0
+    in_quote = False
+    for ch in array_content:
+        if in_quote:
+            if ch == '"':
+                in_quote = False
+            current.append(ch)
+        elif ch == '"':
+            in_quote = True
+            current.append(ch)
+        elif ch == "[":
+            depth += 1
+            current.append(ch)
+        elif ch == "]":
+            depth -= 1
+            current.append(ch)
+        elif ch == "," and depth == 0:
+            segments.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    if current or array_content.strip():
+        segments.append("".join(current))
+
+    map_entry_count = 0
+    for seg in segments:
+        stripped = seg.strip()
+        if not stripped:
+            continue
+        # A map entry starts with an unquoted identifier followed by ``::``
+        if _W_INLINE_ARRAY_ROOT_ENTRY_RE.match("," + stripped):
+            map_entry_count += 1
+    return map_entry_count
 
 
 def _detect_inline_array_root(content: str) -> list[dict[str, Any]]:
@@ -1011,15 +1111,17 @@ def _detect_inline_array_root(content: str) -> list[dict[str, Any]]:
 
     Fires when a key's value is an inline array ``[...]`` whose elements are
     themselves K::V map-entries (map-as-inline-array), AND EITHER:
-      * entry count >= 3, OR
-      * serialized length > ``_W_INLINE_ARRAY_ROOT_LENGTH_THRESHOLD``
+      * map-entry element count >= 3, OR
+      * serialized array length > ``_W_INLINE_ARRAY_ROOT_LENGTH_THRESHOLD``
+        (with at least one map-entry element present)
 
     Does NOT fire on:
       * Legitimate scalar/string lists: IMMUTABLES::[a, b, c]
       * Content inside fenced literal zones (Zone 3)
       * Content inside // comments
+      * Arrays where ``::`` appears only inside quoted strings
 
-    Discriminator: elements contain ``::`` map syntax.
+    Discriminator: top-level (unquoted) elements contain ``::`` map syntax.
 
     Severity: ADVISORY only (non-blocking, surfaced in warnings/corrections).
 
@@ -1033,11 +1135,6 @@ def _detect_inline_array_root(content: str) -> list[dict[str, Any]]:
 
     literal_zone_lines = _build_literal_zone_line_set(content)
     lines = content.split("\n")
-
-    # Build cumulative offsets for line-based tracking.
-    line_offsets: list[int] = [0]
-    for ln in lines:
-        line_offsets.append(line_offsets[-1] + len(ln) + 1)
 
     i = 0
     while i < len(lines):
@@ -1067,50 +1164,22 @@ def _detect_inline_array_root(content: str) -> list[dict[str, Any]]:
 
         # Locate the opening ``[`` position in the line.
         bracket_pos = raw_line.index("[", opener_match.start())
-        # Collect the full array content by walking forward until balanced.
-        full_array = ""
-        depth = 0
-        found_close = False
-        scan_line_idx = i
-        while scan_line_idx < len(lines):
-            scan_line = lines[scan_line_idx]
-            # Skip literal zone inside multi-line array collection.
-            if scan_line_idx + 1 in literal_zone_lines and scan_line_idx != i:
-                scan_line_idx += 1
-                continue
-            start_col = bracket_pos if scan_line_idx == i else 0
-            for _col, ch in enumerate(scan_line[start_col:], start=start_col):
-                if ch == "[":
-                    depth += 1
-                    if depth == 1:
-                        continue  # skip the opening bracket itself
-                elif ch == "]":
-                    depth -= 1
-                    if depth == 0:
-                        found_close = True
-                        break
-                if depth > 0:
-                    full_array += ch
-            if found_close:
-                break
-            if depth > 0 and scan_line_idx < len(lines) - 1:
-                full_array += "\n"
-            scan_line_idx += 1
 
-        if not found_close:
-            i += 1
+        # Collect the full array content with quote/comment-aware scanning.
+        full_array, last_scan_idx = _w_inline_array_root_collect_array(lines, i, bracket_pos, literal_zone_lines)
+
+        if not full_array and not full_array.strip():
+            # Empty or unclosed array — skip.
+            i = last_scan_idx + 1
             continue
 
-        # Discriminate: does the array content contain K::V map entries?
-        if not _w_inline_array_root_array_is_map(full_array):
-            i += 1
-            continue
-
-        entry_count = _w_inline_array_root_entry_count(full_array)
+        # Discriminate: count only unquoted K::V map-entry elements.
+        map_entry_count = _w_inline_array_root_count_map_entries(full_array)
         array_length = len(full_array)
 
-        if entry_count >= _W_INLINE_ARRAY_ROOT_ENTRY_THRESHOLD or array_length > _W_INLINE_ARRAY_ROOT_LENGTH_THRESHOLD:
-            # Extract the key name from the line.
+        if map_entry_count >= _W_INLINE_ARRAY_ROOT_ENTRY_THRESHOLD or (
+            map_entry_count >= 1 and array_length > _W_INLINE_ARRAY_ROOT_LENGTH_THRESHOLD
+        ):
             key_match = re.match(r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)", raw_line)
             key_name = key_match.group(1) if key_match else "<unknown>"
             warnings_out.append(
@@ -1120,20 +1189,21 @@ def _detect_inline_array_root(content: str) -> list[dict[str, Any]]:
                     "discipline": "STRUCTURAL_ADVISORY",
                     "message": (
                         f"W_INLINE_ARRAY_ROOT at line {line_num}: key '{key_name}' "
-                        f"has {entry_count} map-entry elements authored as an "
+                        f"has {map_entry_count} map-entry elements authored as an "
                         f"inline-array root; prefer BLOCK form (KEY: + indented "
                         f"children). Inline arrays are for scalar lists, not "
                         f"maps-of-maps."
                     ),
                     "line": line_num,
                     "key": key_name,
-                    "entry_count": entry_count,
+                    "entry_count": map_entry_count,
                     "safe": True,
                     "semantics_changed": False,
                 }
             )
 
-        i += 1
+        # Advance past the scanned lines (efficiency fix: don't re-scan).
+        i = last_scan_idx + 1
 
     return warnings_out
 
@@ -1181,13 +1251,23 @@ def _detect_flat_prefix_scalar(content: str) -> list[dict[str, Any]]:
     """Detect sibling keys that share a redundant underscore prefix (W_FLAT_PREFIX_SCALAR).
 
     Heuristic:
-      1. Extract all key assignment lines at the same indentation level
-         (excluding literal zones and comment lines).
-      2. For each candidate prefix (all underscore-delimited prefixes of each
-         key), count how many sibling keys share that prefix.
-      3. For groups with >= 3 members at the same indentation level, emit an
-         advisory warning suggesting nesting under a ``{PREFIX}:`` block parent.
+      1. Walk all lines, collecting key assignment lines while tracking the
+         current parent block context.  A line at a *shallower* indentation than
+         the current context (other than blank lines and comment lines) resets
+         the sibling group — keys at different indentation levels are not siblings
+         even if they share the same indent string (CRS finding 1: parent-block
+         context must be tracked to avoid false grouping).
+      2. Within each contiguous sibling group, for each candidate prefix (all
+         underscore-delimited prefixes of each key), count how many keys share
+         that prefix.
+      3. For groups with >= 3 members, emit an advisory warning suggesting
+         nesting under a ``{PREFIX}:`` block parent.
       4. Report the longest qualifying prefix to give the most actionable advice.
+
+    v1 scope note: detection operates on lines collected within the same
+    parent-block context (same indentation run).  Keys scattered across
+    different parent blocks at the same indent level are NOT grouped — this
+    prevents false positives when the same prefix appears in unrelated sections.
 
     Severity: ADVISORY only (non-blocking).
 
@@ -1199,11 +1279,68 @@ def _detect_flat_prefix_scalar(content: str) -> list[dict[str, Any]]:
     """
     warnings_out: list[dict[str, Any]] = []
     literal_zone_lines = _build_literal_zone_line_set(content)
-
     lines = content.split("\n")
 
-    # Collect (indent_level, key_name, line_num) tuples.
-    entries: list[tuple[str, str, int]] = []
+    from collections import defaultdict
+
+    def _process_sibling_group(group: list[tuple[str, int]]) -> None:
+        """Analyse one contiguous sibling group and emit warnings as appropriate."""
+        if len(group) < _W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD:
+            return
+
+        prefix_groups_local: dict[str, list[tuple[str, int]]] = defaultdict(list)
+        for key_name, line_num in group:
+            for prefix in _w_flat_prefix_scalar_all_prefixes(key_name):
+                prefix_groups_local[prefix].append((key_name, line_num))
+
+        # Deduplicate: for each unique key-set, keep only the longest prefix.
+        best_prefix_for_keyset: dict[frozenset[str], str] = {}
+        for prefix, members in prefix_groups_local.items():
+            if len(members) < _W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD:
+                continue
+            key_set = frozenset(k for k, _ in members)
+            existing = best_prefix_for_keyset.get(key_set)
+            if existing is None or len(prefix) > len(existing):
+                best_prefix_for_keyset[key_set] = prefix
+
+        for _key_set, best_prefix in best_prefix_for_keyset.items():
+            members = prefix_groups_local[best_prefix]
+            seen: set[str] = set()
+            unique: list[tuple[str, int]] = []
+            for k, ln in members:
+                if k not in seen:
+                    seen.add(k)
+                    unique.append((k, ln))
+            if len(unique) < _W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD:
+                continue
+            first_line = unique[0][1]
+            key_names = [k for k, _ in unique]
+            warnings_out.append(
+                {
+                    "code": W_FLAT_PREFIX_SCALAR,
+                    "tier": "STRUCTURAL_CHECK",
+                    "discipline": "STRUCTURAL_ADVISORY",
+                    "message": (
+                        f"W_FLAT_PREFIX_SCALAR at line {first_line}: sibling keys "
+                        f"share prefix '{best_prefix}_'; nest under '{best_prefix}:' "
+                        f"block to drop the redundant prefix (key-token saving + "
+                        f"better attention inheritance). Keys: {', '.join(key_names)}"
+                    ),
+                    "line": first_line,
+                    "prefix": best_prefix,
+                    "keys": key_names,
+                    "safe": True,
+                    "semantics_changed": False,
+                }
+            )
+
+    # Walk lines, tracking the current sibling group by a (indent, group_id)
+    # context.  A new parent block (a line at shallower or equal indentation
+    # that is not a key-assignment itself) closes the current sibling group.
+    # We use a simple monotonic group counter — each non-blank, non-comment
+    # line at a shallower indent than the active siblings starts a new group.
+    current_indent: str | None = None
+    current_group: list[tuple[str, int]] = []
 
     for line_idx, raw_line in enumerate(lines):
         line_num = line_idx + 1
@@ -1212,83 +1349,44 @@ def _detect_flat_prefix_scalar(content: str) -> list[dict[str, Any]]:
         if line_num in literal_zone_lines:
             continue
 
-        # Skip comment lines.
         stripped = raw_line.lstrip()
+
+        # Skip blank lines.
+        if not stripped:
+            continue
+
+        # Skip comment lines.
         if stripped.startswith("//"):
             continue
 
         m = _W_FLAT_PREFIX_SCALAR_KEY_RE.match(raw_line)
-        if not m:
-            continue
 
-        indent = m.group(1)
-        key_name = m.group(2)
-        entries.append((indent, key_name, line_num))
+        if m:
+            indent = m.group(1)
+            key_name = m.group(2)
 
-    if not entries:
-        return warnings_out
+            if current_indent is None:
+                # First key — start a new group.
+                current_indent = indent
+                current_group = [(key_name, line_num)]
+            elif indent == current_indent:
+                # Same indentation — same sibling group.
+                current_group.append((key_name, line_num))
+            else:
+                # Different indentation — close the current group and start fresh.
+                _process_sibling_group(current_group)
+                current_indent = indent
+                current_group = [(key_name, line_num)]
+        else:
+            # Non-key line at any indentation — if it is shallower than or equal
+            # to the current group's indent, it closes the sibling context.
+            this_indent = raw_line[: len(raw_line) - len(stripped)]
+            if current_indent is not None and len(this_indent) <= len(current_indent):
+                _process_sibling_group(current_group)
+                current_indent = None
+                current_group = []
 
-    from collections import defaultdict
-
-    # Build a mapping: (indent, prefix) -> list of (key_name, line_num)
-    # A key contributes to every prefix group it belongs to.
-    prefix_groups: dict[tuple[str, str], list[tuple[str, int]]] = defaultdict(list)
-
-    for indent, key_name, line_num in entries:
-        for prefix in _w_flat_prefix_scalar_all_prefixes(key_name):
-            prefix_groups[(indent, prefix)].append((key_name, line_num))
-
-    # Among qualifying groups (size >= threshold), report the LONGEST prefix
-    # for each key set — this gives the most actionable suggestion.
-    # To avoid double-reporting a set of keys under both "DB" and "DB_HOST"
-    # when the intent is to flag "DB", we deduplicate by the key-set fingerprint
-    # and keep only the longest prefix per unique key set.
-    best_prefix_for_keyset: dict[tuple[str, frozenset[str]], str] = {}
-
-    for (indent, prefix), members in prefix_groups.items():
-        if len(members) < _W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD:
-            continue
-        key_set = frozenset(k for k, _ in members)
-        group_id = (indent, key_set)
-        existing = best_prefix_for_keyset.get(group_id)
-        if existing is None or len(prefix) > len(existing):
-            best_prefix_for_keyset[group_id] = prefix
-
-    # Emit one warning per unique (indent, key_set) using the best (longest) prefix.
-    for (indent, _key_set), best_prefix in best_prefix_for_keyset.items():
-        # Retrieve the members for this (indent, best_prefix) group.
-        members = prefix_groups[(indent, best_prefix)]
-        # De-duplicate member list (a key may appear multiple times if it
-        # contributes to both shorter and longer prefix groups).
-        seen_keys: set[str] = set()
-        unique_members: list[tuple[str, int]] = []
-        for k, ln in members:
-            if k not in seen_keys:
-                seen_keys.add(k)
-                unique_members.append((k, ln))
-
-        if len(unique_members) < _W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD:
-            continue
-
-        first_line = unique_members[0][1]
-        key_names = [k for k, _ in unique_members]
-        warnings_out.append(
-            {
-                "code": W_FLAT_PREFIX_SCALAR,
-                "tier": "STRUCTURAL_CHECK",
-                "discipline": "STRUCTURAL_ADVISORY",
-                "message": (
-                    f"W_FLAT_PREFIX_SCALAR at line {first_line}: sibling keys "
-                    f"share prefix '{best_prefix}_'; nest under '{best_prefix}:' "
-                    f"block to drop the redundant prefix (key-token saving + "
-                    f"better attention inheritance). Keys: {', '.join(key_names)}"
-                ),
-                "line": first_line,
-                "prefix": best_prefix,
-                "keys": key_names,
-                "safe": True,
-                "semantics_changed": False,
-            }
-        )
+    # Flush the last group.
+    _process_sibling_group(current_group)
 
     return warnings_out

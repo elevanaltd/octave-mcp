@@ -558,3 +558,68 @@ class TestFlatPrefixScalarTMGAdvisory:
             "Block-form (KEY: value with space) siblings must also trigger "
             "W_FLAT_PREFIX_SCALAR after regex fix."
         )
+
+    def test_no_false_positive_across_different_parent_blocks(self):
+        """CRS-1: Keys in different parent blocks must NOT be grouped as siblings.
+
+        SECTION_A:\n  DB_HOST and SECTION_B:\n  DB_NAME are NOT siblings even if
+        both are indented equally — they have different parents.
+        """
+        content = (
+            "SECTION_A:\n"
+            "  DB_HOST::localhost\n"
+            "  DB_PORT::5432\n"
+            "SECTION_B:\n"
+            "  DB_NAME::mydb\n"
+        )
+        warnings = _detect_flat_prefix_scalar(content)
+        hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
+        # DB_HOST + DB_PORT = 2 (below threshold in SECTION_A group).
+        # DB_NAME = 1 (only key in SECTION_B group).
+        # No cross-block group of 3+ should form.
+        for hit in hits:
+            key_list = hit["keys"]
+            has_section_a = any(k in ("DB_HOST", "DB_PORT") for k in key_list)
+            has_section_b = any(k in ("DB_NAME",) for k in key_list)
+            assert not (has_section_a and has_section_b), (
+                f"Cross-parent-block grouping detected: {key_list}"
+            )
+
+
+class TestInlineArrayRootCRSAdvisory:
+    """CRS advisory follow-ups for W_INLINE_ARRAY_ROOT."""
+
+    def test_no_false_positive_when_double_colon_in_quoted_string(self):
+        """CRS-2: '::' appearing only inside a quoted string element must NOT trigger.
+
+        SECTION::[\"note, A::x\"] — the '::' is inside a quote, not a map entry.
+        """
+        # Only one quoted scalar element containing '::'; no unquoted K::V entries.
+        content = 'SECTION::["note with A::x embedded"]\n'
+        warnings = _detect_inline_array_root(content)
+        codes = [w["code"] for w in warnings]
+        assert "W_INLINE_ARRAY_ROOT" not in codes
+
+    def test_no_false_positive_mixed_scalar_map_below_threshold(self):
+        """CRS-3: Mixed array with 1 map entry and 2 scalars must NOT trigger.
+
+        Entry count threshold (>= 3 map entries) guards against firing when only
+        one element is a K::V pair and the rest are scalars.
+        """
+        # One map entry + two scalars = 1 map-entry, below threshold of 3.
+        content = "SECTION::[A::1, scalar_b, scalar_c]\n"
+        warnings = _detect_inline_array_root(content)
+        codes = [w["code"] for w in warnings]
+        assert "W_INLINE_ARRAY_ROOT" not in codes
+
+    def test_no_false_positive_closing_bracket_in_quoted_value(self):
+        """CRS-2: A ']' inside a quoted string value must NOT close the array scan early.
+
+        Without quote-protection, SECTION::[A::'foo]', B::2, C::3] would close
+        prematurely on the ']' inside the first quoted value.
+        """
+        content = 'SECTION::[A::"foo]", B::2, C::3]\n'
+        warnings = _detect_inline_array_root(content)
+        codes = [w["code"] for w in warnings]
+        # The array has 3 unquoted map-entry elements after correct bracket tracking.
+        assert "W_INLINE_ARRAY_ROOT" in codes
