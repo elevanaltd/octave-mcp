@@ -23,7 +23,10 @@ This guard asserts every committed North Star ``.oct.md`` governance artefact:
 
 The NEGATIVE-CONTROL tests prove the detector actually fires on the broken
 legacy forms — guarding against a regression where the detector silently stops
-working (which would make the positive tests pass vacuously).
+working (which would make the positive tests pass vacuously). Every subtype in
+FORBIDDEN_SUBTYPES has a dedicated detector-liveness control (duplicate_key,
+bare_line_dropped, bare_flow, multi_word_coalesce), plus the LexerError path and
+the structural-vacuity floor.
 """
 
 from __future__ import annotations
@@ -235,4 +238,84 @@ def test_negative_control_empty_envelope_is_structurally_vacuous() -> None:
     assert not parsed.sections, (
         "Guard regression: empty envelope unexpectedly reports body sections — "
         "the structural-nonvacuity test would no longer catch truncated docs"
+    )
+
+
+# The legacy-chained and markdown controls above exercise duplicate_key and the
+# LexerError path. The three controls below cover the remaining FORBIDDEN_SUBTYPES
+# (bare_line_dropped, bare_flow, multi_word_coalesce) so every member of the set
+# has a proven-live detector — closing the "detector silently stops firing →
+# positive guard passes vacuously for that subtype" gap.
+
+LEGACY_BARE_LINE = """===LEGACY_BARE_LINE===
+META:
+  TYPE::NORTH_STAR_SUMMARY
+  VERSION::"1.0"
+§1::X
+  KEY::value
+  this is an unkeyed bare prose line
+===END===
+"""
+
+LEGACY_BARE_FLOW = """===LEGACY_BARE_FLOW===
+META:
+  TYPE::NORTH_STAR_SUMMARY
+  VERSION::"1.0"
+§1::X
+  IMPACT->high
+===END===
+"""
+
+LEGACY_MULTI_WORD = """===LEGACY_MULTI_WORD===
+META:
+  TYPE::NORTH_STAR_SUMMARY
+  VERSION::"1.0"
+§1::X
+  NOTE::"first" second third
+===END===
+"""
+
+
+def test_negative_control_bare_line_dropped_is_detected() -> None:
+    """An unkeyed prose line in the body MUST emit bare_line_dropped.
+
+    bare_line_dropped is in FORBIDDEN_SUBTYPES; this proves that detector still
+    fires (a dropped unkeyed line is silent content loss a governance doc must
+    never incur).
+    """
+    _doc, warnings = parse_with_warnings(LEGACY_BARE_LINE)
+    subtypes = {w.get("subtype") for w in _forbidden(warnings)}
+    assert "bare_line_dropped" in subtypes, (
+        "Detector regression: an unkeyed prose line no longer emits "
+        f"bare_line_dropped. Got warnings: {[w.get('subtype') for w in warnings]}"
+    )
+
+
+def test_negative_control_bare_flow_is_detected() -> None:
+    """Using ``->`` as an assignment operator MUST emit bare_flow.
+
+    bare_flow is in FORBIDDEN_SUBTYPES; this proves that detector still fires,
+    so a clean positive result for a real NS doc is meaningful rather than the
+    detector having silently regressed.
+    """
+    _doc, warnings = parse_with_warnings(LEGACY_BARE_FLOW)
+    subtypes = {w.get("subtype") for w in _forbidden(warnings)}
+    assert "bare_flow" in subtypes, (
+        "Detector regression: 'KEY->value' no longer emits bare_flow. "
+        f"Got warnings: {[w.get('subtype') for w in warnings]}"
+    )
+
+
+def test_negative_control_multi_word_coalesce_is_detected() -> None:
+    """A quoted value followed by bare words MUST emit multi_word_coalesce.
+
+    multi_word_coalesce is in FORBIDDEN_SUBTYPES; this proves that detector
+    still fires (an unquoted multi-word value silently coalescing is data loss
+    a governance doc must never incur).
+    """
+    _doc, warnings = parse_with_warnings(LEGACY_MULTI_WORD)
+    subtypes = {w.get("subtype") for w in _forbidden(warnings)}
+    assert "multi_word_coalesce" in subtypes, (
+        "Detector regression: a quoted value followed by bare words no longer "
+        f"emits multi_word_coalesce. Got warnings: {[w.get('subtype') for w in warnings]}"
     )
