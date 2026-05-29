@@ -128,7 +128,7 @@ META:
   R1::"Preserve CAUSALITY — X→Y because Z. Never flatten to X→Y alone."
   R2::"Preserve CONDITIONAL QUALIFIERS — when X, if Y, unless Z carry material risk info"
   R3::"Preserve EXPLICIT TRADEOFFS — GAIN⇌LOSS or GAIN vs LOSS"
-  R3a::TELEGRAPHIC_PHRASE::"quoted value, stopwords dropped, operators carry English connectives — e.g. 'security ⇌ usability' not 'security at odds with usability'"
+  R3a::"TELEGRAPHIC_PHRASE — quoted value, stopwords dropped, operators carry English connectives — e.g. 'security ⇌ usability' not 'security at odds with usability'"
   R4::"One concrete example per major abstraction — minimum reconstruction anchor"
   R5::"Use mythology as KEY PREFIXES (CHRONOS::audit_6wk) not embedded values — domain labels are reconstruction anchors"
   R6::"Use mythology as PATTERN DESCRIPTORS (SISYPHEAN,ODYSSEAN) for single-token trajectory encoding"

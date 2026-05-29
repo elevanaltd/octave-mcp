@@ -3,13 +3,13 @@ name: octave-literacy
 description: "LLM-native structured communication format. Teaches OCTAVE syntax rules, canonical forms, and warning prevention for zero-error .oct.md authoring."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave format", "write octave", "octave syntax", "structured output", "OCTAVE basics", "OCTAVE literacy", "OCTAVE structure", "key::value", "OCTAVE notation", "llm communication", "token economy", "loss accounting"]
-version: "3.0.0"
+version: "3.1.0"
 ---
 
 ===OCTAVE_LITERACY===
 META:
   TYPE::SKILL
-  VERSION::"3.0.0"
+  VERSION::"3.1.0"
   STATUS::ACTIVE
   PURPOSE::"Zero-error OCTAVE authoring — syntax rules, canonical forms, warning prevention"
   OCTAVE::"Olympian Common Text And Vocabulary Engine — loss accounting system for LLM communication"
@@ -102,7 +102,7 @@ META:
     // STATUS in META = document lifecycle (ACTIVE, DRAFT). STATUS in BODY = subject state. Both valid.
     COMPRESSION_TIER::ENUM[LOSSLESS,CONSERVATIVE,AGGRESSIVE,ULTRA]
     LOSS_PROFILE::"[preserve:causal_chains,drop:verbose_phrasing] — loss is explicit, never hidden"
-    // NOTE: LOSS_PROFILE is spec-valid but not yet in octave-validator allowed_meta — validator gap, not spec error
+    // NOTE: LOSS_PROFILE is spec-valid; older validators may not list it in allowed_meta — validator gap, not spec error
     CONTRACT::HOLOGRAPHIC<validation_law_in_document>
     GRAMMAR::GBNF_COMPILER<generate_constrained_output>
   §3c::ASSEMBLY_RULES
@@ -150,7 +150,8 @@ METRICS:
 §6::FORTHCOMING_BEHAVIOR
   // Per ADR-0006 (Writer/Reader Symmetry Programme). The writer surface is bifurcating.
   // This section is truthful BEFORE and AFTER the milestones land — read the timing markers.
-  REF::"docs/adr/ADR-0006-writer-reader-symmetry.md"
+  REF::"octave-mcp:docs/adr/ADR-0006-writer-reader-symmetry.md"
+  // ^ path is in the octave-mcp repo (upstream OCTAVE spec authority), not this repo.
   §6a::TIMELINE
     TODAY::"octave_write canonicalises (normalises syntax) on every write. warnings[] enumerates what changed during normalisation. Empty warnings[] ⇒ source was already canonical."
     AFTER_SR1_T4::"Default behaviour becomes NO-OP normalisation. octave_write commits bytes as supplied (subject to schema validation). warnings[] enumerates what would have changed had normalisation been ATTEMPTED. Empty warnings[] ⇒ no normalisation was attempted — NOT a guarantee of canonicality. Sprint 1 milestone."
@@ -192,4 +193,103 @@ METRICS:
     "To detect content normalisation: filter corrections by tier=='NORMALIZATION'.",
     "To detect schema repairs: filter by tier=='REPAIR'."
   ]
+§8::UNIVERSAL_GOVERNANCE_GRAMMAR
+  // UPOG (Universal Parse-Only Governance) — structural composition for governance artefacts
+  // (North Stars, ADRs, RFCs, project-context docs). Composes on top of §2 R3a value-form
+  // and §3 critical rules. Establishes parse-only validation as the gate, eliminating
+  // per-doctype schema registration tax. Convention IS the schema, enforced by the strict
+  // parser ⊕ this skill ⊕ octave-secretary write gate.
+  §8a::ORGANIZING_PRINCIPLE
+    MOTTO::"strict AST parse → gate. skill → schema. doctypes → zero registration tax."
+    INSIGHT::"governance bodies → schema-exempt by declaration. META envelope → still validates."
+    APPLIES_TO::[
+      North_Star_Summary,
+      Architectural_Decision_Record,
+      Request_For_Comments,
+      project_context_documents,
+      any_repeated_entity_governance_artefact
+    ]
+  §8b::BLOCK_FORM_FOR_REPEATED_ENTITIES
+    // The structural anti-pattern that broke pre-UPOG governance docs:
+    // I1::NAME::[PRINCIPLE::v, WHY::v, STATUS::v]
+    // The chained ::NAME::[...] form reads as ASSIGNMENT under strict 1.13 lexer,
+    // hoisting inner KV pairs to file-top-level. Across I1..IN, PRINCIPLE/WHY/STATUS
+    // collide with W_DUPLICATE_KEY × 3N — last-write-wins data loss.
+    PATTERN::"ID<LABEL>: + indented children"
+    SYNTAX::"Block opener uses ID<LABEL>: form. NAME<facet> annotation (§3 of octave-mastery) carries the human-readable label. Indented children scope KEY tokens per-parent."
+    EXAMPLE_FORBIDDEN::"I1::PERSISTENT_COGNITIVE_CONTINUITY::[PRINCIPLE::v,WHY::v,STATUS::v]"
+    EXAMPLE_CANONICAL:
+      ```
+      §1::IMMUTABLES
+        COUNT::6
+        I1<PERSISTENT_COGNITIVE_CONTINUITY>:
+          PRINCIPLE::"persist context⊕decisions⊕learnings → cross-session continuity"
+          WHY::"amnesia → system failure [prevent re-learning cost]"
+          STATUS::PENDING
+          OWNER::implementation-lead
+          GATE::B1
+        I2<STRUCTURAL_INTEGRITY_PRIORITY>:
+          PRINCIPLE::"correctness⊕compliance → precedence over velocity"
+          ...
+      ```
+    GUARANTEE::"each I<N> block scopes children → ZERO W_DUPLICATE_KEY across the §"
+    APPLIES_ALSO_TO::[
+      assumptions<A1..AN>,
+      ADR_records<ADR-NNNN>,
+      RFC_records<RFC-NNN>,
+      constrained_variables,
+      any_homogeneous_repeated_record_block
+    ]
+  §8c::MARKDOWN_ERADICATION
+    // Mixed markdown ## headings inside ===NAME=== envelopes fail E_TOKENIZE under
+    // strict 1.13 lexer (the `(` in "## IMMUTABLES (6 Total)" trips the lexer).
+    RULE::"governance .oct.md → ZERO markdown headings inside envelope"
+    SCOPE::"applies to active governance artefacts. Generators (template files, /ns-summary-create skill, north-star-architect agent) that still emit legacy ## headings are Phase B follow-up — not retro-non-compliant, but MUST migrate before next governance amendment cycle."
+    TRANSFORM:
+      FROM::"^## (.*)$"
+      TO::"§N::SECTION_NAME"
+    EXAMPLE_BEFORE::"## IMMUTABLES (6 Total)"
+    EXAMPLE_AFTER:
+      ```
+      §1::IMMUTABLES
+        COUNT::6
+      ```
+    RATIONALE::"§N::NAME is structurally targetable. ## is text annotation lexer rejects."
+  §8d::SCHEMA_EXEMPTION_VIA_CONTRACT
+    // Declaratively scope schema validation to the META envelope; body fields are governed
+    // by parse correctness, NOT by per-doctype schema registration. Eliminates the tax of
+    // creating NORTH_STAR_SUMMARY / ADR / RFC schemas for every new artefact class.
+    META_ANNOTATION::"CONTRACT::HOLOGRAPHIC<parse_only_governance>"
+    SEMANTIC::"META → still validates against generic META schema. Body → parse-only governed. Body schema_validation_errors → non-load-bearing by declaration."
+    PRECEDENT::"§3b META_COMMON_OPTIONAL already permits the HOLOGRAPHIC contract facet — we are using the existing hook, no spec change required."
+    SUCCESS_CRITERION::"octave_validate STRICT → warnings:[] ⊕ errors:[] ⊕ repairs:[]"
+  §8e::CANONICAL_AND_SOURCE_META
+    // Path-tracking META fields enforced by canonical-paths pre-commit hook.
+    CANONICAL::"runtime delivery path (e.g. .hestai/north-star/… or .hestai-sys/…)"
+    SOURCE::"git-committed source path (e.g. src/<pkg>/_bundled_hub/… or repo-local)"
+    RULE::"every governance .oct.md → META.CANONICAL ⊕ META.SOURCE required"
+    PROJECT_LOCAL::"if file lives only in project tree → CANONICAL == SOURCE"
+    BUNDLED_HUB::"source ≠ canonical → CANONICAL points to .hestai-sys/, SOURCE points to _bundled_hub/"
+  §8f::VALUE_FORM_DELEGATION
+    // Reasoning-field values (PRINCIPLE, WHY, RATIONALE, EVIDENCE, …) → R3a §4 of octave-compression.
+    // Do NOT use snake_case_blobs in reasoning fields → triggers W_SNAKE_CASE_BLOB advisory
+    // (see octave-secretary §5::SNAKE_CASE_BLOB anti-pattern, octave-mcp 1.13.0).
+    SEE_COMPRESSION::"octave-compression §4::R3a"
+    SEE_SECRETARY::"octave-secretary §5::SNAKE_CASE_BLOB"
+    RULE::"quoted prose ∨ telegraphic operator form. NEVER bare snake_case_blob in reasoning fields."
+  §8g::MIGRATION_CHECKLIST
+    // Mechanical migration recipe — every legacy field preserved verbatim, only shape changes.
+    STEP_1::"replace every ## Heading → §N::SECTION_NAME"
+    STEP_2::"replace every I#::NAME::[KEY::v,…] → I#<NAME>:\\n  KEY::v indented children"
+    STEP_3::"add META.CONTRACT::HOLOGRAPHIC<parse_only_governance>"
+    STEP_4::"add META.CANONICAL ⊕ META.SOURCE"
+    STEP_5::"telegraphic-compress reasoning values per R3a (operators carry connectives)"
+    STEP_6::"octave_validate STRICT → confirm warnings:[] ⊕ errors:[] ⊕ repairs:[]"
+    INVARIANT::"core structural field names preserved (PRINCIPLE, WHY, STATUS, INHERITS, IS, IS_NOT, GATES, LOAD_FULL_NORTH_STAR_IF, THE_OATH, …). Permitted semantic splits where the legacy form encoded multiple values in one slot: ASSUMPTIONS::N[note] → ASSUMPTIONS_COUNT::N ⊕ ASSUMPTIONS_NOTE::note. RELATED::[issues]∨[adrs] → RELATED_ISSUES::[…] ⊕ RELATED_ADRS::[…]. IF::trigger,THEN::[actions] → TRIGGER::trigger ⊕ ACTION::[actions] (within §::PROTECTION_CLAUSE block). Splits are mechanical and lossless — no semantic content dropped."
+  §8h::ENFORCEMENT_LOCI
+    // The convention is enforced at three structural points — drift in any one is detectable.
+    LOCUS_1::"this skill — declares the pattern (vault delivery via _bundled_hub)"
+    LOCUS_2::"octave-secretary agent — sole valid .oct.md write path, invokes octave_write"
+    LOCUS_3::"octave-mcp 1.13 STRICT lexer — refuses non-compliant grammar at parse"
+    DRIFT_DETECTION::"file hash on bundled-hub skill source ⊕ pre-commit OCTAVE validation"
 ===END===
