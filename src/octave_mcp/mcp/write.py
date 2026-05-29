@@ -1609,6 +1609,25 @@ class WriteTool(BaseTool):
                     return (hit, node)
         return None
 
+    def _is_anchored_change(self, doc: Any, key: str) -> bool:
+        """#460 Case B: True iff ``key`` must be routed to the anchored handler.
+
+        A key is an anchored change when ALL hold:
+          - it parses as an ``ANCHOR/KEY`` anchored path, AND
+          - no literal top-level Assignment matches the raw key verbatim
+            (resolve-literal-first: a real ``A/B`` key wins), AND
+          - the anchored target resolves in document order.
+
+        Centralising the predicate keeps the dispatch chain in ``_apply_changes``
+        in lock-step: the bare-DELETE branch is suppressed for exactly the keys
+        the anchored branch will claim, so anchored DELETE can never fall into a
+        silent-success no-op (rework B2) and a literal ``A/B`` DELETE is never
+        stranded between the two branches.
+        """
+        if not any(isinstance(s, Assignment) and s.key == key for s in doc.sections):
+            return self._resolve_anchored_change(doc, key) is not None
+        return False
+
     def _apply_block_change(
         self,
         doc: Any,
@@ -2041,8 +2060,16 @@ class WriteTool(BaseTool):
                 # modify the flat assignment in that scenario.
                 parent_key, _, child_key = key.partition(".")
                 self._apply_block_change(doc, key, parent_key, child_key, new_value)
-            elif _is_delete_sentinel(new_value):
-                # I2: DELETE sentinel - remove field entirely from sections
+            elif _is_delete_sentinel(new_value) and not self._is_anchored_change(doc, key):
+                # I2: DELETE sentinel - remove field entirely from sections.
+                # #460 Case B (rework B2): the bare-DELETE branch matches by
+                # ``s.key == key`` and never matches an anchored path, so it
+                # must NOT consume a resolvable ANCHOR/KEY DELETE (which would
+                # otherwise silent-success no-op). Suppressing it for exactly
+                # the keys the anchored branch claims (_is_anchored_change)
+                # lets a resolvable anchored DELETE fall through to the
+                # anchored handler below; a literal ``A/B`` key (resolve-
+                # literal-first) is still handled here.
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
                 # PR-2 T6: doc.sections list changed (deletion). The
                 # Document does not carry body_dirty; mark whole-doc
@@ -2127,17 +2154,19 @@ class WriteTool(BaseTool):
                                 ]
                                 _mark_dirty(target_block, body=True)
                                 continue
-                            normalized_mv = _normalize_value_for_ast(mv)
                             found_child = False
                             for child in target_block.children:
                                 if isinstance(child, Assignment) and child.key == mk:
-                                    child.value = normalized_mv
+                                    # #460 Case A: preserve literal-zone fence form
+                                    # when MERGE replaces an existing fenced child.
+                                    child.value = _normalize_value_for_ast_preserving(mv, child.value)
                                     # PR-2 T6: paired-write per leaf.
                                     _mark_dirty(child)
                                     found_child = True
                                     break
                             if not found_child:
-                                new_child = Assignment(key=mk, value=normalized_mv, dirty=True)
+                                # New child: nothing to preserve, plain normalize.
+                                new_child = Assignment(key=mk, value=_normalize_value_for_ast(mv), dirty=True)
                                 target_block.children.append(new_child)
                             # PR-2 T6: in every MERGE-on-Block branch
                             # (existing-child mutate or new-child
@@ -2161,16 +2190,18 @@ class WriteTool(BaseTool):
                                 ]
                                 _mark_dirty(target_section, body=True)
                                 continue
-                            normalized_mv = _normalize_value_for_ast(mv)
                             found_child = False
                             for child in target_section.children:
                                 if isinstance(child, Assignment) and child.key == mk:
-                                    child.value = normalized_mv
+                                    # #460 Case A: preserve literal-zone fence form
+                                    # when MERGE replaces an existing fenced child.
+                                    child.value = _normalize_value_for_ast_preserving(mv, child.value)
                                     _mark_dirty(child)
                                     found_child = True
                                     break
                             if not found_child:
-                                new_child = Assignment(key=mk, value=normalized_mv, dirty=True)
+                                # New child: nothing to preserve, plain normalize.
+                                new_child = Assignment(key=mk, value=_normalize_value_for_ast(mv), dirty=True)
                                 target_section.children.append(new_child)
                             _mark_dirty(target_section, body=True)
                         continue

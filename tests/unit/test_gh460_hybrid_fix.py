@@ -325,9 +325,7 @@ class TestCaseAMergePreservation:
     async def test_merge_block_new_child_unaffected(self) -> None:
         """Sanity: MERGE that ADDS a new (absent) child is a plain scalar, no fence."""
         doc = "===D===\nPRIMER:\n  OPERATORS::\n  ```\n  old\n  ```\n===END===\n"
-        result, written = await _write_and_read(
-            doc, {"PRIMER": {"$op": "MERGE", "value": {"NEW_KEY": "plain value"}}}
-        )
+        result, written = await _write_and_read(doc, {"PRIMER": {"$op": "MERGE", "value": {"NEW_KEY": "plain value"}}})
         assert result["status"] == "success", result.get("errors")
         assert "plain value" in written
         # The pre-existing fenced child is untouched; no fence invented for NEW_KEY.
@@ -338,12 +336,7 @@ class TestCaseAMergePreservation:
 # Five immutables, each followed by a sibling RATIONALE (flat top-level form),
 # reused for the anchored-DELETE coverage below.
 _DOC_TWO_RATIONALE_TOP = (
-    "===NS===\n"
-    "I1::FIDELITY\n"
-    'RATIONALE::"r1"\n'
-    "I2::ABSENCE\n"
-    'RATIONALE::"r2"\n'
-    "===END===\n"
+    "===NS===\n" "I1::FIDELITY\n" 'RATIONALE::"r1"\n' "I2::ABSENCE\n" 'RATIONALE::"r2"\n' "===END===\n"
 )
 
 _DOC_TWO_RATIONALE_SEC = (
@@ -369,9 +362,7 @@ class TestCaseBAnchoredDelete:
     @pytest.mark.asyncio
     async def test_anchored_delete_top_level_removes_resolved_sibling(self) -> None:
         """ANCHOR/KEY DELETE removes the RATIONALE following I2, not the first."""
-        result, written = await _write_and_read(
-            _DOC_TWO_RATIONALE_TOP, {"I2/RATIONALE": {"$op": "DELETE"}}
-        )
+        result, written = await _write_and_read(_DOC_TWO_RATIONALE_TOP, {"I2/RATIONALE": {"$op": "DELETE"}})
         assert result["status"] == "success", result.get("errors")
         # I2's RATIONALE removed; I1's RATIONALE survives.
         assert '"r2"' not in written, f"I2 RATIONALE not deleted:\n{written}"
@@ -382,9 +373,7 @@ class TestCaseBAnchoredDelete:
     @pytest.mark.asyncio
     async def test_anchored_delete_section_removes_resolved_sibling(self) -> None:
         """ANCHOR/KEY DELETE works on siblings nested inside a section."""
-        result, written = await _write_and_read(
-            _DOC_TWO_RATIONALE_SEC, {"I2/RATIONALE": {"$op": "DELETE"}}
-        )
+        result, written = await _write_and_read(_DOC_TWO_RATIONALE_SEC, {"I2/RATIONALE": {"$op": "DELETE"}})
         assert result["status"] == "success", result.get("errors")
         assert '"r2"' not in written, f"I2 RATIONALE not deleted:\n{written}"
         assert "r1" in written, f"I1 RATIONALE wrongly deleted:\n{written}"
@@ -393,9 +382,7 @@ class TestCaseBAnchoredDelete:
     @pytest.mark.asyncio
     async def test_anchored_delete_unresolvable_still_errors(self) -> None:
         """Anchored DELETE on a missing anchor errors, never silent-success."""
-        result, _ = await _write_and_read(
-            _DOC_TWO_RATIONALE_TOP, {"I9/RATIONALE": {"$op": "DELETE"}}
-        )
+        result, _ = await _write_and_read(_DOC_TWO_RATIONALE_TOP, {"I9/RATIONALE": {"$op": "DELETE"}})
         assert result["status"] != "success"
         codes = {e.get("code") for e in result.get("errors", [])}
         assert "E_UNRESOLVABLE_PATH" in codes, result.get("errors")
