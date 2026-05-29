@@ -87,9 +87,7 @@ class TestCaseBAnchoredPath:
     )
     async def test_each_rationale_targetable_individually(self, anchor: str, new_value: str) -> None:
         """Each of 5 sibling RATIONALE keys is reachable via ANCHOR/RATIONALE."""
-        result, written = await _write_and_read(
-            _DOC_FIVE_RATIONALE, {f"{anchor}/RATIONALE": new_value}
-        )
+        result, written = await _write_and_read(_DOC_FIVE_RATIONALE, {f"{anchor}/RATIONALE": new_value})
         assert result["status"] == "success", result.get("errors")
         # The targeted RATIONALE changed...
         assert f'RATIONALE::"{new_value}"' in written or f"RATIONALE::{new_value}" in written
@@ -98,8 +96,7 @@ class TestCaseBAnchoredPath:
         idx = int(anchor[1])
         expected_survivors = [n for n in range(1, 6) if n != idx]
         assert survivors == expected_survivors, (
-            f"Anchor {anchor} should change only RATIONALE #{idx}; "
-            f"survivors={survivors}, written=\n{written}"
+            f"Anchor {anchor} should change only RATIONALE #{idx}; " f"survivors={survivors}, written=\n{written}"
         )
 
     @pytest.mark.asyncio
@@ -209,9 +206,11 @@ RATIONALE::"after_anchor"
 """
         result, written = await _write_and_read(doc, {"I2/RATIONALE": "sec_r2_new"})
         assert result["status"] == "success", result.get("errors")
-        assert '"sec_r1"' in written  # first sibling untouched
-        assert '"sec_r2"' not in written  # second changed
-        assert "sec_r2_new" in written
+        # First sibling untouched (quoting may be canonicalized on section
+        # re-emit; assert on the value content, not the quote form).
+        assert "RATIONALE::sec_r1" in written or 'RATIONALE::"sec_r1"' in written
+        assert "sec_r2_new" in written  # second changed
+        assert "RATIONALE::sec_r2\n" not in written and 'RATIONALE::"sec_r2"' not in written
 
 
 # ---------------------------------------------------------------------------
@@ -235,9 +234,7 @@ class TestCaseALiteralZonePreservation:
         Pre-fix this emitted ``OPERATORS::"new line 1\\nnew line 2"`` —
         a quoted scalar, losing the fence (I1 violation).
         """
-        result, written = await _write_and_read(
-            _DOC_LITERAL_TOPLEVEL, {"OPERATORS": "new line 1\nnew line 2"}
-        )
+        result, written = await _write_and_read(_DOC_LITERAL_TOPLEVEL, {"OPERATORS": "new line 1\nnew line 2"})
         assert result["status"] == "success", result.get("errors")
         # Fence form preserved: NOT downgraded to a quoted scalar.
         assert 'OPERATORS::"' not in written, f"fence form lost:\n{written}"
@@ -281,7 +278,7 @@ class TestCaseALiteralZonePreservation:
     @pytest.mark.asyncio
     async def test_non_literal_scalar_change_unaffected(self) -> None:
         """Sanity: a plain scalar child is still changed as a plain scalar."""
-        doc = "===D===\nKEY::\"old\"\n===END===\n"
+        doc = '===D===\nKEY::"old"\n===END===\n'
         result, written = await _write_and_read(doc, {"KEY": "new"})
         assert result["status"] == "success", result.get("errors")
         assert "new" in written
