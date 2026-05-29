@@ -76,6 +76,31 @@ dev = [
     "virtualenv>=20.36.2",  # CVE-2025-68147: TOCTOU vulnerabilities
 ]
 
+# PEP-735 dependency group mirroring the `dev` extra above.
+# Rationale (#462): uv installs the `dev` dependency-group by DEFAULT on a bare
+# `uv sync` (no flags required), whereas `[project.optional-dependencies].dev`
+# is an EXTRA that only installs under `uv sync --all-extras` / `--extra dev` /
+# `pip install -e ".[dev]"`. Declaring the group as well makes the worktree
+# `.venv` robust to a sync invocation that omits `--all-extras`, so dev tooling
+# (ruff/black/pytest-cov/mypy + coverage HTML toolchain) reliably lands in
+# `.venv/bin`. The extra is retained for the pip-fallback install path.
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-cov>=6.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-timeout>=2.3.0",
+    "mypy>=1.14.0",
+    "types-PyYAML>=6.0.12",
+    "ruff>=0.9.0",
+    "black>=26.0.0",
+    "hypothesis>=6.122.0",
+    "pre-commit>=4.1.0",
+    "httpx>=0.28.0",  # For testing HTTP transport
+    "Pygments>=2.20.0",  # CVE-2025-61833: ReDoS vulnerability
+    "virtualenv>=20.36.2",  # CVE-2025-68147: TOCTOU vulnerabilities
+]
+
 [project.scripts]
 octave = "octave_mcp.cli.main:cli"
 octave-mcp-server = "octave_mcp.mcp.server:run"

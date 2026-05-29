@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Worktree `.venv` reliably gets the dev toolchain after sync (#462).** Added a PEP-735 `[dependency-groups]` `dev` group to `pyproject.toml` mirroring the existing `[project.optional-dependencies]` `dev` extra. `uv sync` installs the `dev` dependency-group **by default** (no flag required), so `.venv/bin/ruff`, `.venv/bin/black`, `.venv/bin/coverage`, `.venv/bin/mypy`, and the coverage HTML toolchain (`coverage/htmlfiles/`) land in the venv even if a sync invocation omits `--all-extras` — the root of the reported symptom where a worktree `.venv` held only runtime + `http`-extra packages and quality gates fell back to system `ruff`/`black`. The `dev` extra is retained for the `pip install -e ".[dev]"` fallback path, and `uv sync --all-extras` continues to work unchanged. `uv.lock` regenerated to resolve the new group. Empirically verified: a bare `uv sync` into a clean venv now installs all 13 dev packages, and `pytest --cov-report=html` generates `htmlcov/` with no INTERNALERROR. Developer docs (`docs/guides/development-setup.md`, `CONTRIBUTING.md`) updated with the canonical sync command and a verify/repair recipe.
+
+### Changed
+- **Canonical dev-setup command documented as `uv sync --all-extras` (#462).** `CONTRIBUTING.md` and `docs/guides/development-setup.md` now present `uv sync --all-extras` (rather than `uv pip install -e ".[dev]"`) as the canonical install step, and direct quality-gate invocation through `.venv/bin/...` so the project venv is exercised rather than system-installed `ruff`/`black`.
+
 ## [1.13.1] - 2026-05-28 - "write.py STRATEGY_S1 refactor (god-object decomposition)"
 
 ### Changed
