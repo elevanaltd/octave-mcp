@@ -245,7 +245,8 @@ def _normalize_value_for_ast_preserving(new_value: Any, existing_value: Any) -> 
 
     PROD::I1 (Syntactic Fidelity): ``normalization_alters_syntax_never_semantics``.
     When an existing child's value is a ``LiteralZoneValue`` (fenced block) and
-    the caller supplies a plain replacement (str or dict) through changes-mode,
+    the caller supplies a plain ``str`` replacement through changes-mode (a
+    ``dict`` is taken at face value and becomes an ``InlineMap``, not a fence),
     the prior behaviour downgraded the value to a quoted scalar — emitting
     ``KEY::"..."`` instead of ``KEY::\\n```...```\\n``. That silently switches
     the syntactic form of a literal zone, an I1 violation.

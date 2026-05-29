@@ -2114,15 +2114,22 @@ class WriteTool(BaseTool):
                         new_child = Assignment(key=mk, value=_normalize_value_for_ast(mv), dirty=True)
                         t7_block.children.append(new_child)
                     _mark_dirty(t7_block, body=True)
-            elif self._resolve_anchored_change(doc, key) is not None and not any(
-                isinstance(s, Assignment) and s.key == key for s in doc.sections
-            ):
+            elif self._is_anchored_change(doc, key):
                 # #460 Case B: ANCHOR/KEY anchored-path. Resolve-literal-first —
-                # only reached when no literal top-level Assignment matches the
-                # raw key verbatim (that case is handled by the legacy branch,
-                # preserving backward-compat for real keys containing '/').
-                target_assignment, parent = self._resolve_anchored_change(doc, key)  # type: ignore[misc]
-                if _is_delete_sentinel(new_value):
+                # _is_anchored_change is True only when no literal top-level
+                # Assignment matches the raw key verbatim (that case is handled
+                # by the legacy branch, preserving backward-compat for real keys
+                # containing '/'). The same predicate gates the bare-DELETE
+                # suppression above, keeping the two branches in lock-step.
+                resolved = self._resolve_anchored_change(doc, key)
+                assert resolved is not None  # narrowed by _is_anchored_change
+                target_assignment, parent = resolved
+                # #460 (cubic P1): the anchored target is an Assignment, so it
+                # MUST go through the SAME op machinery as a bare top-level key.
+                # Otherwise a $op descriptor is normalized and written as literal
+                # data (PROD::I3 violation: control descriptors as content).
+                op, payload, _ = _extract_op_descriptor(new_value)
+                if op == "DELETE" or _is_delete_sentinel(new_value):
                     # Remove the resolved sibling from its parent's child list.
                     if parent is None:
                         doc.sections = [s for s in doc.sections if s is not target_assignment]
@@ -2130,7 +2137,35 @@ class WriteTool(BaseTool):
                     elif isinstance(parent, (Block, Section)):
                         parent.children = [c for c in parent.children if c is not target_assignment]
                         _mark_dirty(parent, body=True)
+                elif op in ("APPEND", "PREPEND"):
+                    # Array op on the resolved Assignment. _validate_change_paths
+                    # has already verified the target is array-typed via
+                    # _resolve_target_type (which resolves anchored paths), so a
+                    # type mismatch surfaces as E_OP_TARGET_MISMATCH before apply.
+                    _apply_array_op_inplace(target_assignment, op, payload)
+                    if isinstance(parent, (Block, Section)):
+                        _mark_dirty(parent, body=True)
+                elif op == "MERGE":
+                    # An anchored path resolves only to an Assignment, never a
+                    # Block/Section/META, so MERGE has no valid anchored target.
+                    # The validator rejects this upstream (E_OP_TARGET_MISMATCH);
+                    # this is a defensive loud failure so a MERGE descriptor can
+                    # NEVER be written as literal data if it ever reaches apply.
+                    raise ValueError(
+                        [
+                            {
+                                "code": "E_OP_TARGET_MISMATCH",
+                                "message": (
+                                    f"$op MERGE is not supported on anchored path '{key}': "
+                                    f"it resolves to an assignment (scalar/array), not a "
+                                    f"Block/Section/META target. MERGE only applies to "
+                                    f"top-level Blocks, Sections, or META."
+                                ),
+                            }
+                        ]
+                    )
                 else:
+                    # Bare value: full replacement.
                     # #460 Case A interplay: preserve literal-zone fence form.
                     target_assignment.value = _normalize_value_for_ast_preserving(new_value, target_assignment.value)
                     _mark_dirty(target_assignment)
