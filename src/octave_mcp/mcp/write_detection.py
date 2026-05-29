@@ -1082,7 +1082,7 @@ def _w_inline_array_root_collect_array(
             chunks.append("\n")
         scan_idx += 1
 
-    return "".join(chunks), scan_idx if found_close else start_line_idx
+    return ("".join(chunks), scan_idx) if found_close else ("", start_line_idx)
 
 
 def _w_inline_array_root_count_map_entries(array_content: str) -> int:
@@ -1254,7 +1254,7 @@ _W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD = 3
 # The value-start pattern `:[:\s]` matches either a second `:` (double-colon
 # assignment form `KEY::value`) or whitespace (block-open form `KEY: child`),
 # allowing detection of both sibling-assignment and sibling-block patterns.
-_W_FLAT_PREFIX_SCALAR_KEY_RE = re.compile(r"^([ \t]*)([A-Z][A-Z0-9_]+)\s*:[:\s]")
+_W_FLAT_PREFIX_SCALAR_KEY_RE = re.compile(r"^([ \t]*)([A-Z][A-Z0-9_]+)\s*:(?::|\s|$)")
 
 
 def _w_flat_prefix_scalar_all_prefixes(key: str) -> list[str]:

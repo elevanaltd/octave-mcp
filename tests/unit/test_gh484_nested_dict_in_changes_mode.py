@@ -8,9 +8,12 @@ Root cause: ``_normalize_value_for_ast`` in write_mutation.py wraps any ``dict``
 
 STRATEGY_S3 (DocumentMutator) is deferred.  The minimum correct fix is a REJECTION guard
 at input validation time: ``_validate_change_paths`` must append an
-``E_NESTED_DICT_IN_MERGE_PAYLOAD`` error when a MERGE payload contains plain nested dict
-values (ones that are not op-descriptors — ``_is_op_descriptor`` subsumes delete
-sentinels since both carry a ``$op`` key).
+``E_NESTED_DICT_IN_MERGE_PAYLOAD`` error when a MERGE payload contains any dict sub-value
+that is not a delete sentinel (``{"$op": "DELETE"}``).  The MERGE handler in
+``_apply_changes`` only recognises delete sentinels as special sub-operations; every
+other dict — including non-DELETE op-descriptors such as ``{"$op": "APPEND", ...}`` —
+is normalised as a literal InlineMap, which is either structurally invalid (nested
+InlineMap → ``E_NESTED_INLINE_MAP``) or semantically wrong (wrong caller intent).
 
 TDD protocol (T2 tier): these tests were authored RED (failing before the guard lands)
 and gate GREEN (guard implemented in ``_validate_change_paths``).
@@ -64,9 +67,9 @@ async def test_merge_with_nested_dict_returns_error() -> None:
     )
     errors = result.get("errors", [])
     error_codes = [e.get("code") for e in errors]
-    assert "E_NESTED_DICT_IN_MERGE_PAYLOAD" in error_codes, (
-        f"Expected E_NESTED_DICT_IN_MERGE_PAYLOAD in errors but got: {errors}"
-    )
+    assert (
+        "E_NESTED_DICT_IN_MERGE_PAYLOAD" in error_codes
+    ), f"Expected E_NESTED_DICT_IN_MERGE_PAYLOAD in errors but got: {errors}"
 
 
 @pytest.mark.asyncio
@@ -80,12 +83,10 @@ async def test_merge_with_nested_dict_error_message_is_actionable() -> None:
     e = next((e for e in errors if e.get("code") == "E_NESTED_DICT_IN_MERGE_PAYLOAD"), None)
     assert e is not None, f"No E_NESTED_DICT_IN_MERGE_PAYLOAD error found in: {errors}"
     msg = e.get("message", "")
-    assert "content" in msg, (
-        f"Error message should mention the 'content' parameter. Got: {msg!r}"
-    )
-    assert "format_style" in msg or "preserve" in msg, (
-        f"Error message should mention 'format_style=preserve'. Got: {msg!r}"
-    )
+    assert "content" in msg, f"Error message should mention the 'content' parameter. Got: {msg!r}"
+    assert (
+        "format_style" in msg or "preserve" in msg
+    ), f"Error message should mention 'format_style=preserve'. Got: {msg!r}"
     # Should mention which nested key(s) triggered the rejection
     assert "NESTED" in msg, f"Error message should cite the nested key 'NESTED'. Got: {msg!r}"
 
@@ -123,18 +124,18 @@ async def test_merge_with_scalar_values_passes() -> None:
     )
     errors = result.get("errors", [])
     error_codes = [e.get("code") for e in errors]
-    assert "E_NESTED_DICT_IN_MERGE_PAYLOAD" not in error_codes, (
-        f"Unexpected E_NESTED_DICT_IN_MERGE_PAYLOAD for scalar MERGE: {errors}"
-    )
+    assert (
+        "E_NESTED_DICT_IN_MERGE_PAYLOAD" not in error_codes
+    ), f"Unexpected E_NESTED_DICT_IN_MERGE_PAYLOAD for scalar MERGE: {errors}"
 
 
 @pytest.mark.asyncio
-async def test_merge_with_op_descriptor_value_passes() -> None:
-    """A MERGE payload whose sub-value is itself an op-descriptor must pass through.
+async def test_merge_with_delete_sentinel_passes() -> None:
+    """A MERGE payload whose sub-value is a DELETE sentinel must pass through.
 
-    Op-descriptors (any dict with a ``$op`` key, including delete sentinels) are
-    legitimate sub-operations and must not be misidentified as plain nested dicts.
-    The guard uses ``_is_op_descriptor`` which covers all ``$op``-keyed dicts.
+    Delete sentinels (``{"$op": "DELETE"}``) are the only dict sub-values the
+    MERGE handler treats as a special sub-operation (child deletion). The guard
+    uses ``_is_delete_sentinel`` to exempt exactly this case.
     """
     result = await _write(
         _BASE_DOC,
@@ -142,9 +143,30 @@ async def test_merge_with_op_descriptor_value_passes() -> None:
     )
     errors = result.get("errors", [])
     error_codes = [e.get("code") for e in errors]
-    assert "E_NESTED_DICT_IN_MERGE_PAYLOAD" not in error_codes, (
-        f"Unexpected E_NESTED_DICT_IN_MERGE_PAYLOAD for op-descriptor sub-value: {errors}"
+    assert (
+        "E_NESTED_DICT_IN_MERGE_PAYLOAD" not in error_codes
+    ), f"Unexpected E_NESTED_DICT_IN_MERGE_PAYLOAD for delete-sentinel sub-value: {errors}"
+
+
+@pytest.mark.asyncio
+async def test_merge_with_non_delete_op_descriptor_is_rejected() -> None:
+    """A MERGE payload whose sub-value is a non-DELETE op-descriptor must be rejected.
+
+    The MERGE handler in _apply_changes only recognises delete sentinels as
+    special sub-operations; every other dict (including op-descriptors like
+    ``{"$op": "APPEND", ...}``) is normalised as a literal InlineMap value.
+    A non-DELETE op-descriptor is almost certainly a caller mistake (intending
+    a recursive sub-operation), so the guard rejects it explicitly.
+    """
+    result = await _write(
+        _BASE_DOC,
+        changes={"KEY": {"$op": "MERGE", "value": {"SUB": {"$op": "APPEND", "value": "x"}}}},
     )
+    errors = result.get("errors", [])
+    error_codes = [e.get("code") for e in errors]
+    assert (
+        "E_NESTED_DICT_IN_MERGE_PAYLOAD" in error_codes
+    ), f"Expected E_NESTED_DICT_IN_MERGE_PAYLOAD for non-DELETE op-descriptor sub-value: {errors}"
 
 
 @pytest.mark.asyncio
@@ -157,9 +179,9 @@ async def test_non_merge_op_with_dict_value_not_affected() -> None:
     )
     errors = result.get("errors", [])
     error_codes = [e.get("code") for e in errors]
-    assert "E_NESTED_DICT_IN_MERGE_PAYLOAD" not in error_codes, (
-        f"Unexpected E_NESTED_DICT_IN_MERGE_PAYLOAD for non-MERGE change: {errors}"
-    )
+    assert (
+        "E_NESTED_DICT_IN_MERGE_PAYLOAD" not in error_codes
+    ), f"Unexpected E_NESTED_DICT_IN_MERGE_PAYLOAD for non-MERGE change: {errors}"
 
 
 @pytest.mark.asyncio

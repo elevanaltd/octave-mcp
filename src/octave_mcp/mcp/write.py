@@ -1148,15 +1148,19 @@ class WriteTool(BaseTool):
                 errors.append(err)
                 continue
             op_descriptors[key] = (op, payload)
-            # GH#484: Reject MERGE payloads that contain plain nested dict values.
-            # _normalize_value_for_ast wraps any dict as InlineMap unconditionally,
-            # so nested dicts would emit as inline maps (KEY::[K::V]) which fail
-            # strict re-parse with E_NESTED_INLINE_MAP. Strategy S3 (DocumentMutator)
-            # is deferred; the minimum correct fix is rejection at validation time.
+            # GH#484: Reject MERGE payloads that contain non-DELETE-sentinel dict
+            # values. The MERGE handler in _apply_changes only recognises
+            # _is_delete_sentinel as a special sub-operation; every other dict is
+            # passed to _normalize_value_for_ast which wraps it as InlineMap. A
+            # plain nested dict produces nested InlineMap → E_NESTED_INLINE_MAP on
+            # emit. A non-DELETE op-descriptor dict (e.g. $op:APPEND) produces a
+            # flat InlineMap (valid OCTAVE) but with wrong semantics — the caller
+            # almost certainly intended a sub-operation, not a literal map value.
+            # Reject both cases so failures are loud, not silent.
             # I3 (Mirror Constraint): do not silently corrupt the document.
             if op == "MERGE" and isinstance(payload, dict):
                 nested_dict_keys = [
-                    mk for mk, mv in payload.items() if isinstance(mv, dict) and not _is_op_descriptor(mv)
+                    mk for mk, mv in payload.items() if isinstance(mv, dict) and not _is_delete_sentinel(mv)
                 ]
                 if nested_dict_keys:
                     errors.append(

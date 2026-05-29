@@ -182,23 +182,14 @@ class TestFlatPrefixScalarDetector:
 
     def test_fires_on_four_siblings_with_shared_prefix(self):
         """Four sibling keys with shared prefix must trigger."""
-        content = (
-            "DB_HOST::localhost\n"
-            "DB_PORT::5432\n"
-            "DB_NAME::mydb\n"
-            "DB_USER::admin\n"
-        )
+        content = "DB_HOST::localhost\n" "DB_PORT::5432\n" "DB_NAME::mydb\n" "DB_USER::admin\n"
         warnings = _detect_flat_prefix_scalar(content)
         codes = [w["code"] for w in warnings]
         assert "W_FLAT_PREFIX_SCALAR" in codes
 
     def test_warning_message_names_the_prefix(self):
         """Warning message must name the shared prefix."""
-        content = (
-            "NODE_RUNTIME_FLOOR::3.12\n"
-            "NODE_RUNTIME_PIN_SITES::[a, b]\n"
-            "NODE_RUNTIME_WHY::performance\n"
-        )
+        content = "NODE_RUNTIME_FLOOR::3.12\n" "NODE_RUNTIME_PIN_SITES::[a, b]\n" "NODE_RUNTIME_WHY::performance\n"
         warnings = _detect_flat_prefix_scalar(content)
         hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
         assert hits, "Expected W_FLAT_PREFIX_SCALAR warning"
@@ -207,11 +198,7 @@ class TestFlatPrefixScalarDetector:
 
     def test_fires_with_mixed_depth_prefix(self):
         """CACHE_READ, CACHE_WRITE, CACHE_EXPIRE at document root must fire."""
-        content = (
-            "CACHE_READ::fast\n"
-            "CACHE_WRITE::slow\n"
-            "CACHE_EXPIRE::300\n"
-        )
+        content = "CACHE_READ::fast\n" "CACHE_WRITE::slow\n" "CACHE_EXPIRE::300\n"
         warnings = _detect_flat_prefix_scalar(content)
         codes = [w["code"] for w in warnings]
         assert "W_FLAT_PREFIX_SCALAR" in codes
@@ -220,22 +207,14 @@ class TestFlatPrefixScalarDetector:
 
     def test_no_fire_on_two_siblings_with_shared_prefix(self):
         """Only 2 siblings with shared prefix is below threshold — must NOT trigger."""
-        content = (
-            "NODE_RUNTIME_FLOOR::3.12\n"
-            "NODE_RUNTIME_WHY::performance\n"
-            "OTHER_KEY::value\n"
-        )
+        content = "NODE_RUNTIME_FLOOR::3.12\n" "NODE_RUNTIME_WHY::performance\n" "OTHER_KEY::value\n"
         warnings = _detect_flat_prefix_scalar(content)
         codes = [w["code"] for w in warnings]
         assert "W_FLAT_PREFIX_SCALAR" not in codes
 
     def test_no_fire_on_keys_without_shared_prefix(self):
         """Keys that don't share a prefix must NOT trigger."""
-        content = (
-            "ALPHA_ONE::1\n"
-            "BETA_TWO::2\n"
-            "GAMMA_THREE::3\n"
-        )
+        content = "ALPHA_ONE::1\n" "BETA_TWO::2\n" "GAMMA_THREE::3\n"
         warnings = _detect_flat_prefix_scalar(content)
         codes = [w["code"] for w in warnings]
         assert "W_FLAT_PREFIX_SCALAR" not in codes
@@ -245,11 +224,7 @@ class TestFlatPrefixScalarDetector:
 
         E.g. FOO, BAR, BAZ all have no common prefix.
         """
-        content = (
-            "FOO::1\n"
-            "BAR::2\n"
-            "BAZ::3\n"
-        )
+        content = "FOO::1\n" "BAR::2\n" "BAZ::3\n"
         warnings = _detect_flat_prefix_scalar(content)
         codes = [w["code"] for w in warnings]
         assert "W_FLAT_PREFIX_SCALAR" not in codes
@@ -263,12 +238,7 @@ class TestFlatPrefixScalarDetector:
 
     def test_no_fire_in_comment_lines(self):
         """Keys that appear only in comment lines must NOT trigger."""
-        content = (
-            "// DB_HOST::localhost\n"
-            "// DB_PORT::5432\n"
-            "// DB_NAME::mydb\n"
-            "REAL_KEY::value\n"
-        )
+        content = "// DB_HOST::localhost\n" "// DB_PORT::5432\n" "// DB_NAME::mydb\n" "REAL_KEY::value\n"
         warnings = _detect_flat_prefix_scalar(content)
         codes = [w["code"] for w in warnings]
         assert "W_FLAT_PREFIX_SCALAR" not in codes
@@ -277,11 +247,7 @@ class TestFlatPrefixScalarDetector:
 
     def test_warning_has_stable_code_line_and_provenance(self):
         """Warning carries stable code, line number, safe=True, semantics_changed=False (I4)."""
-        content = (
-            "DB_HOST::localhost\n"
-            "DB_PORT::5432\n"
-            "DB_NAME::mydb\n"
-        )
+        content = "DB_HOST::localhost\n" "DB_PORT::5432\n" "DB_NAME::mydb\n"
         warnings = _detect_flat_prefix_scalar(content)
         hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
         assert len(hits) >= 1
@@ -293,11 +259,7 @@ class TestFlatPrefixScalarDetector:
 
     def test_advisory_severity_only(self):
         """W_FLAT_PREFIX_SCALAR must carry safe=True, semantics_changed=False."""
-        content = (
-            "CACHE_READ::fast\n"
-            "CACHE_WRITE::slow\n"
-            "CACHE_EXPIRE::300\n"
-        )
+        content = "CACHE_READ::fast\n" "CACHE_WRITE::slow\n" "CACHE_EXPIRE::300\n"
         warnings = _detect_flat_prefix_scalar(content)
         for w in warnings:
             if w["code"] == "W_FLAT_PREFIX_SCALAR":
@@ -306,11 +268,7 @@ class TestFlatPrefixScalarDetector:
 
     def test_warning_message_references_nesting_suggestion(self):
         """Warning message mentions nesting under a block parent."""
-        content = (
-            "CACHE_READ::fast\n"
-            "CACHE_WRITE::slow\n"
-            "CACHE_EXPIRE::300\n"
-        )
+        content = "CACHE_READ::fast\n" "CACHE_WRITE::slow\n" "CACHE_EXPIRE::300\n"
         warnings = _detect_flat_prefix_scalar(content)
         hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
         assert hits
@@ -482,11 +440,7 @@ class TestFlatPrefixScalarTMGAdvisory:
 
     def test_warning_tier_is_structural_check(self):
         """A1: tier field must be STRUCTURAL_CHECK."""
-        content = (
-            "DB_HOST::localhost\n"
-            "DB_PORT::5432\n"
-            "DB_NAME::mydb\n"
-        )
+        content = "DB_HOST::localhost\n" "DB_PORT::5432\n" "DB_NAME::mydb\n"
         warnings = _detect_flat_prefix_scalar(content)
         hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
         assert hits, "Expected W_FLAT_PREFIX_SCALAR warning"
@@ -498,11 +452,7 @@ class TestFlatPrefixScalarTMGAdvisory:
         Without dedup, the multi-prefix algorithm could emit both under
         prefix 'NODE' and prefix 'NODE_RUNTIME' for the same key set.
         """
-        content = (
-            "NODE_RUNTIME_FLOOR::3.12\n"
-            "NODE_RUNTIME_PIN_SITES::[a, b]\n"
-            "NODE_RUNTIME_WHY::performance\n"
-        )
+        content = "NODE_RUNTIME_FLOOR::3.12\n" "NODE_RUNTIME_PIN_SITES::[a, b]\n" "NODE_RUNTIME_WHY::performance\n"
         warnings = _detect_flat_prefix_scalar(content)
         hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
         assert len(hits) == 1, (
@@ -533,9 +483,7 @@ class TestFlatPrefixScalarTMGAdvisory:
             # No warning should contain keys from BOTH indent levels.
             has_top_level = any(k in ("DB_HOST", "DB_PORT") for k in key_list)
             has_indented = any(k in ("DB_NAME", "DB_USER", "DB_PASS") for k in key_list)
-            assert not (has_top_level and has_indented), (
-                f"Cross-indent grouping detected: {key_list}"
-            )
+            assert not (has_top_level and has_indented), f"Cross-indent grouping detected: {key_list}"
 
     def test_block_form_siblings_detected(self):
         """A4: block-form siblings (KEY: child) should also trigger after regex fix.
@@ -546,16 +494,11 @@ class TestFlatPrefixScalarTMGAdvisory:
         # Block-open form: DB_HOST: followed by value on next line would be
         # `DB_HOST:\n  value`, but at the key-scan level we match the opener line.
         # The simplest form that exercises the \\s branch: `KEY: value` (space after colon).
-        content = (
-            "DB_HOST: localhost\n"
-            "DB_PORT: 5432\n"
-            "DB_NAME: mydb\n"
-        )
+        content = "DB_HOST: localhost\n" "DB_PORT: 5432\n" "DB_NAME: mydb\n"
         warnings = _detect_flat_prefix_scalar(content)
         codes = [w["code"] for w in warnings]
         assert "W_FLAT_PREFIX_SCALAR" in codes, (
-            "Block-form (KEY: value with space) siblings must also trigger "
-            "W_FLAT_PREFIX_SCALAR after regex fix."
+            "Block-form (KEY: value with space) siblings must also trigger " "W_FLAT_PREFIX_SCALAR after regex fix."
         )
 
     def test_no_false_positive_across_different_parent_blocks(self):
@@ -564,13 +507,7 @@ class TestFlatPrefixScalarTMGAdvisory:
         SECTION_A:\n  DB_HOST and SECTION_B:\n  DB_NAME are NOT siblings even if
         both are indented equally — they have different parents.
         """
-        content = (
-            "SECTION_A:\n"
-            "  DB_HOST::localhost\n"
-            "  DB_PORT::5432\n"
-            "SECTION_B:\n"
-            "  DB_NAME::mydb\n"
-        )
+        content = "SECTION_A:\n" "  DB_HOST::localhost\n" "  DB_PORT::5432\n" "SECTION_B:\n" "  DB_NAME::mydb\n"
         warnings = _detect_flat_prefix_scalar(content)
         hits = [w for w in warnings if w["code"] == "W_FLAT_PREFIX_SCALAR"]
         # DB_HOST + DB_PORT = 2 (below threshold in SECTION_A group).
@@ -580,9 +517,7 @@ class TestFlatPrefixScalarTMGAdvisory:
             key_list = hit["keys"]
             has_section_a = any(k in ("DB_HOST", "DB_PORT") for k in key_list)
             has_section_b = any(k in ("DB_NAME",) for k in key_list)
-            assert not (has_section_a and has_section_b), (
-                f"Cross-parent-block grouping detected: {key_list}"
-            )
+            assert not (has_section_a and has_section_b), f"Cross-parent-block grouping detected: {key_list}"
 
 
 class TestInlineArrayRootCRSAdvisory:
