@@ -44,6 +44,8 @@ from octave_mcp.mcp.compile_grammar import USAGE_HINTS
 from octave_mcp.mcp.write_detection import (
     _auto_quote_section_refs_in_values,
     _detect_annotation_too_long,
+    _detect_flat_prefix_scalar,
+    _detect_inline_array_root,
     _detect_snake_case_blob,
     _detect_unquoted_section_in_values,
 )
@@ -2837,6 +2839,16 @@ class WriteTool(BaseTool):
             # Refined contract per operator comment 4549996376. v1 ADVISORY only.
             snake_case_blob_warnings = _detect_snake_case_blob(parse_input)
             corrections.extend(snake_case_blob_warnings)
+
+            # Structural advisory: map-as-inline-array root pattern.
+            # Advisory only — non-blocking, routed to corrections.
+            inline_array_root_warnings = _detect_inline_array_root(parse_input)
+            corrections.extend(inline_array_root_warnings)
+
+            # Structural advisory: flat sibling keys sharing a redundant prefix.
+            # Advisory only — non-blocking, routed to corrections.
+            flat_prefix_warnings = _detect_flat_prefix_scalar(parse_input)
+            corrections.extend(flat_prefix_warnings)
 
             # Apply META mutations (if any)
             self._apply_mutations(doc, mutations)

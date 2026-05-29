@@ -26,7 +26,11 @@ from octave_mcp.core.schema_extractor import SchemaDefinition
 from octave_mcp.core.validator import ValidationError, Validator, _count_literal_zones
 from octave_mcp.mcp.base_tool import BaseTool, SchemaBuilder
 from octave_mcp.mcp.compile_grammar import USAGE_HINTS
-from octave_mcp.mcp.write_detection import _detect_snake_case_blob
+from octave_mcp.mcp.write_detection import (
+    _detect_flat_prefix_scalar,
+    _detect_inline_array_root,
+    _detect_snake_case_blob,
+)
 from octave_mcp.schemas.loader import get_builtin_schema, load_schema_by_name
 
 # Gap_6: Regex pattern to extract spec error codes (E001-E007) from error messages
@@ -849,6 +853,16 @@ class ValidateTool(BaseTool):
             # callers see the discipline guidance (I4/I5).
             snake_case_blob_warnings = _detect_snake_case_blob(content)
             result["warnings"].extend(snake_case_blob_warnings)
+
+            # Structural advisory: map-as-inline-array root pattern.
+            # Advisory only — surfaces in warnings[], non-blocking (I4/I5).
+            inline_array_root_warnings = _detect_inline_array_root(content)
+            result["warnings"].extend(inline_array_root_warnings)
+
+            # Structural advisory: flat sibling keys sharing a redundant prefix.
+            # Advisory only — surfaces in warnings[], non-blocking (I4/I5).
+            flat_prefix_warnings = _detect_flat_prefix_scalar(content)
+            result["warnings"].extend(flat_prefix_warnings)
 
         except Exception as e:
             result["status"] = "error"

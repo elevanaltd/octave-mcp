@@ -944,3 +944,348 @@ def _detect_snake_case_blob(content: str) -> list[dict[str, Any]]:
         i += 1
 
     return warnings
+
+
+# ---------------------------------------------------------------------------
+# GH-structural-advisory: W_INLINE_ARRAY_ROOT
+# ---------------------------------------------------------------------------
+
+# Advisory code for map-as-inline-array structural pattern.
+W_INLINE_ARRAY_ROOT = "W_INLINE_ARRAY_ROOT"
+
+# Threshold: inline array with >= this many K::V elements triggers.
+_W_INLINE_ARRAY_ROOT_ENTRY_THRESHOLD = 3
+
+# Threshold: serialized array length > this triggers regardless of entry count.
+_W_INLINE_ARRAY_ROOT_LENGTH_THRESHOLD = 80
+
+# Regex: detects a K::V map-entry element within an inline array — the
+# discriminator between map-as-inline-array and scalar/string lists.
+# A map entry is: optional whitespace, an identifier token, `::`, then a value.
+_W_INLINE_ARRAY_ROOT_ENTRY_RE = re.compile(r"(?:^|,)\s*[A-Za-z_][A-Za-z0-9_]*\s*::")
+
+# Regex: detects an assignment opener with an inline array value on the same
+# line: ``KEY::[...]`` (double-colon form).
+_W_INLINE_ARRAY_ROOT_INLINE_RE = re.compile(r"^[ \t]*[A-Za-z_][A-Za-z0-9_]*\s*::\s*\[")
+
+# Regex: detects a block-opener form ``KEY:[`` (single colon).
+_W_INLINE_ARRAY_ROOT_BLOCK_RE = re.compile(r"^[ \t]*[A-Za-z_][A-Za-z0-9_]*\s*:\s*\[")
+
+
+def _w_inline_array_root_array_is_map(array_content: str) -> bool:
+    """Return True if *array_content* (the text between [ and ]) contains
+    K::V map-entry elements.
+
+    The discriminator: at least one element must contain ``::`` in an
+    identifier-value position (not just a string value).
+    """
+    return bool(_W_INLINE_ARRAY_ROOT_ENTRY_RE.search(array_content))
+
+
+def _w_inline_array_root_entry_count(array_content: str) -> int:
+    """Count the number of top-level comma-separated elements in *array_content*."""
+    # A simple heuristic: count commas at depth 0 plus 1.
+    depth = 0
+    commas = 0
+    in_quote = False
+    for ch in array_content:
+        if ch == '"' and not in_quote:
+            in_quote = True
+        elif ch == '"' and in_quote:
+            in_quote = False
+        elif not in_quote:
+            if ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+            elif ch == "," and depth == 0:
+                commas += 1
+    stripped = array_content.strip()
+    if not stripped:
+        return 0
+    return commas + 1
+
+
+def _detect_inline_array_root(content: str) -> list[dict[str, Any]]:
+    """Detect map-as-inline-array structural pattern (W_INLINE_ARRAY_ROOT).
+
+    Fires when a key's value is an inline array ``[...]`` whose elements are
+    themselves K::V map-entries (map-as-inline-array), AND EITHER:
+      * entry count >= 3, OR
+      * serialized length > ``_W_INLINE_ARRAY_ROOT_LENGTH_THRESHOLD``
+
+    Does NOT fire on:
+      * Legitimate scalar/string lists: IMMUTABLES::[a, b, c]
+      * Content inside fenced literal zones (Zone 3)
+      * Content inside // comments
+
+    Discriminator: elements contain ``::`` map syntax.
+
+    Severity: ADVISORY only (non-blocking, surfaced in warnings/corrections).
+
+    Args:
+        content: Raw OCTAVE document content string.
+
+    Returns:
+        List of warning dicts with code ``W_INLINE_ARRAY_ROOT``.
+    """
+    warnings_out: list[dict[str, Any]] = []
+
+    literal_zone_lines = _build_literal_zone_line_set(content)
+    lines = content.split("\n")
+
+    # Build cumulative offsets for line-based tracking.
+    line_offsets: list[int] = [0]
+    for ln in lines:
+        line_offsets.append(line_offsets[-1] + len(ln) + 1)
+
+    i = 0
+    while i < len(lines):
+        raw_line = lines[i]
+        line_num = i + 1
+
+        # Skip literal zone lines.
+        if line_num in literal_zone_lines:
+            i += 1
+            continue
+
+        # Skip comment lines.
+        stripped = raw_line.lstrip()
+        if stripped.startswith("//"):
+            i += 1
+            continue
+
+        # --- Case 1: inline form ``KEY::[...]`` on a single line ---
+        m = _W_INLINE_ARRAY_ROOT_INLINE_RE.match(raw_line)
+        # --- Case 2: block-open form ``KEY:[`` possibly spanning lines ---
+        bm = _W_INLINE_ARRAY_ROOT_BLOCK_RE.match(raw_line) if not m else None
+
+        opener_match = m or bm
+        if not opener_match:
+            i += 1
+            continue
+
+        # Locate the opening ``[`` position in the line.
+        bracket_pos = raw_line.index("[", opener_match.start())
+        # Collect the full array content by walking forward until balanced.
+        full_array = ""
+        depth = 0
+        found_close = False
+        scan_line_idx = i
+        while scan_line_idx < len(lines):
+            scan_line = lines[scan_line_idx]
+            # Skip literal zone inside multi-line array collection.
+            if scan_line_idx + 1 in literal_zone_lines and scan_line_idx != i:
+                scan_line_idx += 1
+                continue
+            start_col = bracket_pos if scan_line_idx == i else 0
+            for _col, ch in enumerate(scan_line[start_col:], start=start_col):
+                if ch == "[":
+                    depth += 1
+                    if depth == 1:
+                        continue  # skip the opening bracket itself
+                elif ch == "]":
+                    depth -= 1
+                    if depth == 0:
+                        found_close = True
+                        break
+                if depth > 0:
+                    full_array += ch
+            if found_close:
+                break
+            if depth > 0 and scan_line_idx < len(lines) - 1:
+                full_array += "\n"
+            scan_line_idx += 1
+
+        if not found_close:
+            i += 1
+            continue
+
+        # Discriminate: does the array content contain K::V map entries?
+        if not _w_inline_array_root_array_is_map(full_array):
+            i += 1
+            continue
+
+        entry_count = _w_inline_array_root_entry_count(full_array)
+        array_length = len(full_array)
+
+        if entry_count >= _W_INLINE_ARRAY_ROOT_ENTRY_THRESHOLD or array_length > _W_INLINE_ARRAY_ROOT_LENGTH_THRESHOLD:
+            # Extract the key name from the line.
+            key_match = re.match(r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)", raw_line)
+            key_name = key_match.group(1) if key_match else "<unknown>"
+            warnings_out.append(
+                {
+                    "code": W_INLINE_ARRAY_ROOT,
+                    "tier": "STRUCTURAL_CHECK",
+                    "discipline": "STRUCTURAL_ADVISORY",
+                    "message": (
+                        f"W_INLINE_ARRAY_ROOT at line {line_num}: key '{key_name}' "
+                        f"has {entry_count} map-entry elements authored as an "
+                        f"inline-array root; prefer BLOCK form (KEY: + indented "
+                        f"children). Inline arrays are for scalar lists, not "
+                        f"maps-of-maps."
+                    ),
+                    "line": line_num,
+                    "key": key_name,
+                    "entry_count": entry_count,
+                    "safe": True,
+                    "semantics_changed": False,
+                }
+            )
+
+        i += 1
+
+    return warnings_out
+
+
+# ---------------------------------------------------------------------------
+# GH-structural-advisory: W_FLAT_PREFIX_SCALAR
+# ---------------------------------------------------------------------------
+
+# Advisory code for flat sibling keys that share a redundant prefix.
+W_FLAT_PREFIX_SCALAR = "W_FLAT_PREFIX_SCALAR"
+
+# Minimum number of sibling keys sharing a prefix to trigger the warning.
+_W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD = 3
+
+# Regex matching a top-level (zero-indent or consistent-indent) KEY assignment.
+# Captures the full key name. We restrict to uppercase/underscore keys as those
+# are the primary OCTAVE structural pattern subject to flat-prefix sprawl.
+_W_FLAT_PREFIX_SCALAR_KEY_RE = re.compile(r"^([ \t]*)([A-Z][A-Z0-9_]+)\s*:[:s]")
+
+
+def _w_flat_prefix_scalar_all_prefixes(key: str) -> list[str]:
+    """Return all valid underscore-delimited prefix segments for *key*.
+
+    For ``NODE_RUNTIME_FLOOR`` → [``NODE``, ``NODE_RUNTIME``].
+    For ``DB_HOST`` → [``DB``].
+    For ``FOO`` (no underscore) → [] (single-segment keys have no prefix).
+
+    We generate ALL candidate prefixes (not just "all except last") so that
+    siblings like ``NODE_RUNTIME_FLOOR``, ``NODE_RUNTIME_PIN_SITES``,
+    ``NODE_RUNTIME_WHY`` all map to the shared prefix ``NODE_RUNTIME`` even
+    though their "all except last" prefixes differ (``NODE_RUNTIME`` vs
+    ``NODE_RUNTIME_PIN``).
+    """
+    parts = key.split("_")
+    if len(parts) < 2:
+        return []
+    # All prefixes: from the first segment up to (but not including) the last.
+    return ["_".join(parts[:n]) for n in range(1, len(parts))]
+
+
+def _detect_flat_prefix_scalar(content: str) -> list[dict[str, Any]]:
+    """Detect sibling keys that share a redundant underscore prefix (W_FLAT_PREFIX_SCALAR).
+
+    Heuristic:
+      1. Extract all key assignment lines at the same indentation level
+         (excluding literal zones and comment lines).
+      2. For each candidate prefix (all underscore-delimited prefixes of each
+         key), count how many sibling keys share that prefix.
+      3. For groups with >= 3 members at the same indentation level, emit an
+         advisory warning suggesting nesting under a ``{PREFIX}:`` block parent.
+      4. Report the longest qualifying prefix to give the most actionable advice.
+
+    Severity: ADVISORY only (non-blocking).
+
+    Args:
+        content: Raw OCTAVE document content string.
+
+    Returns:
+        List of warning dicts with code ``W_FLAT_PREFIX_SCALAR``.
+    """
+    warnings_out: list[dict[str, Any]] = []
+    literal_zone_lines = _build_literal_zone_line_set(content)
+
+    lines = content.split("\n")
+
+    # Collect (indent_level, key_name, line_num) tuples.
+    entries: list[tuple[str, str, int]] = []
+
+    for line_idx, raw_line in enumerate(lines):
+        line_num = line_idx + 1
+
+        # Skip literal zone lines.
+        if line_num in literal_zone_lines:
+            continue
+
+        # Skip comment lines.
+        stripped = raw_line.lstrip()
+        if stripped.startswith("//"):
+            continue
+
+        m = _W_FLAT_PREFIX_SCALAR_KEY_RE.match(raw_line)
+        if not m:
+            continue
+
+        indent = m.group(1)
+        key_name = m.group(2)
+        entries.append((indent, key_name, line_num))
+
+    if not entries:
+        return warnings_out
+
+    from collections import defaultdict
+
+    # Build a mapping: (indent, prefix) -> list of (key_name, line_num)
+    # A key contributes to every prefix group it belongs to.
+    prefix_groups: dict[tuple[str, str], list[tuple[str, int]]] = defaultdict(list)
+
+    for indent, key_name, line_num in entries:
+        for prefix in _w_flat_prefix_scalar_all_prefixes(key_name):
+            prefix_groups[(indent, prefix)].append((key_name, line_num))
+
+    # Among qualifying groups (size >= threshold), report the LONGEST prefix
+    # for each key set — this gives the most actionable suggestion.
+    # To avoid double-reporting a set of keys under both "DB" and "DB_HOST"
+    # when the intent is to flag "DB", we deduplicate by the key-set fingerprint
+    # and keep only the longest prefix per unique key set.
+    best_prefix_for_keyset: dict[tuple[str, frozenset[str]], str] = {}
+
+    for (indent, prefix), members in prefix_groups.items():
+        if len(members) < _W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD:
+            continue
+        key_set = frozenset(k for k, _ in members)
+        group_id = (indent, key_set)
+        existing = best_prefix_for_keyset.get(group_id)
+        if existing is None or len(prefix) > len(existing):
+            best_prefix_for_keyset[group_id] = prefix
+
+    # Emit one warning per unique (indent, key_set) using the best (longest) prefix.
+    for (indent, _key_set), best_prefix in best_prefix_for_keyset.items():
+        # Retrieve the members for this (indent, best_prefix) group.
+        members = prefix_groups[(indent, best_prefix)]
+        # De-duplicate member list (a key may appear multiple times if it
+        # contributes to both shorter and longer prefix groups).
+        seen_keys: set[str] = set()
+        unique_members: list[tuple[str, int]] = []
+        for k, ln in members:
+            if k not in seen_keys:
+                seen_keys.add(k)
+                unique_members.append((k, ln))
+
+        if len(unique_members) < _W_FLAT_PREFIX_SCALAR_GROUP_THRESHOLD:
+            continue
+
+        first_line = unique_members[0][1]
+        key_names = [k for k, _ in unique_members]
+        warnings_out.append(
+            {
+                "code": W_FLAT_PREFIX_SCALAR,
+                "tier": "STRUCTURAL_CHECK",
+                "discipline": "STRUCTURAL_ADVISORY",
+                "message": (
+                    f"W_FLAT_PREFIX_SCALAR at line {first_line}: sibling keys "
+                    f"share prefix '{best_prefix}_'; nest under '{best_prefix}:' "
+                    f"block to drop the redundant prefix (key-token saving + "
+                    f"better attention inheritance). Keys: {', '.join(key_names)}"
+                ),
+                "line": first_line,
+                "prefix": best_prefix,
+                "keys": key_names,
+                "safe": True,
+                "semantics_changed": False,
+            }
+        )
+
+    return warnings_out
