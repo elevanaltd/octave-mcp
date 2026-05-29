@@ -128,6 +128,36 @@ def test_north_star_doc_has_no_data_loss_warnings(doc: Path) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "doc",
+    NORTH_STAR_DOCS,
+    ids=[str(p.relative_to(REPO_ROOT)) for p in NORTH_STAR_DOCS],
+)
+def test_north_star_doc_is_structurally_nonvacuous(doc: Path) -> None:
+    """Each NS doc MUST parse to a substantive governance document.
+
+    The no-data-loss check above is necessary but not sufficient: a truncated
+    or empty envelope tokenises cleanly with zero forbidden warnings yet carries
+    no governance content. This guards against that vacuous-pass mode by
+    asserting the parsed document has a META envelope (with TYPE) and at least
+    one body section — i.e. UPOG block structure actually survived, not merely
+    that nothing was dropped.
+
+    (Full octave_validate STRICT compliance — warnings/errors/repairs all empty
+    against the META schema under CONTRACT::HOLOGRAPHIC<parse_only_governance> —
+    is enforced at author time by the octave_write gate; this test asserts the
+    portable, dependency-free structural floor.)
+    """
+    content = doc.read_text(encoding="utf-8")
+    parsed, _warnings = parse_with_warnings(content)
+    assert parsed.meta, f"{doc.relative_to(REPO_ROOT)}: missing/empty META envelope"
+    assert parsed.meta.get("TYPE"), f"{doc.relative_to(REPO_ROOT)}: META has no TYPE — not a governance artefact"
+    assert parsed.sections, (
+        f"{doc.relative_to(REPO_ROOT)}: no body sections — empty/truncated doc "
+        "would pass the warning check vacuously"
+    )
+
+
 # ---------------------------------------------------------------------------
 # NEGATIVE CONTROLS — prove the detector fires on the broken legacy forms.
 # These keep the positive tests honest: if the detector ever silently stops
@@ -183,3 +213,26 @@ def test_negative_control_markdown_headings_fail_tokenisation() -> None:
     """
     with pytest.raises(LexerError):
         parse_with_warnings(LEGACY_MARKDOWN_HEADINGS)
+
+
+EMPTY_ENVELOPE = """===EMPTY_NS===
+META:
+  TYPE::NORTH_STAR_SUMMARY
+  VERSION::"1.0"
+===END===
+"""
+
+
+def test_negative_control_empty_envelope_is_structurally_vacuous() -> None:
+    """An empty envelope tokenises clean yet has NO body sections.
+
+    Proves the structural-nonvacuity guard above is load-bearing: this doc emits
+    zero forbidden warnings (would pass the warning check) but MUST be caught by
+    the empty-sections assertion.
+    """
+    parsed, warnings = parse_with_warnings(EMPTY_ENVELOPE)
+    assert not _forbidden(warnings), "fixture should emit no data-loss warnings"
+    assert not parsed.sections, (
+        "Guard regression: empty envelope unexpectedly reports body sections — "
+        "the structural-nonvacuity test would no longer catch truncated docs"
+    )

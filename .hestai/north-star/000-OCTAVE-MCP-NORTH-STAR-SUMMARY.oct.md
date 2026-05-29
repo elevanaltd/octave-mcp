@@ -49,7 +49,7 @@ THREE_ZONE_MODEL:
   I5<SCHEMA_SOVEREIGNTY>:
     STATEMENT::validation_status_visible_in_output
     RATIONALE::if_cant_validate_say_so
-    INTERPRETATION_LITERAL_ZONES::contains_literal_zones_flag⊕literal_zones_validated_flag
+    INTERPRETATION_LITERAL_ZONES::"contains_literal_zones_flag ⊕ literal_zones_validated_flag"
     STATUS::ENFORCED
 §2::ASSUMPTIONS
   COUNT::10
