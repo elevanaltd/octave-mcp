@@ -149,7 +149,8 @@ CONDUCT:
   PROSE_BLEED::"Using natural language sentences as values — every token must carry semantic payload"
 §7::TIER_NORMALIZATION_AUDIT_CHANNEL
   // ADR-0006 SR1-T1 Step 3 (v1.12.0): centralised audit channel for I4 completeness
-  MODULE::"src/octave_mcp/core/grammar/tier_normalize.py"
+  MODULE::"octave-mcp:src/octave_mcp/core/grammar/tier_normalize.py"
+  // ^ path is in the octave-mcp repo (upstream OCTAVE implementation), not this repo.
   API:
     LOG_REPAIR::"log_repair(log, rule_id, before, after, *, safe=True, semantics_changed=False) — single precise entry point appending a RepairTier.NORMALIZATION entry"
     ACTIVE::"active(log) context manager — binds ``log`` as the ContextVar-scoped sink so pipeline-internal sites (notably emitter identifier-dequoting) can record receipts without threading RepairLog through emit()'s public signature"
@@ -163,5 +164,5 @@ CONDUCT:
     SELF_DEPRECATION::"When Sprint 3+ trivia and the new triple-quote lexer W-code land, precise loggers will cover their respective diffs, the dedup precondition fails, and the reconciler no-ops without any code change"
   INTEGRATION_POINTS:
     EMITTER::"emit_assignment: precise log when assignment.was_quoted is True AND emitter chose to emit bare (identifier-shape dequoting)"
-    WRITE_PY::"mcp/write.py: tier_normalize.active(tier_normalize_log) wraps each _emit_with_style call; reconcile_canonical_emission runs after final emit; entries drain into result[corrections]"
+    WRITE_PY::"octave-mcp:src/octave_mcp/mcp/write.py — tier_normalize.active(tier_normalize_log) wraps each _emit_with_style call; reconcile_canonical_emission runs after final emit; entries drain into result[corrections]"
 ===END===
