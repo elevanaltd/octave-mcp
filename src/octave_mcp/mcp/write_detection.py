@@ -950,6 +950,9 @@ def _detect_snake_case_blob(content: str) -> list[dict[str, Any]]:
 # GH-structural-advisory: W_INLINE_ARRAY_ROOT
 # ---------------------------------------------------------------------------
 
+# Critical-Engineer: consulted for Validator detector architecture
+# (advisory routing, quote-scan robustness, drift surface) — CE gate 2026-05-29.
+
 # Advisory code for map-as-inline-array structural pattern.
 W_INLINE_ARRAY_ROOT = "W_INLINE_ARRAY_ROOT"
 
@@ -963,6 +966,35 @@ _W_INLINE_ARRAY_ROOT_LENGTH_THRESHOLD = 80
 # discriminator between map-as-inline-array and scalar/string lists.
 # A map entry is: optional whitespace, an identifier token, `::`, then a value.
 _W_INLINE_ARRAY_ROOT_ENTRY_RE = re.compile(r"(?:^|,)\s*[A-Za-z_][A-Za-z0-9_]*\s*::")
+
+
+def _w_quote_is_unescaped(text: str, pos: int) -> bool:
+    """Return True iff the ``"`` at *pos* in *text* is NOT escaped.
+
+    Implements the backslash-run-parity convention already used in
+    ``_all_section_marks_quoted`` and ``_build_holographic_line_set``
+    (cubic-dev-ai P1 fix, PR #431): count consecutive backslashes
+    immediately before the quote; an **even** count (including zero)
+    means the quote is unescaped; an **odd** count means it is escaped.
+
+    CE gate 2026-05-29: extracted as a shared helper so all four scanners
+    that track in-quote state use the same parity logic and cannot drift
+    independently.
+
+    Args:
+        text: The string being scanned.
+        pos: Index of the ``"`` character to test.
+
+    Returns:
+        True if the quote at *pos* is unescaped (should toggle in-quote state).
+    """
+    backslash_count = 0
+    j = pos - 1
+    while j >= 0 and text[j] == "\\":
+        backslash_count += 1
+        j -= 1
+    return backslash_count % 2 == 0
+
 
 # Regex: detects an assignment opener with an inline array value on the same
 # line: ``KEY::[...]`` (double-colon form).
@@ -1016,14 +1048,13 @@ def _w_inline_array_root_collect_array(
         i = 0
         while i < len(line_text):
             ch = line_text[i]
-            if in_quote:
-                if ch == '"':
-                    in_quote = False
+            # Backslash-parity quote toggle (CE gate 2026-05-29 / cubic P1 convention).
+            if ch == '"' and _w_quote_is_unescaped(line_text, i):
+                in_quote = not in_quote
                 chunks.append(ch)
                 i += 1
                 continue
-            if ch == '"':
-                in_quote = True
+            if in_quote:
                 chunks.append(ch)
                 i += 1
                 continue
@@ -1069,17 +1100,16 @@ def _w_inline_array_root_count_map_entries(array_content: str) -> int:
         Number of top-level map-entry elements.
     """
     # Split into top-level comma-separated segments respecting depth and quotes.
+    # Uses backslash-parity quote toggle (CE gate 2026-05-29 / cubic P1 convention).
     segments: list[str] = []
     current: list[str] = []
     depth = 0
     in_quote = False
-    for ch in array_content:
-        if in_quote:
-            if ch == '"':
-                in_quote = False
+    for idx, ch in enumerate(array_content):
+        if ch == '"' and _w_quote_is_unescaped(array_content, idx):
+            in_quote = not in_quote
             current.append(ch)
-        elif ch == '"':
-            in_quote = True
+        elif in_quote:
             current.append(ch)
         elif ch == "[":
             depth += 1
@@ -1168,7 +1198,7 @@ def _detect_inline_array_root(content: str) -> list[dict[str, Any]]:
         # Collect the full array content with quote/comment-aware scanning.
         full_array, last_scan_idx = _w_inline_array_root_collect_array(lines, i, bracket_pos, literal_zone_lines)
 
-        if not full_array and not full_array.strip():
+        if not full_array.strip():
             # Empty or unclosed array — skip.
             i = last_scan_idx + 1
             continue
