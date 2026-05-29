@@ -182,7 +182,8 @@ behaviour) or a **`$op` descriptor** that targets a specific operation:
 | _(none)_ | any | full-value replacement (legacy behaviour) |
 
 Paths support: top-level `KEY`, `META.FIELD`, `PARENT.CHILD` into a top-level
-Block, and `§N.KEY` / `§N::NAME.KEY` into Sections.
+Block, `§N.KEY` / `§N::NAME.KEY` into Sections, and `ANCHOR/KEY` anchored paths
+for disambiguating duplicate sibling keys (see below).
 
 ```python
 # Append a new token to a nested array (no read-modify-write of the whole array).
@@ -209,6 +210,71 @@ await client.call_tool("octave_write", {
     "changes": {"NAV.DEPRECATED": {"$op": "DELETE"}}
 })
 ```
+
+#### Anchored-path disambiguation `ANCHOR/KEY` (GH#460, v1.14.0)
+
+When a document contains **duplicate sibling keys** — e.g. five sibling
+`RATIONALE` keys, one following each `I1`…`I5` immutable — a bare-key change
+(`{"RATIONALE": …}`) resolves only the **first** match. The `ANCHOR/KEY` form
+disambiguates: it targets *"the `KEY` assignment that follows the `ANCHOR` key
+in document order"*.
+
+```python
+# Update only the RATIONALE that follows the I2 key; siblings untouched.
+await client.call_tool("octave_write", {
+    "target_path": path,
+    "changes": {"I2/RATIONALE": "new rationale for I2"}
+})
+```
+
+Semantics and guarantees:
+
+- **Document order.** `ANCHOR/KEY` resolves the first `KEY` assignment that
+  appears *after* the `ANCHOR` assignment within the **same sibling list**
+  (top-level, or one level inside a Block/Section). The anchor never crosses a
+  container boundary.
+- **Resolve-literal-first (backward-compat).** `/` is a valid OCTAVE identifier
+  character, so a key may literally contain it. If a real assignment whose key
+  is exactly `ANCHOR/KEY` exists, it is mutated in place; the anchored-path
+  interpretation only applies when no such literal key is present. Bare `KEY`,
+  `META.FIELD`, `PARENT.CHILD`, and `§N.KEY` paths are unchanged. This collision
+  is resolved **silently** (no warning is emitted): if you intend the anchored
+  interpretation on a document that *also* contains a literal `ANCHOR/KEY` key,
+  rename the literal key or use a `§N.KEY` section path to disambiguate.
+- **Real keys, not indices.** Indexed addressing (`KEY[N]`) is deliberately
+  **not** supported and remains rejected with `E_UNRESOLVABLE_PATH`. Stable
+  real-key anchors honour PROD::I4 (Transform Auditability — deleting a sibling
+  does not shift which node a path resolves to) and PROD::I3 (Mirror Constraint
+  — reflect real structure, never invented indices).
+- **No auto-create.** An anchored path that does not resolve (anchor absent, or
+  no `KEY` following the anchor) fails with `E_UNRESOLVABLE_PATH` rather than
+  appending a fabricated `ANCHOR/KEY` assignment (PROD::I3).
+
+#### Literal-zone form preservation (GH#460, v1.14.0)
+
+When a `changes` value replaces a child whose existing value is a **literal
+zone** (a fenced ```` ``` ```` block), the new content is re-wrapped to preserve
+the fence form — the original fence marker (e.g. ```` ``` ```` vs ```` ```` ````)
+and info tag are kept, and only the inner content changes. A content-only edit
+therefore round-trips to a **byte-identical fence form** under
+`format_style="preserve"`, instead of being downgraded to a quoted scalar
+(`KEY::"…"`). This restores PROD::I1 (Syntactic Fidelity:
+*normalization_alters_syntax_never_semantics*) and mirrors the PR #449
+mutate-in-place philosophy.
+
+```python
+# A fenced OPERATOR_LEGEND block: only the content changes; the ``` fence
+# framing is preserved byte-for-byte.
+await client.call_tool("octave_write", {
+    "target_path": path,
+    "changes": {"OPERATOR_LEGEND": "A -> B (new)\nC -> D (new)"},
+    "format_style": "preserve",
+})
+```
+
+> Passing an explicit `LiteralZoneValue`, a list, or a `$op` descriptor is taken
+> at face value; form preservation only re-wraps a plain string replacement
+> aimed at an existing literal-zone child.
 
 **Validation contract.** Op/target-type mismatches and missing paths surface as
 explicit error codes; they are never silently coerced (I3 Mirror Constraint,

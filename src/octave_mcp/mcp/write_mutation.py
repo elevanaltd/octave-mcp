@@ -238,3 +238,115 @@ def _normalize_value_for_ast(value: Any) -> Any:
         return InlineMap(pairs=normalized_pairs)
     # Other types (str, int, bool, None, etc.) are handled by emit_value directly
     return value
+
+
+def _normalize_value_for_ast_preserving(new_value: Any, existing_value: Any) -> Any:
+    """#460 Case A: normalize a new value, preserving literal-zone fence form.
+
+    PROD::I1 (Syntactic Fidelity): ``normalization_alters_syntax_never_semantics``.
+    When an existing child's value is a ``LiteralZoneValue`` (fenced block) and
+    the caller supplies a plain ``str`` replacement through changes-mode (a
+    ``dict`` is taken at face value and becomes an ``InlineMap``, not a fence),
+    the prior behaviour downgraded the value to a quoted scalar — emitting
+    ``KEY::"..."`` instead of ``KEY::\\n```...```\\n``. That silently switches
+    the syntactic form of a literal zone, an I1 violation.
+
+    This helper preserves the fence form by re-wrapping plain replacement
+    content as a ``LiteralZoneValue`` carrying the ORIGINAL ``fence_marker``
+    (and ``info_tag``), mirroring PR #449's mutate-in-place philosophy. Only
+    the inner content changes; the framing is byte-stable on re-emit.
+
+    Form-preservation is intentionally narrow:
+      - Only triggers when ``existing_value`` is a ``LiteralZoneValue``.
+      - Only re-wraps plain ``str`` replacements. A caller who passes a
+        ``dict``, a ``list``, or an explicit ``LiteralZoneValue`` is taken at
+        face value and normalized via :func:`_normalize_value_for_ast` (their
+        intent is explicit; a ``dict`` becomes an ``InlineMap``, not a fence).
+      - DELETE / op-descriptors never reach here (handled upstream).
+
+    Args:
+        new_value: The replacement value from the changes dict.
+        existing_value: The current ``Assignment.value`` being replaced.
+
+    Returns:
+        A ``LiteralZoneValue`` preserving the existing fence form when the
+        target is a literal zone and the replacement is plain text; otherwise
+        the result of the standard :func:`_normalize_value_for_ast`.
+    """
+    if isinstance(existing_value, LiteralZoneValue) and isinstance(new_value, str):
+        # Re-wrap: keep the fence marker + info tag, swap only the content.
+        # Span bytes are intentionally dropped so the emitter re-emits the
+        # mutated zone canonically rather than splicing stale baseline bytes.
+        return LiteralZoneValue(
+            content=new_value,
+            info_tag=existing_value.info_tag,
+            fence_marker=existing_value.fence_marker,
+        )
+    return _normalize_value_for_ast(new_value)
+
+
+def _parse_anchored_path(key: str) -> tuple[str, str] | None:
+    """#460 Case B: parse an ``ANCHOR/KEY`` anchored path.
+
+    The anchored-path form selects "the KEY assignment following the ANCHOR
+    key in document order". It disambiguates duplicate sibling keys (e.g. five
+    sibling ``RATIONALE`` keys, one per immutable) without inventing indices.
+
+    Recognised shape: exactly one ``/`` separating two non-empty identifier
+    segments, neither containing ``§``, ``.``, ``[`` or ``]`` (those belong to
+    the section-path / META-dot / array-index forms and must not be consumed
+    here). ``ANCHOR`` and ``KEY`` may themselves contain ``/`` only if the
+    whole thing is a single literal identifier — but a literal key is resolved
+    BEFORE this parser is consulted (resolve-literal-first), so any ``/`` that
+    reaches here is treated as the anchored-path separator on the FIRST split.
+
+    Args:
+        key: The raw change-path key.
+
+    Returns:
+        ``(anchor, child_key)`` when the key is shaped like an anchored path;
+        ``None`` otherwise (caller falls back to other resolution forms).
+    """
+    if "/" not in key:
+        return None
+    # Reject shapes owned by other path forms.
+    if key.startswith("§") or "." in key or "[" in key or "]" in key:
+        return None
+    anchor, _, child_key = key.partition("/")
+    if not anchor or not child_key or "/" in child_key:
+        # Empty segment or more than one separator -> not a simple anchored path.
+        return None
+    return (anchor, child_key)
+
+
+def _resolve_anchored_assignment(nodes: list[Any], anchor: str, child_key: str) -> Assignment | None:
+    """#460 Case B: find the ``child_key`` Assignment following ``anchor``.
+
+    Walks ``nodes`` (a sibling list — ``doc.sections`` or a Block/Section's
+    ``children``) in document order. Once the ``anchor`` Assignment is seen,
+    returns the FIRST subsequent ``Assignment`` whose key equals ``child_key``.
+
+    PROD::I3 (Mirror Constraint): resolves only against keys actually present.
+    PROD::I4 (Transform Auditability): the anchor is a stable real key, so a
+    sibling deletion does not shift which node a given path resolves to.
+
+    Args:
+        nodes: Sibling node list to search in document order.
+        anchor: The anchor key that must appear before the target.
+        child_key: The key to resolve after the anchor.
+
+    Returns:
+        The matching ``Assignment`` node, or ``None`` if the anchor is absent
+        or no ``child_key`` Assignment follows it.
+    """
+    seen_anchor = False
+    for node in nodes:
+        if not isinstance(node, Assignment):
+            continue
+        if not seen_anchor:
+            if node.key == anchor:
+                seen_anchor = True
+            continue
+        if node.key == child_key:
+            return node
+    return None

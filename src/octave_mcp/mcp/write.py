@@ -63,6 +63,9 @@ from octave_mcp.mcp.write_mutation import (
     _is_op_descriptor,
     _mark_dirty,
     _normalize_value_for_ast,
+    _normalize_value_for_ast_preserving,
+    _parse_anchored_path,
+    _resolve_anchored_assignment,
     _target_type_for_assignment,
 )
 from octave_mcp.schemas.loader import (
@@ -1339,6 +1342,34 @@ class WriteTool(BaseTool):
                 # doc is None: cannot do AST-aware resolution. Fall through and
                 # accept (legacy behaviour). _apply_changes will resolve.
 
+            # Pattern 4: ANCHOR/KEY anchored-path (#460 Case B).
+            # A '/'-bearing key with no '.' / '§' / '[' is either a literal key
+            # (real assignment whose identifier contains '/') or an anchored
+            # path. Resolve-literal-first: if a literal top-level Assignment
+            # matches the raw key, accept it (backward-compat). Otherwise, when
+            # an AST is available, the anchored target MUST resolve, else the
+            # applier would silently append a fabricated 'ANCHOR/KEY' key
+            # (I3 violation). Reject unresolvable anchored paths here.
+            elif _parse_anchored_path(key) is not None and doc is not None:
+                literal_match = any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
+                if not literal_match and self._resolve_anchored_change(doc, key) is None:
+                    anchor, child_key = _parse_anchored_path(key)  # type: ignore[misc]
+                    errors.append(
+                        {
+                            "code": "E_UNRESOLVABLE_PATH",
+                            "message": (
+                                f"Unresolvable change path '{key}': anchored-path "
+                                f"'{anchor}/{child_key}' did not resolve. It selects the "
+                                f"first '{child_key}' assignment following the '{anchor}' "
+                                f"key in document order, but no such anchor+key pair was "
+                                f"found (and no literal key '{key}' exists). Auto-create is "
+                                f"forbidden by I3 (Mirror Constraint); use content= to add "
+                                f"new structure."
+                            ),
+                        }
+                    )
+                    continue
+
         # GH#373: Op/target-type compatibility post-pass.
         # For each key with a recognised $op, look up the resolved target in the
         # AST and verify the op is compatible with the target type.
@@ -1500,6 +1531,16 @@ class WriteTool(BaseTool):
                 return ("block", node)
             if isinstance(node, Section) and node.key == key:
                 return ("section", node)
+
+        # #460 Case B: ANCHOR/KEY anchored-path (only reached when no literal
+        # key matched above — resolve-literal-first). Mirrors the applier so the
+        # $op/target-type post-pass validates against the node the applier hits.
+        anchored = self._resolve_anchored_change(doc, key)
+        if anchored is not None:
+            target_assignment, _parent = anchored
+            kind = _target_type_for_assignment(target_assignment.value)
+            return (kind, target_assignment)
+
         return ("missing", None)
 
     def _find_block(self, doc: Any, block_key: str) -> Block | None:
@@ -1522,6 +1563,70 @@ class WriteTool(BaseTool):
             if isinstance(node, Block) and node.key == block_key:
                 return node
         return None
+
+    def _resolve_anchored_change(self, doc: Any, key: str) -> tuple[Assignment, Any] | None:
+        """#460 Case B: resolve an ``ANCHOR/KEY`` anchored path to a node.
+
+        Returns the Assignment that the path ``ANCHOR/KEY`` selects — "the KEY
+        assignment following the ANCHOR key in document order" — together with
+        its parent container, or ``None`` when the key is not an anchored path
+        or does not resolve.
+
+        Search order (document order, depth-first):
+          1. The top-level ``doc.sections`` list (parent reported as ``None``).
+          2. The ``children`` of each top-level Block/Section (parent reported
+             as that Block/Section), so siblings nested one level deep are
+             reachable too.
+
+        Anchor and target must be siblings in the SAME list; the resolver does
+        not cross container boundaries (an anchor in one block cannot select a
+        key in another). This keeps resolution local and predictable, honouring
+        PROD::I3 (reflect real structure) and PROD::I4 (stable real-key anchor).
+
+        Args:
+            doc: Parsed AST document.
+            key: The raw change-path key (may or may not be an anchored path).
+
+        Returns:
+            ``(assignment, parent)`` when resolved; ``None`` otherwise. ``parent``
+            is ``None`` for a top-level match, else the containing Block/Section.
+        """
+        parsed = _parse_anchored_path(key)
+        if parsed is None:
+            return None
+        anchor, child_key = parsed
+
+        # 1. Top-level sibling list.
+        top = _resolve_anchored_assignment(doc.sections, anchor, child_key)
+        if top is not None:
+            return (top, None)
+
+        # 2. One level into each Block/Section's children.
+        for node in doc.sections:
+            if isinstance(node, (Block, Section)):
+                hit = _resolve_anchored_assignment(node.children, anchor, child_key)
+                if hit is not None:
+                    return (hit, node)
+        return None
+
+    def _is_anchored_change(self, doc: Any, key: str) -> bool:
+        """#460 Case B: True iff ``key`` must be routed to the anchored handler.
+
+        A key is an anchored change when ALL hold:
+          - it parses as an ``ANCHOR/KEY`` anchored path, AND
+          - no literal top-level Assignment matches the raw key verbatim
+            (resolve-literal-first: a real ``A/B`` key wins), AND
+          - the anchored target resolves in document order.
+
+        Centralising the predicate keeps the dispatch chain in ``_apply_changes``
+        in lock-step: the bare-DELETE branch is suppressed for exactly the keys
+        the anchored branch will claim, so anchored DELETE can never fall into a
+        silent-success no-op (rework B2) and a literal ``A/B`` DELETE is never
+        stranded between the two branches.
+        """
+        if not any(isinstance(s, Assignment) and s.key == key for s in doc.sections):
+            return self._resolve_anchored_change(doc, key) is not None
+        return False
 
     def _apply_block_change(
         self,
@@ -1612,10 +1717,10 @@ class WriteTool(BaseTool):
             )
 
         # Legacy full-value replacement (or new Assignment if missing).
-        normalized_value = _normalize_value_for_ast(new_value)
         for child in block.children:
             if isinstance(child, Assignment) and child.key == child_key:
-                child.value = normalized_value
+                # #460 Case A: preserve literal-zone fence form in place.
+                child.value = _normalize_value_for_ast_preserving(new_value, child.value)
                 # PR-2 T6: child Assignment value mutated; parent block
                 # body region must re-emit (the child line bytes are
                 # stale) while block header line still splices.
@@ -1625,7 +1730,7 @@ class WriteTool(BaseTool):
 
         # If we reach here, _validate_change_paths missed the case. Add as new
         # child Assignment to keep behaviour consistent with _apply_section_change.
-        new_child = Assignment(key=child_key, value=normalized_value, dirty=True)
+        new_child = Assignment(key=child_key, value=_normalize_value_for_ast(new_value), dirty=True)
         block.children.append(new_child)
         _mark_dirty(block, body=True)
 
@@ -1749,11 +1854,11 @@ class WriteTool(BaseTool):
 
         # Update or add child assignment
         # I1 (Syntactic Fidelity): Normalize Python values to AST types
-        normalized_value = _normalize_value_for_ast(new_value)
         found = False
         for child in section.children:
             if isinstance(child, Assignment) and child.key == child_key:
-                child.value = normalized_value
+                # #460 Case A: preserve literal-zone fence form in place.
+                child.value = _normalize_value_for_ast_preserving(new_value, child.value)
                 # PR-2 T6: child Assignment value mutated.
                 _mark_dirty(child)
                 found = True
@@ -1761,7 +1866,7 @@ class WriteTool(BaseTool):
 
         if not found:
             # Add new assignment to section children
-            new_assignment = Assignment(key=child_key, value=normalized_value, dirty=True)
+            new_assignment = Assignment(key=child_key, value=_normalize_value_for_ast(new_value), dirty=True)
             section.children.append(new_assignment)
         # PR-2 T6: in both branches the section's body region changed
         # (either an existing child mutated, or a new child appended),
@@ -1871,10 +1976,12 @@ class WriteTool(BaseTool):
                         doc.dirty = True
                     else:
                         # I1 (Syntactic Fidelity): normalise the value.
-                        normalized_value = _normalize_value_for_ast(new_value)
                         target_assignment = doc.sections[flat_idx]
                         assert isinstance(target_assignment, Assignment)
-                        target_assignment.value = normalized_value
+                        # #460 Case A: preserve literal-zone fence form in place.
+                        target_assignment.value = _normalize_value_for_ast_preserving(
+                            new_value, target_assignment.value
+                        )
                         # PR-2 T6: paired-write — mark only this leaf
                         # dirty so the preserve-mode emitter re-emits
                         # just this atom and splices the rest of the
@@ -1953,8 +2060,16 @@ class WriteTool(BaseTool):
                 # modify the flat assignment in that scenario.
                 parent_key, _, child_key = key.partition(".")
                 self._apply_block_change(doc, key, parent_key, child_key, new_value)
-            elif _is_delete_sentinel(new_value):
-                # I2: DELETE sentinel - remove field entirely from sections
+            elif _is_delete_sentinel(new_value) and not self._is_anchored_change(doc, key):
+                # I2: DELETE sentinel - remove field entirely from sections.
+                # #460 Case B (rework B2): the bare-DELETE branch matches by
+                # ``s.key == key`` and never matches an anchored path, so it
+                # must NOT consume a resolvable ANCHOR/KEY DELETE (which would
+                # otherwise silent-success no-op). Suppressing it for exactly
+                # the keys the anchored branch claims (_is_anchored_change)
+                # lets a resolvable anchored DELETE fall through to the
+                # anchored handler below; a literal ``A/B`` key (resolve-
+                # literal-first) is still handled here.
                 doc.sections = [s for s in doc.sections if not (isinstance(s, Assignment) and s.key == key)]
                 # PR-2 T6: doc.sections list changed (deletion). The
                 # Document does not carry body_dirty; mark whole-doc
@@ -1987,18 +2102,75 @@ class WriteTool(BaseTool):
                         ]
                         _mark_dirty(t7_block, body=True)
                         continue
-                    normalized_mv = _normalize_value_for_ast(mv)
                     found_child = False
                     for child in t7_block.children:
                         if isinstance(child, Assignment) and child.key == mk:
-                            child.value = normalized_mv
+                            # #460 Case A: preserve literal-zone fence form in place.
+                            child.value = _normalize_value_for_ast_preserving(mv, child.value)
                             _mark_dirty(child)
                             found_child = True
                             break
                     if not found_child:
-                        new_child = Assignment(key=mk, value=normalized_mv, dirty=True)
+                        new_child = Assignment(key=mk, value=_normalize_value_for_ast(mv), dirty=True)
                         t7_block.children.append(new_child)
                     _mark_dirty(t7_block, body=True)
+            elif self._is_anchored_change(doc, key):
+                # #460 Case B: ANCHOR/KEY anchored-path. Resolve-literal-first —
+                # _is_anchored_change is True only when no literal top-level
+                # Assignment matches the raw key verbatim (that case is handled
+                # by the legacy branch, preserving backward-compat for real keys
+                # containing '/'). The same predicate gates the bare-DELETE
+                # suppression above, keeping the two branches in lock-step.
+                resolved = self._resolve_anchored_change(doc, key)
+                assert resolved is not None  # narrowed by _is_anchored_change
+                target_assignment, parent = resolved
+                # #460 (cubic P1): the anchored target is an Assignment, so it
+                # MUST go through the SAME op machinery as a bare top-level key.
+                # Otherwise a $op descriptor is normalized and written as literal
+                # data (PROD::I3 violation: control descriptors as content).
+                op, payload, _ = _extract_op_descriptor(new_value)
+                if op == "DELETE" or _is_delete_sentinel(new_value):
+                    # Remove the resolved sibling from its parent's child list.
+                    if parent is None:
+                        doc.sections = [s for s in doc.sections if s is not target_assignment]
+                        doc.dirty = True
+                    elif isinstance(parent, (Block, Section)):
+                        parent.children = [c for c in parent.children if c is not target_assignment]
+                        _mark_dirty(parent, body=True)
+                elif op in ("APPEND", "PREPEND"):
+                    # Array op on the resolved Assignment. _validate_change_paths
+                    # has already verified the target is array-typed via
+                    # _resolve_target_type (which resolves anchored paths), so a
+                    # type mismatch surfaces as E_OP_TARGET_MISMATCH before apply.
+                    _apply_array_op_inplace(target_assignment, op, payload)
+                    if isinstance(parent, (Block, Section)):
+                        _mark_dirty(parent, body=True)
+                elif op == "MERGE":
+                    # An anchored path resolves only to an Assignment, never a
+                    # Block/Section/META, so MERGE has no valid anchored target.
+                    # The validator rejects this upstream (E_OP_TARGET_MISMATCH);
+                    # this is a defensive loud failure so a MERGE descriptor can
+                    # NEVER be written as literal data if it ever reaches apply.
+                    raise ValueError(
+                        [
+                            {
+                                "code": "E_OP_TARGET_MISMATCH",
+                                "message": (
+                                    f"$op MERGE is not supported on anchored path '{key}': "
+                                    f"it resolves to an assignment (scalar/array), not a "
+                                    f"Block/Section/META target. MERGE only applies to "
+                                    f"top-level Blocks, Sections, or META."
+                                ),
+                            }
+                        ]
+                    )
+                else:
+                    # Bare value: full replacement.
+                    # #460 Case A interplay: preserve literal-zone fence form.
+                    target_assignment.value = _normalize_value_for_ast_preserving(new_value, target_assignment.value)
+                    _mark_dirty(target_assignment)
+                    if isinstance(parent, (Block, Section)):
+                        _mark_dirty(parent, body=True)
             else:
                 # GH#373: Op-aware dispatch on top-level keys.
                 # MERGE on a top-level Block; APPEND/PREPEND on a top-level
@@ -2017,17 +2189,19 @@ class WriteTool(BaseTool):
                                 ]
                                 _mark_dirty(target_block, body=True)
                                 continue
-                            normalized_mv = _normalize_value_for_ast(mv)
                             found_child = False
                             for child in target_block.children:
                                 if isinstance(child, Assignment) and child.key == mk:
-                                    child.value = normalized_mv
+                                    # #460 Case A: preserve literal-zone fence form
+                                    # when MERGE replaces an existing fenced child.
+                                    child.value = _normalize_value_for_ast_preserving(mv, child.value)
                                     # PR-2 T6: paired-write per leaf.
                                     _mark_dirty(child)
                                     found_child = True
                                     break
                             if not found_child:
-                                new_child = Assignment(key=mk, value=normalized_mv, dirty=True)
+                                # New child: nothing to preserve, plain normalize.
+                                new_child = Assignment(key=mk, value=_normalize_value_for_ast(mv), dirty=True)
                                 target_block.children.append(new_child)
                             # PR-2 T6: in every MERGE-on-Block branch
                             # (existing-child mutate or new-child
@@ -2051,16 +2225,18 @@ class WriteTool(BaseTool):
                                 ]
                                 _mark_dirty(target_section, body=True)
                                 continue
-                            normalized_mv = _normalize_value_for_ast(mv)
                             found_child = False
                             for child in target_section.children:
                                 if isinstance(child, Assignment) and child.key == mk:
-                                    child.value = normalized_mv
+                                    # #460 Case A: preserve literal-zone fence form
+                                    # when MERGE replaces an existing fenced child.
+                                    child.value = _normalize_value_for_ast_preserving(mv, child.value)
                                     _mark_dirty(child)
                                     found_child = True
                                     break
                             if not found_child:
-                                new_child = Assignment(key=mk, value=normalized_mv, dirty=True)
+                                # New child: nothing to preserve, plain normalize.
+                                new_child = Assignment(key=mk, value=_normalize_value_for_ast(mv), dirty=True)
                                 target_section.children.append(new_child)
                             _mark_dirty(target_section, body=True)
                         continue
@@ -2092,11 +2268,11 @@ class WriteTool(BaseTool):
 
                 # Legacy full-value replacement (or new Assignment if missing).
                 # I1 (Syntactic Fidelity): Normalize Python values to AST types
-                normalized_value = _normalize_value_for_ast(new_value)
                 found = False
                 for section in doc.sections:
                     if isinstance(section, Assignment) and section.key == key:
-                        section.value = normalized_value
+                        # #460 Case A: preserve literal-zone fence form in place.
+                        section.value = _normalize_value_for_ast_preserving(new_value, section.value)
                         # PR-2 T6: paired-write on top-level Assignment.
                         _mark_dirty(section)
                         found = True
@@ -2107,7 +2283,7 @@ class WriteTool(BaseTool):
                     # Create new assignment node with normalized value.
                     # PR-2 T6: new Assignment is born dirty (no source
                     # bytes to splice; its value MUST be re-emitted).
-                    new_assignment = Assignment(key=key, value=normalized_value, dirty=True)
+                    new_assignment = Assignment(key=key, value=_normalize_value_for_ast(new_value), dirty=True)
                     doc.sections.append(new_assignment)
 
         return doc
