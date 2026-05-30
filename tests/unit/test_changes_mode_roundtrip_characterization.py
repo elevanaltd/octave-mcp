@@ -1,0 +1,574 @@
+"""GH#487 Phase 0 — changes-mode round-trip characterization net + ratified-contract xfail spec.
+
+This module is the FOUNDATION (Phase 0) of GH#487 (STRATEGY_S3 ``DocumentMutator`` extraction).
+It is **test-only**: it touches no production code under ``src/``. It builds the safety net +
+acceptance spec that the Phase 2 build (a different agent) will refactor against.
+
+It is organised in TWO complementary layers:
+
+1. CHARACTERIZATION layer — pins CURRENT behaviour (what ``octave_write`` / ``octave_validate``
+   do *today*, including the known-bad cases). Each test that pins a KNOWN DEFECT is labelled
+   in its docstring with the issue number and the phrase "CHARACTERIZATION: documents current
+   buggy behavior, will flip when #487 lands". This layer is the regression net proving the
+   refactor changes ONLY what is intended.
+
+2. DESIRED-CONTRACT layer — for each defect, a ``pytest.mark.xfail(strict=True)`` test encoding
+   the ratified target behaviour. These are the RED that the Phase 2 build flips to GREEN by
+   removing the xfail marker. Each reason references the issue + the GH#487 contract clause.
+
+METHOD per matrix cell (false-green detection):
+  Construct a minimal ``.oct.md`` in a temp file, apply the change via ``WriteTool`` (the same
+  class the MCP ``octave_write`` tool wraps — matches ``tests/unit/test_gh484_*`` idioms),
+  capture the EMITTED document by reading the file back, then feed it through a strict re-parse
+  (``octave_mcp.core.parser.parse``) and/or ``ValidateTool`` to detect false-green — i.e.
+  ``status: success`` (or ``valid: true``) while the emitted output is structurally invalid /
+  non-reparseable. Assertions cover BOTH the write/validate result AND the re-parse.
+
+================================================================================================
+MANIFEST — acceptance spec for GH#487 (cell -> current behaviour -> defect # -> desired behaviour)
+================================================================================================
+The ratified contract (debate-hall decision_hash a8837c80…, operator-ratified 2026-05-30):
+  Q1 (#443a): bare-dict at a top-level KEY = FULL REPLACE (drops unmentioned children, I3).
+              Explicit {"$op":"MERGE","value":{...}} required to merge. HARD BREAK v1.15.
+  Q2 (#440):  DEFERRED CANONICALIZATION. validate + write ACCEPT nested inline maps on input
+              (A2 leniency); validate warns W_INLINE_ARRAY_ROOT without mutating source (I5);
+              write canonicalizes inline->BLOCK at emit only, logging TRANSFORM::INLINE_MAP_TO_BLOCK
+              (I4). dict->InlineMap coercion abolished; BLOCK is the sole canonical nested form.
+  #443 Defect 2: scalar<->BLOCK transition via MERGE resolved explicitly (honour OR reject with
+              E_OP_TARGET_MISMATCH) — NEVER emit duplicate keys.
+  #488:       APPEND/PREPEND onto a list-of-lists must NOT emit single-quoted inline strings that
+              fail strict re-parse.
+  #484 (shipped): E_NESTED_DICT_IN_MERGE_PAYLOAD rejects non-DELETE dict sub-values in MERGE
+              payloads — kept GREEN here as an invariant.
+
+  CELL                                                  | CURRENT (pinned GREEN)            | ISSUE  | DESIRED (xfail strict)
+  ------------------------------------------------------|----------------------------------|--------|------------------------------------------
+  APPEND  x flat scalar array                           | success, reparse OK              | (none) | invariant — stays GREEN
+  PREPEND x flat scalar array                           | success, reparse OK              | (none) | invariant — stays GREEN
+  MERGE   x flat scalar array (op-target mismatch)      | E_OP_TARGET_MISMATCH (rejected)  | (none) | invariant — stays GREEN
+  APPEND  x list-of-lists                               | success BUT reparse FAIL (E005)  | #488   | clean reparseable round-trip
+  PREPEND x list-of-lists                               | success BUT reparse FAIL (E005)  | #488   | clean reparseable round-trip
+  APPEND  x nested-dict element (list contains a dict)  | success BUT reparse FAIL (E005)  | #488   | reparseable (block/double-quote, no repr)
+  bare-dict at NEW top-level KEY, nested dict value     | success BUT reparse FAIL         | #440   | BLOCK form, reparses, I4 TRANSFORM logged
+  MERGE   x nested dict payload (#484 guard)            | E_NESTED_DICT_IN_MERGE_PAYLOAD   | #484   | invariant — stays GREEN (shipped)
+  bare-dict at top-level KEY over existing nested BLOCK | success, SILENT MERGE (children  | #443a  | FULL REPLACE: unmentioned children DROPPED
+                                                        | preserved + new appended)        |        | (honour I3); reparses
+  MERGE   scalar value over an existing nested BLOCK    | success, DUPLICATE keys (BLOCK + | #443   | resolve explicitly: replace BLOCK w/ scalar
+            (Defect 2)                                  | flat scalar same scope), reparse |Defect2 | OR E_OP_TARGET_MISMATCH; NEVER duplicate keys
+                                                        | OK (lenient parser)              |        |
+  bare-scalar over an existing nested BLOCK (no $op)    | success, DUPLICATE keys (BLOCK + | #443   | full replace BLOCK w/ scalar; NEVER duplicate
+                                                        | flat scalar same scope)          |Defect2 | keys
+  validate: flat-vs-flat top-level duplicate            | duplicate_key in repair_log      | (R2)   | invariant — stays detected (pin)
+  validate: BLOCK-key vs flat-scalar same name in block | NOT in repair_log (undetected)   | #443/R2| should be caught (duplicate_key or error)
+================================================================================================
+
+QUALITY GATES (run by the author of this module, Phase 0):
+  .venv/bin/python -m pytest tests/unit/test_changes_mode_roundtrip_characterization.py -v
+  .venv/bin/python -m pytest  (full suite, no regressions)
+  ruff check src tests ; black --check src tests ; mypy src
+
+NOTE on [MISSING] coverage: the ``test-generation`` skill body was absent from this worktree at
+authoring time (GH#461 missing-skills class); methodology proceeded from the agent PRINCIPLES
+(Defensive Testing, Reality Validation) — every characterization assertion below was first
+verified live against the current tools (APOLLO precision-measurement), not assumed.
+"""
+
+import os
+import tempfile
+
+import pytest
+
+from octave_mcp.core.lexer import LexerError
+from octave_mcp.core.parser import ParserError, parse
+from octave_mcp.mcp.validate import ValidateTool
+from octave_mcp.mcp.write import WriteTool
+
+_WRITE = WriteTool()
+_VALIDATE = ValidateTool()
+
+# Both parser-level and lexer-level exceptions are "strict re-parse failures". LexerError is NOT
+# a subclass of ParserError (it lives in octave_mcp.core.lexer), so we catch both explicitly.
+_REPARSE_ERRORS = (ParserError, LexerError)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+async def _roundtrip(doc: str, changes: dict, format_style: str = "preserve") -> tuple[dict, str]:
+    """Seed ``doc`` to a temp file, apply ``changes``, return ``(result, emitted_document)``.
+
+    The emitted document is read back from disk (not dry_run) so the captured bytes are exactly
+    what a subsequent reader would see — this is what enables false-green detection.
+    """
+    fd, path = tempfile.mkstemp(suffix=".oct.md")
+    os.close(fd)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(doc)
+        result = await _WRITE.execute(target_path=path, changes=changes, format_style=format_style)
+        with open(path, encoding="utf-8") as f:
+            emitted = f.read()
+        return result, emitted
+    finally:
+        os.unlink(path)
+
+
+def _strict_reparses(document: str) -> bool:
+    """True iff ``document`` survives a strict re-parse (no lexer/parser error)."""
+    try:
+        parse(document)
+        return True
+    except _REPARSE_ERRORS:
+        return False
+
+
+def _reparse_error(document: str) -> Exception | None:
+    """Return the strict re-parse exception (or None if it parses cleanly)."""
+    try:
+        parse(document)
+        return None
+    except _REPARSE_ERRORS as exc:
+        return exc
+
+
+async def _validate_repair_subtypes(document: str) -> list[str]:
+    """Return the ``subtype`` values of every repair_log entry for ``document`` (schema META)."""
+    result = await _VALIDATE.execute(content=document, schema="META", profile="STANDARD")
+    return [entry.get("subtype") for entry in result.get("repair_log", [])]
+
+
+# Base documents (all carry a valid META.VERSION so duplicate-key signals are not masked by E003).
+_DOC_FLAT_ARRAY = "===EXAMPLE===\n" "META:\n" "  TYPE::TEST\n" '  VERSION::"1.0"\n' "ITEMS::[a, b, c]\n" "===END===\n"
+
+_DOC_LIST_OF_LISTS = (
+    "===EXAMPLE===\n"
+    "META:\n"
+    "  TYPE::TEST\n"
+    '  VERSION::"1.0"\n'
+    "RECENT::[\n"
+    "  [\n"
+    "    PR_483::desc\n"
+    "  ]\n"
+    "]\n"
+    "===END===\n"
+)
+
+_DOC_SCALAR_KEY = "===EXAMPLE===\n" "META:\n" "  TYPE::TEST\n" '  VERSION::"1.0"\n' "KEY::scalar\n" "===END===\n"
+
+_DOC_NESTED_BLOCK = (
+    "===EXAMPLE===\n"
+    "META:\n"
+    "  TYPE::TEST\n"
+    '  VERSION::"1.0"\n'
+    "PARENT:\n"
+    "  CHILD_A::keep_me\n"
+    "  CHILD_B::keep_me_too\n"
+    "===END===\n"
+)
+
+
+def _count_key_occurrences(document: str, key: str) -> int:
+    """Count lines whose first non-space token is ``key`` as a BLOCK header (``key:``) or
+    flat assignment (``key::``). Used to detect duplicate-key emission (Defect 2)."""
+    count = 0
+    for line in document.splitlines():
+        stripped = line.strip()
+        if stripped == f"{key}:" or stripped.startswith(f"{key}::"):
+            count += 1
+    return count
+
+
+# ===========================================================================
+# LAYER 1 — CHARACTERIZATION (pins CURRENT behaviour; all GREEN today)
+# ===========================================================================
+
+
+class TestCharacterizationInvariants:
+    """Cells whose current behaviour is CORRECT — pinned as regression invariants.
+
+    These must stay GREEN through the #487 refactor (the build must not break them).
+    """
+
+    @pytest.mark.asyncio
+    async def test_append_flat_scalar_array_roundtrips_clean(self) -> None:
+        """APPEND onto a flat scalar array: success + strict-reparseable. INVARIANT."""
+        result, emitted = await _roundtrip(_DOC_FLAT_ARRAY, {"ITEMS": {"$op": "APPEND", "value": ["d"]}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"flat-array APPEND must round-trip; got:\n{emitted}"
+        assert "d" in emitted
+
+    @pytest.mark.asyncio
+    async def test_prepend_flat_scalar_array_roundtrips_clean(self) -> None:
+        """PREPEND onto a flat scalar array: success + strict-reparseable. INVARIANT."""
+        result, emitted = await _roundtrip(_DOC_FLAT_ARRAY, {"ITEMS": {"$op": "PREPEND", "value": ["z"]}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"flat-array PREPEND must round-trip; got:\n{emitted}"
+        assert "z" in emitted
+
+    @pytest.mark.asyncio
+    async def test_merge_over_flat_scalar_array_is_rejected(self) -> None:
+        """MERGE targeting a flat scalar array is rejected with E_OP_TARGET_MISMATCH. INVARIANT.
+
+        A MERGE expects a map target; a flat array is not one. The tool correctly rejects rather
+        than corrupting — this is the *good* shape the scalar<->BLOCK Defect-2 resolution should
+        mirror.
+        """
+        result, _ = await _roundtrip(_DOC_FLAT_ARRAY, {"ITEMS": {"$op": "MERGE", "value": {"X": "1"}}})
+        codes = [e.get("code") for e in result.get("errors", [])]
+        assert "E_OP_TARGET_MISMATCH" in codes, f"expected E_OP_TARGET_MISMATCH, got: {codes}"
+        assert result.get("status") != "success"
+
+    @pytest.mark.asyncio
+    async def test_merge_nested_dict_payload_rejected_gh484(self) -> None:
+        """MERGE payload with a plain nested dict is rejected (E_NESTED_DICT_IN_MERGE_PAYLOAD).
+
+        #484 (shipped, PR#485). The ratified #487 contract keeps this guard firing for explicit
+        MERGE payloads. INVARIANT — must stay GREEN.
+        """
+        result, _ = await _roundtrip(_DOC_SCALAR_KEY, {"KEY": {"$op": "MERGE", "value": {"NESTED": {"deep": "dict"}}}})
+        codes = [e.get("code") for e in result.get("errors", [])]
+        assert "E_NESTED_DICT_IN_MERGE_PAYLOAD" in codes, f"#484 guard must fire; got: {codes}"
+        assert result.get("status") != "success"
+
+    @pytest.mark.asyncio
+    async def test_merge_scalar_into_existing_block_roundtrips_clean(self) -> None:
+        """MERGE adding a NEW scalar child into an existing BLOCK: success + reparseable. INVARIANT.
+
+        This is the *intended* MERGE happy-path (distinct from Defect 2's scalar-over-BLOCK).
+        """
+        result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"META": {"$op": "MERGE", "value": {"STATUS": "OK"}}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"scalar MERGE into block must round-trip; got:\n{emitted}"
+        assert "STATUS" in emitted
+
+    @pytest.mark.asyncio
+    async def test_validate_flat_vs_flat_duplicate_is_detected(self) -> None:
+        """Validator detects a pure flat-vs-flat top-level duplicate via lenient duplicate_key repair.
+
+        Pinned as an INVARIANT: the #487 validator fix for the BLOCK-vs-flat gap must NOT regress
+        this existing detection. The signal lives in ``repair_log`` (subtype ``duplicate_key``),
+        and the doc validates clean otherwise (``VALIDATED`` / ``valid: true``).
+        """
+        doc = "===EXAMPLE===\n" "META:\n" "  TYPE::TEST\n" '  VERSION::"1.0"\n' "FOO::a\n" "FOO::b\n" "===END===\n"
+        result = await _VALIDATE.execute(content=doc, schema="META", profile="STANDARD")
+        subtypes = [e.get("subtype") for e in result.get("repair_log", [])]
+        assert "duplicate_key" in subtypes, f"flat-vs-flat dup must be detected; repair_log={result.get('repair_log')}"
+
+
+class TestCharacterizationKnownDefects:
+    """Cells whose current behaviour is BUGGY — pinned to prove the refactor flips ONLY these.
+
+    Every test here documents current buggy behavior and will flip when #487 lands.
+    """
+
+    @pytest.mark.asyncio
+    async def test_append_list_of_lists_false_green_single_quote_gh488(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+
+        APPEND onto a list-of-lists emits a single-quoted inline element (``['VALUE']``) which the
+        strict lexer rejects (E005). ``octave_write`` reports ``status: success`` — a FALSE GREEN
+        (I1 round-trip violation): the write claims success but the file no longer parses.
+        """
+        result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "APPEND", "value": [["PR_485::x"]]}})
+        assert result.get("status") == "success", "current: write reports success (false-green)"
+        exc = _reparse_error(emitted)
+        assert exc is not None, f"current bug: emitted output should FAIL strict re-parse; got:\n{emitted}"
+        assert isinstance(exc, LexerError), f"current bug: E005 lexer rejection expected, got {exc!r}"
+        assert "'" in emitted, "current bug: element emitted with single quotes"
+
+    @pytest.mark.asyncio
+    async def test_prepend_list_of_lists_false_green_single_quote_gh488(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+
+        PREPEND variant of the #488 single-quote false-green on a list-of-lists target.
+        """
+        result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [["PR_485::x"]]}})
+        assert result.get("status") == "success", "current: write reports success (false-green)"
+        exc = _reparse_error(emitted)
+        assert exc is not None, f"current bug: emitted output should FAIL strict re-parse; got:\n{emitted}"
+        assert isinstance(exc, LexerError), f"current bug: E005 lexer rejection expected, got {exc!r}"
+        assert "'" in emitted, "current bug: element emitted with single quotes"
+
+    @pytest.mark.asyncio
+    async def test_append_nested_dict_element_false_green_gh488(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+
+        APPEND a dict element onto a list emits a Python-repr ``{'NESTED': 'v'}`` which the strict
+        lexer rejects (E005, unexpected ``{``). Same emitter/serialization family as #488/#484.
+        ``status: success`` — false-green.
+        """
+        result, emitted = await _roundtrip(_DOC_FLAT_ARRAY, {"ITEMS": {"$op": "APPEND", "value": [{"NESTED": "v"}]}})
+        assert result.get("status") == "success", "current: write reports success (false-green)"
+        assert not _strict_reparses(emitted), f"current bug: emitted output should FAIL re-parse:\n{emitted}"
+        assert "{" in emitted, "current bug: dict element emitted as Python repr with braces"
+
+    @pytest.mark.asyncio
+    async def test_bare_dict_new_top_key_nested_value_false_green_gh440(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#440)
+
+        A bare-dict at a NEW top-level KEY whose value is itself a nested dict is coerced into a
+        nested InlineMap (``NEWKEY::[OUTER::[INNER::v]]``). ``status: success`` but the strict
+        parser rejects it with ``E_NESTED_INLINE_MAP``. This is the Q2 (#440) ``dict->InlineMap``
+        coercion that the ratified contract abolishes in favour of BLOCK form at emit.
+        """
+        result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
+        assert result.get("status") == "success", "current: write reports success (false-green)"
+        exc = _reparse_error(emitted)
+        assert exc is not None, f"current bug: nested inline map should FAIL re-parse:\n{emitted}"
+        assert isinstance(exc, ParserError), f"current bug: E_NESTED_INLINE_MAP expected, got {exc!r}"
+        assert "E_NESTED_INLINE_MAP" in str(exc), f"current bug: expected E_NESTED_INLINE_MAP; got {exc}"
+
+    @pytest.mark.asyncio
+    async def test_bare_dict_top_key_over_block_silent_merge_gh443a(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443a)
+
+        A bare-dict at a top-level KEY that already holds a nested BLOCK performs a SILENT MERGE:
+        unmentioned children (CHILD_A, CHILD_B) are PRESERVED and the new child is appended.
+        The ratified Q1 contract makes this a FULL REPLACE (drop unmentioned children, honour I3).
+        ``status: success``, output reparses — the corruption is semantic, not syntactic.
+        """
+        result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": {"NEW_CHILD": "added"}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), "current: output is syntactically valid (semantic-only defect)"
+        # Current silent-MERGE: unmentioned children survive.
+        assert "CHILD_A" in emitted, "current bug: unmentioned child CHILD_A preserved (silent merge)"
+        assert "CHILD_B" in emitted, "current bug: unmentioned child CHILD_B preserved (silent merge)"
+        assert "NEW_CHILD" in emitted
+
+    @pytest.mark.asyncio
+    async def test_merge_scalar_over_block_duplicate_keys_gh443_defect2(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443 Defect 2)
+
+        ``{"$op":"MERGE"}`` of a SCALAR over an existing nested BLOCK child leaves the BLOCK in
+        place AND appends a flat scalar of the same name → DUPLICATE KEYS at the same scope.
+        ``status: success``; the lenient parser even re-parses it. The contract requires explicit
+        resolution (replace the BLOCK or E_OP_TARGET_MISMATCH) — NEVER duplicate keys.
+        """
+        doc = (
+            "===EXAMPLE===\n"
+            "META:\n"
+            "  TYPE::TEST\n"
+            '  VERSION::"1.0"\n'
+            "PARENT:\n"
+            "  CHEVRON:\n"
+            "    deep::x\n"
+            "  PKG::y\n"
+            "===END===\n"
+        )
+        result, emitted = await _roundtrip(doc, {"PARENT": {"$op": "MERGE", "value": {"CHEVRON": "migrated"}}})
+        assert result.get("status") == "success", "current: write reports success (false-green)"
+        # Current bug: CHEVRON appears twice (BLOCK header + flat scalar) in the same scope.
+        assert (
+            _count_key_occurrences(emitted, "CHEVRON") >= 2
+        ), f"current bug: duplicate CHEVRON keys expected; got:\n{emitted}"
+
+    @pytest.mark.asyncio
+    async def test_bare_scalar_over_block_duplicate_keys_gh443_defect2(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443 Defect 2)
+
+        A bare SCALAR (no ``$op``) assigned to a top-level KEY that holds a nested BLOCK leaves the
+        BLOCK in place AND appends a flat scalar of the same name → DUPLICATE KEYS at the same scope.
+        ``status: success``. Non-MERGE variant of the scalar<->BLOCK transition footgun.
+        """
+        result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": "flat_now"})
+        assert result.get("status") == "success", "current: write reports success (false-green)"
+        assert (
+            _count_key_occurrences(emitted, "PARENT") >= 2
+        ), f"current bug: duplicate PARENT keys expected; got:\n{emitted}"
+
+    @pytest.mark.asyncio
+    async def test_validate_block_vs_flat_collision_undetected_gh443(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443 / R2)
+
+        A hand-authored BLOCK-key (``CHEVRON:``) colliding with a flat-scalar of the same name
+        inside the same parent block is NOT detected by the validator: it validates clean
+        (``VALIDATED`` / ``valid: true``) with NO ``duplicate_key`` repair entry. This is the
+        validator-coverage gap the contract folds into Phase 0 — emit-time canonicalization alone
+        won't make ``validate`` see it; a validator-side fix is required.
+        """
+        doc = (
+            "===EXAMPLE===\n"
+            "META:\n"
+            "  TYPE::TEST\n"
+            '  VERSION::"1.0"\n'
+            "PARENT:\n"
+            "  CHEVRON:\n"
+            "    deep::x\n"
+            "  PKG::y\n"
+            "  CHEVRON::migrated\n"
+            "===END===\n"
+        )
+        result = await _VALIDATE.execute(content=doc, schema="META", profile="STANDARD")
+        subtypes = [e.get("subtype") for e in result.get("repair_log", [])]
+        assert (
+            "duplicate_key" not in subtypes
+        ), f"current bug: BLOCK-vs-flat collision should be UNDETECTED; repair_log={result.get('repair_log')}"
+
+
+# ===========================================================================
+# LAYER 2 — DESIRED CONTRACT (xfail strict; flips GREEN when #487 build lands)
+# ===========================================================================
+#
+# Each test removes the xfail marker when Phase 2 implements the ratified behaviour. strict=True
+# means: if the desired behaviour is met prematurely, the suite FAILS loudly (XPASS), signalling
+# the contract has been satisfied and the marker must be removed.
+
+
+class TestDesiredContractGH488:
+    """#488: APPEND/PREPEND onto a list-of-lists must emit strict-re-parseable output."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#488 + GH#487 contract (#488 clause): APPEND onto list-of-lists must NOT emit "
+        "single-quoted inline strings; emitted output MUST strict-re-parse (I1 round-trip).",
+        strict=True,
+    )
+    async def test_append_list_of_lists_emits_reparseable(self) -> None:
+        result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "APPEND", "value": [["PR_485::x"]]}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#488 + GH#487 contract (#488 clause): PREPEND onto list-of-lists must emit "
+        "strict-re-parseable output (no single-quoted inline strings).",
+        strict=True,
+    )
+    async def test_prepend_list_of_lists_emits_reparseable(self) -> None:
+        result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [["PR_485::x"]]}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#488 + GH#487 contract (#488/serialization family): APPEND of a dict element must "
+        "emit re-parseable form (block/double-quoted), never a Python repr with braces.",
+        strict=True,
+    )
+    async def test_append_nested_dict_element_emits_reparseable(self) -> None:
+        result, emitted = await _roundtrip(_DOC_FLAT_ARRAY, {"ITEMS": {"$op": "APPEND", "value": [{"NESTED": "v"}]}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
+
+
+class TestDesiredContractGH440:
+    """#440 / Q2: nested dict values serialize as BLOCK at emit (dict->InlineMap abolished)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#440 + GH#487 contract Q2 (DEFERRED_CANONICALIZATION): a bare-dict at a top-level "
+        "KEY with a nested dict value MUST emit BLOCK form (sole canonical nested form) and "
+        "strict-re-parse; dict->InlineMap coercion is abolished. Transform logged TRANSFORM::"
+        "INLINE_MAP_TO_BLOCK (I4).",
+        strict=True,
+    )
+    async def test_bare_dict_new_top_key_nested_value_emits_block(self) -> None:
+        result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"DESIRED: BLOCK-form emit must round-trip; got:\n{emitted}"
+        # Desired canonical nested form is BLOCK, not an inline map.
+        assert "[OUTER::" not in emitted, f"DESIRED: no inline nested map; got:\n{emitted}"
+
+
+class TestDesiredContractGH443aFullReplace:
+    """#443a / Q1: bare-dict at a top-level KEY = FULL REPLACE (drop unmentioned children, I3)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#443a + GH#487 contract Q1 (HARD BREAK v1.15): a bare-dict at a top-level KEY "
+        "executes FULL REPLACE — unmentioned children are DROPPED (honours I3: reflect only "
+        "what's present). Explicit {'$op':'MERGE'} is required to merge.",
+        strict=True,
+    )
+    async def test_bare_dict_top_key_over_block_full_replace(self) -> None:
+        result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": {"NEW_CHILD": "added"}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"DESIRED: full-replace output must round-trip; got:\n{emitted}"
+        # FULL REPLACE: unmentioned children are dropped.
+        assert "CHILD_A" not in emitted, f"DESIRED: unmentioned CHILD_A must be dropped; got:\n{emitted}"
+        assert "CHILD_B" not in emitted, f"DESIRED: unmentioned CHILD_B must be dropped; got:\n{emitted}"
+        assert "NEW_CHILD" in emitted, "DESIRED: the mentioned child must be present"
+
+
+class TestDesiredContractGH443Defect2:
+    """#443 Defect 2: scalar<->BLOCK transition resolved explicitly — NEVER duplicate keys."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#443 Defect 2 + GH#487 contract: a MERGE of a scalar over an existing nested "
+        "BLOCK MUST resolve the scalar<->BLOCK transition explicitly (replace the BLOCK with the "
+        "flat assignment OR reject with E_OP_TARGET_MISMATCH) — NEVER emit duplicate keys.",
+        strict=True,
+    )
+    async def test_merge_scalar_over_block_no_duplicate_keys(self) -> None:
+        doc = (
+            "===EXAMPLE===\n"
+            "META:\n"
+            "  TYPE::TEST\n"
+            '  VERSION::"1.0"\n'
+            "PARENT:\n"
+            "  CHEVRON:\n"
+            "    deep::x\n"
+            "  PKG::y\n"
+            "===END===\n"
+        )
+        result, emitted = await _roundtrip(doc, {"PARENT": {"$op": "MERGE", "value": {"CHEVRON": "migrated"}}})
+        codes = [e.get("code") for e in result.get("errors", [])]
+        if result.get("status") == "success":
+            # If honoured (not rejected), the transition must not leave duplicate keys.
+            assert (
+                _count_key_occurrences(emitted, "CHEVRON") == 1
+            ), f"DESIRED: exactly one CHEVRON key after transition; got:\n{emitted}"
+            assert _strict_reparses(emitted)
+        else:
+            # The alternative sanctioned outcome is an explicit rejection.
+            assert "E_OP_TARGET_MISMATCH" in codes, f"DESIRED: explicit rejection code; got: {codes}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#443 Defect 2 + GH#487 contract: a bare scalar assigned over an existing nested "
+        "BLOCK at a top-level KEY MUST full-replace the BLOCK (Q1) — NEVER emit duplicate keys.",
+        strict=True,
+    )
+    async def test_bare_scalar_over_block_no_duplicate_keys(self) -> None:
+        result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": "flat_now"})
+        assert result.get("status") == "success"
+        assert (
+            _count_key_occurrences(emitted, "PARENT") == 1
+        ), f"DESIRED: exactly one PARENT key after scalar-over-block replace; got:\n{emitted}"
+        assert _strict_reparses(emitted)
+
+
+class TestDesiredContractValidatorCoverage:
+    """#443 / R2 validator-coverage: BLOCK-key vs flat-scalar collision must be caught."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#443 (validator gap) + GH#487 contract (R2 validator-coverage): a BLOCK-key "
+        "colliding with a flat-scalar of the same name inside a parent block MUST be caught by "
+        "octave_validate (duplicate_key repair entry or a hard error) — currently undetected.",
+        strict=True,
+    )
+    async def test_validate_block_vs_flat_collision_caught(self) -> None:
+        doc = (
+            "===EXAMPLE===\n"
+            "META:\n"
+            "  TYPE::TEST\n"
+            '  VERSION::"1.0"\n'
+            "PARENT:\n"
+            "  CHEVRON:\n"
+            "    deep::x\n"
+            "  PKG::y\n"
+            "  CHEVRON::migrated\n"
+            "===END===\n"
+        )
+        result = await _VALIDATE.execute(content=doc, schema="META", profile="STANDARD")
+        subtypes = [e.get("subtype") for e in result.get("repair_log", [])]
+        error_codes = [e.get("code") for e in result.get("errors", [])]
+        caught = ("duplicate_key" in subtypes) or any("duplicate" in str(c).lower() for c in error_codes)
+        assert caught, (
+            "DESIRED: BLOCK-vs-flat collision must be caught; "
+            f"repair_log={result.get('repair_log')} errors={result.get('errors')}"
+        )
