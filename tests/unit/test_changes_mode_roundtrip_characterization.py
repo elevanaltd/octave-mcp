@@ -34,8 +34,8 @@ The ratified contract (debate-hall decision_hash a8837c80…, operator-ratified 
               (A2 leniency); validate warns W_INLINE_ARRAY_ROOT without mutating source (I5);
               write canonicalizes inline->BLOCK at emit only, logging TRANSFORM::INLINE_MAP_TO_BLOCK
               (I4). dict->InlineMap coercion abolished; BLOCK is the sole canonical nested form.
-  #443 Defect 2: scalar<->BLOCK transition via MERGE resolved explicitly (honour OR reject with
-              E_OP_TARGET_MISMATCH) — NEVER emit duplicate keys.
+  #443 Defect 2: scalar<->BLOCK transition via MERGE REJECTED with E_OP_TARGET_MISMATCH (CDV
+              CONDITIONAL-GO firmed this to REJECT-only, not honour) — NEVER emit duplicate keys.
   #488:       APPEND/PREPEND onto a list-of-lists must NOT emit single-quoted inline strings that
               fail strict re-parse.
   #484 (shipped): E_NESTED_DICT_IN_MERGE_PAYLOAD rejects non-DELETE dict sub-values in MERGE
@@ -53,13 +53,22 @@ The ratified contract (debate-hall decision_hash a8837c80…, operator-ratified 
   MERGE   x nested dict payload (#484 guard)            | E_NESTED_DICT_IN_MERGE_PAYLOAD   | #484   | invariant — stays GREEN (shipped)
   bare-dict at top-level KEY over existing nested BLOCK | success, SILENT MERGE (children  | #443a  | FULL REPLACE: unmentioned children DROPPED
                                                         | preserved + new appended)        |        | (honour I3); reparses
-  MERGE   scalar value over an existing nested BLOCK    | success, DUPLICATE keys (BLOCK + | #443   | resolve explicitly: replace BLOCK w/ scalar
-            (Defect 2)                                  | flat scalar same scope), reparse |Defect2 | OR E_OP_TARGET_MISMATCH; NEVER duplicate keys
-                                                        | OK (lenient parser)              |        |
+  MERGE   scalar value over an existing nested BLOCK    | success, DUPLICATE keys (BLOCK + | #443   | REJECT with E_OP_TARGET_MISMATCH (CDV firmed
+            (Defect 2)                                  | flat scalar same scope), reparse |Defect2 | scalar<->BLOCK ruling to REJECT-only, not
+                                                        | OK (lenient parser)              |        | honour); NEVER duplicate keys
   bare-scalar over an existing nested BLOCK (no $op)    | success, DUPLICATE keys (BLOCK + | #443   | full replace BLOCK w/ scalar; NEVER duplicate
                                                         | flat scalar same scope)          |Defect2 | keys
   validate: flat-vs-flat top-level duplicate            | duplicate_key in repair_log      | (R2)   | invariant — stays detected (pin)
   validate: BLOCK-key vs flat-scalar same name in block | NOT in repair_log (undetected)   | #443/R2| should be caught (duplicate_key or error)
+  --- CDV CONDITIONAL-GO blind cells (added Phase 0+, gemini critical-design-validator) ---------
+  bare-dict FULL REPLACE re-mentioning a LITERAL-ZONE   | success, SILENT MERGE: fence form| #460-A | REPLACE: fence form of MENTIONED child still
+    child (fenced ```...```) at a top-level Block        | of mentioned child IS preserved  | #487   | preserved (route via _normalize_value_for_ast_
+    [BLOCKING-1]                                        | (I1/#460 Case A) BUT unmentioned | BLK-1  | preserving) AND unmentioned siblings DROPPED
+                                                        | sibling preserved; reparse OK    |        | (Q1); reparses. Cite I1 + #460 Case A.
+  MERGE   dict-or-scalar payload over a FLAT SCALAR     | E_OP_TARGET_MISMATCH (rejected)  | #443   | invariant: E_OP_TARGET_MISMATCH (CDV firmed
+    [scalar<->BLOCK transition = REJECT-only]           |                                  | #487   | REJECT-only). Cite I3 + contract refinement.
+  PREPEND x nested-dict element (list contains a dict)  | success BUT reparse FAIL (E005,  | #488   | reparseable (block/double-quote, no repr);
+                                                        | Python repr braces)              |        | mirrors APPEND-dict cell
 ================================================================================================
 
 QUALITY GATES (run by the author of this module, Phase 0):
@@ -168,6 +177,22 @@ _DOC_NESTED_BLOCK = (
     "===END===\n"
 )
 
+# A top-level Block whose CODE child is a LiteralZoneValue (fenced ```...``` block) plus an
+# unmentioned SIBLING scalar. Used by the CDV BLOCKING-1 literal-zone REPLACE cell.
+_DOC_LITERAL_ZONE_BLOCK = (
+    "===EXAMPLE===\n"
+    "META:\n"
+    "  TYPE::TEST\n"
+    '  VERSION::"1.0"\n'
+    "PARENT:\n"
+    "  CODE::\n"
+    "    ```python\n"
+    "    x = 1\n"
+    "    ```\n"
+    "  SIBLING::unmentioned_value\n"
+    "===END===\n"
+)
+
 
 def _count_key_occurrences(document: str, key: str) -> int:
     """Count lines whose first non-space token is ``key`` as a BLOCK header (``key:``) or
@@ -242,6 +267,25 @@ class TestCharacterizationInvariants:
         assert result.get("status") == "success"
         assert _strict_reparses(emitted), f"scalar MERGE into block must round-trip; got:\n{emitted}"
         assert "STATUS" in emitted
+
+    @pytest.mark.asyncio
+    async def test_merge_over_flat_scalar_is_rejected(self) -> None:
+        """MERGE targeting a FLAT SCALAR key is rejected with E_OP_TARGET_MISMATCH. INVARIANT.
+
+        CDV CONDITIONAL-GO blind cell (MERGE-DICT-OVER-SCALAR): a MERGE expects a map target; a
+        flat scalar is not one. The tool already rejects rather than corrupting — verified live
+        for BOTH a dict payload and a scalar payload. This is exactly the REJECT-only shape the
+        firmed scalar<->BLOCK ruling (#487 contract refinement) wants the BLOCK case to mirror.
+        """
+        # dict payload
+        result_dict, _ = await _roundtrip(_DOC_SCALAR_KEY, {"KEY": {"$op": "MERGE", "value": {"A": "1", "B": "2"}}})
+        codes_dict = [e.get("code") for e in result_dict.get("errors", [])]
+        assert "E_OP_TARGET_MISMATCH" in codes_dict, f"dict-over-scalar MERGE must reject; got: {codes_dict}"
+        assert result_dict.get("status") != "success"
+        # scalar payload — same rejection
+        result_scalar, _ = await _roundtrip(_DOC_SCALAR_KEY, {"KEY": {"$op": "MERGE", "value": {"CHILD": "x"}}})
+        codes_scalar = [e.get("code") for e in result_scalar.get("errors", [])]
+        assert "E_OP_TARGET_MISMATCH" in codes_scalar, f"scalar-payload MERGE must reject; got: {codes_scalar}"
 
     @pytest.mark.asyncio
     async def test_validate_flat_vs_flat_duplicate_is_detected(self) -> None:
@@ -406,6 +450,47 @@ class TestCharacterizationKnownDefects:
             "duplicate_key" not in subtypes
         ), f"current bug: BLOCK-vs-flat collision should be UNDETECTED; repair_log={result.get('repair_log')}"
 
+    @pytest.mark.asyncio
+    async def test_literal_zone_replace_silent_merge_keeps_sibling_gh460a(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#460 Case A / #443a)
+
+        CDV BLOCKING-1 cell. A bare-dict FULL REPLACE at a top-level Block (``PARENT``) whose
+        payload re-mentions the fenced child (``CODE``) with a plain str value:
+          - CURRENT: the fence FORM of the mentioned child IS preserved (the #460 Case A path,
+            ``_normalize_value_for_ast_preserving``, re-wraps the plain str as a LiteralZoneValue —
+            so it emits ``CODE::`` + a ``\\`\\`\\``` fence, not ``CODE::\"...\"``). I1 form-preservation
+            already works for the mentioned child.
+          - CURRENT BUG: the operation is still a SILENT MERGE — the UNMENTIONED ``SIBLING`` child
+            is PRESERVED. Under the ratified Q1 FULL-REPLACE contract it must be dropped.
+        ``status: success``, output reparses (semantic-only defect on the sibling).
+        """
+        result, emitted = await _roundtrip(_DOC_LITERAL_ZONE_BLOCK, {"PARENT": {"CODE": "new plain content"}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"current: output is syntactically valid; got:\n{emitted}"
+        # Fence form preserved for the mentioned child (already-correct #460 Case A behaviour).
+        assert "```" in emitted, f"current: fence form preserved for mentioned child; got:\n{emitted}"
+        assert 'CODE::"' not in emitted, f"current: must NOT downgrade fence to quoted scalar; got:\n{emitted}"
+        assert "new plain content" in emitted, "current: content was swapped into the fence"
+        # Silent-merge defect: the unmentioned sibling survives.
+        assert "SIBLING" in emitted, f"current bug: unmentioned SIBLING preserved (silent merge); got:\n{emitted}"
+
+    @pytest.mark.asyncio
+    async def test_prepend_nested_dict_element_false_green_gh488(self) -> None:
+        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+
+        CDV PREPEND-DICT-ONTO-ARRAY cell — mirror of the APPEND-dict case. PREPEND a dict element
+        onto a list-of-lists emits a Python-repr ``{'NESTED': 'v'}`` which the strict lexer rejects
+        (E005, unexpected ``{``). ``status: success`` — false-green, same emitter family as #488.
+        """
+        result, emitted = await _roundtrip(
+            _DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [{"NESTED": "v"}]}}
+        )
+        assert result.get("status") == "success", "current: write reports success (false-green)"
+        exc = _reparse_error(emitted)
+        assert exc is not None, f"current bug: emitted output should FAIL strict re-parse; got:\n{emitted}"
+        assert isinstance(exc, LexerError), f"current bug: E005 lexer rejection expected, got {exc!r}"
+        assert "{" in emitted, "current bug: dict element emitted as Python repr with braces"
+
 
 # ===========================================================================
 # LAYER 2 — DESIRED CONTRACT (xfail strict; flips GREEN when #487 build lands)
@@ -452,6 +537,20 @@ class TestDesiredContractGH488:
         assert result.get("status") == "success"
         assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
 
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#488 + GH#487 contract (#488 clause, PREPEND-DICT-ONTO-ARRAY, CDV blind cell): "
+        "PREPEND of a dict element onto a list-of-lists must emit re-parseable form "
+        "(block/double-quoted), never a Python repr with braces.",
+        strict=True,
+    )
+    async def test_prepend_nested_dict_element_emits_reparseable(self) -> None:
+        result, emitted = await _roundtrip(
+            _DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [{"NESTED": "v"}]}}
+        )
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
+
 
 class TestDesiredContractGH440:
     """#440 / Q2: nested dict values serialize as BLOCK at emit (dict->InlineMap abolished)."""
@@ -491,18 +590,40 @@ class TestDesiredContractGH443aFullReplace:
         assert "CHILD_B" not in emitted, f"DESIRED: unmentioned CHILD_B must be dropped; got:\n{emitted}"
         assert "NEW_CHILD" in emitted, "DESIRED: the mentioned child must be present"
 
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="GH#487 BLOCKING-1 (CDV CONDITIONAL-GO) + GH#460 Case A + I1 (Syntactic Fidelity): a "
+        "bare-dict FULL REPLACE at a top-level Block that re-mentions a LITERAL-ZONE child with a "
+        "plain str MUST (a) form-preserve the mentioned child's fence (route via "
+        '_normalize_value_for_ast_preserving, write_mutation.py:243 — emit a fence, not KEY::"...") '
+        "AND (b) DROP unmentioned siblings (Q1 full replace). Currently the fence is preserved but "
+        "the unmentioned sibling survives (silent merge).",
+        strict=True,
+    )
+    async def test_literal_zone_replace_preserves_fence_and_drops_sibling(self) -> None:
+        result, emitted = await _roundtrip(_DOC_LITERAL_ZONE_BLOCK, {"PARENT": {"CODE": "new plain content"}})
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"DESIRED: output must round-trip; got:\n{emitted}"
+        # (a) I1 / #460 Case A: the mentioned literal-zone child keeps its fence form.
+        assert "```" in emitted, f"DESIRED: fence form preserved for mentioned child; got:\n{emitted}"
+        assert 'CODE::"' not in emitted, f"DESIRED: fence must NOT downgrade to quoted scalar; got:\n{emitted}"
+        assert "new plain content" in emitted, "DESIRED: replacement content present in the fence"
+        # (b) Q1 FULL REPLACE: the unmentioned sibling is dropped.
+        assert "SIBLING" not in emitted, f"DESIRED: unmentioned SIBLING must be dropped; got:\n{emitted}"
+
 
 class TestDesiredContractGH443Defect2:
     """#443 Defect 2: scalar<->BLOCK transition resolved explicitly — NEVER duplicate keys."""
 
     @pytest.mark.asyncio
     @pytest.mark.xfail(
-        reason="GH#443 Defect 2 + GH#487 contract: a MERGE of a scalar over an existing nested "
-        "BLOCK MUST resolve the scalar<->BLOCK transition explicitly (replace the BLOCK with the "
-        "flat assignment OR reject with E_OP_TARGET_MISMATCH) — NEVER emit duplicate keys.",
+        reason="GH#443 Defect 2 + GH#487 contract REFINEMENT (CDV CONDITIONAL-GO firmed the "
+        "scalar<->BLOCK ruling to REJECT-only, not honour): a MERGE of a scalar over an existing "
+        "nested BLOCK MUST be REJECTED with E_OP_TARGET_MISMATCH (not honoured) — NEVER emit "
+        "duplicate keys, NEVER status:success. Cite I3 + GH#487 contract refinement.",
         strict=True,
     )
-    async def test_merge_scalar_over_block_no_duplicate_keys(self) -> None:
+    async def test_merge_scalar_over_block_rejected_op_target_mismatch(self) -> None:
         doc = (
             "===EXAMPLE===\n"
             "META:\n"
@@ -514,17 +635,12 @@ class TestDesiredContractGH443Defect2:
             "  PKG::y\n"
             "===END===\n"
         )
-        result, emitted = await _roundtrip(doc, {"PARENT": {"$op": "MERGE", "value": {"CHEVRON": "migrated"}}})
+        result, _ = await _roundtrip(doc, {"PARENT": {"$op": "MERGE", "value": {"CHEVRON": "migrated"}}})
         codes = [e.get("code") for e in result.get("errors", [])]
-        if result.get("status") == "success":
-            # If honoured (not rejected), the transition must not leave duplicate keys.
-            assert (
-                _count_key_occurrences(emitted, "CHEVRON") == 1
-            ), f"DESIRED: exactly one CHEVRON key after transition; got:\n{emitted}"
-            assert _strict_reparses(emitted)
-        else:
-            # The alternative sanctioned outcome is an explicit rejection.
-            assert "E_OP_TARGET_MISMATCH" in codes, f"DESIRED: explicit rejection code; got: {codes}"
+        # CDV refinement: the scalar<->BLOCK transition is REJECT-only. The earlier
+        # "honour OR reject" branch is removed — only E_OP_TARGET_MISMATCH is sanctioned.
+        assert "E_OP_TARGET_MISMATCH" in codes, f"DESIRED (REJECT-only): expected E_OP_TARGET_MISMATCH; got: {codes}"
+        assert result.get("status") != "success", "DESIRED: scalar-over-BLOCK MERGE must not succeed"
 
     @pytest.mark.asyncio
     @pytest.mark.xfail(
