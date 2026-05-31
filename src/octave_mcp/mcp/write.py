@@ -1480,6 +1480,31 @@ class WriteTool(BaseTool):
                                 ),
                             }
                         )
+                    elif target_kind in ("block", "section") and isinstance(target_node, (Block, Section)):
+                        # GH#487 Defect-2 (#443): a MERGE payload key that names an
+                        # existing CHILD Block but supplies a scalar (non-dict)
+                        # replacement is a scalar<->BLOCK transition. CDV firmed
+                        # this to REJECT-only (E_OP_TARGET_MISMATCH) — surfaced here
+                        # pre-apply (PROD::I3 / I5: visible, no silent destruction).
+                        child_blocks = {c.key for c in target_node.children if isinstance(c, Block)}
+                        bad = [
+                            mk
+                            for mk, mv in _payload.items()
+                            if mk in child_blocks and not _is_delete_sentinel(mv) and not isinstance(mv, dict)
+                        ]
+                        if bad:
+                            errors.append(
+                                {
+                                    "code": "E_OP_TARGET_MISMATCH",
+                                    "message": (
+                                        f"$op MERGE on '{key}' cannot replace nested block(s) "
+                                        f"{bad} with a scalar value (scalar<->BLOCK transition). "
+                                        f"Rejected to avoid silent structural destruction / "
+                                        f"duplicate keys (PROD::I3). To replace a block, DELETE "
+                                        f"it first or send a bare-dict REPLACE at '{key}'."
+                                    ),
+                                }
+                            )
 
         return errors
 

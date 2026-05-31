@@ -333,6 +333,14 @@ class DocumentMutator:
                         ]
                         _mark_dirty(target_block, body=True)
                         continue
+                    # GH#487 Defect-2 (#443): scalar-over-nested-BLOCK via MERGE is
+                    # a scalar<->BLOCK transition. CDV CONDITIONAL-GO firmed this to
+                    # REJECT-only (never silently honour): replacing a child Block
+                    # with a scalar would either destroy structure silently or emit
+                    # duplicate keys. Reject with E_OP_TARGET_MISMATCH (I3: no silent
+                    # structural destruction). This is the apply-side defensive net;
+                    # the validator surfaces the same error pre-apply.
+                    self._reject_scalar_over_child_block(target_block, mk, mv, key)
                     found_child = False
                     for child in target_block.children:
                         if isinstance(child, Assignment) and child.key == mk:
@@ -445,6 +453,44 @@ class DocumentMutator:
             # bytes to splice; its value MUST be re-emitted).
             new_assignment = Assignment(key=key, value=_normalize_value_for_ast(new_value), dirty=True)
             doc.sections.append(new_assignment)
+
+    # ------------------------------------------------------------------
+    # Transition primitives (GH#487 B-3: Defect-2 reject)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _reject_scalar_over_child_block(parent: Block, child_key: str, replacement: Any, target_key: str) -> None:
+        """GH#487 Defect-2 (#443): reject a scalar replacement of a child Block.
+
+        CDV CONDITIONAL-GO firmed the scalar<->BLOCK ruling to REJECT-only (not
+        honour). Under an explicit ``$op:MERGE`` on ``parent``, if a payload key
+        ``child_key`` names an existing child that is itself a ``Block`` and the
+        replacement is NOT a bare dict (i.e. a scalar / list — a non-block), the
+        MERGE would either destroy the nested Block silently or emit duplicate
+        keys. Raise ``E_OP_TARGET_MISMATCH`` (PROD::I3: no silent structural
+        destruction). To replace a Block with a scalar, the caller must DELETE
+        first or REPLACE at the parent (bare-dict FULL REPLACE).
+
+        No-op when the child is absent, is an Assignment, or the replacement is a
+        bare dict (the #484 guard already rejects nested-dict MERGE payloads, so a
+        dict reaching apply would be an op-descriptor handled elsewhere).
+        """
+        is_block_child = any(isinstance(c, Block) and c.key == child_key for c in parent.children)
+        if is_block_child and not (isinstance(replacement, dict)):
+            raise ValueError(
+                [
+                    {
+                        "code": "E_OP_TARGET_MISMATCH",
+                        "message": (
+                            f"$op MERGE on '{target_key}' cannot replace nested block "
+                            f"'{child_key}' with a scalar value (scalar<->BLOCK transition). "
+                            f"This is rejected to avoid silent structural destruction / "
+                            f"duplicate keys (PROD::I3). To replace the block, DELETE it first "
+                            f"or send a bare-dict REPLACE at '{target_key}'."
+                        ),
+                    }
+                ]
+            )
 
     # ------------------------------------------------------------------
     # Transition primitives (GH#487 B-2: Q1 FULL REPLACE)

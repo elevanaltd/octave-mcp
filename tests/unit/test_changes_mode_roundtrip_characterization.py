@@ -384,13 +384,14 @@ class TestCharacterizationKnownDefects:
         assert "NEW_CHILD" in emitted
 
     @pytest.mark.asyncio
-    async def test_merge_scalar_over_block_duplicate_keys_gh443_defect2(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443 Defect 2)
+    async def test_merge_scalar_over_block_rejected_gh443_defect2(self) -> None:
+        """INVERTED (GH#487 B-3, Defect-2 REJECT landed): MERGE scalar-over-block is now rejected.
 
-        ``{"$op":"MERGE"}`` of a SCALAR over an existing nested BLOCK child leaves the BLOCK in
-        place AND appends a flat scalar of the same name → DUPLICATE KEYS at the same scope.
-        ``status: success``; the lenient parser even re-parses it. The contract requires explicit
-        resolution (replace the BLOCK or E_OP_TARGET_MISMATCH) — NEVER duplicate keys.
+        Formerly a characterization pin documenting the duplicate-keys bug (the BLOCK left in
+        place AND a flat scalar of the same name appended, status:success). GH#487 firmed the
+        scalar<->BLOCK transition to REJECT-only: the MERGE now fails with E_OP_TARGET_MISMATCH
+        and NO duplicate keys are emitted. Retained as the negative-history regression guard
+        (converse of ``test_merge_scalar_over_block_rejected_op_target_mismatch``).
         """
         doc = (
             "===EXAMPLE===\n"
@@ -403,12 +404,10 @@ class TestCharacterizationKnownDefects:
             "  PKG::y\n"
             "===END===\n"
         )
-        result, emitted = await _roundtrip(doc, {"PARENT": {"$op": "MERGE", "value": {"CHEVRON": "migrated"}}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        # Current bug: CHEVRON appears twice (BLOCK header + flat scalar) in the same scope.
-        assert (
-            _count_key_occurrences(emitted, "CHEVRON") >= 2
-        ), f"current bug: duplicate CHEVRON keys expected; got:\n{emitted}"
+        result, _ = await _roundtrip(doc, {"PARENT": {"$op": "MERGE", "value": {"CHEVRON": "migrated"}}})
+        codes = [e.get("code") for e in result.get("errors", [])]
+        assert "E_OP_TARGET_MISMATCH" in codes, f"GH#487 Defect-2: expected E_OP_TARGET_MISMATCH; got: {codes}"
+        assert result.get("status") != "success", "GH#487 Defect-2: scalar-over-BLOCK MERGE must not succeed"
 
     @pytest.mark.asyncio
     async def test_bare_scalar_over_block_full_replace_gh443_defect2(self) -> None:
@@ -607,13 +606,6 @@ class TestDesiredContractGH443Defect2:
     """#443 Defect 2: scalar<->BLOCK transition resolved explicitly — NEVER duplicate keys."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#443 Defect 2 + GH#487 contract REFINEMENT (CDV CONDITIONAL-GO firmed the "
-        "scalar<->BLOCK ruling to REJECT-only, not honour): a MERGE of a scalar over an existing "
-        "nested BLOCK MUST be REJECTED with E_OP_TARGET_MISMATCH (not honoured) — NEVER emit "
-        "duplicate keys, NEVER status:success. Cite I3 + GH#487 contract refinement.",
-        strict=True,
-    )
     async def test_merge_scalar_over_block_rejected_op_target_mismatch(self) -> None:
         doc = (
             "===EXAMPLE===\n"
