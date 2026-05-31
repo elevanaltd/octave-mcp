@@ -1,5 +1,6 @@
 """Op-dispatch and AST mutation primitives extracted from write.py as part of STRATEGY_S1 (#459/#466). Home of the v1.14.0 literal-zone form preservation fix (#460 Case A) when that work lands."""
 
+import re
 from typing import Any
 
 from octave_mcp.core.grammar.cst import (
@@ -10,6 +11,17 @@ from octave_mcp.core.grammar.cst import (
     ListValue,
     LiteralZoneValue,
     Section,
+)
+
+# GH#353 section-path regex. Relocated here from write.py as part of GH#487
+# (STRATEGY_S3) so both the WriteTool and the DocumentMutator share ONE
+# canonical definition (R2: no parallel/duplicate logic). ``§<id>::NAME.KEY``
+# where id = digits + optional letter suffix + optional ".N", NAME has no dots,
+# and KEY (required child key) has no dots.
+_SECTION_PATH_RE = re.compile(
+    r"^§([0-9]+[a-zA-Z]?(?:\.[0-9]+)?)"  # §<id>: digits + optional letter suffix + optional .N
+    r"(?:::([A-Za-z_][A-Za-z0-9_/\-]*))?"  # optional ::NAME (no dots in name)
+    r"\.([A-Za-z_][A-Za-z0-9_/\-]*)$"  # .KEY (required child key, no dots)
 )
 
 
