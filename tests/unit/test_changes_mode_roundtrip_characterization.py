@@ -309,45 +309,42 @@ class TestCharacterizationKnownDefects:
     """
 
     @pytest.mark.asyncio
-    async def test_append_list_of_lists_false_green_single_quote_gh488(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+    async def test_append_list_of_lists_reparseable_gh488(self) -> None:
+        """INVERTED (GH#487 B-5, #488 list-element synthesis landed): clean round-trip.
 
-        APPEND onto a list-of-lists emits a single-quoted inline element (``['VALUE']``) which the
-        strict lexer rejects (E005). ``octave_write`` reports ``status: success`` — a FALSE GREEN
-        (I1 round-trip violation): the write claims success but the file no longer parses.
+        Formerly a characterization pin documenting the single-quote false-green (APPEND onto a
+        list-of-lists emitted ``['VALUE']`` failing strict re-parse with E005 while reporting
+        success). GH#487 B-5 normalizes new list items at the mutation seam so nested lists emit
+        as double-quoted re-parseable OCTAVE. Retained as the negative-history regression guard.
         """
         result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "APPEND", "value": [["PR_485::x"]]}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        exc = _reparse_error(emitted)
-        assert exc is not None, f"current bug: emitted output should FAIL strict re-parse; got:\n{emitted}"
-        assert isinstance(exc, LexerError), f"current bug: E005 lexer rejection expected, got {exc!r}"
-        assert "'" in emitted, "current bug: element emitted with single quotes"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 #488: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_prepend_list_of_lists_false_green_single_quote_gh488(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+    async def test_prepend_list_of_lists_reparseable_gh488(self) -> None:
+        """INVERTED (GH#487 B-5, #488 PREPEND list-element synthesis landed): clean round-trip.
 
-        PREPEND variant of the #488 single-quote false-green on a list-of-lists target.
+        PREPEND variant of the formerly-false-green #488 list-of-lists case; now re-parseable.
+        Retained as the negative-history regression guard.
         """
         result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [["PR_485::x"]]}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        exc = _reparse_error(emitted)
-        assert exc is not None, f"current bug: emitted output should FAIL strict re-parse; got:\n{emitted}"
-        assert isinstance(exc, LexerError), f"current bug: E005 lexer rejection expected, got {exc!r}"
-        assert "'" in emitted, "current bug: element emitted with single quotes"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 #488: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_append_nested_dict_element_false_green_gh488(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+    async def test_append_nested_dict_element_reparseable_gh488(self) -> None:
+        """INVERTED (GH#487 B-5, #488 dict-element synthesis landed): clean round-trip.
 
-        APPEND a dict element onto a list emits a Python-repr ``{'NESTED': 'v'}`` which the strict
-        lexer rejects (E005, unexpected ``{``). Same emitter/serialization family as #488/#484.
-        ``status: success`` — false-green.
+        Formerly a characterization pin documenting the Python-repr false-green (APPEND a dict
+        element emitted ``{'NESTED': 'v'}`` failing strict re-parse). GH#487 B-5 normalizes the
+        dict item to an InlineMap, emitting a re-parseable bare ``NESTED::v`` pair. Retained as
+        the negative-history regression guard.
         """
         result, emitted = await _roundtrip(_DOC_FLAT_ARRAY, {"ITEMS": {"$op": "APPEND", "value": [{"NESTED": "v"}]}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        assert not _strict_reparses(emitted), f"current bug: emitted output should FAIL re-parse:\n{emitted}"
-        assert "{" in emitted, "current bug: dict element emitted as Python repr with braces"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 #488: emitted output must round-trip; got:\n{emitted}"
+        assert "{" not in emitted, f"GH#487 #488: no Python-repr braces; got:\n{emitted}"
 
     @pytest.mark.asyncio
     async def test_bare_dict_new_top_key_nested_value_emits_block_gh440(self) -> None:
@@ -480,21 +477,19 @@ class TestCharacterizationKnownDefects:
         assert "SIBLING" not in emitted, f"GH#487 Q1: unmentioned SIBLING must be dropped; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_prepend_nested_dict_element_false_green_gh488(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+    async def test_prepend_nested_dict_element_reparseable_gh488(self) -> None:
+        """INVERTED (GH#487 B-5, #488 PREPEND dict-element synthesis landed): clean round-trip.
 
-        CDV PREPEND-DICT-ONTO-ARRAY cell — mirror of the APPEND-dict case. PREPEND a dict element
-        onto a list-of-lists emits a Python-repr ``{'NESTED': 'v'}`` which the strict lexer rejects
-        (E005, unexpected ``{``). ``status: success`` — false-green, same emitter family as #488.
+        CDV PREPEND-DICT-ONTO-ARRAY cell — mirror of the APPEND-dict case. Formerly a
+        characterization pin documenting the Python-repr false-green; GH#487 B-5 normalizes the
+        dict item so it emits re-parseably. Retained as the negative-history regression guard.
         """
         result, emitted = await _roundtrip(
             _DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [{"NESTED": "v"}]}}
         )
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        exc = _reparse_error(emitted)
-        assert exc is not None, f"current bug: emitted output should FAIL strict re-parse; got:\n{emitted}"
-        assert isinstance(exc, LexerError), f"current bug: E005 lexer rejection expected, got {exc!r}"
-        assert "{" in emitted, "current bug: dict element emitted as Python repr with braces"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 #488: emitted output must round-trip; got:\n{emitted}"
+        assert "{" not in emitted, f"GH#487 #488: no Python-repr braces; got:\n{emitted}"
 
 
 # ===========================================================================
@@ -510,45 +505,24 @@ class TestDesiredContractGH488:
     """#488: APPEND/PREPEND onto a list-of-lists must emit strict-re-parseable output."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#488 + GH#487 contract (#488 clause): APPEND onto list-of-lists must NOT emit "
-        "single-quoted inline strings; emitted output MUST strict-re-parse (I1 round-trip).",
-        strict=True,
-    )
     async def test_append_list_of_lists_emits_reparseable(self) -> None:
         result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "APPEND", "value": [["PR_485::x"]]}})
         assert result.get("status") == "success"
         assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#488 + GH#487 contract (#488 clause): PREPEND onto list-of-lists must emit "
-        "strict-re-parseable output (no single-quoted inline strings).",
-        strict=True,
-    )
     async def test_prepend_list_of_lists_emits_reparseable(self) -> None:
         result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [["PR_485::x"]]}})
         assert result.get("status") == "success"
         assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#488 + GH#487 contract (#488/serialization family): APPEND of a dict element must "
-        "emit re-parseable form (block/double-quoted), never a Python repr with braces.",
-        strict=True,
-    )
     async def test_append_nested_dict_element_emits_reparseable(self) -> None:
         result, emitted = await _roundtrip(_DOC_FLAT_ARRAY, {"ITEMS": {"$op": "APPEND", "value": [{"NESTED": "v"}]}})
         assert result.get("status") == "success"
         assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#488 + GH#487 contract (#488 clause, PREPEND-DICT-ONTO-ARRAY, CDV blind cell): "
-        "PREPEND of a dict element onto a list-of-lists must emit re-parseable form "
-        "(block/double-quoted), never a Python repr with braces.",
-        strict=True,
-    )
     async def test_prepend_nested_dict_element_emits_reparseable(self) -> None:
         result, emitted = await _roundtrip(
             _DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [{"NESTED": "v"}]}}

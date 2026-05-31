@@ -155,8 +155,17 @@ def _apply_array_op_inplace(assignment: Assignment, op: str, payload: Any) -> No
       - payload as a single element: push/unshift one element.
       - payload as a list: bulk push/unshift in caller order.
     Existing items keep their original tokens (where present); new items are
-    appended as Python values, mirroring how _normalize_value_for_ast produces
-    list contents.
+    normalized via ``_normalize_value_for_ast`` so nested lists become
+    ``ListValue`` and nested dicts become ``InlineMap`` — both of which the
+    emitter renders as re-parseable OCTAVE.
+
+    GH#487 #488: previously raw Python ``list`` / ``dict`` items were pushed
+    verbatim and hit the emitter's ``str(value)`` fallback, producing a Python
+    repr (``['PR_485::x']`` single-quoted, or ``{'NESTED': 'v'}`` with braces)
+    that failed strict re-parse (E005) while ``octave_write`` reported success —
+    an I1 round-trip violation (false-green). Normalizing the new items at the
+    mutation seam closes the false-green; the emitter (sole canonicalizer) then
+    renders them depth-aware and re-parseable.
 
     ADR-0006 SR2-T2 PR-2 (GH#377): the Assignment whose value was
     mutated is marked ``dirty=True`` via ``_mark_dirty`` so Strategy
@@ -168,7 +177,11 @@ def _apply_array_op_inplace(assignment: Assignment, op: str, payload: Any) -> No
         op: "APPEND" or "PREPEND".
         payload: Element or list of elements to push.
     """
-    new_items = list(payload) if isinstance(payload, list) else [payload]
+    raw_items = list(payload) if isinstance(payload, list) else [payload]
+    # GH#487 #488: normalize each new item so nested structures emit re-parseably
+    # (list -> ListValue, dict -> InlineMap) instead of falling through to the
+    # emitter's Python-repr str(value) fallback.
+    new_items = [_normalize_value_for_ast(item) for item in raw_items]
 
     current = assignment.value
     if isinstance(current, ListValue):
