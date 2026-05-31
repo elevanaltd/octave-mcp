@@ -309,87 +309,86 @@ class TestCharacterizationKnownDefects:
     """
 
     @pytest.mark.asyncio
-    async def test_append_list_of_lists_false_green_single_quote_gh488(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+    async def test_append_list_of_lists_reparseable_gh488(self) -> None:
+        """INVERTED (GH#487 B-5, #488 list-element synthesis landed): clean round-trip.
 
-        APPEND onto a list-of-lists emits a single-quoted inline element (``['VALUE']``) which the
-        strict lexer rejects (E005). ``octave_write`` reports ``status: success`` — a FALSE GREEN
-        (I1 round-trip violation): the write claims success but the file no longer parses.
+        Formerly a characterization pin documenting the single-quote false-green (APPEND onto a
+        list-of-lists emitted ``['VALUE']`` failing strict re-parse with E005 while reporting
+        success). GH#487 B-5 normalizes new list items at the mutation seam so nested lists emit
+        as double-quoted re-parseable OCTAVE. Retained as the negative-history regression guard.
         """
         result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "APPEND", "value": [["PR_485::x"]]}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        exc = _reparse_error(emitted)
-        assert exc is not None, f"current bug: emitted output should FAIL strict re-parse; got:\n{emitted}"
-        assert isinstance(exc, LexerError), f"current bug: E005 lexer rejection expected, got {exc!r}"
-        assert "'" in emitted, "current bug: element emitted with single quotes"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 #488: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_prepend_list_of_lists_false_green_single_quote_gh488(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+    async def test_prepend_list_of_lists_reparseable_gh488(self) -> None:
+        """INVERTED (GH#487 B-5, #488 PREPEND list-element synthesis landed): clean round-trip.
 
-        PREPEND variant of the #488 single-quote false-green on a list-of-lists target.
+        PREPEND variant of the formerly-false-green #488 list-of-lists case; now re-parseable.
+        Retained as the negative-history regression guard.
         """
         result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [["PR_485::x"]]}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        exc = _reparse_error(emitted)
-        assert exc is not None, f"current bug: emitted output should FAIL strict re-parse; got:\n{emitted}"
-        assert isinstance(exc, LexerError), f"current bug: E005 lexer rejection expected, got {exc!r}"
-        assert "'" in emitted, "current bug: element emitted with single quotes"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 #488: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_append_nested_dict_element_false_green_gh488(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+    async def test_append_nested_dict_element_reparseable_gh488(self) -> None:
+        """INVERTED (GH#487 B-5, #488 dict-element synthesis landed): clean round-trip.
 
-        APPEND a dict element onto a list emits a Python-repr ``{'NESTED': 'v'}`` which the strict
-        lexer rejects (E005, unexpected ``{``). Same emitter/serialization family as #488/#484.
-        ``status: success`` — false-green.
+        Formerly a characterization pin documenting the Python-repr false-green (APPEND a dict
+        element emitted ``{'NESTED': 'v'}`` failing strict re-parse). GH#487 B-5 normalizes the
+        dict item to an InlineMap, emitting a re-parseable bare ``NESTED::v`` pair. Retained as
+        the negative-history regression guard.
         """
         result, emitted = await _roundtrip(_DOC_FLAT_ARRAY, {"ITEMS": {"$op": "APPEND", "value": [{"NESTED": "v"}]}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        assert not _strict_reparses(emitted), f"current bug: emitted output should FAIL re-parse:\n{emitted}"
-        assert "{" in emitted, "current bug: dict element emitted as Python repr with braces"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 #488: emitted output must round-trip; got:\n{emitted}"
+        assert "{" not in emitted, f"GH#487 #488: no Python-repr braces; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_bare_dict_new_top_key_nested_value_false_green_gh440(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#440)
+    async def test_bare_dict_new_top_key_nested_value_emits_block_gh440(self) -> None:
+        """INVERTED (GH#487 B-4, Q2 dict->BLOCK landed): nested dict now emits BLOCK form.
 
-        A bare-dict at a NEW top-level KEY whose value is itself a nested dict is coerced into a
-        nested InlineMap (``NEWKEY::[OUTER::[INNER::v]]``). ``status: success`` but the strict
-        parser rejects it with ``E_NESTED_INLINE_MAP``. This is the Q2 (#440) ``dict->InlineMap``
-        coercion that the ratified contract abolishes in favour of BLOCK form at emit.
+        Formerly a characterization pin documenting the dict->InlineMap coercion bug (nested
+        ``NEWKEY::[OUTER::[INNER::v]]`` failing strict re-parse with E_NESTED_INLINE_MAP). GH#487
+        Q2 (#440) DEFERRED_CANONICALIZATION abolishes the coercion: a bare-dict at a NEW top-level
+        KEY whose value is a nested dict is synthesized as BLOCK form (sole canonical nested form),
+        which strict-re-parses cleanly. Retained as the negative-history regression guard
+        (converse of ``test_bare_dict_new_top_key_nested_value_emits_block``).
         """
         result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        exc = _reparse_error(emitted)
-        assert exc is not None, f"current bug: nested inline map should FAIL re-parse:\n{emitted}"
-        assert isinstance(exc, ParserError), f"current bug: E_NESTED_INLINE_MAP expected, got {exc!r}"
-        assert "E_NESTED_INLINE_MAP" in str(exc), f"current bug: expected E_NESTED_INLINE_MAP; got {exc}"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 Q2: BLOCK-form emit must round-trip; got:\n{emitted}"
+        assert "[OUTER::" not in emitted, f"GH#487 Q2: no inline nested map; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_bare_dict_top_key_over_block_silent_merge_gh443a(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443a)
+    async def test_bare_dict_top_key_over_block_full_replace_gh443a(self) -> None:
+        """INVERTED (GH#487 B-2, Q1 FULL REPLACE landed): bare-dict over a Block now full-replaces.
 
-        A bare-dict at a top-level KEY that already holds a nested BLOCK performs a SILENT MERGE:
-        unmentioned children (CHILD_A, CHILD_B) are PRESERVED and the new child is appended.
-        The ratified Q1 contract makes this a FULL REPLACE (drop unmentioned children, honour I3).
-        ``status: success``, output reparses — the corruption is semantic, not syntactic.
+        Formerly a characterization pin documenting the silent-MERGE bug (unmentioned children
+        CHILD_A/CHILD_B preserved + new child appended). GH#487 Q1 inverts this to a FULL REPLACE
+        (HARD BREAK v1.15): unmentioned children are DROPPED (honours I3). Retained as the
+        negative-history regression guard for the fixed behaviour; the converse of the
+        desired-contract cell ``test_bare_dict_top_key_over_block_full_replace``.
         """
         result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": {"NEW_CHILD": "added"}})
         assert result.get("status") == "success"
-        assert _strict_reparses(emitted), "current: output is syntactically valid (semantic-only defect)"
-        # Current silent-MERGE: unmentioned children survive.
-        assert "CHILD_A" in emitted, "current bug: unmentioned child CHILD_A preserved (silent merge)"
-        assert "CHILD_B" in emitted, "current bug: unmentioned child CHILD_B preserved (silent merge)"
+        assert _strict_reparses(emitted), f"output must round-trip; got:\n{emitted}"
+        # GH#487 Q1 FULL REPLACE: unmentioned children are now DROPPED.
+        assert "CHILD_A" not in emitted, f"GH#487 Q1: unmentioned CHILD_A must be dropped; got:\n{emitted}"
+        assert "CHILD_B" not in emitted, f"GH#487 Q1: unmentioned CHILD_B must be dropped; got:\n{emitted}"
         assert "NEW_CHILD" in emitted
 
     @pytest.mark.asyncio
-    async def test_merge_scalar_over_block_duplicate_keys_gh443_defect2(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443 Defect 2)
+    async def test_merge_scalar_over_block_rejected_gh443_defect2(self) -> None:
+        """INVERTED (GH#487 B-3, Defect-2 REJECT landed): MERGE scalar-over-block is now rejected.
 
-        ``{"$op":"MERGE"}`` of a SCALAR over an existing nested BLOCK child leaves the BLOCK in
-        place AND appends a flat scalar of the same name → DUPLICATE KEYS at the same scope.
-        ``status: success``; the lenient parser even re-parses it. The contract requires explicit
-        resolution (replace the BLOCK or E_OP_TARGET_MISMATCH) — NEVER duplicate keys.
+        Formerly a characterization pin documenting the duplicate-keys bug (the BLOCK left in
+        place AND a flat scalar of the same name appended, status:success). GH#487 firmed the
+        scalar<->BLOCK transition to REJECT-only: the MERGE now fails with E_OP_TARGET_MISMATCH
+        and NO duplicate keys are emitted. Retained as the negative-history regression guard
+        (converse of ``test_merge_scalar_over_block_rejected_op_target_mismatch``).
         """
         doc = (
             "===EXAMPLE===\n"
@@ -402,26 +401,26 @@ class TestCharacterizationKnownDefects:
             "  PKG::y\n"
             "===END===\n"
         )
-        result, emitted = await _roundtrip(doc, {"PARENT": {"$op": "MERGE", "value": {"CHEVRON": "migrated"}}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        # Current bug: CHEVRON appears twice (BLOCK header + flat scalar) in the same scope.
-        assert (
-            _count_key_occurrences(emitted, "CHEVRON") >= 2
-        ), f"current bug: duplicate CHEVRON keys expected; got:\n{emitted}"
+        result, _ = await _roundtrip(doc, {"PARENT": {"$op": "MERGE", "value": {"CHEVRON": "migrated"}}})
+        codes = [e.get("code") for e in result.get("errors", [])]
+        assert "E_OP_TARGET_MISMATCH" in codes, f"GH#487 Defect-2: expected E_OP_TARGET_MISMATCH; got: {codes}"
+        assert result.get("status") != "success", "GH#487 Defect-2: scalar-over-BLOCK MERGE must not succeed"
 
     @pytest.mark.asyncio
-    async def test_bare_scalar_over_block_duplicate_keys_gh443_defect2(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443 Defect 2)
+    async def test_bare_scalar_over_block_full_replace_gh443_defect2(self) -> None:
+        """INVERTED (GH#487 B-2, Q1 FULL REPLACE landed): bare-scalar over a Block now replaces it.
 
-        A bare SCALAR (no ``$op``) assigned to a top-level KEY that holds a nested BLOCK leaves the
-        BLOCK in place AND appends a flat scalar of the same name → DUPLICATE KEYS at the same scope.
-        ``status: success``. Non-MERGE variant of the scalar<->BLOCK transition footgun.
+        Formerly a characterization pin documenting the duplicate-keys bug (Block left in place
+        AND a flat scalar of the same name appended). GH#487 Q1 FULL REPLACE (scalar<->BLOCK
+        transition) replaces the Block with a single flat Assignment IN PLACE — exactly one key.
+        Retained as the negative-history regression guard for the fixed behaviour.
         """
         result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": "flat_now"})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
+        assert result.get("status") == "success"
         assert (
-            _count_key_occurrences(emitted, "PARENT") >= 2
-        ), f"current bug: duplicate PARENT keys expected; got:\n{emitted}"
+            _count_key_occurrences(emitted, "PARENT") == 1
+        ), f"GH#487 Q1: exactly one PARENT key after scalar-over-block replace; got:\n{emitted}"
+        assert _strict_reparses(emitted), f"output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
     async def test_validate_block_vs_flat_collision_detected_gh443(self) -> None:
@@ -454,45 +453,43 @@ class TestCharacterizationKnownDefects:
         ), f"GH#487: BLOCK-vs-flat collision must now be DETECTED; repair_log={result.get('repair_log')}"
 
     @pytest.mark.asyncio
-    async def test_literal_zone_replace_silent_merge_keeps_sibling_gh460a(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#460 Case A / #443a)
+    async def test_literal_zone_replace_preserves_fence_and_drops_sibling_gh460a(self) -> None:
+        """INVERTED (GH#487 B-2, CDV BLOCKING-1 landed): fence preserved AND sibling dropped.
 
         CDV BLOCKING-1 cell. A bare-dict FULL REPLACE at a top-level Block (``PARENT``) whose
         payload re-mentions the fenced child (``CODE``) with a plain str value:
-          - CURRENT: the fence FORM of the mentioned child IS preserved (the #460 Case A path,
+          - The fence FORM of the mentioned child is PRESERVED (the #460 Case A path,
             ``_normalize_value_for_ast_preserving``, re-wraps the plain str as a LiteralZoneValue —
-            so it emits ``CODE::`` + a ``\\`\\`\\``` fence, not ``CODE::\"...\"``). I1 form-preservation
-            already works for the mentioned child.
-          - CURRENT BUG: the operation is still a SILENT MERGE — the UNMENTIONED ``SIBLING`` child
-            is PRESERVED. Under the ratified Q1 FULL-REPLACE contract it must be dropped.
-        ``status: success``, output reparses (semantic-only defect on the sibling).
+            so it emits ``CODE::`` + a fence, not ``CODE::\"...\"``). I1 form-preservation holds.
+          - GH#487 Q1 FULL REPLACE: the UNMENTIONED ``SIBLING`` child is now DROPPED.
+        Formerly a characterization pin documenting the silent-MERGE sibling-survives bug; now the
+        negative-history regression guard for the fixed behaviour (converse of
+        ``test_literal_zone_replace_preserves_fence_and_drops_sibling``).
         """
         result, emitted = await _roundtrip(_DOC_LITERAL_ZONE_BLOCK, {"PARENT": {"CODE": "new plain content"}})
         assert result.get("status") == "success"
-        assert _strict_reparses(emitted), f"current: output is syntactically valid; got:\n{emitted}"
-        # Fence form preserved for the mentioned child (already-correct #460 Case A behaviour).
-        assert "```" in emitted, f"current: fence form preserved for mentioned child; got:\n{emitted}"
-        assert 'CODE::"' not in emitted, f"current: must NOT downgrade fence to quoted scalar; got:\n{emitted}"
-        assert "new plain content" in emitted, "current: content was swapped into the fence"
-        # Silent-merge defect: the unmentioned sibling survives.
-        assert "SIBLING" in emitted, f"current bug: unmentioned SIBLING preserved (silent merge); got:\n{emitted}"
+        assert _strict_reparses(emitted), f"output must round-trip; got:\n{emitted}"
+        # Fence form preserved for the mentioned child (#460 Case A / BLOCKING-1).
+        assert "```" in emitted, f"fence form preserved for mentioned child; got:\n{emitted}"
+        assert 'CODE::"' not in emitted, f"fence must NOT downgrade to quoted scalar; got:\n{emitted}"
+        assert "new plain content" in emitted, "content was swapped into the fence"
+        # GH#487 Q1 FULL REPLACE: the unmentioned sibling is now dropped.
+        assert "SIBLING" not in emitted, f"GH#487 Q1: unmentioned SIBLING must be dropped; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_prepend_nested_dict_element_false_green_gh488(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#488)
+    async def test_prepend_nested_dict_element_reparseable_gh488(self) -> None:
+        """INVERTED (GH#487 B-5, #488 PREPEND dict-element synthesis landed): clean round-trip.
 
-        CDV PREPEND-DICT-ONTO-ARRAY cell — mirror of the APPEND-dict case. PREPEND a dict element
-        onto a list-of-lists emits a Python-repr ``{'NESTED': 'v'}`` which the strict lexer rejects
-        (E005, unexpected ``{``). ``status: success`` — false-green, same emitter family as #488.
+        CDV PREPEND-DICT-ONTO-ARRAY cell — mirror of the APPEND-dict case. Formerly a
+        characterization pin documenting the Python-repr false-green; GH#487 B-5 normalizes the
+        dict item so it emits re-parseably. Retained as the negative-history regression guard.
         """
         result, emitted = await _roundtrip(
             _DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [{"NESTED": "v"}]}}
         )
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        exc = _reparse_error(emitted)
-        assert exc is not None, f"current bug: emitted output should FAIL strict re-parse; got:\n{emitted}"
-        assert isinstance(exc, LexerError), f"current bug: E005 lexer rejection expected, got {exc!r}"
-        assert "{" in emitted, "current bug: dict element emitted as Python repr with braces"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 #488: emitted output must round-trip; got:\n{emitted}"
+        assert "{" not in emitted, f"GH#487 #488: no Python-repr braces; got:\n{emitted}"
 
 
 # ===========================================================================
@@ -508,45 +505,24 @@ class TestDesiredContractGH488:
     """#488: APPEND/PREPEND onto a list-of-lists must emit strict-re-parseable output."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#488 + GH#487 contract (#488 clause): APPEND onto list-of-lists must NOT emit "
-        "single-quoted inline strings; emitted output MUST strict-re-parse (I1 round-trip).",
-        strict=True,
-    )
     async def test_append_list_of_lists_emits_reparseable(self) -> None:
         result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "APPEND", "value": [["PR_485::x"]]}})
         assert result.get("status") == "success"
         assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#488 + GH#487 contract (#488 clause): PREPEND onto list-of-lists must emit "
-        "strict-re-parseable output (no single-quoted inline strings).",
-        strict=True,
-    )
     async def test_prepend_list_of_lists_emits_reparseable(self) -> None:
         result, emitted = await _roundtrip(_DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [["PR_485::x"]]}})
         assert result.get("status") == "success"
         assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#488 + GH#487 contract (#488/serialization family): APPEND of a dict element must "
-        "emit re-parseable form (block/double-quoted), never a Python repr with braces.",
-        strict=True,
-    )
     async def test_append_nested_dict_element_emits_reparseable(self) -> None:
         result, emitted = await _roundtrip(_DOC_FLAT_ARRAY, {"ITEMS": {"$op": "APPEND", "value": [{"NESTED": "v"}]}})
         assert result.get("status") == "success"
         assert _strict_reparses(emitted), f"DESIRED: emitted output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#488 + GH#487 contract (#488 clause, PREPEND-DICT-ONTO-ARRAY, CDV blind cell): "
-        "PREPEND of a dict element onto a list-of-lists must emit re-parseable form "
-        "(block/double-quoted), never a Python repr with braces.",
-        strict=True,
-    )
     async def test_prepend_nested_dict_element_emits_reparseable(self) -> None:
         result, emitted = await _roundtrip(
             _DOC_LIST_OF_LISTS, {"RECENT": {"$op": "PREPEND", "value": [{"NESTED": "v"}]}}
@@ -559,13 +535,6 @@ class TestDesiredContractGH440:
     """#440 / Q2: nested dict values serialize as BLOCK at emit (dict->InlineMap abolished)."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#440 + GH#487 contract Q2 (DEFERRED_CANONICALIZATION): a bare-dict at a top-level "
-        "KEY with a nested dict value MUST emit BLOCK form (sole canonical nested form) and "
-        "strict-re-parse; dict->InlineMap coercion is abolished. Transform logged TRANSFORM::"
-        "INLINE_MAP_TO_BLOCK (I4).",
-        strict=True,
-    )
     async def test_bare_dict_new_top_key_nested_value_emits_block(self) -> None:
         result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
         assert result.get("status") == "success"
@@ -573,17 +542,43 @@ class TestDesiredContractGH440:
         # Desired canonical nested form is BLOCK, not an inline map.
         assert "[OUTER::" not in emitted, f"DESIRED: no inline nested map; got:\n{emitted}"
 
+    @pytest.mark.asyncio
+    async def test_existing_scalar_replaced_by_nested_dict_emits_block(self) -> None:
+        """GH#487 CE BLOCKING regression: existing FLAT SCALAR replaced by a bare nested dict.
+
+        A bare nested-dict payload at a KEY that ALREADY holds a flat scalar must, per the Q1
+        (FULL REPLACE) + Q2 (BLOCK is the sole canonical nested form) contract, synthesize
+        canonical BLOCK form — NOT the legacy nested-InlineMap coercion (``KEY::[OUTER::[INNER::v]]``)
+        which failed strict re-parse with E_NESTED_INLINE_MAP (an I1 round-trip violation, reported
+        ``status:success`` — a false-green). The existing-Block and new-key paths already synthesized
+        BLOCK; this existing-scalar->nested-dict branch was missed (document_mutator.py legacy
+        full-value replacement). Asserts: (a) success, (b) BLOCK form (no inline map), (c) strict
+        re-parse, (d) the I4 TRANSFORM::INLINE_MAP_TO_BLOCK (TN_INLINE_MAP_TO_BLOCK) receipt is
+        logged with the key as the stable structural id.
+        """
+        result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"KEY": {"OUTER": {"INNER": "v"}}})
+        # (a) success
+        assert result.get("status") == "success", f"expected success; got: {result.get('errors')}"
+        # (b) BLOCK form — no inline nested map for the replaced scalar
+        assert "[OUTER::" not in emitted, f"DESIRED: no inline nested map; got:\n{emitted}"
+        assert "KEY:" in emitted, f"DESIRED: KEY emits as a BLOCK header; got:\n{emitted}"
+        # (c) strict re-parse (no E_NESTED_INLINE_MAP)
+        exc = _reparse_error(emitted)
+        assert exc is None, f"DESIRED: BLOCK-form emit must round-trip; got reparse error {exc!r}:\n{emitted}"
+        # (d) I4 transform logged with a stable structural id (the key)
+        corrections = result.get("corrections") or []
+        transform_codes = [c for c in corrections if c.get("code") == "TN_INLINE_MAP_TO_BLOCK"]
+        assert transform_codes, (
+            "DESIRED: I4 TRANSFORM::INLINE_MAP_TO_BLOCK must be logged; " f"corrections={corrections}"
+        )
+        keys_logged = {str(c.get("before", "")).split("::", 1)[0] for c in transform_codes}
+        assert "KEY" in keys_logged, f"DESIRED: I4 receipt for 'KEY' (stable id); got: {keys_logged}"
+
 
 class TestDesiredContractGH443aFullReplace:
     """#443a / Q1: bare-dict at a top-level KEY = FULL REPLACE (drop unmentioned children, I3)."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#443a + GH#487 contract Q1 (HARD BREAK v1.15): a bare-dict at a top-level KEY "
-        "executes FULL REPLACE — unmentioned children are DROPPED (honours I3: reflect only "
-        "what's present). Explicit {'$op':'MERGE'} is required to merge.",
-        strict=True,
-    )
     async def test_bare_dict_top_key_over_block_full_replace(self) -> None:
         result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": {"NEW_CHILD": "added"}})
         assert result.get("status") == "success"
@@ -594,15 +589,6 @@ class TestDesiredContractGH443aFullReplace:
         assert "NEW_CHILD" in emitted, "DESIRED: the mentioned child must be present"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#487 BLOCKING-1 (CDV CONDITIONAL-GO) + GH#460 Case A + I1 (Syntactic Fidelity): a "
-        "bare-dict FULL REPLACE at a top-level Block that re-mentions a LITERAL-ZONE child with a "
-        "plain str MUST (a) form-preserve the mentioned child's fence (route via "
-        '_normalize_value_for_ast_preserving, write_mutation.py:243 — emit a fence, not KEY::"...") '
-        "AND (b) DROP unmentioned siblings (Q1 full replace). Currently the fence is preserved but "
-        "the unmentioned sibling survives (silent merge).",
-        strict=True,
-    )
     async def test_literal_zone_replace_preserves_fence_and_drops_sibling(self) -> None:
         result, emitted = await _roundtrip(_DOC_LITERAL_ZONE_BLOCK, {"PARENT": {"CODE": "new plain content"}})
         assert result.get("status") == "success"
@@ -619,13 +605,6 @@ class TestDesiredContractGH443Defect2:
     """#443 Defect 2: scalar<->BLOCK transition resolved explicitly — NEVER duplicate keys."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#443 Defect 2 + GH#487 contract REFINEMENT (CDV CONDITIONAL-GO firmed the "
-        "scalar<->BLOCK ruling to REJECT-only, not honour): a MERGE of a scalar over an existing "
-        "nested BLOCK MUST be REJECTED with E_OP_TARGET_MISMATCH (not honoured) — NEVER emit "
-        "duplicate keys, NEVER status:success. Cite I3 + GH#487 contract refinement.",
-        strict=True,
-    )
     async def test_merge_scalar_over_block_rejected_op_target_mismatch(self) -> None:
         doc = (
             "===EXAMPLE===\n"
@@ -646,11 +625,6 @@ class TestDesiredContractGH443Defect2:
         assert result.get("status") != "success", "DESIRED: scalar-over-BLOCK MERGE must not succeed"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#443 Defect 2 + GH#487 contract: a bare scalar assigned over an existing nested "
-        "BLOCK at a top-level KEY MUST full-replace the BLOCK (Q1) — NEVER emit duplicate keys.",
-        strict=True,
-    )
     async def test_bare_scalar_over_block_no_duplicate_keys(self) -> None:
         result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": "flat_now"})
         assert result.get("status") == "success"

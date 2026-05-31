@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠️ BREAKING — `octave_write` `changes` mode value semantics (GH#487, v1.15.0)
+
+> **Migration in one line:** a **bare dict** at a `changes` KEY now **fully replaces** that key (unmentioned children are **dropped**). To merge into an existing block, you **MUST** now send an explicit `{"$op": "MERGE", "value": {…}}`.
+
+This is the STRATEGY_S3 `DocumentMutator` extraction implementing the operator-ratified, debate-hall-settled (`decision_hash a8837c80…`) + CDV CONDITIONAL-GO contract. Transition logic and structural AST synthesis are now owned by a single `DocumentMutator` layer (`src/octave_mcp/mcp/document_mutator.py`); the emitter remains the sole canonicalizer-to-bytes (R2: one mutation path, no serialization-policy split, no node indentation metadata added).
+
+- **Q1 — bare-dict at a top-level KEY = FULL REPLACE (#443a, HARD BREAK).** `changes={"PARENT": {"NEW_CHILD": "x"}}` against an existing `PARENT` block now **replaces** the block's children with the payload: **unmentioned children are DROPPED** (honours PROD::I3 — reflect only what's present). The previous silent implicit-MERGE (unmentioned children preserved + new child appended) is removed. **No** `$op:REPLACE` op is introduced — bare-dict carries replace semantics directly.
+  - **Key-wise reconciliation (CDV BLOCKING-1):** a key present in BOTH payload and target is **form-preserved** — routed through the #460 fence-preserving path, so a re-mentioned literal-zone (fenced ```` ``` ````) child keeps its fence FORM while unmentioned siblings are dropped (PROD::I1 intact).
+  - **Migration:** callers that relied on bare-dict merging **MUST** switch to `changes={"PARENT": {"$op": "MERGE", "value": {"NEW_CHILD": "x"}}}` to preserve unmentioned children. Blast radius is small at current usage; accepted by operator as a hard break.
+- **Q1 — bare-scalar over a nested BLOCK = FULL REPLACE (#443 Defect 2).** A bare scalar assigned to a KEY that holds a block now **replaces the block in place** with a single flat assignment (exactly one key emitted), curing the prior duplicate-keys footgun (block left in place AND a flat scalar of the same name appended at the same scope).
+- **Defect 2 — scalar-over-nested-BLOCK via `$op:MERGE` = REJECT (#443).** A `$op:MERGE` whose payload would replace an existing **child block** with a **scalar** is now **rejected with `E_OP_TARGET_MISMATCH`** (CDV firmed the scalar↔BLOCK transition to REJECT-only, never silently honour). To replace a block with a scalar, DELETE it first or send a bare-dict REPLACE at the parent. **Never emits duplicate keys.** Surfaced pre-apply by `octave_validate` and defended apply-side.
+- **Q2 — deferred canonicalization: nested dicts emit BLOCK form (#440).** A bare dict with a **nested** dict value is now synthesized as canonical **BLOCK** form (the sole canonical nested form) instead of the legacy `dict→InlineMap` coercion (which re-parsed to `E_NESTED_INLINE_MAP`). The `dict→InlineMap` coercion is **abolished** for nested dicts. Every such conversion is logged to the I4 audit channel as `TRANSFORM::INLINE_MAP_TO_BLOCK` (stable rule id `TN_INLINE_MAP_TO_BLOCK`) with the key as the stable structural id (PROD::I4). A **flat** dict (all scalar/list values) is unchanged — it still emits as a re-parseable inline map.
+- **#488 — APPEND/PREPEND of nested list/dict elements now re-parseable.** `$op:APPEND`/`$op:PREPEND` of a nested list (`[["PR::x"]]`) or dict (`[{"K": "v"}]`) element previously emitted a Python repr (`['PR::x']` single-quoted, or `{'K': 'v'}` with braces) that failed strict re-parse (E005) while reporting `status:success` — an I1 round-trip false-green. New list items are now normalized at the mutation seam so they emit as re-parseable OCTAVE (double-quoted strings; bare `k::v` pairs in multi-line lists).
+- **#484 guard retained.** The `E_NESTED_DICT_IN_MERGE_PAYLOAD` guard for nested dicts in `$op:MERGE` payloads is **unchanged** and continues to fire **only** under explicit `$op:MERGE`; the new bare-dict REPLACE path emits BLOCK form instead and is never blocked by the guard.
+
+`octave_validate` (read path) is unchanged: it continues to ACCEPT inline maps and report `W_INLINE_ARRAY_ROOT` without mutating the source (PROD::I5).
+
 ## [1.14.0] - 2026-05-30 - "octave_write changes-mode hybrid fix (anchored paths + literal-zone fidelity)"
 
 ### Added
