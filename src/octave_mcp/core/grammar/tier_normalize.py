@@ -80,6 +80,14 @@ audit receipt covering blank-line stripping (until Sprint 3+ trivia
 population lands) and triple-quote collapse (until the new lexer W-code
 lands)."""
 
+RULE_INLINE_MAP_TO_BLOCK = "TN_INLINE_MAP_TO_BLOCK"
+"""GH#487 Q2 (#440) DEFERRED_CANONICALIZATION: changes-mode synthesised a
+canonical BLOCK node for a nested dict value instead of the legacy nested
+``InlineMap`` coercion (which re-parsed to E_NESTED_INLINE_MAP). Fires once per
+nested dict synthesised, recording the structural id of the key. BLOCK is the
+sole canonical nested form (Wall M1); the surfaced audit atom is
+``TRANSFORM::INLINE_MAP_TO_BLOCK`` (I4 TRANSFORM_AUDITABILITY)."""
+
 
 # ---------------------------------------------------------------------------
 # Active-log context (thread / async safe)
@@ -273,6 +281,7 @@ def reconcile_canonical_emission(
 
 __all__ = [
     "RULE_IDENTIFIER_DEQUOTE",
+    "RULE_INLINE_MAP_TO_BLOCK",
     "RULE_RECONCILE_CANONICAL",
     "active",
     "get_active_log",

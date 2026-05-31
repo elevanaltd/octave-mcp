@@ -350,20 +350,20 @@ class TestCharacterizationKnownDefects:
         assert "{" in emitted, "current bug: dict element emitted as Python repr with braces"
 
     @pytest.mark.asyncio
-    async def test_bare_dict_new_top_key_nested_value_false_green_gh440(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#440)
+    async def test_bare_dict_new_top_key_nested_value_emits_block_gh440(self) -> None:
+        """INVERTED (GH#487 B-4, Q2 dict->BLOCK landed): nested dict now emits BLOCK form.
 
-        A bare-dict at a NEW top-level KEY whose value is itself a nested dict is coerced into a
-        nested InlineMap (``NEWKEY::[OUTER::[INNER::v]]``). ``status: success`` but the strict
-        parser rejects it with ``E_NESTED_INLINE_MAP``. This is the Q2 (#440) ``dict->InlineMap``
-        coercion that the ratified contract abolishes in favour of BLOCK form at emit.
+        Formerly a characterization pin documenting the dict->InlineMap coercion bug (nested
+        ``NEWKEY::[OUTER::[INNER::v]]`` failing strict re-parse with E_NESTED_INLINE_MAP). GH#487
+        Q2 (#440) DEFERRED_CANONICALIZATION abolishes the coercion: a bare-dict at a NEW top-level
+        KEY whose value is a nested dict is synthesized as BLOCK form (sole canonical nested form),
+        which strict-re-parses cleanly. Retained as the negative-history regression guard
+        (converse of ``test_bare_dict_new_top_key_nested_value_emits_block``).
         """
         result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
-        exc = _reparse_error(emitted)
-        assert exc is not None, f"current bug: nested inline map should FAIL re-parse:\n{emitted}"
-        assert isinstance(exc, ParserError), f"current bug: E_NESTED_INLINE_MAP expected, got {exc!r}"
-        assert "E_NESTED_INLINE_MAP" in str(exc), f"current bug: expected E_NESTED_INLINE_MAP; got {exc}"
+        assert result.get("status") == "success"
+        assert _strict_reparses(emitted), f"GH#487 Q2: BLOCK-form emit must round-trip; got:\n{emitted}"
+        assert "[OUTER::" not in emitted, f"GH#487 Q2: no inline nested map; got:\n{emitted}"
 
     @pytest.mark.asyncio
     async def test_bare_dict_top_key_over_block_full_replace_gh443a(self) -> None:
@@ -561,13 +561,6 @@ class TestDesiredContractGH440:
     """#440 / Q2: nested dict values serialize as BLOCK at emit (dict->InlineMap abolished)."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#440 + GH#487 contract Q2 (DEFERRED_CANONICALIZATION): a bare-dict at a top-level "
-        "KEY with a nested dict value MUST emit BLOCK form (sole canonical nested form) and "
-        "strict-re-parse; dict->InlineMap coercion is abolished. Transform logged TRANSFORM::"
-        "INLINE_MAP_TO_BLOCK (I4).",
-        strict=True,
-    )
     async def test_bare_dict_new_top_key_nested_value_emits_block(self) -> None:
         result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
         assert result.get("status") == "success"

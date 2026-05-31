@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from octave_mcp.core.grammar import tier_normalize
 from octave_mcp.core.grammar.cst import (
     Assignment,
     Block,
@@ -448,11 +449,73 @@ class DocumentMutator:
 
         # If not found and not deleting, add new field
         if not found:
-            # Create new assignment node with normalized value.
-            # PR-2 T6: new Assignment is born dirty (no source
-            # bytes to splice; its value MUST be re-emitted).
-            new_assignment = Assignment(key=key, value=_normalize_value_for_ast(new_value), dirty=True)
-            doc.sections.append(new_assignment)
+            # GH#487 Q2 (#440): a bare dict with NESTED dict values is synthesized
+            # as a canonical BLOCK (sole canonical nested form), not a nested
+            # InlineMap (which re-parses to E_NESTED_INLINE_MAP). The transform is
+            # I4-logged (TRANSFORM::INLINE_MAP_TO_BLOCK). A flat dict (all
+            # scalar/list values) stays an InlineMap — re-parseable inline OCTAVE.
+            if isinstance(new_value, dict) and not _is_op_descriptor(new_value) and self._has_nested_dict(new_value):
+                doc.sections.append(self._synthesize_block_from_dict(key, new_value))
+            else:
+                # Create new assignment node with normalized value.
+                # PR-2 T6: new Assignment is born dirty (no source
+                # bytes to splice; its value MUST be re-emitted).
+                new_assignment = Assignment(key=key, value=_normalize_value_for_ast(new_value), dirty=True)
+                doc.sections.append(new_assignment)
+
+    # ------------------------------------------------------------------
+    # Synthesis primitives (GH#487 B-4: Q2 dict -> BLOCK + I4 audit)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _synthesize_block_from_dict(key: str, payload: dict[str, Any]) -> Block:
+        """GH#487 Q2 (#440): synthesize a born-dirty canonical ``Block`` from a dict.
+
+        BLOCK is the sole canonical nested form (Wall M1); the legacy dict ->
+        ``InlineMap`` coercion (which re-parsed to E_NESTED_INLINE_MAP for nested
+        dicts) is abolished. Each value is built recursively:
+          - nested dict  -> nested ``Block`` (recurse)
+          - everything else -> normalized leaf via ``_normalize_value_for_ast``
+            (lists -> ListValue, scalars as-is) on a born-dirty ``Assignment``.
+
+        I4 (TRANSFORM_AUDITABILITY): a ``TRANSFORM::INLINE_MAP_TO_BLOCK`` receipt is
+        appended to the active TIER_NORMALIZATION log (the ContextVar set by
+        write.py during emit) with a stable structural id (the key path). Outside
+        an active audit context the log call is a no-op (today's behaviour for
+        callers that don't opt in).
+
+        The returned Block is ``dirty=True`` / ``body_dirty=True`` so the emitter
+        re-emits it canonically (depth-aware indentation by construction; no node
+        indentation metadata required — the seam holds).
+        """
+        children: list[Any] = []
+        for mk, mv in payload.items():
+            if isinstance(mv, dict) and not _is_op_descriptor(mv) and not _is_delete_sentinel(mv):
+                children.append(DocumentMutator._synthesize_block_from_dict(mk, mv))
+            else:
+                children.append(Assignment(key=mk, value=_normalize_value_for_ast(mv), dirty=True))
+        # I4: stable structural id is the synthesised key (path-stable for the
+        # top-level synthesis; nested recursions log their own child key).
+        tier_normalize.log_repair_if_active(
+            tier_normalize.RULE_INLINE_MAP_TO_BLOCK,
+            before=f"{key}::[<inline-map>]",
+            after=f"{key}: (BLOCK)",
+        )
+        return Block(key=key, children=children, dirty=True, body_dirty=True)
+
+    @staticmethod
+    def _has_nested_dict(payload: dict[str, Any]) -> bool:
+        """True iff ``payload`` contains a non-op, non-DELETE nested dict value.
+
+        Used to decide whether a bare-dict assignment needs BLOCK synthesis (Q2)
+        vs. a flat single-level inline form. A flat dict (all scalar/list values)
+        stays an ``InlineMap`` — re-parseable inline OCTAVE — preserving today's
+        behaviour for the flat case; only nested dicts require BLOCK form.
+        """
+        return any(
+            isinstance(mv, dict) and not _is_op_descriptor(mv) and not _is_delete_sentinel(mv)
+            for mv in payload.values()
+        )
 
     # ------------------------------------------------------------------
     # Transition primitives (GH#487 B-3: Defect-2 reject)
