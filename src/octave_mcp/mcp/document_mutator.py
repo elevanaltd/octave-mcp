@@ -438,12 +438,34 @@ class DocumentMutator:
         # Legacy full-value replacement (or new Assignment if missing).
         # I1 (Syntactic Fidelity): Normalize Python values to AST types
         found = False
-        for section in doc.sections:
+        replace_nested = (
+            isinstance(new_value, dict) and not _is_op_descriptor(new_value) and self._has_nested_dict(new_value)
+        )
+        for idx, section in enumerate(doc.sections):
             if isinstance(section, Assignment) and section.key == key:
-                # #460 Case A: preserve literal-zone fence form in place.
-                section.value = _normalize_value_for_ast_preserving(new_value, section.value)
-                # PR-2 T6: paired-write on top-level Assignment.
-                _mark_dirty(section)
+                if replace_nested:
+                    # GH#487 Q2 (#440) — CE BLOCKING fix: a bare dict with NESTED
+                    # dict values REPLACING an existing scalar Assignment must
+                    # synthesize canonical BLOCK form (sole canonical nested form),
+                    # exactly as the new-key path does. The prior in-place value
+                    # swap routed through _normalize_value_for_ast_preserving ->
+                    # _normalize_value_for_ast, which coerced the dict to a nested
+                    # InlineMap (KEY::[OUTER::[INNER::v]]) failing strict re-parse
+                    # with E_NESTED_INLINE_MAP — an I1 round-trip violation. Swap
+                    # the Assignment node for a born-dirty Block (Q1 FULL REPLACE of
+                    # the scalar); the I4 TRANSFORM::INLINE_MAP_TO_BLOCK receipt is
+                    # logged by _synthesize_block_from_dict with stable structural
+                    # IDs, consistent with the new-key path.
+                    doc.sections[idx] = self._synthesize_block_from_dict(key, new_value)
+                    # The sections list shape changed (Assignment -> Block); mark
+                    # whole-doc dirty so the preserve-mode emitter re-emits rather
+                    # than splicing the now-stale scalar baseline bytes.
+                    doc.dirty = True
+                else:
+                    # #460 Case A: preserve literal-zone fence form in place.
+                    section.value = _normalize_value_for_ast_preserving(new_value, section.value)
+                    # PR-2 T6: paired-write on top-level Assignment.
+                    _mark_dirty(section)
                 found = True
                 break
 

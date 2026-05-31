@@ -542,6 +542,38 @@ class TestDesiredContractGH440:
         # Desired canonical nested form is BLOCK, not an inline map.
         assert "[OUTER::" not in emitted, f"DESIRED: no inline nested map; got:\n{emitted}"
 
+    @pytest.mark.asyncio
+    async def test_existing_scalar_replaced_by_nested_dict_emits_block(self) -> None:
+        """GH#487 CE BLOCKING regression: existing FLAT SCALAR replaced by a bare nested dict.
+
+        A bare nested-dict payload at a KEY that ALREADY holds a flat scalar must, per the Q1
+        (FULL REPLACE) + Q2 (BLOCK is the sole canonical nested form) contract, synthesize
+        canonical BLOCK form — NOT the legacy nested-InlineMap coercion (``KEY::[OUTER::[INNER::v]]``)
+        which failed strict re-parse with E_NESTED_INLINE_MAP (an I1 round-trip violation, reported
+        ``status:success`` — a false-green). The existing-Block and new-key paths already synthesized
+        BLOCK; this existing-scalar->nested-dict branch was missed (document_mutator.py legacy
+        full-value replacement). Asserts: (a) success, (b) BLOCK form (no inline map), (c) strict
+        re-parse, (d) the I4 TRANSFORM::INLINE_MAP_TO_BLOCK (TN_INLINE_MAP_TO_BLOCK) receipt is
+        logged with the key as the stable structural id.
+        """
+        result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"KEY": {"OUTER": {"INNER": "v"}}})
+        # (a) success
+        assert result.get("status") == "success", f"expected success; got: {result.get('errors')}"
+        # (b) BLOCK form — no inline nested map for the replaced scalar
+        assert "[OUTER::" not in emitted, f"DESIRED: no inline nested map; got:\n{emitted}"
+        assert "KEY:" in emitted, f"DESIRED: KEY emits as a BLOCK header; got:\n{emitted}"
+        # (c) strict re-parse (no E_NESTED_INLINE_MAP)
+        exc = _reparse_error(emitted)
+        assert exc is None, f"DESIRED: BLOCK-form emit must round-trip; got reparse error {exc!r}:\n{emitted}"
+        # (d) I4 transform logged with a stable structural id (the key)
+        corrections = result.get("corrections") or []
+        transform_codes = [c for c in corrections if c.get("code") == "TN_INLINE_MAP_TO_BLOCK"]
+        assert transform_codes, (
+            "DESIRED: I4 TRANSFORM::INLINE_MAP_TO_BLOCK must be logged; " f"corrections={corrections}"
+        )
+        keys_logged = {str(c.get("before", "")).split("::", 1)[0] for c in transform_codes}
+        assert "KEY" in keys_logged, f"DESIRED: I4 receipt for 'KEY' (stable id); got: {keys_logged}"
+
 
 class TestDesiredContractGH443aFullReplace:
     """#443a / Q1: bare-dict at a top-level KEY = FULL REPLACE (drop unmentioned children, I3)."""

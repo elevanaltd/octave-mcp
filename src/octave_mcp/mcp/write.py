@@ -2337,7 +2337,16 @@ class WriteTool(BaseTool):
             # corrections argument so deprecation warnings remain visible even
             # when validation fails the request.
             try:
-                doc = self._apply_changes(doc, changes, change_warnings=change_warnings)
+                # GH#487 Q2 (#440) / CE rework: the DocumentMutator synthesizes
+                # canonical BLOCK nodes for nested dicts during _apply_changes and
+                # records a TRANSFORM::INLINE_MAP_TO_BLOCK receipt via the
+                # tier_normalize active-context channel (I4). Synthesis happens here
+                # (apply time), BEFORE the emit-phase active() context opens, so the
+                # log must be active across _apply_changes too — otherwise the
+                # receipt is silently dropped. One channel (R2): the same
+                # tier_normalize_log is drained into corrections after emit.
+                with tier_normalize.active(tier_normalize_log):
+                    doc = self._apply_changes(doc, changes, change_warnings=change_warnings)
             except ValueError as e:
                 # GH#335: _validate_change_paths raises ValueError with
                 # structured error list for unresolvable paths.
