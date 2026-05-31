@@ -1268,8 +1268,11 @@ class Parser:
                 pending_comments = []  # Reset after passing to child
                 pending_comments_start_byte = None
                 if child:
-                    # GH#294: Track duplicate keys in section children
-                    if isinstance(child, Assignment):
+                    # GH#294: Track duplicate keys in section children.
+                    # GH#487 (R2): also register Block children, not just Assignment,
+                    # so a BLOCK-key colliding with a flat-scalar of the same name in
+                    # the same scope is detected (e.g. ``CHEVRON:`` then ``CHEVRON::x``).
+                    if isinstance(child, (Assignment, Block)):
                         child_key = child.key
                         child_line = child.line
                         if child_key in section_key_positions:
@@ -1637,8 +1640,11 @@ class Parser:
                     pending_comments = []  # Reset after passing to child
                     pending_comments_start_byte = None
                     if child:
-                        # GH#294: Track duplicate keys in block children
-                        if isinstance(child, Assignment):
+                        # GH#294: Track duplicate keys in block children.
+                        # GH#487 (R2): also register Block children, not just Assignment,
+                        # so a BLOCK-key colliding with a flat-scalar of the same name in
+                        # the same scope is detected (e.g. ``CHEVRON:`` then ``CHEVRON::x``).
+                        if isinstance(child, (Assignment, Block)):
                             child_key = child.key
                             child_line = child.line
                             if child_key in block_key_positions:

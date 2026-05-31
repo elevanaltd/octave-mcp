@@ -59,7 +59,8 @@ The ratified contract (debate-hall decision_hash a8837c80…, operator-ratified 
   bare-scalar over an existing nested BLOCK (no $op)    | success, DUPLICATE keys (BLOCK + | #443   | full replace BLOCK w/ scalar; NEVER duplicate
                                                         | flat scalar same scope)          |Defect2 | keys
   validate: flat-vs-flat top-level duplicate            | duplicate_key in repair_log      | (R2)   | invariant — stays detected (pin)
-  validate: BLOCK-key vs flat-scalar same name in block | NOT in repair_log (undetected)   | #443/R2| should be caught (duplicate_key or error)
+  validate: BLOCK-key vs flat-scalar same name in block | duplicate_key in repair_log      | #443/R2| caught (duplicate_key) — FIXED GH#487 Ph1a
+                                                        | (DETECTED — GH#487 Phase 1a)     |        | (parser detector registers Block children)
   --- CDV CONDITIONAL-GO blind cells (added Phase 0+, gemini critical-design-validator) ---------
   bare-dict FULL REPLACE re-mentioning a LITERAL-ZONE   | success, SILENT MERGE: fence form| #460-A | REPLACE: fence form of MENTIONED child still
     child (fenced ```...```) at a top-level Block        | of mentioned child IS preserved  | #487   | preserved (route via _normalize_value_for_ast_
@@ -423,14 +424,16 @@ class TestCharacterizationKnownDefects:
         ), f"current bug: duplicate PARENT keys expected; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_validate_block_vs_flat_collision_undetected_gh443(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443 / R2)
+    async def test_validate_block_vs_flat_collision_detected_gh443(self) -> None:
+        """INVERTED (GH#487 Phase 1a, R2): BLOCK-vs-flat same-name collision IS now detected.
 
-        A hand-authored BLOCK-key (``CHEVRON:``) colliding with a flat-scalar of the same name
-        inside the same parent block is NOT detected by the validator: it validates clean
-        (``VALIDATED`` / ``valid: true``) with NO ``duplicate_key`` repair entry. This is the
-        validator-coverage gap the contract folds into Phase 0 — emit-time canonicalization alone
-        won't make ``validate`` see it; a validator-side fix is required.
+        Previously a characterization pin asserting the validator-coverage GAP: a hand-authored
+        BLOCK-key (``CHEVRON:``) colliding with a flat-scalar of the same name inside the same
+        parent block validated clean with NO ``duplicate_key`` repair entry. The GH#487 Phase 1a
+        parser fix (extend the single duplicate-key detector to register Block children, not just
+        Assignment) closes that gap. This cell is inverted to assert the collision is now caught;
+        it is the converse of the desired-contract cell ``test_validate_block_vs_flat_collision_caught``
+        and is retained as the negative-history pin documenting the fixed behaviour.
         """
         doc = (
             "===EXAMPLE===\n"
@@ -447,8 +450,8 @@ class TestCharacterizationKnownDefects:
         result = await _VALIDATE.execute(content=doc, schema="META", profile="STANDARD")
         subtypes = [e.get("subtype") for e in result.get("repair_log", [])]
         assert (
-            "duplicate_key" not in subtypes
-        ), f"current bug: BLOCK-vs-flat collision should be UNDETECTED; repair_log={result.get('repair_log')}"
+            "duplicate_key" in subtypes
+        ), f"GH#487: BLOCK-vs-flat collision must now be DETECTED; repair_log={result.get('repair_log')}"
 
     @pytest.mark.asyncio
     async def test_literal_zone_replace_silent_merge_keeps_sibling_gh460a(self) -> None:
@@ -661,13 +664,11 @@ class TestDesiredContractValidatorCoverage:
     """#443 / R2 validator-coverage: BLOCK-key vs flat-scalar collision must be caught."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#443 (validator gap) + GH#487 contract (R2 validator-coverage): a BLOCK-key "
-        "colliding with a flat-scalar of the same name inside a parent block MUST be caught by "
-        "octave_validate (duplicate_key repair entry or a hard error) — currently undetected.",
-        strict=True,
-    )
     async def test_validate_block_vs_flat_collision_caught(self) -> None:
+        # GH#487 Phase 1a (R2 validator-coverage): a BLOCK-key colliding with a
+        # flat-scalar of the same name inside a parent block is now caught by
+        # octave_validate (duplicate_key repair entry). xfail marker removed when
+        # the parser duplicate-key detector was extended to register Block children.
         doc = (
             "===EXAMPLE===\n"
             "META:\n"
