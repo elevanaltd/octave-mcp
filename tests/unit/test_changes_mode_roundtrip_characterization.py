@@ -366,20 +366,21 @@ class TestCharacterizationKnownDefects:
         assert "E_NESTED_INLINE_MAP" in str(exc), f"current bug: expected E_NESTED_INLINE_MAP; got {exc}"
 
     @pytest.mark.asyncio
-    async def test_bare_dict_top_key_over_block_silent_merge_gh443a(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443a)
+    async def test_bare_dict_top_key_over_block_full_replace_gh443a(self) -> None:
+        """INVERTED (GH#487 B-2, Q1 FULL REPLACE landed): bare-dict over a Block now full-replaces.
 
-        A bare-dict at a top-level KEY that already holds a nested BLOCK performs a SILENT MERGE:
-        unmentioned children (CHILD_A, CHILD_B) are PRESERVED and the new child is appended.
-        The ratified Q1 contract makes this a FULL REPLACE (drop unmentioned children, honour I3).
-        ``status: success``, output reparses — the corruption is semantic, not syntactic.
+        Formerly a characterization pin documenting the silent-MERGE bug (unmentioned children
+        CHILD_A/CHILD_B preserved + new child appended). GH#487 Q1 inverts this to a FULL REPLACE
+        (HARD BREAK v1.15): unmentioned children are DROPPED (honours I3). Retained as the
+        negative-history regression guard for the fixed behaviour; the converse of the
+        desired-contract cell ``test_bare_dict_top_key_over_block_full_replace``.
         """
         result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": {"NEW_CHILD": "added"}})
         assert result.get("status") == "success"
-        assert _strict_reparses(emitted), "current: output is syntactically valid (semantic-only defect)"
-        # Current silent-MERGE: unmentioned children survive.
-        assert "CHILD_A" in emitted, "current bug: unmentioned child CHILD_A preserved (silent merge)"
-        assert "CHILD_B" in emitted, "current bug: unmentioned child CHILD_B preserved (silent merge)"
+        assert _strict_reparses(emitted), f"output must round-trip; got:\n{emitted}"
+        # GH#487 Q1 FULL REPLACE: unmentioned children are now DROPPED.
+        assert "CHILD_A" not in emitted, f"GH#487 Q1: unmentioned CHILD_A must be dropped; got:\n{emitted}"
+        assert "CHILD_B" not in emitted, f"GH#487 Q1: unmentioned CHILD_B must be dropped; got:\n{emitted}"
         assert "NEW_CHILD" in emitted
 
     @pytest.mark.asyncio
@@ -410,18 +411,20 @@ class TestCharacterizationKnownDefects:
         ), f"current bug: duplicate CHEVRON keys expected; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_bare_scalar_over_block_duplicate_keys_gh443_defect2(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#443 Defect 2)
+    async def test_bare_scalar_over_block_full_replace_gh443_defect2(self) -> None:
+        """INVERTED (GH#487 B-2, Q1 FULL REPLACE landed): bare-scalar over a Block now replaces it.
 
-        A bare SCALAR (no ``$op``) assigned to a top-level KEY that holds a nested BLOCK leaves the
-        BLOCK in place AND appends a flat scalar of the same name → DUPLICATE KEYS at the same scope.
-        ``status: success``. Non-MERGE variant of the scalar<->BLOCK transition footgun.
+        Formerly a characterization pin documenting the duplicate-keys bug (Block left in place
+        AND a flat scalar of the same name appended). GH#487 Q1 FULL REPLACE (scalar<->BLOCK
+        transition) replaces the Block with a single flat Assignment IN PLACE — exactly one key.
+        Retained as the negative-history regression guard for the fixed behaviour.
         """
         result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": "flat_now"})
-        assert result.get("status") == "success", "current: write reports success (false-green)"
+        assert result.get("status") == "success"
         assert (
-            _count_key_occurrences(emitted, "PARENT") >= 2
-        ), f"current bug: duplicate PARENT keys expected; got:\n{emitted}"
+            _count_key_occurrences(emitted, "PARENT") == 1
+        ), f"GH#487 Q1: exactly one PARENT key after scalar-over-block replace; got:\n{emitted}"
+        assert _strict_reparses(emitted), f"output must round-trip; got:\n{emitted}"
 
     @pytest.mark.asyncio
     async def test_validate_block_vs_flat_collision_detected_gh443(self) -> None:
@@ -454,28 +457,28 @@ class TestCharacterizationKnownDefects:
         ), f"GH#487: BLOCK-vs-flat collision must now be DETECTED; repair_log={result.get('repair_log')}"
 
     @pytest.mark.asyncio
-    async def test_literal_zone_replace_silent_merge_keeps_sibling_gh460a(self) -> None:
-        """CHARACTERIZATION: documents current buggy behavior, will flip when #487 lands. (#460 Case A / #443a)
+    async def test_literal_zone_replace_preserves_fence_and_drops_sibling_gh460a(self) -> None:
+        """INVERTED (GH#487 B-2, CDV BLOCKING-1 landed): fence preserved AND sibling dropped.
 
         CDV BLOCKING-1 cell. A bare-dict FULL REPLACE at a top-level Block (``PARENT``) whose
         payload re-mentions the fenced child (``CODE``) with a plain str value:
-          - CURRENT: the fence FORM of the mentioned child IS preserved (the #460 Case A path,
+          - The fence FORM of the mentioned child is PRESERVED (the #460 Case A path,
             ``_normalize_value_for_ast_preserving``, re-wraps the plain str as a LiteralZoneValue —
-            so it emits ``CODE::`` + a ``\\`\\`\\``` fence, not ``CODE::\"...\"``). I1 form-preservation
-            already works for the mentioned child.
-          - CURRENT BUG: the operation is still a SILENT MERGE — the UNMENTIONED ``SIBLING`` child
-            is PRESERVED. Under the ratified Q1 FULL-REPLACE contract it must be dropped.
-        ``status: success``, output reparses (semantic-only defect on the sibling).
+            so it emits ``CODE::`` + a fence, not ``CODE::\"...\"``). I1 form-preservation holds.
+          - GH#487 Q1 FULL REPLACE: the UNMENTIONED ``SIBLING`` child is now DROPPED.
+        Formerly a characterization pin documenting the silent-MERGE sibling-survives bug; now the
+        negative-history regression guard for the fixed behaviour (converse of
+        ``test_literal_zone_replace_preserves_fence_and_drops_sibling``).
         """
         result, emitted = await _roundtrip(_DOC_LITERAL_ZONE_BLOCK, {"PARENT": {"CODE": "new plain content"}})
         assert result.get("status") == "success"
-        assert _strict_reparses(emitted), f"current: output is syntactically valid; got:\n{emitted}"
-        # Fence form preserved for the mentioned child (already-correct #460 Case A behaviour).
-        assert "```" in emitted, f"current: fence form preserved for mentioned child; got:\n{emitted}"
-        assert 'CODE::"' not in emitted, f"current: must NOT downgrade fence to quoted scalar; got:\n{emitted}"
-        assert "new plain content" in emitted, "current: content was swapped into the fence"
-        # Silent-merge defect: the unmentioned sibling survives.
-        assert "SIBLING" in emitted, f"current bug: unmentioned SIBLING preserved (silent merge); got:\n{emitted}"
+        assert _strict_reparses(emitted), f"output must round-trip; got:\n{emitted}"
+        # Fence form preserved for the mentioned child (#460 Case A / BLOCKING-1).
+        assert "```" in emitted, f"fence form preserved for mentioned child; got:\n{emitted}"
+        assert 'CODE::"' not in emitted, f"fence must NOT downgrade to quoted scalar; got:\n{emitted}"
+        assert "new plain content" in emitted, "content was swapped into the fence"
+        # GH#487 Q1 FULL REPLACE: the unmentioned sibling is now dropped.
+        assert "SIBLING" not in emitted, f"GH#487 Q1: unmentioned SIBLING must be dropped; got:\n{emitted}"
 
     @pytest.mark.asyncio
     async def test_prepend_nested_dict_element_false_green_gh488(self) -> None:
@@ -578,12 +581,6 @@ class TestDesiredContractGH443aFullReplace:
     """#443a / Q1: bare-dict at a top-level KEY = FULL REPLACE (drop unmentioned children, I3)."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#443a + GH#487 contract Q1 (HARD BREAK v1.15): a bare-dict at a top-level KEY "
-        "executes FULL REPLACE — unmentioned children are DROPPED (honours I3: reflect only "
-        "what's present). Explicit {'$op':'MERGE'} is required to merge.",
-        strict=True,
-    )
     async def test_bare_dict_top_key_over_block_full_replace(self) -> None:
         result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": {"NEW_CHILD": "added"}})
         assert result.get("status") == "success"
@@ -594,15 +591,6 @@ class TestDesiredContractGH443aFullReplace:
         assert "NEW_CHILD" in emitted, "DESIRED: the mentioned child must be present"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#487 BLOCKING-1 (CDV CONDITIONAL-GO) + GH#460 Case A + I1 (Syntactic Fidelity): a "
-        "bare-dict FULL REPLACE at a top-level Block that re-mentions a LITERAL-ZONE child with a "
-        "plain str MUST (a) form-preserve the mentioned child's fence (route via "
-        '_normalize_value_for_ast_preserving, write_mutation.py:243 — emit a fence, not KEY::"...") '
-        "AND (b) DROP unmentioned siblings (Q1 full replace). Currently the fence is preserved but "
-        "the unmentioned sibling survives (silent merge).",
-        strict=True,
-    )
     async def test_literal_zone_replace_preserves_fence_and_drops_sibling(self) -> None:
         result, emitted = await _roundtrip(_DOC_LITERAL_ZONE_BLOCK, {"PARENT": {"CODE": "new plain content"}})
         assert result.get("status") == "success"
@@ -646,11 +634,6 @@ class TestDesiredContractGH443Defect2:
         assert result.get("status") != "success", "DESIRED: scalar-over-BLOCK MERGE must not succeed"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="GH#443 Defect 2 + GH#487 contract: a bare scalar assigned over an existing nested "
-        "BLOCK at a top-level KEY MUST full-replace the BLOCK (Q1) — NEVER emit duplicate keys.",
-        strict=True,
-    )
     async def test_bare_scalar_over_block_no_duplicate_keys(self) -> None:
         result, emitted = await _roundtrip(_DOC_NESTED_BLOCK, {"PARENT": "flat_now"})
         assert result.get("status") == "success"

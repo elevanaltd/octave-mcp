@@ -241,37 +241,20 @@ class DocumentMutator:
             return
 
         if isinstance(new_value, dict) and not _is_op_descriptor(new_value) and tool._find_block(doc, key) is not None:
-            # ADR-0006 SR2-T2 PR-2 (GH#377) T7: bare ``{KEY: {child:
-            # v2}}`` change against an EXISTING top-level Block.
-            # Without this branch, the dict would be normalised to
-            # an InlineMap and appended as a NEW top-level
-            # Assignment beside the Block (duplicate key, silent
-            # shape switch — I3 violation under format_style
-            # ``"preserve"``). With this branch, the dict is
-            # expanded into per-child Assignment mutations against
-            # the existing Block, keeping the Block shape and
-            # marking only the touched children dirty.
+            # GH#487 Q1 (#443a) FULL REPLACE [HARD BREAK v1.15]: a bare-dict at a
+            # top-level KEY that already holds a Block executes a FULL REPLACEMENT
+            # of that Block's children. Unmentioned children are DROPPED (honours
+            # PROD::I3 MIRROR_CONSTRAINT: reflect only what's present). To MERGE,
+            # callers MUST send an explicit {"$op":"MERGE","value":{...}}.
+            #
+            # This is the semantic inversion of the prior silent-merge behaviour:
+            # previously unmentioned children survived and the new child was
+            # appended. The #460 Case A fence-preserving path is REUSED for keys
+            # present in BOTH payload and target (CDV BLOCKING-1), so a re-mentioned
+            # literal-zone child keeps its fence FORM while unmentioned siblings drop.
             t7_block = tool._find_block(doc, key)
             assert t7_block is not None  # narrowed by branch guard
-            for mk, mv in new_value.items():
-                if _is_delete_sentinel(mv):
-                    t7_block.children = [
-                        c for c in t7_block.children if not (isinstance(c, Assignment) and c.key == mk)
-                    ]
-                    _mark_dirty(t7_block, body=True)
-                    continue
-                found_child = False
-                for child in t7_block.children:
-                    if isinstance(child, Assignment) and child.key == mk:
-                        # #460 Case A: preserve literal-zone fence form in place.
-                        child.value = _normalize_value_for_ast_preserving(mv, child.value)
-                        _mark_dirty(child)
-                        found_child = True
-                        break
-                if not found_child:
-                    new_child = Assignment(key=mk, value=_normalize_value_for_ast(mv), dirty=True)
-                    t7_block.children.append(new_child)
-                _mark_dirty(t7_block, body=True)
+            self._full_replace_block(t7_block, new_value)
             return
 
         if tool._is_anchored_change(doc, key):
@@ -425,6 +408,24 @@ class DocumentMutator:
                 )
             return
 
+        # GH#487 Defect-2 (#443) bare-scalar-over-Block / Q1 FULL REPLACE:
+        # a bare value (no $op) assigned to a top-level KEY that currently holds
+        # a Block is a scalar<->BLOCK transition. Under Q1 FULL REPLACE it
+        # replaces the Block with a single flat Assignment IN PLACE (drop the
+        # Block's children, exactly one key emitted) — never the prior bug of
+        # leaving the Block AND appending a flat scalar of the same name
+        # (duplicate keys at the same scope). The replacement Assignment is born
+        # dirty (no baseline span) so the emitter re-emits it canonically and the
+        # dropped Block carries no stale span into the tree the emitter walks.
+        for idx, section in enumerate(doc.sections):
+            if isinstance(section, Block) and section.key == key:
+                doc.sections[idx] = Assignment(key=key, value=_normalize_value_for_ast(new_value), dirty=True)
+                # The sections list shape (a node was swapped) differs from the
+                # baseline; mark whole-doc dirty so the preserve-mode emitter does
+                # not splice the now-stale Block bytes for this key.
+                doc.dirty = True
+                return
+
         # Legacy full-value replacement (or new Assignment if missing).
         # I1 (Syntactic Fidelity): Normalize Python values to AST types
         found = False
@@ -444,3 +445,60 @@ class DocumentMutator:
             # bytes to splice; its value MUST be re-emitted).
             new_assignment = Assignment(key=key, value=_normalize_value_for_ast(new_value), dirty=True)
             doc.sections.append(new_assignment)
+
+    # ------------------------------------------------------------------
+    # Transition primitives (GH#487 B-2: Q1 FULL REPLACE)
+    # ------------------------------------------------------------------
+
+    def _full_replace_block(self, block: Block, payload: dict[str, Any]) -> None:
+        """GH#487 Q1 (#443a) key-wise reconciliation FULL REPLACE of a Block.
+
+        The Block's children are REBUILT from ``payload`` (a bare dict, no $op):
+          - key present in BOTH payload and block  -> FORM-PRESERVE: the existing
+            child node is kept and its value routed through
+            ``_normalize_value_for_ast_preserving`` (the #460 Case A fence-
+            preserving path, CDV BLOCKING-1), so a re-mentioned literal-zone child
+            keeps its fence FORM. The child is marked dirty.
+          - key in payload only                    -> SYNTHESIZE a born-dirty
+            Assignment child.
+          - key in block only (UNMENTIONED)         -> DROPPED (Q1, honours I3).
+          - payload value is the DELETE sentinel    -> the key is simply omitted
+            from the rebuilt children (idempotent drop).
+
+        Span hygiene (CDV flag): ``block.children`` is REPLACED with a fresh list.
+        Dropped children's nodes are discarded, not retained with stale spans, so
+        no stale baseline span survives; ``_mark_dirty(block, body=True)`` forces
+        the children region to re-emit canonically while the header still slices
+        from baseline. New/re-mentioned children carry/are-marked dirty so they
+        re-emit; synthesized children carry no spans.
+        """
+        existing: dict[str, Assignment] = {c.key: c for c in block.children if isinstance(c, Assignment)}
+        # Existing Block children (nested blocks) keyed for reconciliation too:
+        existing_blocks: dict[str, Block] = {c.key: c for c in block.children if isinstance(c, Block)}
+
+        new_children: list[Any] = []
+        for mk, mv in payload.items():
+            if _is_delete_sentinel(mv):
+                # Explicit DELETE of a (possibly absent) child: omit it.
+                continue
+            if mk in existing:
+                child = existing[mk]
+                # #460 Case A / BLOCKING-1: form-preserve a mentioned child.
+                child.value = _normalize_value_for_ast_preserving(mv, child.value)
+                _mark_dirty(child)
+                new_children.append(child)
+            elif mk in existing_blocks and isinstance(mv, dict) and not _is_op_descriptor(mv):
+                # Mentioned child is itself a nested Block and the replacement is a
+                # bare dict: recurse the FULL REPLACE into it (preserve the nested
+                # Block shape, reconcile its children key-wise).
+                nested = existing_blocks[mk]
+                self._full_replace_block(nested, mv)
+                new_children.append(nested)
+            else:
+                # New (unmentioned-in-target) key: synthesize a born-dirty child.
+                new_children.append(Assignment(key=mk, value=_normalize_value_for_ast(mv), dirty=True))
+
+        # Replace the children list wholesale: unmentioned children are simply not
+        # carried over -> dropped (Q1, I3). No stale spans survive.
+        block.children = new_children
+        _mark_dirty(block, body=True)
