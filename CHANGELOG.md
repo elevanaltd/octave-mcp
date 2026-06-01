@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-05-31 - "STRATEGY_S3 DocumentMutator — changes-mode value semantics (HARD BREAK)"
+
 ### ⚠️ BREAKING — `octave_write` `changes` mode value semantics (GH#487, v1.15.0)
 
 > **Migration in one line:** a **bare dict** at a `changes` KEY now **fully replaces** that key (unmentioned children are **dropped**). To merge into an existing block, you **MUST** now send an explicit `{"$op": "MERGE", "value": {…}}`.
@@ -1057,7 +1059,8 @@ the architectural separation of the OCTAVE language specification from implement
 - Non-reasoning document processing
 - Deterministic, idempotent transformations
 
-[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/elevanaltd/octave-mcp/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/elevanaltd/octave-mcp/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/elevanaltd/octave-mcp/compare/v1.12.0...v1.13.0
