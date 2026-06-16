@@ -14,7 +14,27 @@ The operator sensed decay. It is **not** in the code (v1.15.0 stable, all 5 Nort
 
 Every drift symptom is a child of that one gap. The fix is to **apply OCTAVE's own I4 discipline to OCTAVE.**
 
-In a one-human + many-agent topology, the agents *are* the team. Prose ADR statuses fail because agents have no implicit temporal context — they cannot tell a frozen "Proposed" header from a live decision. A machine-readable current-state manifest is therefore not over-engineering; it is the structural precondition for agents not to hallucinate project state. (ho-liaison: 90% recurrence probability without it.)
+In a one-human + many-agent topology, the agents *are* the team. Prose ADR statuses fail because agents have no implicit temporal context — they cannot tell a frozen "Proposed" header from a live decision. A machine-readable current-state surface is therefore not over-engineering; it is the structural precondition for agents not to hallucinate project state. (ho-liaison: 90% recurrence probability without it.)
+
+### 1b. The fix already exists and was never adopted (sharpened)
+
+The recurrence fix is **not new infrastructure to build.** The HestAI `hestai-context` decision-record system already provides exactly the missing receipt:
+
+- `submit_governance` — author a per-record decision (AGR) as validated OCTAVE, via prose or content, opened as a reviewed PR (no auto-merge). *This is OCTAVE applying its own I4 discipline to governance.*
+- `list_decisions(status/tier/scope)` — the machine-readable **current-state surface** (replaces the "invent a CURRENT-STATE manifest" idea below).
+- `lookup_decision(token)` + `trace_supersedure(token)` — resolve a decision and walk its supersession chain to terminal state.
+- Schema (`decision_log.oct.md` v1.1) carries the exact fields whose absence caused the drift: **`STATUS`** lifecycle (BINDING/ACTIVE/SUPERSEDED_BY/DEPRECATED/ARCHIVED), **`SUPERSEDED_BY`/`SUPERSEDES`/`EXTENDS`/`AMENDS`** relationships, `ISSUE_REF`, `ENFORCEMENT_REF`, `CANONICAL` (pointer to long-form body), `EVIDENCE`, `DATE`.
+
+**Verified:** this repo's own `CLAUDE.md §4` already *mandates* decision-lookup discipline against this system — yet `list_decisions` returns **0 records** and there is no `.hestai/decisions/` directory. OCTAVE-MCP's ADRs are orphaned plain-markdown in `docs/adr/`, entirely outside the governance system it tells its agents to consult. *That* is the root, stated precisely.
+
+**What adopting it resolves:** status-lifecycle drift (no more frozen "Proposed"), supersession tracking (triage bucket B), and the queryable current-state anchor — all three, with no bespoke tooling.
+
+**What it does NOT resolve (residual, handled separately):**
+- *Release-version reconciliation* — the schema has no dedicated `SHIPPED_IN` field; STATUS is the live/dead proxy and the `EVIDENCE`/`ENFORCEMENT_REF` fields absorb "shipped in vX" informally. A structured `SHIPPED_IN` is a *nice-to-have* (queryable release-gating), **not** required — recommend deferring per MIP unless release automation needs it.
+- *Capability / literacy live-state* (literacy §6: does `octave_fmt` exist? does `octave_write` canonicalise by default?) is runtime **capability** state, not a decision — needs its own small fix (see Wave 0.2), or a single CONVENTION-tier AGR anchoring it.
+- *GitHub issue triage* — issues are not AGRs; that stays a GitHub workstream (§3b).
+
+**Backfill discipline (`CLAUDE.md §4 PROMOTION`):** MIP — *no blanket backfill.* Do **not** mass-migrate all 11 ADRs. Adopt AGRs as the forward mechanism; backfill **only the hot/contested** decisions now (ADR-0005 genuinely-open, ADR-0001 partial). Shipped-and-settled ADRs just get their markdown `Status` header corrected (done in this commit) and are promoted to AGRs lazily, per-token, if/when they become load-bearing.
 
 ## 2. Purpose — the durable framing
 
@@ -83,12 +103,12 @@ This honours the HARDEN posture (no v2.0 work now) while refusing the limbo the 
 
 ## 6. Forward plan (waves, owners, lane)
 
-> Orchestrator lane: this document is coordination. All execution below delegates to specialists; `.oct.md` artifacts route through octave-secretary via `octave_write`.
+> Lane note: this document is coordination. Decision records are authored via `submit_governance` (the correct tool for `.hestai/decisions/` records — not `octave_write`); plain-markdown ADR/doc reorg is done in-place directly.
 
 **WAVE 0 — No-regrets governance cleanup (cheap, high-certainty, do first):**
-1. Re-status the 6 misstatused ADRs; **consolidate the ADR-0006 family** into one Accepted ADR with §SR1/§SR2/§G3 sub-sections; **archive** the Sprint-2 Addendum. → octave-secretary + technical-architect.
-2. Fix `octave-literacy` §6: add `LIVE_PHASE::TODAY` marker; correct the `AFTER_SR1_T4` row (it currently describes the unshipped SR3-T2 endstate; #407 shipped only a narrow byte-identity short-circuit). → octave-secretary.
-3. **Create `CURRENT-STATE.oct.md` manifest** — single source of truth: live tools, defaults, phase, ADR→`SHIPPED_IN` map. Add a release-time reconciliation step. *This is the structural fix that prevents recurrence.* → octave-secretary + technical-architect.
+1. **[DONE this commit]** Re-status the 5 misstatused ADR-0006-family headers (Proposed/Draft → Accepted + `Shipped:` line) so the human-readable layer matches reality. Long-form bodies stay in `docs/adr/`; no physical consolidation (the AGR `EXTENDS`/`SUPERSEDES` relationships model the family better than a merged file).
+2. Fix `octave-literacy` §6: add a `LIVE_PHASE::TODAY` marker; correct the `AFTER_SR1_T4` row (it currently describes the unshipped SR3-T2 endstate; #407 shipped only a narrow byte-identity short-circuit). *Cross-repo — the skill is governed outside octave-mcp; route to the skills owner.*
+3. **Adopt the existing `hestai-context` AGR decision store** as the forward source of truth (replaces the discarded "invent a manifest" idea). Per MIP/`CLAUDE.md §4` backfill **only** ADR-0005 and ADR-0001 now via `submit_governance`; settled ADRs promote lazily. `list_decisions(status=...)` becomes the queryable current-state surface. *This is the structural recurrence fix.*
 4. Verify-close #376, #384, #385, #386. → implementation-lead (quick verify).
 5. Relocate ADR-0283 → odyssean-anchor-mcp; file #450, #481 as cross-repo. → system-steward.
 
@@ -100,8 +120,8 @@ This honours the HARDEN posture (no v2.0 work now) while refusing the limbo the 
 - ADR-0001 scope-down-or-complete decision. → technical-architect → operator.
 - Stamp the v2.0.0 EXPLORE cluster (#291, #260, #153, #135, #111, #318, #317) with a uniform "parked: gated on demand" label and a one-line demand-trigger each. → system-steward.
 
-**Recurrence guard (standing):** every release reconciles ADR `SHIPPED_IN` + CURRENT-STATE manifest before tagging. I4 for governance.
+**Recurrence guard (standing):** every release flips the `STATUS` of newly-shipped AGRs (and records supersessions) before tagging; `list_decisions(status=ACTIVE)` is the live-state read. I4 for governance.
 
 ## 7. One-line summary
 
-> The code and vision are healthy; only the governance receipt-keeping drifted. Apply OCTAVE's own I4 discipline to itself (CURRENT-STATE manifest + per-ADR SHIPPED_IN), clean up the misstatused ADRs, harden the v1.15 surface, and park — explicitly, with a receipt — all language-level evolution until ecosystem demand is proven.
+> The code and vision are healthy; only the governance receipt-keeping drifted. The fix already exists and was never adopted: turn on the `hestai-context` AGR decision store (which this repo's CLAUDE.md already mandates), backfill only the hot decisions, correct the misstatused ADR headers, harden the v1.15 surface, and park — explicitly, with a receipt — all language-level evolution until ecosystem demand is proven.
