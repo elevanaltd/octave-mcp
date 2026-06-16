@@ -3,13 +3,13 @@ name: octave-mastery
 description: "Advanced semantic vocabulary, holographic contracts, and structural patterns for OCTAVE. REQUIRES octave-literacy. Extends literacy with mythology, archetype annotation, v6 contracts, and anti-pattern rules."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced octave", "OCTAVE mastery", "holographic patterns", "archetypes", "high-density specifications", "system architecture", "holographic contracts", "archetype annotation"]
-version: "3.0.0"
+version: "3.2.0"
 ---
 
 ===OCTAVE_MASTERY===
 META:
   TYPE::SKILL
-  VERSION::"3.0.0"
+  VERSION::"3.2.0"
   STATUS::ACTIVE
   PURPOSE::"Expert-level OCTAVE: mythology vocabulary, holographic contracts, archetype annotation, anti-patterns"
   REQUIRES::octave-literacy
@@ -140,13 +140,30 @@ CONDUCT:
     MUST_ALWAYS::[rule_a, rule_b]
     ```
   WRONG::"CONDUCT::[TONE::\"Precise\", PROTOCOL::[MUST_ALWAYS::[rule_a]]]"
+  RECOVERY_ON_E_NESTED_INLINE_MAP::"Fix is BLOCK form — NOT flatten-to-scalars (creates FLAT_PREFIX_SCALARS anti-pattern, §6), NOT collapse-to-blob (creates W_SNAKE_CASE_BLOB). The wrong escapes produce a different error class, not a solution."
 §6::ANTI_PATTERNS
   // Each has a concrete example of what NOT to do
   ISOLATED_LIST::"[auth, payments, users] with no relationships — use DECISION::microservice_extraction[auth⊕payments→independent_services] instead"
   FLAT_HIERARCHY::"All keys at top level with no grouping — group related keys under a parent BLOCK"
   BURIED_NETWORK::"RELATED_TO::other_service hidden in prose comment — use explicit operator: auth→payments[dependency]"
   OPERATOR_SOUP::"RESULT::A+B->C~D all in one expression — break into separate keyed fields"
-  PROSE_BLEED::"Using natural language sentences as values — every token must carry semantic payload"
+  PROSE_BLEED::"Stopword-laden English sentences as values — quoted telegraphic phrases ARE valid (see §6a). Ban applies when operators could compress the same semantics."
+  INLINE_ARRAY_ROOT::"TOKEN::[KEY::v, KEY2::v2] — inline map used as multi-field token root. Non-canonical for map tokens even when values are atomic; BLOCK form is mandated. Triggers E_NESTED_INLINE_MAP as soon as any child value needs nesting (§5::BLOCK_NOTATION_RULE). Fix: use BLOCK form (TOKEN: + indented children) from the start."
+  FLAT_PREFIX_SCALARS::"PARENT_CHILD::v, PARENT_CHILD2::v2 — flattened hierarchy via key name prefixes instead of BLOCK nesting. Destroys grouping and LLM attention. Fix: group under a PARENT: block with CHILD::v children."
+  §6a::TELEGRAPHIC_PHRASE
+    DEFINITION::"Quoted value with stopwords dropped; operators ⊕ ⇌ ∧ ∨ → carry relational meaning English connectives would spell out"
+    RULES::[
+      "Drop stopwords (is, at, for, the, a, with, by, of) — operators carry connectives",
+      "Use ⇌ for tension ('security ⇌ usability' not 'security at odds with usability')",
+      "Use → for causality ('migration → conflict' not 'migration causes conflict')",
+      "Preserve named entities, thresholds, IDs — never compress these",
+      "Use ∧ for joint conditions, ∨ for alternatives, ⊕ for emergent synthesis"
+    ]
+    EXAMPLE_PAIR:
+      BEFORE::"\"natural language at odds with OCTAVE because stopwords\" (~13 tokens)"
+      AFTER::"\"natural language ⇌ OCTAVE → stopword overhead\" (~5 tokens)"
+    WHY::"operators are parse-efficient for LLM attention — same fidelity, lower token cost"
+    SEE_ALSO::"octave-compression §4::R3a for full rule set"
 §7::TIER_NORMALIZATION_AUDIT_CHANNEL
   // ADR-0006 SR1-T1 Step 3 (v1.12.0): centralised audit channel for I4 completeness
   MODULE::"octave-mcp:src/octave_mcp/core/grammar/tier_normalize.py"
