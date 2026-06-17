@@ -1066,3 +1066,84 @@ class TestBug304AnnotationMultiline:
         doc2 = parse(emitted1)
         emitted2 = emit(doc2)
         assert emitted1 == emitted2
+
+
+class TestBackslashRoundTrip:
+    """GH#434: parse→emit must be byte-identical for backslash-bearing string literals.
+
+    I1 (SYNTACTIC_FIDELITY): normalisation must alter syntax never semantics;
+    round-trip must be bijective on semantic space.
+
+    Root cause: the lexer's sequential .replace() calls for escape sequences
+    cause \\t and \\n to be misinterpreted after \\\\→\\ conversion.
+    E.g. source "C:\\\\path\\\\to" → after \\→\: "C:\\path\\to" → after \\t→tab:
+    "C:\\path[TAB]o".  The emitter then re-encodes the tab as \\t, producing
+    "C:\\\\path\\t" which does not round-trip to the original source.
+    """
+
+    @staticmethod
+    def _roundtrip(src: str) -> str:
+        """Parse then emit; return emitted text."""
+        doc = parse(src)
+        return emit(doc)
+
+    def test_single_backslash_scalar(self):
+        """A single backslash inside a quoted scalar survives the round-trip."""
+        # OCTAVE source: K::"a\\"  →  value is a\ (one backslash)
+        src = '===T===\nK::"a\\\\"\n===END===\n'
+        assert self._roundtrip(src) == src
+
+    def test_double_backslash_scalar(self):
+        """Two consecutive backslashes survive the round-trip."""
+        # OCTAVE source: K::"a\\\\"  →  value is a\\ (two backslashes)
+        src = '===T===\nK::"a\\\\\\\\"\n===END===\n'
+        assert self._roundtrip(src) == src
+
+    def test_windows_path(self):
+        """A Windows-style path with backslash separators survives the round-trip.
+
+        GH#434: "C:\\\\path\\\\to" was being re-emitted as "C:\\\\path\\to"
+        because the lexer's sequential replace turned \\t into a literal tab.
+        """
+        # OCTAVE source: K::"C:\\path\\to"  →  value is C:\path\to
+        src = '===T===\nK::"C:\\\\path\\\\to"\n===END===\n'
+        assert self._roundtrip(src) == src
+
+    def test_backslash_before_n_not_newline(self):
+        """Backslash followed by 'n' as separate escape (\\\\n) is not a newline.
+
+        GH#434: "\\\\n" (two backslashes then n in source) was being converted to
+        "\\n" (one backslash then n, which is then treated as newline).
+        """
+        # OCTAVE source: K::"\\n"  →  value is \n (backslash + n literal, not newline)
+        src = '===T===\nK::"\\\\n"\n===END===\n'
+        assert self._roundtrip(src) == src
+
+    def test_backslash_before_t_not_tab(self):
+        """Backslash followed by 't' as separate escape (\\\\t) is not a tab.
+
+        The root bug: after \\→\\ conversion, a subsequent \t sequence was
+        being treated as a tab character.
+        """
+        # OCTAVE source: K::"\\t"  →  value is \t (backslash + t literal, not tab)
+        src = '===T===\nK::"\\\\t"\n===END===\n'
+        assert self._roundtrip(src) == src
+
+    def test_mixed_backslash_counts(self):
+        """Mixed backslash run lengths all survive the round-trip."""
+        # OCTAVE source: K::"\\d+\\.\\d+"  →  value is \d+\.\d+ (regex-like pattern)
+        src = '===T===\nK::"\\\\d+\\\\.\\\\d+"\n===END===\n'
+        assert self._roundtrip(src) == src
+
+    def test_backslash_in_list(self):
+        """Backslash-bearing strings inside list values survive the round-trip."""
+        # OCTAVE source: K::["a\\","b\\\\"]
+        src = '===T===\nK::["a\\\\","b\\\\\\\\"]\n===END===\n'
+        assert self._roundtrip(src) == src
+
+    def test_idempotent_second_roundtrip(self):
+        """A second parse→emit produces the same result (idempotency gate)."""
+        src = '===T===\nK::"C:\\\\path\\\\to"\n===END===\n'
+        first = self._roundtrip(src)
+        second = self._roundtrip(first)
+        assert first == second
