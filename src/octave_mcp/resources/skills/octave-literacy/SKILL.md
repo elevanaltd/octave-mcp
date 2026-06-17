@@ -138,7 +138,7 @@ META:
   W_BARE_LINE_DROPPED::"Cause: line has no key:: prefix. Fix: add a key or use // comment."
   W_NUMERIC_KEY_DROPPED::"Cause: bare integer key (1::thing). Fix: use R1::thing or STEP_1::thing."
   W_CHECK::"After every octave_write call, inspect warnings[]. Today: Empty = clean. Non-empty = data lost. AFTER ADR-0006 SR1-T4: see §6 — empty no longer implies clean."
-  W_CHANGES_MODE_NESTED_MAP::"Cause: passing a nested dict as a changes-mode value to octave_write. Fix: use content_mode + format_style=preserve for any block-nested content. Changes-mode serializes nested dicts as inline maps → E_NESTED_INLINE_MAP. Exception: scalar-array appends (e.g. into AMENDS::[…]) remain changes-mode-friendly."
+  W_CHANGES_MODE_NESTED_MAP::"Cause: passing a nested dict as a changes-mode value to octave_write. Fix: use content= with format_style=preserve for any block-nested content. Changes-mode serializes nested dicts as inline maps → E_NESTED_INLINE_MAP. Exception: scalar-array appends (e.g. into AMENDS::[…]) remain changes-mode-friendly."
   // W_CHANGES_MODE_NESTED_MAP: per octave-mcp changes-mode footgun — revisit post-ADR-0006-SR3-T2 when changes-mode gains native nesting support
   // Semantic of warnings[] is changing. See §6::FORTHCOMING_BEHAVIOR for timing markers.
 §5::WORKED_EXAMPLE
