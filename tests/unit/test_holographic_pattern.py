@@ -703,12 +703,77 @@ class TestParserTargetOnlyHolographic:
         ), f"Expected ListValue for flow expression [a→b], got {type(assignment.value).__name__}"
 
     def test_target_only_holographic_preserves_raw_pattern(self):
-        """Parser MUST preserve raw_pattern for I1 fidelity in target-only case."""
+        """Parser MUST preserve raw_pattern EXACTLY (canonical form) for I1 fidelity.
+
+        TMG coverage: assert exact equality against the canonical reconstruction
+        rather than substring containment, so a future regression that drops or
+        reorders pattern bytes is caught.
+        """
         from octave_mcp.core.grammar.cst import HolographicValue
         from octave_mcp.core.parser import parse
 
         doc = parse('===TEST===\nID::["abc123"→§INDEXER]\n===END===')
         assignment = doc.sections[0]
         assert isinstance(assignment.value, HolographicValue)
-        assert "abc123" in assignment.value.raw_pattern
-        assert "INDEXER" in assignment.value.raw_pattern
+        assert assignment.value.raw_pattern == '["abc123"→§INDEXER]'
+
+    def test_parser_does_not_misclassify_outer_list_with_nested_target_only(self):
+        """Outer list wrapping a nested target-only pattern stays a ListValue.
+
+        TMG coverage (GH#433): [["a"→§T]] — the →§ sequence sits at depth 2
+        inside the nested bracket, so the OUTER list is NOT holographic and
+        remains a ListValue. The single nested item, parsed recursively, IS a
+        HolographicValue because its →§ is at depth 1 within its own scope.
+        This locks in the depth-0 (depth==1) adjacency contract of
+        _has_target_arrow_at_depth_zero.
+        """
+        from octave_mcp.core.grammar.cst import HolographicValue, ListValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::[["a"→§T]]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, ListValue
+        ), f"Expected outer ListValue for nested pattern, got {type(assignment.value).__name__}"
+        assert len(assignment.value.items) == 1
+        inner = assignment.value.items[0]
+        assert isinstance(inner, HolographicValue), f"Expected inner HolographicValue, got {type(inner).__name__}"
+        assert inner.example == "a"
+        assert inner.constraints is None
+        assert inner.target == "T"
+
+    def test_parser_does_not_misclassify_multi_target_comma_list(self):
+        """A comma-separated list of target-only patterns stays a ListValue.
+
+        TMG coverage (GH#433): ["a"→§T, "b"→§U] — the depth-1 comma check in
+        _try_parse_holographic rejects holographic classification because a
+        comma at depth 1 means this is a regular list, not a single pattern.
+        """
+        from octave_mcp.core.grammar.cst import ListValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["a"→§T, "b"→§U]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, ListValue
+        ), f"Expected ListValue for multi-target comma list, got {type(assignment.value).__name__}"
+
+    def test_parser_tolerates_whitespace_between_arrow_and_section(self):
+        """Whitespace between → and § is tolerated; pattern stays holographic.
+
+        TMG coverage (GH#433): ["a"→ §T] — the lexer emits FLOW and SECTION as
+        separate tokens and discards the inter-token space, so
+        _has_target_arrow_at_depth_zero sees SECTION as the next meaningful
+        token after FLOW and recognises the pattern. The reconstructed target
+        is 'T'.
+        """
+        from octave_mcp.core.grammar.cst import HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["a"→ §T]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, HolographicValue
+        ), f"Expected HolographicValue for whitespace-separated arrow/section, got {type(assignment.value).__name__}"
+        assert assignment.value.example == "a"
+        assert assignment.value.target == "T"
