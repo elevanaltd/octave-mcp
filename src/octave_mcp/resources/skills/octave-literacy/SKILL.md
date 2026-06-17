@@ -3,13 +3,13 @@ name: octave-literacy
 description: "LLM-native structured communication format. Teaches OCTAVE syntax rules, canonical forms, and warning prevention for zero-error .oct.md authoring."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave format", "write octave", "octave syntax", "structured output", "OCTAVE basics", "OCTAVE literacy", "OCTAVE structure", "key::value", "OCTAVE notation", "llm communication", "token economy", "loss accounting"]
-version: "3.1.0"
+version: "3.2.1"
 ---
 
 ===OCTAVE_LITERACY===
 META:
   TYPE::SKILL
-  VERSION::"3.1.0"
+  VERSION::"3.2.1"
   STATUS::ACTIVE
   PURPOSE::"Zero-error OCTAVE authoring — syntax rules, canonical forms, warning prevention"
   OCTAVE::"Olympian Common Text And Vocabulary Engine — loss accounting system for LLM communication"
@@ -36,7 +36,7 @@ META:
   §1b::BRACKET_FORMS
     CONTAINER::"[a,b,c] — bare brackets = list"
     ANNOTATION::"NAME<qualifier> — semantic facet on identity (ATHENA<strategic_wisdom>, LLM<exclusively>)"
-    ANNOTATION_DISCIPLINE::"Annotations are SHORT qualifiers (1-3 words, ≤32 chars, identifier-only). Multi-word reasoning belongs in a sibling RATIONALE value with quoted prose."
+    ANNOTATION_DISCIPLINE::"Annotations are SHORT qualifiers (1-3 words, ≤32 chars, identifier-only). Multi-word reasoning belongs in a sibling RATIONALE value as a quoted telegraphic phrase (see octave-mastery §6a)."
     ANNOTATION_WRONG::"I6<migration_on_moving_target_is_anti_pattern_for_zero_warnings>"
     ANNOTATION_RIGHT::"I6<production_grade_quality> + RATIONALE::\"Migration on moving target is anti-pattern for strict typing during data model changes.\""
     CONSTRUCTOR::"NAME[args] — structured arguments on identifier (REGEX[pattern], ENUM[a,b], JIT_GRAMMAR_COMPILATION[META→GBNF])"
@@ -61,6 +61,22 @@ META:
       OCTAVE_about_OCTAVE
     ]
     FENCE_SCALING::"use N+1 backticks to wrap content containing N-backtick fences"
+  §1d::BLOCK_CANONICAL_FORMS
+    // Three shapes agents reach for when nesting — only one is correct
+    RULE::"Multi-field token (any key whose value is a map) → BLOCK form. Never inline-array root. Never flat prefix-scalars."
+    THREE_SHAPES:
+      ```
+      ✓ BLOCK (canonical):         ✗ inline-array root:              ✗ flat prefix-scalars:
+        PLATFORM:                    PLATFORM::[                        PLATFORM_TOKEN::HO-v1
+          TOKEN::HO-v1                 TOKEN::HO-v1,                   PLATFORM_RUNTIME_FLOOR::"Node >=22"
+          RUNTIME:                     RUNTIME::[FLOOR::"Node >=22"]]  PLATFORM_RUNTIME_BECAUSE::"…"
+            FLOOR::"Node >=22"
+            BECAUSE::"…"
+      ```
+    SCALAR_LIST_ONLY::"Inline arrays ([a,b,c]) are for scalar lists only — IMMUTABLES::[…], CONSOLIDATES::[a,b] — never for maps-of-maps"
+    WHY_BLOCK::"Indented children inherit parent context → fewer key tokens, better LLM attention, zero W_DUPLICATE_KEY collisions"
+    WHY_NOT_INLINE_ARRAY_ROOT::"Inline map as token root is non-canonical for map tokens even when values are atomic (§1b::INLINE_MAP). Triggers E_NESTED_INLINE_MAP as soon as any child value needs nesting — restructuring after the fact is mechanical waste. Use BLOCK form from the start."
+    WHY_NOT_FLAT_PREFIX::"PARENT_CHILD1 + PARENT_CHILD2 key proliferation destroys hierarchical grouping and LLM attention"
 §2::OPERATORS
   // Each operator encodes a relationship in a single token
   CONTAINER::"[] — List [a,b,c]"
@@ -82,6 +98,7 @@ META:
   R4::"Envelopes: ===NAME=== open, ===END=== close (NAME must be [A-Z_][A-Z0-9_]*)"
   R5::"true, false, null — lowercase only (NOT True, False, NULL)"
   R6::"∧ only inside brackets: [A∧B∧C] valid, bare A∧B invalid"
+  R6_CLARIFICATION::"Structural position: ∧ inside brackets only. Value position: operators inside quoted strings are valid telegraphic phrases — 'security ⇌ usability' not 'security at odds with usability' (see §2::TELEGRAPHIC_PHRASE, mastery §6a)"
   R7::"⇌ is binary only: A⇌B valid, chained A⇌B⇌C invalid"
   R8::"Values containing § must be quoted: \"see §3b\" not bare §3b"
   R9::"File extension .oct.md is canonical"
@@ -121,6 +138,8 @@ META:
   W_BARE_LINE_DROPPED::"Cause: line has no key:: prefix. Fix: add a key or use // comment."
   W_NUMERIC_KEY_DROPPED::"Cause: bare integer key (1::thing). Fix: use R1::thing or STEP_1::thing."
   W_CHECK::"After every octave_write call, inspect warnings[]. Today: Empty = clean. Non-empty = data lost. AFTER ADR-0006 SR1-T4: see §6 — empty no longer implies clean."
+  W_CHANGES_MODE_NESTED_MAP::"Cause: passing a nested dict as a changes-mode value to octave_write. Fix: use content= with format_style=preserve for any block-nested content. Changes-mode serializes nested dicts as inline maps → E_NESTED_INLINE_MAP. Exception: scalar-array appends (e.g. into AMENDS::[…]) remain changes-mode-friendly."
+  // W_CHANGES_MODE_NESTED_MAP: per octave-mcp changes-mode footgun — revisit post-ADR-0006-SR3-T2 when changes-mode gains native nesting support
   // Semantic of warnings[] is changing. See §6::FORTHCOMING_BEHAVIOR for timing markers.
 §5::WORKED_EXAMPLE
   // Shows: envelope, META with optional fields, separator, operators, annotation, loss accounting
