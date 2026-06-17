@@ -609,3 +609,171 @@ FIELDS:
         # Inline map is wrapped in ListValue
         assert len(assignment.value.items) == 1
         assert isinstance(assignment.value.items[0], InlineMap)
+
+
+class TestParserTargetOnlyHolographic:
+    """Tests for GH#433: target-only holographic patterns at AST level.
+
+    A target-only holographic pattern has the form ["example"→§TARGET] with
+    no ∧ constraint chain. Before the fix, the parser's _try_parse_holographic
+    required a CONSTRAINT token and returned None for target-only patterns,
+    causing them to fall through to ListValue.
+
+    These are TDD RED tests: they fail before the fix and pass after.
+    """
+
+    def test_parser_returns_holographic_value_for_target_only_pattern(self):
+        """Parser MUST return HolographicValue for target-only ["example"→§TARGET].
+
+        GH#433: Without a ∧ constraint chain the old code returned None from
+        _try_parse_holographic, causing the pattern to be parsed as ListValue.
+        """
+        from octave_mcp.core.grammar.cst import HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["abc123"→§INDEXER]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, HolographicValue
+        ), f"Expected HolographicValue for target-only pattern, got {type(assignment.value).__name__}"
+        assert assignment.value.example == "abc123"
+        assert assignment.value.constraints is None
+        assert assignment.value.target == "INDEXER"
+
+    def test_parser_returns_holographic_value_for_target_only_ascii_arrow(self):
+        """Parser MUST return HolographicValue for target-only ["example"->§TARGET].
+
+        Tests the ASCII arrow alias variant of the target-only pattern.
+        """
+        from octave_mcp.core.grammar.cst import HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["abc123"->§INDEXER]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, HolographicValue
+        ), f"Expected HolographicValue for ASCII-arrow target-only pattern, got {type(assignment.value).__name__}"
+        assert assignment.value.example == "abc123"
+        assert assignment.value.constraints is None
+        assert assignment.value.target == "INDEXER"
+
+    def test_parser_returns_holographic_value_target_only_in_block(self):
+        """Parser MUST recognise target-only patterns inside block context."""
+        from octave_mcp.core.grammar.cst import Assignment, Block, HolographicValue
+        from octave_mcp.core.parser import parse
+
+        content = '===TEST===\nFIELDS:\n  ID::["abc123"→§INDEXER]\n===END==='
+        doc = parse(content)
+        block = doc.sections[0]
+        assert isinstance(block, Block)
+        id_assignment = block.children[0]
+        assert isinstance(id_assignment, Assignment)
+        assert isinstance(
+            id_assignment.value, HolographicValue
+        ), f"Expected HolographicValue in block context, got {type(id_assignment.value).__name__}"
+        assert id_assignment.value.target == "INDEXER"
+
+    def test_parser_does_not_misclassify_plain_list_as_holographic(self):
+        """Parser MUST NOT classify a plain list as holographic (negative test).
+
+        [a, b, c] has no → operator; it must remain a ListValue.
+        """
+        from octave_mcp.core.grammar.cst import ListValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse("===TEST===\nITEMS::[a, b, c]\n===END===")
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, ListValue
+        ), f"Expected ListValue for plain list, got {type(assignment.value).__name__}"
+
+    def test_parser_does_not_misclassify_flow_expression_in_list_as_holographic(self):
+        """Parser MUST NOT classify a list with → but no §-target as holographic.
+
+        A flow expression like [a→b] is NOT holographic because it lacks →§.
+        It should remain a ListValue.
+        """
+        from octave_mcp.core.grammar.cst import ListValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse("===TEST===\nFLOW::[a→b]\n===END===")
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, ListValue
+        ), f"Expected ListValue for flow expression [a→b], got {type(assignment.value).__name__}"
+
+    def test_target_only_holographic_preserves_raw_pattern(self):
+        """Parser MUST preserve raw_pattern EXACTLY (canonical form) for I1 fidelity.
+
+        TMG coverage: assert exact equality against the canonical reconstruction
+        rather than substring containment, so a future regression that drops or
+        reorders pattern bytes is caught.
+        """
+        from octave_mcp.core.grammar.cst import HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["abc123"→§INDEXER]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(assignment.value, HolographicValue)
+        assert assignment.value.raw_pattern == '["abc123"→§INDEXER]'
+
+    def test_parser_does_not_misclassify_outer_list_with_nested_target_only(self):
+        """Outer list wrapping a nested target-only pattern stays a ListValue.
+
+        TMG coverage (GH#433): [["a"→§T]] — the →§ sequence sits at depth 2
+        inside the nested bracket, so the OUTER list is NOT holographic and
+        remains a ListValue. The single nested item, parsed recursively, IS a
+        HolographicValue because its →§ is at depth 1 within its own scope.
+        This locks in the depth-0 (depth==1) adjacency contract of
+        _has_target_arrow_at_depth_zero.
+        """
+        from octave_mcp.core.grammar.cst import HolographicValue, ListValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::[["a"→§T]]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, ListValue
+        ), f"Expected outer ListValue for nested pattern, got {type(assignment.value).__name__}"
+        assert len(assignment.value.items) == 1
+        inner = assignment.value.items[0]
+        assert isinstance(inner, HolographicValue), f"Expected inner HolographicValue, got {type(inner).__name__}"
+        assert inner.example == "a"
+        assert inner.constraints is None
+        assert inner.target == "T"
+
+    def test_parser_does_not_misclassify_multi_target_comma_list(self):
+        """A comma-separated list of target-only patterns stays a ListValue.
+
+        TMG coverage (GH#433): ["a"→§T, "b"→§U] — the depth-1 comma check in
+        _try_parse_holographic rejects holographic classification because a
+        comma at depth 1 means this is a regular list, not a single pattern.
+        """
+        from octave_mcp.core.grammar.cst import ListValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["a"→§T, "b"→§U]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, ListValue
+        ), f"Expected ListValue for multi-target comma list, got {type(assignment.value).__name__}"
+
+    def test_parser_tolerates_whitespace_between_arrow_and_section(self):
+        """Whitespace between → and § is tolerated; pattern stays holographic.
+
+        TMG coverage (GH#433): ["a"→ §T] — the lexer emits FLOW and SECTION as
+        separate tokens and discards the inter-token space, so
+        _has_target_arrow_at_depth_zero sees SECTION as the next meaningful
+        token after FLOW and recognises the pattern. The reconstructed target
+        is 'T'.
+        """
+        from octave_mcp.core.grammar.cst import HolographicValue
+        from octave_mcp.core.parser import parse
+
+        doc = parse('===TEST===\nID::["a"→ §T]\n===END===')
+        assignment = doc.sections[0]
+        assert isinstance(
+            assignment.value, HolographicValue
+        ), f"Expected HolographicValue for whitespace-separated arrow/section, got {type(assignment.value).__name__}"
+        assert assignment.value.example == "a"
+        assert assignment.value.target == "T"
