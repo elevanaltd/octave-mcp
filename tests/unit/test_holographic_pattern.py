@@ -633,9 +633,9 @@ class TestParserTargetOnlyHolographic:
 
         doc = parse('===TEST===\nID::["abc123"→§INDEXER]\n===END===')
         assignment = doc.sections[0]
-        assert isinstance(assignment.value, HolographicValue), (
-            f"Expected HolographicValue for target-only pattern, got {type(assignment.value).__name__}"
-        )
+        assert isinstance(
+            assignment.value, HolographicValue
+        ), f"Expected HolographicValue for target-only pattern, got {type(assignment.value).__name__}"
         assert assignment.value.example == "abc123"
         assert assignment.value.constraints is None
         assert assignment.value.target == "INDEXER"
@@ -650,9 +650,9 @@ class TestParserTargetOnlyHolographic:
 
         doc = parse('===TEST===\nID::["abc123"->§INDEXER]\n===END===')
         assignment = doc.sections[0]
-        assert isinstance(assignment.value, HolographicValue), (
-            f"Expected HolographicValue for ASCII-arrow target-only pattern, got {type(assignment.value).__name__}"
-        )
+        assert isinstance(
+            assignment.value, HolographicValue
+        ), f"Expected HolographicValue for ASCII-arrow target-only pattern, got {type(assignment.value).__name__}"
         assert assignment.value.example == "abc123"
         assert assignment.value.constraints is None
         assert assignment.value.target == "INDEXER"
@@ -668,9 +668,9 @@ class TestParserTargetOnlyHolographic:
         assert isinstance(block, Block)
         id_assignment = block.children[0]
         assert isinstance(id_assignment, Assignment)
-        assert isinstance(id_assignment.value, HolographicValue), (
-            f"Expected HolographicValue in block context, got {type(id_assignment.value).__name__}"
-        )
+        assert isinstance(
+            id_assignment.value, HolographicValue
+        ), f"Expected HolographicValue in block context, got {type(id_assignment.value).__name__}"
         assert id_assignment.value.target == "INDEXER"
 
     def test_parser_does_not_misclassify_plain_list_as_holographic(self):
@@ -683,9 +683,9 @@ class TestParserTargetOnlyHolographic:
 
         doc = parse("===TEST===\nITEMS::[a, b, c]\n===END===")
         assignment = doc.sections[0]
-        assert isinstance(assignment.value, ListValue), (
-            f"Expected ListValue for plain list, got {type(assignment.value).__name__}"
-        )
+        assert isinstance(
+            assignment.value, ListValue
+        ), f"Expected ListValue for plain list, got {type(assignment.value).__name__}"
 
     def test_parser_does_not_misclassify_flow_expression_in_list_as_holographic(self):
         """Parser MUST NOT classify a list with → but no §-target as holographic.
@@ -698,9 +698,9 @@ class TestParserTargetOnlyHolographic:
 
         doc = parse("===TEST===\nFLOW::[a→b]\n===END===")
         assignment = doc.sections[0]
-        assert isinstance(assignment.value, ListValue), (
-            f"Expected ListValue for flow expression [a→b], got {type(assignment.value).__name__}"
-        )
+        assert isinstance(
+            assignment.value, ListValue
+        ), f"Expected ListValue for flow expression [a→b], got {type(assignment.value).__name__}"
 
     def test_target_only_holographic_preserves_raw_pattern(self):
         """Parser MUST preserve raw_pattern for I1 fidelity in target-only case."""
