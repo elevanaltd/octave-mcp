@@ -39,6 +39,18 @@ from typing import Any
 
 from octave_mcp.core.repair_log import is_destructive_normalization_repair
 
+# GH#434: Single-pass escape sequence map for quoted string tokenisation.
+# Keys are the two-char escape sequences as they appear in OCTAVE source;
+# values are the corresponding semantic characters.
+# Order does not matter (re.sub processes left-to-right in one pass).
+_STRING_ESCAPE_MAP: dict[str, str] = {
+    "\\\\": "\\",
+    '\\"': '"',
+    "\\n": "\n",
+    "\\t": "\t",
+}
+_STRING_ESCAPE_RE = re.compile(r"\\[\\\"nt]")
+
 
 class TokenType(Enum):
     """OCTAVE token types."""
@@ -1189,11 +1201,17 @@ def tokenize(content: str, lenient: bool = False) -> tuple[list[Token], list[Any
                     else:
                         # Single-quoted string: remove " from both ends
                         value = matched_text[1:-1]
-                    # Process escape sequences
-                    value = value.replace(r"\"", '"')
-                    value = value.replace(r"\\", "\\")
-                    value = value.replace(r"\n", "\n")
-                    value = value.replace(r"\t", "\t")
+                    # Process escape sequences in a single left-to-right pass.
+                    # GH#434: the previous four sequential .replace() calls were
+                    # order-sensitive: after replacing \\\\ → \\ the resulting \\
+                    # could form new \\n or \\t sequences that the subsequent
+                    # replacements then incorrectly converted to newline/tab,
+                    # violating I1 (SYNTACTIC_FIDELITY / bijective round-trip).
+                    # A single re.sub pass eliminates the double-processing hazard.
+                    value = _STRING_ESCAPE_RE.sub(
+                        lambda m: _STRING_ESCAPE_MAP[m.group(0)],
+                        value,
+                    )
                 elif token_type == TokenType.NUMBER:
                     # GH#356: Check if the number is immediately followed by an
                     # identifier-start character (no whitespace gap).  When this
