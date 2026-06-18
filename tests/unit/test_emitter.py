@@ -1069,16 +1069,16 @@ class TestBug304AnnotationMultiline:
 
 
 class TestBackslashRoundTrip:
-    """GH#434: parse→emit must be byte-identical for backslash-bearing string literals.
+    r"""GH#434: parse→emit must be byte-identical for backslash-bearing string literals.
 
     I1 (SYNTACTIC_FIDELITY): normalisation must alter syntax never semantics;
     round-trip must be bijective on semantic space.
 
     Root cause: the lexer's sequential .replace() calls for escape sequences
-    cause \\t and \\n to be misinterpreted after \\\\→\\ conversion.
-    E.g. source "C:\\\\path\\\\to" → after \\→\: "C:\\path\\to" → after \\t→tab:
-    "C:\\path[TAB]o".  The emitter then re-encodes the tab as \\t, producing
-    "C:\\\\path\\t" which does not round-trip to the original source.
+    cause \t and \n to be misinterpreted after \\→\ conversion.
+    E.g. source "C:\\path\\to" → after \\→\: "C:\path\to" → after \t→tab:
+    "C:\path[TAB]o".  The emitter then re-encodes the tab as \t, producing
+    "C:\\path\t" which does not round-trip to the original source.
     """
 
     @staticmethod
