@@ -3,13 +3,13 @@ name: octave-mastery
 description: "Advanced semantic vocabulary, holographic contracts, and structural patterns for OCTAVE. REQUIRES octave-literacy. Extends literacy with mythology, archetype annotation, v6 contracts, and anti-pattern rules."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced octave", "OCTAVE mastery", "holographic patterns", "archetypes", "high-density specifications", "system architecture", "holographic contracts", "archetype annotation"]
-version: "3.2.0"
+version: "3.2.1"
 ---
 
 ===OCTAVE_MASTERY===
 META:
   TYPE::SKILL
-  VERSION::"3.2.0"
+  VERSION::"3.2.1"
   STATUS::ACTIVE
   PURPOSE::"Expert-level OCTAVE: mythology vocabulary, holographic contracts, archetype annotation, anti-patterns"
   REQUIRES::octave-literacy
@@ -150,6 +150,7 @@ CONDUCT:
   PROSE_BLEED::"Stopword-laden English sentences as values — quoted telegraphic phrases ARE valid (see §6a). Ban applies when operators could compress the same semantics."
   INLINE_ARRAY_ROOT::"TOKEN::[KEY::v, KEY2::v2] — inline map used as multi-field token root. Non-canonical for map tokens even when values are atomic; BLOCK form is mandated. Triggers E_NESTED_INLINE_MAP as soon as any child value needs nesting (§5::BLOCK_NOTATION_RULE). Fix: use BLOCK form (TOKEN: + indented children) from the start."
   FLAT_PREFIX_SCALARS::"PARENT_CHILD::v, PARENT_CHILD2::v2 — flattened hierarchy via key name prefixes instead of BLOCK nesting. Destroys grouping and LLM attention. Fix: group under a PARENT: block with CHILD::v children."
+  STRUCTURAL_SYNTAX_IN_VALUE::"<> annotation ∨ [] constructor embedded INSIDE a quoted telegraphic value — e.g. \"migration[high_risk]<legacy_db> → downtime\" or \"SISYPHEAN[bugs] ⊕ KAIROS[repair]\". Structural forms are key/identifier-only (§3, literacy §1b: <> qualifies identity, [] parameterizes operations). Inside a value the parser treats them as opaque text → all the ambiguity, none of the validation, and it blurs the structural⇌value boundary. Fix: inside a value, relations carry via telegraphic operators only (→ ⇌ ∧ ∨ ⊕); push facets to a sibling field or an annotated KEY. 'migration → downtime' + RISK::high ∨ MIGRATION<legacy_db>:."
   §6a::TELEGRAPHIC_PHRASE
     DEFINITION::"Quoted value with stopwords dropped; operators ⊕ ⇌ ∧ ∨ → carry relational meaning English connectives would spell out"
     RULES::[
@@ -157,7 +158,8 @@ CONDUCT:
       "Use ⇌ for tension ('security ⇌ usability' not 'security at odds with usability')",
       "Use → for causality ('migration → conflict' not 'migration causes conflict')",
       "Preserve named entities, thresholds, IDs — never compress these",
-      "Use ∧ for joint conditions, ∨ for alternatives, ⊕ for emergent synthesis"
+      "Use ∧ for joint conditions, ∨ for alternatives, ⊕ for emergent synthesis",
+      "Structural syntax (<> / []) is key/identifier-only — NEVER embed inside the quoted value (see §6::STRUCTURAL_SYNTAX_IN_VALUE)"
     ]
     EXAMPLE_PAIR:
       BEFORE::"\"natural language at odds with OCTAVE because stopwords\" (~13 tokens)"
