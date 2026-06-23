@@ -1,6 +1,7 @@
 # ADR-0006 SR1-T1: Unified Grammar Core — Design Pass
 
-**Status:** Proposed (design-only; implementation in progress — Steps 1, 2, 4, 5 merged; Step 3 in flight on PR #399)
+**Status:** Accepted (grammar core unified and shipped)
+**Shipped:** v1.12.0 (PRs #393–#401)
 **Date:** 2026-05-09 (original) · **Updated:** 2026-05-11 (v1.3 empirical reality from Step 3 implementation — see §3a "Empirical reality at logical-Step 3" and "Future structural-fidelity work (Sprint 3+)")
 **Version:** 1.3 (semver: patch — records empirical reality from Step 3 implementation; META-side `was_quoted` deferred to Sprint 3+; self-deprecation contract intact; no architectural change)
 **Parent:** [ADR-0006 Writer/Reader Symmetry](./adr-0006-writer-reader-symmetry.md) §70-84

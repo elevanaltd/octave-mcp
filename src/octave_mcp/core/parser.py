@@ -2778,11 +2778,20 @@ class Parser:
         """Try to parse token slice as holographic pattern.
 
         Issue #187: Integrates holographic pattern parsing into L4 context.
+        GH#433: Extended to recognise target-only patterns (no ∧ constraint chain).
 
-        Holographic patterns have the form: ["example"∧CONSTRAINT→§TARGET]
+        Holographic patterns have the form:
+            ["example"∧CONSTRAINT→§TARGET]  — full pattern
+            ["example"→§TARGET]             — target-only (GH#433)
+            ["example"∧CONSTRAINT]          — constraint-only (no target)
+
         Detection criteria:
-        - Must contain a CONSTRAINT (∧) token outside nested brackets
-        - First substantive token after LIST_START should be the example value
+        - Must contain a CONSTRAINT (∧) token, OR
+        - Must contain a FLOW (→) token immediately followed by a SECTION (§) token
+          at depth 0 — this is the structural marker for →§TARGET.
+
+        A plain flow expression [a→b] has FLOW but no SECTION after it, so it
+        does not match the second criterion and remains a ListValue.
 
         Args:
             token_slice: Token list from LIST_START to LIST_END inclusive
@@ -2790,9 +2799,13 @@ class Parser:
         Returns:
             HolographicValue if this is a holographic pattern, None otherwise
         """
-        # Quick check: must have CONSTRAINT token to be holographic
+        # Quick check: must be recognisably holographic.
+        # A pattern is a candidate if it has a CONSTRAINT (∧) token, OR if it
+        # contains the →§ sequence (FLOW immediately followed by SECTION) outside
+        # nested brackets. The latter covers target-only patterns (GH#433).
         has_constraint = any(t.type == TokenType.CONSTRAINT for t in token_slice)
-        if not has_constraint:
+        has_target_arrow = self._has_target_arrow_at_depth_zero(token_slice)
+        if not has_constraint and not has_target_arrow:
             return None
 
         # Additional heuristic: holographic patterns don't have commas at depth=0
@@ -2828,6 +2841,38 @@ class Parser:
         except HolographicPatternError:
             # Not a valid holographic pattern, fall back to ListValue
             return None
+
+    def _has_target_arrow_at_depth_zero(self, token_slice: list[Token]) -> bool:
+        """Return True if token_slice contains →§ (FLOW then SECTION) at depth 0.
+
+        GH#433: Detects the structural marker for a target reference outside
+        nested brackets. A plain flow expression [a→b] has FLOW but no
+        adjacent SECTION, so this returns False for it.
+
+        Depth tracking mirrors the comma-check in _try_parse_holographic:
+        depth=1 means inside the outer [], outside any nested [].
+
+        Args:
+            token_slice: Token list from LIST_START to LIST_END inclusive
+
+        Returns:
+            True if a →§ sequence exists outside nested brackets, False otherwise
+        """
+        depth = 0
+        for i, token in enumerate(token_slice):
+            if token.type == TokenType.LIST_START:
+                depth += 1
+            elif token.type == TokenType.LIST_END:
+                depth -= 1
+            elif token.type == TokenType.FLOW and depth == 1:
+                # Check if the immediately following non-whitespace token is SECTION
+                for j in range(i + 1, len(token_slice)):
+                    next_tok = token_slice[j]
+                    if next_tok.type == TokenType.SECTION:
+                        return True
+                    # Any other meaningful token breaks the →§ adjacency
+                    break
+        return False
 
     def _reconstruct_pattern_from_tokens(self, token_slice: list[Token]) -> str:
         """Reconstruct pattern string from tokens for holographic parsing.

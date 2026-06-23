@@ -1,6 +1,7 @@
 # ADR-0006 G3: META Envelope Schema Admission for Audit Markers
 
-**Status:** Proposed
+**Status:** Accepted
+**Shipped:** v1.13.0 (PR #419)
 **Date:** 2026-05-07
 **Parent:** [ADR-0006: Writer/Reader Symmetry](./adr-0006-writer-reader-symmetry.md)
 **Scope:** Sprint 2 Task 3 (SR2-T3) blocker — admission policy for `META.NON_CANONICAL_DEGRADED` and `META.DEGRADED_REGIONS`

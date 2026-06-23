@@ -1,6 +1,7 @@
 # ADR-0006 SR2-T2 — AST Source-Span Coverage Audit (Strategy A for GH#377)
 
-Status: DRAFT (advisory; pending HO commit)
+Status: Accepted (committed and shipped)
+Shipped: v1.13.0–v1.13.1 (PR #418, Strategy A)
 Authors: ho-liaison (advisory)
 Decision owner: holistic-orchestrator
 Target release: v1.13.0

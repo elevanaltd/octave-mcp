@@ -1,6 +1,6 @@
 # ADR-0006 Sprint 2 Programme Addendum
 
-**Status:** Proposed (programme-coordination; docs-only)
+**Status:** Accepted — programme complete (v1.12.0–v1.14.0); coordination record, candidate for archive
 **Date:** 2026-05-12
 **Authors:** technical-architect (advisory)
 **Decision owner:** holistic-orchestrator

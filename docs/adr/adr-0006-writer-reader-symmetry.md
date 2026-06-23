@@ -1,6 +1,7 @@
 # ADR-0006: Writer/Reader Symmetry — Killing the `octave_validate`/`octave_write` Asymmetry
 
-**Status:** Proposed
+**Status:** Accepted
+**Shipped:** v1.12.0–v1.13.1 (SR0/SR1/SR2 task family — see child records)
 **Date:** 2026-05-07
 **Supersedes:** None
 **Related:** #365, #369, #371, #372, #373, #376, #377; ADR-0004 (tool consolidation)
