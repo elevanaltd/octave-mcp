@@ -7,7 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed — bundled OCTAVE skills realigned to upstream `_bundled_hub` (docs-only)
+## [1.16.0] - 2026-09-18 - "Parser AST fixes, CI mcp dependency cap, bundled skill/spec realignment"
+
+### Upgrade notes
+
+- **Bundled skill `octave-mythology` REMOVED**, absorbed into `octave-mastery` 4.0.0. Anything
+  loading `octave-mythology` by name must switch to `octave-mastery`.
+- **`octave-literacy`/`octave-mastery` 4.0.0 and `octave-ultra-mythic` 2.0.0 renumber sections**
+  (every skill gains a new `§5::ANCHOR_KERNEL`, shifting subsequent sections). External
+  cross-references by `§` number need checking against the new numbering.
+- **Runtime dependency `mcp` capped to `>=1.27.0,<2`** (GH#519). Consumers pinning a bare
+  `mcp>=1.27.0` alongside octave-mcp should apply the same upper bound to avoid the mcp 2.x
+  breaking API (camelCase→snake_case kwarg renames, `Server` generic arity change,
+  `ReadResourceContents` moved).
+- **Primer META key `TIER` renamed `COMPRESSION_TIER`**, plus `LOSS_PROFILE` added, across all
+  six bundled primers.
+
+### Fixed
+
+- **GH#433 — target-only holographic patterns recognised at AST level (#506).** The parser's
+  `_try_parse_holographic` gated holographic recognition on the presence of a `∧` `CONSTRAINT`
+  token, so target-only patterns like `["example"→§TARGET]` (no constraint chain) fell through
+  to `ListValue`. A new `_has_target_arrow_at_depth_zero()` helper detects the `→§`
+  (`FLOW`→`SECTION`) structural marker at depth 0, and the entry gate now also passes through
+  when that condition holds. Plain lists and flow expressions without a `§`-target are
+  unaffected.
+- **GH#434 — lexer escape-sequence processing uses single-pass `re.sub` (#507).** The lexer's
+  STRING token handling applied four sequential `.replace()` calls for `\\`, `\"`, `\n`, `\t`.
+  Because the `\\`→`\` step ran before the `\n`/`\t` steps, a literal `C:\\path\\to` or `\\n`
+  could form a *new* `\t`/`\n` sequence that the later steps then converted to an actual
+  tab/newline byte — corrupting the round-trip (violating I1 `SYNTACTIC_FIDELITY`). Replaced
+  with a single left-to-right `re.sub()` pass over a compiled pattern/mapping so each escape
+  sequence is processed exactly once.
+- **GH#519 — runtime dependency `mcp` capped `>=1.27.0,<2` to unblock CI (#521).**
+  `pyproject.toml` declared `mcp>=1.27.0` with no upper bound; CI installs fresh with
+  `pip install -e ".[dev]"` (no lockfile consulted), so it resolved mcp 2.2.0 at install time
+  and broke `mypy src` with 17 errors (camelCase→snake_case kwarg renames, `Server` generic
+  arity change, `ReadResourceContents` moved). The dependency is now capped `mcp>=1.27.0,<2`;
+  `uv.lock` re-synced to match. Migrating the `mcp` 2.x API usage itself is tracked separately
+  and out of scope here.
+- **GH#520 — SKILL schema realigned to octave-skills-spec v9.1 hub/platform YAML rule (#522).**
+  `schemas/skill.oct.md` (`VERSION "1.0"`) mandated `name`/`description`/`allowed-tools` YAML
+  frontmatter unconditionally, contradicting `octave-skills-spec.oct.md` 9.1.0 §7
+  `PLATFORM_ADAPTATION.YAML_FRONTMATTER_RULES`, which makes frontmatter `OPTIONAL` for
+  `HUB_SKILLS` (`.hestai-sys/library/skills/`) and `REQUIRED` only for `PLATFORM_SKILLS`.
+  50 of 73 on-disk hub skills failed validation as a result. Per structural precedence the
+  spec outranks the schema, so the schema moved: a new `POLICY.FRONTMATTER_PRESENCE`
+  (`REQUIRED|OPTIONAL`, default `REQUIRED`) makes required-field checks conditional on
+  frontmatter presence — absent frontmatter skips required-field checks (hub case); present
+  frontmatter still enforces every `REQUIRED` field and `TYPE` constraint (platform /
+  dual-deployed case); an unrecognised policy value emits `W_MALFORMED_POLICY` and fails
+  closed to `REQUIRED`. Schema bumped to `VERSION "1.1"` with
+  `META.IMPLEMENTS_SPEC::"octave-skills-spec@9.1.0"`.
+
+### Docs
+
+- **octave-mastery 3.2.1 — guard against structural syntax in telegraphic values (#508).**
+  Reinforced guard clauses against mixed scalar/array types in `REQUIRES` fields and
+  operator-spacing conflicts (unspaced `A→B⊕C` fragments tokens unpredictably; `A → B ⊕ C`
+  keeps tokenizer coherence). Folded into `octave-mastery` 4.0.0 below (see the bundled-skills
+  realignment entry) — 3.2.1 was never the shipped version; 4.0.0 is.
+
+### Changed — bundled OCTAVE skills realigned to upstream `_bundled_hub` (docs-only) (#513)
 
 `src/octave_mcp/resources/skills/` had drifted behind the upstream skill library
 (`HestAI-MCP/src/hestai_mcp/_bundled_hub/library/`). The bundled copies are now
@@ -27,7 +88,7 @@ byte-identical to upstream. No parser, validator, or tool behaviour changes.
   `§8::UNIVERSAL_GOVERNANCE_GRAMMAR` becomes `§7::GOVERNANCE_AUTHORING`. Cross-references
   written against the old numbering need updating.
 
-### Changed — spec + primer structural migration (docs-only)
+### Changed — spec + primer structural migration (docs-only) (#513)
 
 - **`octave-core-spec.oct.md` 6.0.0 → 6.0.1.** Structural migration, no semantic change. The file
   could not be amended by `octave_write` at all: bare `===END===` tokens sat inside unquoted body
@@ -109,7 +170,7 @@ measured loss), **#516** (tier `TARGET` values disagree between `octave-data-spe
 `octave-compression`, and the spec contradicts itself), **#517** (`changes`-mode auto-creates keys
 at unresolvable paths contrary to `NO_AUTO_CREATE`).
 
-### Removed
+### Removed (#513)
 
 - **`octave-mythology` skill (1.3.0) retired.** Its pantheon, narrative forces, usage law,
   gloss convention, open-vocabulary rule, and anti-patterns are absorbed wholesale into
