@@ -68,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeps tokenizer coherence). Folded into `octave-mastery` 4.0.0 below (see the bundled-skills
   realignment entry) — 3.2.1 was never the shipped version; 4.0.0 is.
 
-### Changed — bundled OCTAVE skills realigned to upstream `_bundled_hub` (docs-only)
+### Changed — bundled OCTAVE skills realigned to upstream `_bundled_hub` (docs-only) (#513)
 
 `src/octave_mcp/resources/skills/` had drifted behind the upstream skill library
 (`HestAI-MCP/src/hestai_mcp/_bundled_hub/library/`). The bundled copies are now
@@ -88,7 +88,7 @@ byte-identical to upstream. No parser, validator, or tool behaviour changes.
   `§8::UNIVERSAL_GOVERNANCE_GRAMMAR` becomes `§7::GOVERNANCE_AUTHORING`. Cross-references
   written against the old numbering need updating.
 
-### Changed — spec + primer structural migration (docs-only)
+### Changed — spec + primer structural migration (docs-only) (#513)
 
 - **`octave-core-spec.oct.md` 6.0.0 → 6.0.1.** Structural migration, no semantic change. The file
   could not be amended by `octave_write` at all: bare `===END===` tokens sat inside unquoted body
@@ -170,7 +170,7 @@ measured loss), **#516** (tier `TARGET` values disagree between `octave-data-spe
 `octave-compression`, and the spec contradicts itself), **#517** (`changes`-mode auto-creates keys
 at unresolvable paths contrary to `NO_AUTO_CREATE`).
 
-### Removed
+### Removed (#513)
 
 - **`octave-mythology` skill (1.3.0) retired.** Its pantheon, narrative forces, usage law,
   gloss convention, open-vocabulary rule, and anti-patterns are absorbed wholesale into
