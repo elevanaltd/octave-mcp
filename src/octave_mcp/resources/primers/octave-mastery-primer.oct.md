@@ -1,8 +1,8 @@
 ===OCTAVE_MASTERY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"7.0.0"
-  TOKENS::"~280"
+  VERSION::"7.0.1"
+  TOKENS::"462"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"[preserve:forms∧usage_law,drop:rationale∨vocabulary_tables]"
 §1::ESSENCE
