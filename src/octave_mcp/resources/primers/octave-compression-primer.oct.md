@@ -1,15 +1,15 @@
 ===OCTAVE_COMPRESSION_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.7.0"
-  TOKENS::"511"
+  VERSION::"6.7.1"
+  TOKENS::"493"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"[preserve:tier_rules∧transforms,drop:rationale]"
 §1::ESSENCE
-PURPOSE::"Compress prose→OCTAVE with tier judgment"
+PURPOSE::"Compress prose→OCTAVE by tier"
 OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
 METHOD::["READ→SELECT_TIER→EXTRACT[why,evidence]→COMPRESS→VALIDATE"]
-TELEGRAPHIC_PHRASE::"quoted value, stopwords dropped, operators carry English connectives — e.g. 'security ⇌ usability' not 'security at odds with usability'"
+TELEGRAPHIC_PHRASE::"quoted, stopwords dropped, operators replace connectives — 'security ⇌ usability' not 'security at odds with usability'"
 §2::MAP
 TIER_SELECTION::
 ```
@@ -40,7 +40,7 @@ OPERATORS::
 ∨     disjunction
 ```
 §4::ONE_SHOT
-IN::"Authenticate before dashboard; failed logins alert for security and usability."
+IN::"Authenticate before dashboard; failed logins alert; security vs usability."
 OUT:
   AUTH::[login→validate→dashboard]
   FAIL::alert
@@ -49,7 +49,6 @@ OUT:
 MUST::[
   valid_OCTAVE,
   "preserve_§_names_verbatim",
-  preserve_numbers∧IDs∧causality,
   tier_first,
   no_markdown,
   no_JSON,
