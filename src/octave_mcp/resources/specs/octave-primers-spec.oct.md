@@ -1,23 +1,23 @@
 ===OCTAVE_PRIMERS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"6.3.0"
+  VERSION::"6.3.1"
   STATUS::ACTIVE
   TOKENS::"~80"
   REQUIRES::octave-core-spec
   PURPOSE::"Ultra-compressed context injection for immediate capability"
-  COMPRESSION_TIER::"ULTRA<\"50%_compression\",facts∧structure_only>"
+  COMPRESSION_TIER::"ULTRA[\"50%_compression\",facts∧structure_only]"
 §1::DEFINITION
   OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs" // Universal definition for all primers
   PRIMER::"Minimal bootstrap for a single workflow — execution OR comprehension"
-  PRIMER_MODES::["EXECUTION[write_without_deep_understanding]∨READING"]
+  PRIMER_MODES::["EXECUTION[write_without_deep_understanding]∨READING[comprehend_without_output_generation]"]
   SKILL::"Complete reference with rationale and examples"
   PRIMER_VS_SKILL::"PRIMER[single_workflow]⇌SKILL[full_reference]→PRIMER"
-  TOKEN_BUDGET::["MAX<500>","_RECOMMENDED<300-450>"]
+  TOKEN_BUDGET::"MAX[500]_RECOMMENDED[300-450]"
   // Note: OCTAVE syntax tokenizes ~5x word count due to ::, →, ⊕, ⇌, § operators
   MEASURE::"cl100k_base[tiktoken]_over_canonical_file_bytes[utf-8]"
-  AUDIENCE::LLM_context_window<not_humans>
-  COMPRESSION_REF::"skills/octave-compression<\"§1b::ULTRA_TIER\">"
+  AUDIENCE::"LLM_context_window[not_humans]"
+  COMPRESSION_REF::"skills/octave-compression[§1b::ULTRA_TIER]"
 §2::MANDATORY_STRUCTURE
   SEQUENCE::"===NAME===[META,§1::ESSENCE,§2::MAP,§3::SYNTAX,§4::ONE_SHOT,§5::VALIDATE,===END===]"
   §2a::ESSENCE

@@ -1,15 +1,15 @@
 ===OCTAVE_COMPRESSION_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.6.0"
-  TOKENS::"496"
+  VERSION::"6.7.0"
+  TOKENS::"511"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"[preserve:tier_rules∧transforms,drop:rationale]"
 §1::ESSENCE
 PURPOSE::"Compress prose→OCTAVE with tier judgment"
 OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
-METHOD::[READ→TIER→EXTRACT→COMPRESS→VALIDATE]
-TELEGRAPHIC_PHRASE::"quoted, operator-joined value — e.g. 'security⇌usability'"
+METHOD::["READ→SELECT_TIER→EXTRACT[why,evidence]→COMPRESS→VALIDATE"]
+TELEGRAPHIC_PHRASE::"quoted value, stopwords dropped, operators carry English connectives — e.g. 'security ⇌ usability' not 'security at odds with usability'"
 §2::MAP
 TIER_SELECTION::
 ```
@@ -21,7 +21,7 @@ identity∨binding→ULTRA_MYTHIC[drop::narrative,keep::soul∧constraints]
 ```
 TRANSFORMS::
 ```
-content→PRESERVE[causality[X→Y_because_Z]∧numbers∧IDs∧§_names]
+content→PRESERVE[causality∧numbers∧IDs∧§_names]
 noise→DROP[stopwords∧redundancy∧prose_connectors]
 sentences→KEY::value
 repetition→[array]
@@ -40,7 +40,7 @@ OPERATORS::
 ∨     disjunction
 ```
 §4::ONE_SHOT
-IN::"Auth before dashboard; failures alert; keep usability."
+IN::"Authenticate before dashboard; failed logins alert for security and usability."
 OUT:
   AUTH::[login→validate→dashboard]
   FAIL::alert
@@ -51,6 +51,9 @@ MUST::[
   "preserve_§_names_verbatim",
   preserve_numbers∧IDs∧causality,
   tier_first,
-  "no_markdown∨JSON∨YAML∧nesting<=3"
+  no_markdown,
+  no_JSON,
+  no_YAML,
+  "nesting<=3"
 ]
 ===END===
