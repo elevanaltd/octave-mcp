@@ -74,6 +74,7 @@ dev = [
     "httpx>=0.28.0",  # For testing HTTP transport
     "Pygments>=2.20.0",  # CVE-2025-61833: ReDoS vulnerability
     "virtualenv>=20.36.2",  # CVE-2025-68147: TOCTOU vulnerabilities
+    "tiktoken>=0.14.0",  # GH-primer-token-budget-500: real cl100k_base token counts in tests
 ]
 
 # PEP-735 dependency group mirroring the `dev` extra above.
@@ -99,6 +100,7 @@ dev = [
     "httpx>=0.28.0",  # For testing HTTP transport
     "Pygments>=2.20.0",  # CVE-2025-61833: ReDoS vulnerability
     "virtualenv>=20.36.2",  # CVE-2025-68147: TOCTOU vulnerabilities
+    "tiktoken>=0.14.0",  # GH-primer-token-budget-500: real cl100k_base token counts in tests
 ]
 
 [project.scripts]

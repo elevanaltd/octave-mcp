@@ -1,8 +1,8 @@
 ===OCTAVE_LITERACY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.4.0"
-  TOKENS::"~270"
+  VERSION::"6.4.1"
+  TOKENS::"424"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"[preserve:syntax_rules,drop:rationale]"
 §1::ESSENCE

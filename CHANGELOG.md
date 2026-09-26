@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Primer token budget guard measured the wrong thing (AGR
+  `OCTAVE-MCP-PRIMER-TOKEN-BUDGET-500-20260926`).** `octave-primers-spec.oct.md` §1
+  `TOKEN_BUDGET` is raised `MAX[300]` → `MAX[500]`, measured as `cl100k_base` (tiktoken)
+  over each primer's canonical file bytes; the §4 skill-side token comparison now defers to
+  `octave-skills-spec`'s own `TOKEN_TARGET`/`OVERSIZED` bands instead of restating a figure
+  (the observed bundled-skill drift against those bands is tracked separately).
+  `tests/unit/test_gh453_primer_token_budgets.py`
+  now counts real `cl100k_base` tokens (new `tiktoken` dev dependency, no skip path) instead of
+  a whitespace-split proxy that under-counted true tokens 2.7-4.4x and never fired even though
+  every primer already exceeded budget; each primer's declared `TOKENS` must now be its exact
+  measured count, checked within ±10% of a fresh measurement. The declared-value parser is
+  strictly scoped to the file's `META:` block and requires a canonical bare-integer
+  `TOKENS::"NNN"` line, rejecting the legacy `~NNN` form and any TOKENS-shaped text
+  appearing outside `META:`. The compression primer's `§4::ONE_SHOT`
+  `OUT` example is rewritten from one crammed comma-joined string into keyed lines with a
+  bracketed flow (`AUTH::[login→validate→dashboard]`), with further trims to fit the corrected,
+  measured budget; the other five primers are META-only updates (`VERSION`/`TOKENS` bumped to
+  their exact measured counts).
+
+### Changed
+
+- **`octave-primers-spec.oct.md` and the bundled primers gained defensive quoting** so they
+  round-trip through `octave_write` without loss: a bare `===END===` sitting inside a bracket
+  value truncated the whole document on write, chained `KEY::VALUE::extra` lines silently
+  dropped the trailing segment, and a `§` inside an unquoted list element split the element
+  in two with no repair emitted. Values containing these characters are now quoted; the
+  changes are semantics-preserving (parser-level fixes for the underlying defects are tracked
+  separately).
+
 ## [1.16.0] - 2026-09-18 - "Parser AST fixes, CI mcp dependency cap, bundled skill/spec realignment"
 
 ### Upgrade notes
