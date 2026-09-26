@@ -1,8 +1,8 @@
 ===OCTAVE_MYTHOLOGY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.3.1"
-  TOKENS::"~270"
+  VERSION::"6.3.2"
+  TOKENS::"423"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"[preserve:atom_mappings,drop:rationale]"
 §1::ESSENCE
