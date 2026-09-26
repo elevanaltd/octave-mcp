@@ -12,12 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Primer token budget guard measured the wrong thing (AGR
   `OCTAVE-MCP-PRIMER-TOKEN-BUDGET-500-20260926`).** `octave-primers-spec.oct.md` §1
   `TOKEN_BUDGET` is raised `MAX[300]` → `MAX[500]`, measured as `cl100k_base` (tiktoken)
-  over each primer's canonical file bytes; the §4 skill-side token comparison is corrected
-  from the stale `500-800` to the measured `1600-5100`. `tests/unit/test_gh453_primer_token_budgets.py`
+  over each primer's canonical file bytes; the §4 skill-side token comparison now defers to
+  `octave-skills-spec`'s own `TOKEN_TARGET`/`OVERSIZED` bands instead of restating a figure
+  (the observed bundled-skill drift against those bands is tracked separately).
+  `tests/unit/test_gh453_primer_token_budgets.py`
   now counts real `cl100k_base` tokens (new `tiktoken` dev dependency, no skip path) instead of
   a whitespace-split proxy that under-counted true tokens 2.7-4.4x and never fired even though
   every primer already exceeded budget; each primer's declared `TOKENS` must now be its exact
-  measured count, checked within ±10% of a fresh measurement. The compression primer's `§4::ONE_SHOT`
+  measured count, checked within ±10% of a fresh measurement. The declared-value parser is
+  strictly scoped to the file's `META:` block and requires a canonical bare-integer
+  `TOKENS::"NNN"` line, rejecting the legacy `~NNN` form and any TOKENS-shaped text
+  appearing outside `META:`. The compression primer's `§4::ONE_SHOT`
   `OUT` example is rewritten from one crammed comma-joined string into keyed lines with a
   bracketed flow (`AUTH::[login→validate→dashboard]`), with further trims to fit the corrected,
   measured budget; the other five primers are META-only updates (`VERSION`/`TOKENS` bumped to

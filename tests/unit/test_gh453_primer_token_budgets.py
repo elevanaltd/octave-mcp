@@ -56,11 +56,49 @@ DECLARED_TOLERANCE = 0.10
 
 PRIMER_FILES = sorted(PRIMERS_DIR.glob("*.oct.md"))
 
-# Match TOKENS::"240" (canonical plain-number form). A legacy leading
-# approximation tilde ("~240") is still accepted for parsing so this test
-# does not force a primer-content edit in the same step that raises the
-# ceiling; the canonical authoring form going forward is the bare number.
-_TOKENS_DECL_RE = re.compile(r'TOKENS::"~?(\d+)"')
+
+class DeclaredTokensError(ValueError):
+    """Raised when a file's META.TOKENS declaration is missing, malformed,
+    or cannot be identified unambiguously inside the META block."""
+
+
+# Matches a bare-integer META.TOKENS line exactly: "  TOKENS::"NNN"" with
+# only leading whitespace and optional trailing whitespace around it. No
+# legacy "~NNN" prefix, no trailing characters after the closing quote.
+_META_TOKENS_LINE_RE = re.compile(r'^\s+TOKENS::"(\d+)"\s*$')
+
+
+def _declared_tokens(content: str) -> int:
+    """Strictly parse the META.TOKENS declaration from ``content``.
+
+    Only the indented lines that make up the file's ``META:`` block (from
+    the line after ``META:`` up to the first non-indented, non-blank line)
+    are considered — a TOKENS-shaped string appearing in the file body,
+    outside META, is never picked up. Within that block, exactly one line
+    must match a canonical bare-integer ``TOKENS::"NNN"`` declaration (no
+    legacy ``~`` prefix, no trailing junk, no embedded whitespace in the
+    digits). Anything else raises ``DeclaredTokensError``.
+    """
+    lines = content.splitlines()
+    try:
+        meta_start = next(i for i, line in enumerate(lines) if line.strip() == "META:")
+    except StopIteration:
+        raise DeclaredTokensError("no META: block found") from None
+
+    meta_block_lines: list[str] = []
+    for line in lines[meta_start + 1 :]:
+        if line.strip() == "":
+            continue
+        if not line[:1].isspace():
+            break
+        meta_block_lines.append(line)
+
+    matches = [m.group(1) for m in (_META_TOKENS_LINE_RE.match(line) for line in meta_block_lines) if m]
+    if len(matches) != 1:
+        raise DeclaredTokensError(
+            f"expected exactly one canonical META.TOKENS declaration inside META:, found {len(matches)}"
+        )
+    return int(matches[0])
 
 
 @lru_cache(maxsize=1)
@@ -99,12 +137,13 @@ def test_primer_declared_tokens_matches_measured(primer_path: Path) -> None:
     track the real cl100k_base count within +/-10%.
     """
     content = primer_path.read_text(encoding="utf-8")
-    match = _TOKENS_DECL_RE.search(content)
-    assert match is not None, (
-        f"{primer_path.name}: META.TOKENS field missing or unparseable; "
-        f"primers-spec requires authoring contract on token budget."
-    )
-    declared = int(match.group(1))
+    try:
+        declared = _declared_tokens(content)
+    except DeclaredTokensError as exc:
+        pytest.fail(
+            f"{primer_path.name}: META.TOKENS field missing or unparseable ({exc}); "
+            f"primers-spec requires authoring contract on token budget."
+        )
     assert declared <= SPEC_MAX_TOKENS, (
         f"{primer_path.name}: declared TOKENS={declared} exceeds "
         f"TOKEN_BUDGET::MAX[{SPEC_MAX_TOKENS}] (primers-spec §1)."
