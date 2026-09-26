@@ -19,8 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every primer already exceeded budget; each primer's declared `TOKENS` must now be its exact
   measured count, checked within ±10% of a fresh measurement. The compression primer's `§4::ONE_SHOT`
   `OUT` example is rewritten from one crammed comma-joined string into keyed lines with a
-  bracketed flow (`AUTH::[login→validate→dashboard]`), plus trims across all six primers to fit
-  the corrected, measured budget.
+  bracketed flow (`AUTH::[login→validate→dashboard]`), with further trims to fit the corrected,
+  measured budget; the other five primers are META-only updates (`VERSION`/`TOKENS` bumped to
+  their exact measured counts).
 
 ### Changed
 

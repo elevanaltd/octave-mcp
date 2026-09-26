@@ -21,6 +21,10 @@ whitespace), so the guard never fired even though every primer exceeded
 the real budget. This module replaces the whitespace proxy outright with
 a real tokenizer count, and tightens the declared-``TOKENS`` check to
 require it track the measured count (not just an independent ceiling).
+The ``cl100k_base`` encoding is loaded lazily (on first use inside a
+token-counting test), not at module import, so an offline test runner
+only errors the specific tests that need the tokenizer rather than
+failing collection for the whole module.
 
 GH-453 makes the operator-legend section additive (adds ``∧`` and ``∨``
 glosses to each primer's legend) and names the ``TELEGRAPHIC_PHRASE`` form
@@ -33,6 +37,7 @@ are left unchanged.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -57,13 +62,25 @@ PRIMER_FILES = sorted(PRIMERS_DIR.glob("*.oct.md"))
 # ceiling; the canonical authoring form going forward is the bare number.
 _TOKENS_DECL_RE = re.compile(r'TOKENS::"~?(\d+)"')
 
-_ENCODING = tiktoken.get_encoding("cl100k_base")
+
+@lru_cache(maxsize=1)
+def _encoding() -> tiktoken.Encoding:
+    """Lazily load the cl100k_base encoding on first use.
+
+    Loading happens inside a test call, not at module collection time, so
+    a missing tokenizer/BPE file (e.g. an offline runner with no cached
+    ``data-gym-cache``) only errors the token-counting tests below, not
+    every test in this module (including the unrelated legend/TELEGRAPHIC
+    tests). No skip path: absence of the tokenizer is still a hard error
+    for the tests that need it.
+    """
+    return tiktoken.get_encoding("cl100k_base")
 
 
 def _measured_tokens(primer_path: Path) -> int:
     """Real cl100k_base token count over the primer's canonical file bytes."""
     content = primer_path.read_bytes().decode("utf-8")
-    return len(_ENCODING.encode(content))
+    return len(_encoding().encode(content))
 
 
 @pytest.mark.parametrize("primer_path", PRIMER_FILES, ids=lambda p: p.name)
