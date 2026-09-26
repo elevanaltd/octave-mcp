@@ -164,6 +164,64 @@ def test_literacy_primer_cross_references_telegraphic_phrase() -> None:
     )
 
 
+class TestDeclaredTokensHelper:
+    """Regression tests for the strict META.TOKENS parser (CRS/TMG rework, PR #531).
+
+    ``_declared_tokens`` must parse ONLY the indented lines inside the file's
+    ``META:`` block (up to the first non-indented line), matching a bare-integer
+    ``TOKENS::"NNN"`` declaration exactly once. The prior implementation was an
+    unanchored whole-file regex search that (a) still accepted a legacy
+    ``~``-prefixed value even though every primer now declares an exact count,
+    and (b) could match a TOKENS-shaped substring anywhere in the file body,
+    not just inside META. Anything malformed, missing, or misplaced must be
+    rejected via ``DeclaredTokensError``, not silently accepted or mis-parsed.
+    """
+
+    @pytest.mark.parametrize(
+        "content,expected",
+        [
+            pytest.param(
+                'META:\n  TOKENS::"463"\n§1::ESSENCE\n',
+                463,
+                id="valid_meta_tokens",
+            ),
+            pytest.param(
+                'META:\n  VERSION::"1.0"\n  TOKENS::"463"\n  COMPRESSION_TIER::ULTRA\n§1::ESSENCE\n',
+                463,
+                id="valid_meta_tokens_among_other_meta_fields",
+            ),
+            pytest.param(
+                'META:\n  TOKENS::"463"\n§1::ESSENCE\nTOKENS::"999"\n',
+                463,
+                id="meta_tokens_wins_over_body_lookalike",
+            ),
+        ],
+    )
+    def test_valid_declarations_parse(self, content: str, expected: int) -> None:
+        assert _declared_tokens(content) == expected
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            pytest.param('META:\n  TOKENS::"~300"\n§1::ESSENCE\n', id="legacy_tilde_rejected"),
+            pytest.param('META:\n  TOKENS::"300x"\n§1::ESSENCE\n', id="trailing_junk_rejected"),
+            pytest.param('META:\n  TOKENS::"3 00"\n§1::ESSENCE\n', id="embedded_space_rejected"),
+            pytest.param('META:\n  TOKENS::""\n§1::ESSENCE\n', id="empty_value_rejected"),
+            pytest.param(
+                'META:\n  VERSION::"1.0"\n§1::ESSENCE\n',
+                id="tokens_missing_from_meta_rejected",
+            ),
+            pytest.param(
+                'META:\n  VERSION::"1.0"\n§1::ESSENCE\nTOKENS::"999"\n',
+                id="tokens_only_in_body_not_picked_up",
+            ),
+        ],
+    )
+    def test_malformed_or_misplaced_declarations_rejected(self, content: str) -> None:
+        with pytest.raises(DeclaredTokensError):
+            _declared_tokens(content)
+
+
 def test_all_six_primers_present() -> None:
     """Sanity: GH-453 acceptance assumes the six canonical primers."""
     names = {p.name for p in PRIMER_FILES}
