@@ -1,8 +1,8 @@
 ===OCTAVE_COMPRESSION_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.7.1"
-  TOKENS::"493"
+  VERSION::"6.7.2"
+  TOKENS::"498"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"[preserve:tier_rules∧transforms,drop:rationale]"
 §1::ESSENCE
@@ -32,12 +32,13 @@ groupings→parent::[children]
 §3::SYNTAX
 OPERATORS::
 ```
-::    assign
-→     flow
-⊕     synthesis
-⇌     tension
-∧     conjunction
-∨     disjunction
+:: assign
+→ flow
+⊕ synthesis
+⇌ tension
+∧ conjunction
+∨ disjunction
+[,] list
 ```
 §4::ONE_SHOT
 IN::"Authenticate before dashboard; failed logins alert; security vs usability."
@@ -49,7 +50,7 @@ OUT:
 MUST::[
   valid_OCTAVE,
   "preserve_§_names_verbatim",
-  tier_first,
+  preserve_numbers∧IDs∧causality,
   no_markdown,
   no_JSON,
   no_YAML,

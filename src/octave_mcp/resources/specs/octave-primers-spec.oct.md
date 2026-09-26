@@ -1,7 +1,7 @@
 ===OCTAVE_PRIMERS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"6.3.1"
+  VERSION::"6.3.2"
   STATUS::ACTIVE
   TOKENS::"~80"
   REQUIRES::octave-core-spec
@@ -73,7 +73,7 @@ META:
 §4::COMPARISON_MATRIX
   ASPECT::PRIMER→SKILL
   PURPOSE::single_workflow→full_understanding
-  TOKENS::"300-500→1600-5100"
+  TOKENS::"300-500→per_octave-skills-spec[TOKEN_TARGET]"
   EXAMPLES::one→many
   RATIONALE::none→complete
   AUDIENCE::"LLM→human+LLM"
