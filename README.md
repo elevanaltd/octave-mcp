@@ -183,7 +183,7 @@ Evidence and methodology: [The Mythological Compression Principle](docs/guides/m
 
 ## For AI Agents
 
-The ~200-token block below makes you OCTAVE-literate:
+The compact ~140-token block below (`cl100k_base`) makes you OCTAVE-literate:
 
 ```octave
 ===OCTAVE_LITERACY_PRIMER===

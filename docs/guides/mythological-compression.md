@@ -123,4 +123,4 @@ When writing OCTAVE documents, use mythological vocabulary where it compresses c
 - [Evaluation Bias Report](../research/01_comprehension_and_validation/octave-evaluation-bias-report.md) -- Paradigm blindness case study
 - [Comprehension Test](../research/01_comprehension_and_validation/octave-mythological-semantics-comprehension-test-2025-06-19.md) -- 100% zero-shot validation
 - [Archetype Interference Study](../research/03_cognitive_architecture/archetype-interference-study.md) -- Specialization superiority evidence
-- [octave-mythology skill](../../src/octave_mcp/resources/skills/octave-mythology/SKILL.md) -- Functional skill for agents
+- [octave-mastery skill](../../src/octave_mcp/resources/skills/octave-mastery/SKILL.md) -- Functional skill for agents (absorbed the retired `octave-mythology` skill)

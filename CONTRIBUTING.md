@@ -21,7 +21,7 @@ See [docs/guides/development-setup.md](docs/guides/development-setup.md) for det
 ## Testing
 
 ```bash
-# Run all tests (706 passing, 87% coverage required)
+# Run all tests (CI enforces --cov-fail-under=85)
 pytest
 
 # Run with coverage report

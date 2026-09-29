@@ -7,7 +7,7 @@ These resources are distributed as part of the `octave-mcp` package for use by i
 ## Structure
 
 ### `/specs/`
-Official OCTAVE v6.0.0 specifications defining the format, operators, and usage patterns.
+Official OCTAVE v6 specifications defining the format, operators, and usage patterns.
 
 - **octave-core-spec.oct.md** - Core syntax, operators, and type system
 - **octave-agents-spec.oct.md** - Agent architecture patterns
@@ -16,7 +16,7 @@ Official OCTAVE v6.0.0 specifications defining the format, operators, and usage 
 - **octave-execution-spec.oct.md** - Execution flow and protocols
 - **octave-schema-spec.oct.md** - Schema validation framework
 - **octave-rationale-spec.oct.md** - Design rationale and philosophy
-- **octave-primers-spec.oct.md** - Primer specification (v6.0.0)
+- **octave-primers-spec.oct.md** - Primer specification (token budget: 500 `cl100k_base` tokens per primer)
 - **octave-mcp-architecture.oct.md** - MCP implementation architecture
 
 #### `/specs/schemas/`
@@ -34,7 +34,7 @@ OCTAVE vocabulary definitions.
   - **SNAPSHOT.oct.md** - SNAPSHOT vocabulary specification
 
 ### `/skills/`
-Complete OCTAVE skills with full documentation and examples (~500-800 tokens).
+Complete OCTAVE skills with full documentation and examples (roughly 1,600-5,100 `cl100k_base` tokens each).
 
 - **octave-literacy/** - Basic OCTAVE syntax, canonical forms, and governance-artefact grammar
 - **octave-compression/** - Compression workflows and tiers
@@ -52,7 +52,7 @@ Procedural patterns that compose with the skills.
   modes, receipt gates, changes-mode semantics, and warning remediation
 
 ### `/primers/`
-Ultra-compressed bootstrapping documents (30-60 tokens) for instant agent competence.
+Compact bootstrapping documents (each within the 500-token `cl100k_base` budget; the exact count is declared as `TOKENS` in each primer's `META`) for instant agent competence.
 
 - **octave-literacy-primer.oct.md** - Write basic OCTAVE syntax
 - **octave-compression-primer.oct.md** - Compress prose to OCTAVE
@@ -96,7 +96,7 @@ Primers are designed for direct injection into agent context:
 ```python
 # Load primer for instant OCTAVE competence
 primer = load_resource('primers/octave-compression-primer.oct.md')
-# Agent can now compress prose to OCTAVE with ~50 token overhead
+# Agent can now compress prose to OCTAVE at a cost of ~500 tokens of context
 ```
 
 ## Universal OCTAVE Definition
@@ -110,11 +110,11 @@ OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
 
 ## Version Alignment
 
-All resources are v6.0.0, part of the Universal Anchor release, ensuring consistency across the ecosystem.
+Resources target the OCTAVE v6 protocol. Each file carries its own `VERSION` in `META`; versions differ per file (e.g. `octave-core-spec` 6.0.1, `octave-primers-spec` 6.3.2, `octave-skills-spec` 9.1.0), so check the file rather than assuming a shared version.
 
 ## Implementation Notes
 
 - Specs marked as APPROVED are normative
 - Implementation status may vary; check individual specs for details
 - Primers use the format they teach (self-referential compression)
-- Token counts are approximate and may vary by tokenizer
+- Primer `TOKENS` values are exact `cl100k_base` counts (enforced by `tests/unit/test_gh453_primer_token_budgets.py`); other token figures are approximate and vary by tokenizer
