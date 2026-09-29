@@ -45,7 +45,7 @@ pip install -e ".[dev]"
 ```
 
 This installs:
-- **Core**: `mcp>=1.0.0`, `click>=8.0.0`, `pydantic>=2.0.0`
+- **Core**: `mcp>=1.27.0,<2`, `click>=8.1.0`, `pydantic>=2.12.0`
 - **Development**: `pytest`, `pytest-cov`, `mypy`, `ruff`, `black`, `hypothesis`
 
 #### Verifying / repairing the dev toolchain (issue #462)
@@ -253,23 +253,24 @@ docs: Update API reference for parser module
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| mcp | >=1.0.0 | Model Context Protocol SDK |
-| click | >=8.0.0 | CLI framework |
-| pydantic | >=2.0.0 | Data validation |
-| python-dotenv | >=1.0.0 | Environment config |
+| mcp | >=1.27.0,<2 | Model Context Protocol SDK (capped below 2.x, GH#519) |
+| click | >=8.1.0 | CLI framework |
+| pydantic | >=2.12.0 | Data validation |
+| python-dotenv | >=1.2.2 | Environment config |
 
 ### Development Dependencies
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| pytest | >=7.0.0 | Test runner |
-| pytest-cov | >=4.0.0 | Coverage reporting |
-| pytest-asyncio | >=0.21.0 | Async test support |
-| mypy | >=1.0.0 | Type checking (strict) |
-| ruff | >=0.1.0 | Fast linting |
-| black | >=23.0.0 | Code formatting |
-| hypothesis | >=6.0.0 | Property-based testing |
-| pre-commit | >=3.0.0 | Git hooks |
+| pytest | >=9.0.3 | Test runner |
+| pytest-cov | >=6.0.0 | Coverage reporting |
+| pytest-asyncio | >=0.24.0 | Async test support |
+| mypy | >=1.14.0 | Type checking (strict) |
+| ruff | >=0.9.0 | Fast linting |
+| black | >=26.0.0 | Code formatting |
+| hypothesis | >=6.122.0 | Property-based testing |
+| pre-commit | >=4.1.0 | Git hooks |
+| tiktoken | >=0.14.0 | Real `cl100k_base` token counts for the primer budget guard |
 
 Install all development dependencies with `pip install -e ".[dev]"`.
 
