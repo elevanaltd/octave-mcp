@@ -52,7 +52,7 @@ Procedural patterns that compose with the skills.
   modes, receipt gates, changes-mode semantics, and warning remediation
 
 ### `/primers/`
-Compact bootstrapping documents (each within the 500-token `cl100k_base` budget; the exact count is declared as `TOKENS` in each primer's `META`) for instant agent competence.
+Compact bootstrapping documents (each within the 500-token `cl100k_base` budget; the count measured at authoring time is declared as `TOKENS` in each primer's `META`) for instant agent competence.
 
 - **octave-literacy-primer.oct.md** - Write basic OCTAVE syntax
 - **octave-compression-primer.oct.md** - Compress prose to OCTAVE
@@ -117,4 +117,4 @@ Resources target the OCTAVE v6 protocol. Each file carries its own `VERSION` in 
 - Specs marked as APPROVED are normative
 - Implementation status may vary; check individual specs for details
 - Primers use the format they teach (self-referential compression)
-- Primer `TOKENS` values are exact `cl100k_base` counts (enforced by `tests/unit/test_gh453_primer_token_budgets.py`); other token figures are approximate and vary by tokenizer
+- Primer `TOKENS` values are set to the measured `cl100k_base` count at authoring time; `tests/unit/test_gh453_primer_token_budgets.py` enforces ≤500 tokens and a declared value within ±10% of a fresh measurement. Other token figures are approximate and vary by tokenizer
