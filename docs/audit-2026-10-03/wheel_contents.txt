@@ -1,0 +1,88 @@
+TOTAL_ENTRIES 106 NON_PY 42
+octave_mcp/py.typed
+octave_mcp/resources/README.md
+octave_mcp/resources/cognitions/ethos.oct.md
+octave_mcp/resources/cognitions/logos.oct.md
+octave_mcp/resources/cognitions/pathos.oct.md
+octave_mcp/resources/patterns/octave-tool-reference.oct.md
+octave_mcp/resources/primers/octave-compression-primer.oct.md
+octave_mcp/resources/primers/octave-literacy-primer.oct.md
+octave_mcp/resources/primers/octave-mastery-primer.oct.md
+octave_mcp/resources/primers/octave-mythology-primer.oct.md
+octave_mcp/resources/primers/octave-reading-primer.oct.md
+octave_mcp/resources/primers/octave-ultra-mythic-primer.oct.md
+octave_mcp/resources/skills/octave-chatter/SKILL.md
+octave_mcp/resources/skills/octave-compression/SKILL.md
+octave_mcp/resources/skills/octave-literacy/SKILL.md
+octave_mcp/resources/skills/octave-mastery/SKILL.md
+octave_mcp/resources/skills/octave-ultra-mythic/SKILL.md
+octave_mcp/resources/specs/SPEC_TEMPLATE.oct.md
+octave_mcp/resources/specs/octave-agents-spec.oct.md
+octave_mcp/resources/specs/octave-cognition-spec.oct.md
+octave_mcp/resources/specs/octave-core-spec.oct.md
+octave_mcp/resources/specs/octave-data-spec.oct.md
+octave_mcp/resources/specs/octave-execution-spec.oct.md
+octave_mcp/resources/specs/octave-mcp-architecture.oct.md
+octave_mcp/resources/specs/octave-patterns-spec.oct.md
+octave_mcp/resources/specs/octave-primers-spec.oct.md
+octave_mcp/resources/specs/octave-rationale-spec.oct.md
+octave_mcp/resources/specs/octave-schema-spec.oct.md
+octave_mcp/resources/specs/octave-skills-spec.oct.md
+octave_mcp/resources/specs/schemas/agent_definition.oct.md
+octave_mcp/resources/specs/schemas/cognition_definition.oct.md
+octave_mcp/resources/specs/schemas/crs_review.oct.md
+octave_mcp/resources/specs/schemas/debate_transcript.oct.md
+octave_mcp/resources/specs/schemas/decision_log.oct.md
+octave_mcp/resources/specs/schemas/json/README.md
+octave_mcp/resources/specs/schemas/json/json-schema.md
+octave_mcp/resources/specs/schemas/skill.oct.md
+octave_mcp/resources/specs/vocabularies/core/META.oct.md
+octave_mcp/resources/specs/vocabularies/core/SNAPSHOT.oct.md
+octave_mcp/resources/specs/vocabularies/registry.oct.md
+octave_mcp/schemas/builtin/meta.oct.md
+octave_mcp/schemas/builtin/test_holographic.oct.md
+MISSING_FROM_WHEEL 0
+
+IN_WHEEL_NOT_ON_DISK []
+ENTRY_POINTS:
+[console_scripts]
+octave = octave_mcp.cli.main:cli
+octave-mcp-server = octave_mcp.mcp.server:run
+
+Version: 1.16.0
+License: Apache-2.0
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: >=3.11
+License-File: LICENSE
+Requires-Dist: mcp<2,>=1.27.0
+Requires-Dist: click>=8.1.0
+Requires-Dist: pydantic>=2.12.0
+Requires-Dist: python-dotenv>=1.2.2
+Requires-Dist: PyYAML>=6.0.3
+Requires-Dist: PyJWT>=2.12.1
+Requires-Dist: python-multipart>=0.0.27
+Requires-Dist: cryptography>=47.0.0
+Requires-Dist: filelock>=3.29.0
+Provides-Extra: http
+Requires-Dist: starlette>=0.52.0; extra == "http"
+Requires-Dist: uvicorn>=0.34.0; extra == "http"
+Requires-Dist: httpx>=0.28.0; extra == "http"
+Requires-Dist: sse-starlette>=2.2.0; extra == "http"
+Provides-Extra: dev
+Requires-Dist: pytest>=9.0.3; extra == "dev"
+Requires-Dist: pytest-cov>=6.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24.0; extra == "dev"
+Requires-Dist: pytest-timeout>=2.3.0; extra == "dev"
+Requires-Dist: mypy>=1.14.0; extra == "dev"
+Requires-Dist: types-PyYAML>=6.0.12; extra == "dev"
+Requires-Dist: ruff>=0.9.0; extra == "dev"
+Requires-Dist: black>=26.0.0; extra == "dev"
+Requires-Dist: hypothesis>=6.122.0; extra == "dev"
+Requires-Dist: pre-commit>=4.1.0; extra == "dev"
+Requires-Dist: httpx>=0.28.0; extra == "dev"
+Requires-Dist: Pygments>=2.20.0; extra == "dev"
+Requires-Dist: virtualenv>=20.36.2; extra == "dev"
+Requires-Dist: tiktoken>=0.14.0; extra == "dev"

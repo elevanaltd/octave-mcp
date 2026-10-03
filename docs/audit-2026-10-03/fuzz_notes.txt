@@ -1,0 +1,41 @@
+Hand-fuzz results (parse_with_warnings -> emit -> parse -> emit), octave-mcp @ cdfc963
+Each line: INPUT body (inside ===D===...===END===)  =>  canonical OUTPUT  [warnings]
+
+K::"a" b[dropped]        => K::"\"a\" b"            [multi_word_coalesce]   <- [dropped] silently lost (parser.py:1801-1803)
+K::true b[dropped]       => K::"true b"             [multi_word_coalesce]   <- same (parser.py:1981-1982)
+K::"a" [x,y]             => K::a                    [bare_line_dropped x, y] <- list lost, misleading receipt (parser.py:1811-1813)
+K::"a\"b"[x]             => K::"a\"b"               [bare_line_dropped x]
+B: // note / A::1        => B: / A::1               []  <- block trailing comment lost (parser.py:1516)
+META: // c1 / TYPE::X // c2 => comments lost       []  (parser.py:975-979)
+META: A: B: C::1 / D::2 / E::3 => META: A: ; C::1 D::2 E::3 at ROOT  []  <- B lost, C/D/E ejected (parser.py:1063-1064)
+META::x                  => ParserError E001 "Expected TokenType.BLOCK" (parser.py:935)
+K::1e999                 => K::inf   (number -> identifier string on reparse)
+K::1e5                   => K::100000.0
+K::1.2.3                 => K::"1.2.3"
+K::+5                    => K::"⊕"                  [normalization +]  <- 5 silently dropped
+K::~30%                  => K::"⧺"                  [bare_line_dropped 30%]
+K::vs                    => K::"⇌"
+K::A→1→B                 => K::"A→"                 [bare_flow, bare_line_dropped B]  <- 1 silently dropped
+K::1→2→3                 => K::1                    []  <- →2→3 silently dropped
+K::[1→2]                 => K::[1,"→",2]            []
+K::A:"b"                 => K::A                    []  <- "b" silently dropped
+K:: (empty) / L::1       => K::"\n"                 []  <- NEWLINE token became value
+K::[,]                   => K::[","] ; K::[a,,b] => [a,",",b]
+K::FOO[]                 => K::FOO<>  -> REPARSE FAILS E005 '<'
+K::ENUM[A,B]             => K::ENUM<A,B> ; REGEX["^a$"] => "REGEX<\"^a$\">"
+K::[ ```\nx\n``` ]       => K::[```\nx\n```]  -> REPARSE FAILS E006
+K::"A∧B"                 => K::A∧B   (reparse emits W_CONSTRAINT_OUTSIDE_BRACKETS)
+K::"A→B"                 => K::A→B   (reparse emits W_BARE_FLOW)
+§CONTEXT::               => §CONTEXT::CONTEXT
+K::2026-01-15            => LexerError E_UNQUOTED_TIMESTAMP (strict)
+CRLF input               => LexerError E005 "Unexpected character: '\r'" (prints as empty)
+K::"a<TAB>b"             => LexerError E005 "Tabs are not allowed. Use 2 spaces for indentation."
+K::résumé / 🎯           => quoted "résumé" / "🎯"
+K::[a::[b::1]]           => lenient OK with W_NESTED_INLINE_MAP; strict parse() raises E_NESTED_INLINE_MAP
+Validator: CFG.NAME::null with REQ => E003 "required but missing" (null collapsed to absent, validator.py:884)
+Projector executive: §1::PLAN with PASSWORD kept wholesale; fields_omitted=[SECRET] only (projector.py:80-82)
+load_schema(schemas/builtin/meta.oct.md).fields == {}  (block-form FIELDS not parsed by schema_extractor._extract_fields)
+
+Census over 36 shipped resource/test-vector files: canonical output of 4 spec files still trips
+spec_violation on reparse (bare_flow 9, constraint_outside_brackets 3 [up from 1 in source], boundary_missing 2).
+Core unit tests: tests/unit/test_parser.py test_lexer.py test_emitter.py test_literal_zones_roundtrip.py -> 302 passed, 2 skipped.

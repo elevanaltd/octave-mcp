@@ -1,0 +1,49 @@
+STATS: {'total': 56, 'parse_fail': 16, 'emit2_parse_fail': 0, 'non_idempotent': 0, 'ok': 40, 'lossy_vs_source': 19}
+================================================================================
+PARSE_FAIL docs/grammar/test-vectors/invalid/invalid-envelope.oct.md
+LexerError: E_INVALID_ENVELOPE_ID at line 1, column 1: Envelope identifier 'my-document' contains invalid character hyphen '-'. Use underscores or CamelCase instead (e.g., my_document or MyDocument).
+================================================================================
+PARSE_FAIL docs/grammar/test-vectors/invalid/single-colon-assignment.oct.md
+ParserError: E001 at line 15, column 17: Single colon assignment detected: 'WRONG_ASSIGNMENT: value'. OCTAVE REQUIREMENT: Use 'WRONG_ASSIGNMENT::value' (double colon) for assignments. Single colon ':' is reserved 
+================================================================================
+PARSE_FAIL docs/grammar/test-vectors/invalid/tabs.oct.md
+LexerError: E005 at line 14, column 1: Tabs are not allowed. Use 2 spaces for indentation.
+================================================================================
+PARSE_FAIL docs/grammar/test-vectors/invalid/unbalanced-brackets.oct.md
+LexerError: E_UNBALANCED_BRACKET at line 13, column 16: opening '[' at line 13, column 16 has no matching ']'
+================================================================================
+PARSE_FAIL examples/compression-comparisons/research-article-after.oct.md
+LexerError: E005 at line 1, column 1: Unexpected character: '*'
+================================================================================
+PARSE_FAIL examples/compression-comparisons/system-status-after.oct.md
+LexerError: E_UNQUOTED_TIMESTAMP at line 4, column 9: E_UNQUOTED_TIMESTAMP: Unquoted ISO 8601 timestamp detected: 2024-03-15T14:23:00Z. Timestamps must be quoted in OCTAVE. Use "2024-03-15T14:23:00Z" instead.
+================================================================================
+PARSE_FAIL examples/survey-octave-5-aggressive.oct.md
+LexerError: E005 at line 15, column 77: Unexpected character: ';'
+================================================================================
+PARSE_FAIL examples/survey-octave-5-conservative.oct.md
+LexerError: E005 at line 15, column 77: Unexpected character: ';'
+================================================================================
+PARSE_FAIL examples/survey-octave-5-lossless.oct.md
+LexerError: E005 at line 23, column 64: Unexpected character: '('
+================================================================================
+PARSE_FAIL examples/survey-octave-5-ultra.oct.md
+LexerError: E005 at line 115, column 26: Unexpected character: '>'
+================================================================================
+PARSE_FAIL examples/survey-octave-6-aggressive-holographic.oct.md
+LexerError: E005 at line 34, column 17: Unexpected character: '`'
+================================================================================
+PARSE_FAIL examples/survey-octave-6-conservative-holographic.oct.md
+LexerError: E005 at line 23, column 27: Unexpected character: '('
+================================================================================
+PARSE_FAIL examples/survey-octave-6-lossless-holographic.oct.md
+LexerError: E005 at line 32, column 64: Unexpected character: '('
+================================================================================
+PARSE_FAIL examples/survey-octave-6-ultra-holographic.oct.md
+LexerError: E005 at line 142, column 18: Unexpected character: '>'
+================================================================================
+PARSE_FAIL examples/templates/summarizer.oct.md
+LexerError: E005 at line 21, column 10: Unexpected character: '*'
+================================================================================
+PARSE_FAIL examples/templates/system-prompt-octave.oct.md
+LexerError: E005 at line 13, column 19: Unexpected character: '('

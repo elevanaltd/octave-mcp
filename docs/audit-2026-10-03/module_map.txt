@@ -1,0 +1,47 @@
+PER_DIR [('tests', 109), ('tests/integration', 222), ('tests/properties', 14), ('tests/unit', 3193), ('tests/unit/core/grammar', 82), ('tests/unit/governance', 10), ('tests/vectors', 7)]
+
+MODULE	TEST_FILES	TESTS	NAMED_FILE
+octave_mcp.cli.main	11	219	0
+octave_mcp.core.ast_nodes	1	29	0
+octave_mcp.core.constraints	12	482	2
+octave_mcp.core.coverage_mapper	1	16	1
+octave_mcp.core.emitter	38	848	3
+octave_mcp.core.file_ops	1	31	1
+octave_mcp.core.gbnf_compiler	3	356	1
+octave_mcp.core.grammar.cst	35	1031	2
+octave_mcp.core.grammar.entry	3	62	1
+octave_mcp.core.grammar.tier_normalize	1	10	1
+octave_mcp.core.grammar.visitor	3	34	1
+octave_mcp.core.grammar_compiler.gbnf	1	5	1
+octave_mcp.core.holographic	7	208	3
+octave_mcp.core.hydrator	1	89	1
+octave_mcp.core.lexer	22	581	4
+octave_mcp.core.literal_zone_audit	2	22	0
+octave_mcp.core.parser	60	1427	11
+octave_mcp.core.projector	0	0	0
+octave_mcp.core.repair	3	52	5
+octave_mcp.core.repair_log	6	94	1
+octave_mcp.core.routing	1	46	2
+octave_mcp.core.schema_extractor	16	351	1
+octave_mcp.core.sealer	1	17	1
+octave_mcp.core.validator	14	258	3
+octave_mcp.integrations.llama_cpp	1	50	0
+octave_mcp.integrations.outlines	0	0	0
+octave_mcp.integrations.vllm	1	50	0
+octave_mcp.mcp.base_tool	1	8	0
+octave_mcp.mcp.compile_grammar	1	30	1
+octave_mcp.mcp.document_mutator	0	0	0
+octave_mcp.mcp.eject	3	57	4
+octave_mcp.mcp.grammar_resources	1	24	1
+octave_mcp.mcp.http_transport	1	31	1
+octave_mcp.mcp.server	6	89	3
+octave_mcp.mcp.validate	20	526	3
+octave_mcp.mcp.write	24	578	9
+octave_mcp.mcp.write_detection	4	325	0
+octave_mcp.mcp.write_format	2	70	0
+octave_mcp.mcp.write_metrics	1	209	0
+octave_mcp.mcp.write_mutation	0	0	0
+octave_mcp.schemas.loader	12	249	1
+octave_mcp.schemas.repository	1	8	1
+
+NO_TEST_IMPORTS: ['octave_mcp.core.projector', 'octave_mcp.integrations.outlines', 'octave_mcp.mcp.document_mutator', 'octave_mcp.mcp.write_mutation']

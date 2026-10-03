@@ -1,0 +1,57 @@
+src/octave_mcp/cli/main.py                                       564     59    90%   26, 43, 64-67, 147-149, 173, 337-344, 387-389, 639-640, 659-661, 775, 824, 829, 861-862, 866-867, 881-883, 935-936, 940-941, 948, 1009-1010, 1014-1015, 1021-1025, 1098-1102, 1184-1186, 1222-1223, 1276
+src/octave_mcp/core/__init__.py                                    0      0   100%
+src/octave_mcp/core/ast_nodes.py                                  10      0   100%
+src/octave_mcp/core/constraints.py                               405     20    95%   78, 83, 93, 262, 310, 334-335, 359, 393, 398, 429, 463-464, 530-531, 596-597, 711-712, 1197
+src/octave_mcp/core/coverage_mapper.py                            42      0   100%
+src/octave_mcp/core/emitter.py                                   436     36    92%   304, 326, 475, 577, 610, 657, 683, 703, 707, 775-777, 863, 866, 883-885, 889, 891-894, 897, 1231, 1234, 1237, 1243, 1256-1264
+src/octave_mcp/core/file_ops.py                                   81     14    83%   41-42, 68, 73-74, 136, 188-189, 198-204
+src/octave_mcp/core/gbnf_compiler.py                             281     57    80%   75-79, 135-149, 173-197, 231, 234, 239-240, 286-288, 322, 370, 463-469, 526, 567, 573, 581, 629, 730-732
+src/octave_mcp/core/grammar/__init__.py                           14      0   100%
+src/octave_mcp/core/grammar/cst.py                               124      1    99%   163
+src/octave_mcp/core/grammar/entry.py                              37      0   100%
+src/octave_mcp/core/grammar/tier_normalize.py                     36      1    97%   119
+src/octave_mcp/core/grammar/visitor.py                            36      4    89%   117, 124, 234, 236
+src/octave_mcp/core/grammar_compiler/__init__.py                   2      0   100%
+src/octave_mcp/core/grammar_compiler/gbnf.py                       9      3    67%   49-51
+src/octave_mcp/core/holographic.py                               156      1    99%   327
+src/octave_mcp/core/hydrator.py                                  419     39    91%   73-74, 129, 390, 409, 418, 427, 478-479, 517, 539-541, 584-587, 595, 658, 662, 678-681, 685, 697-698, 777-778, 792, 851, 960, 1154, 1173-1176, 1242-1243, 1299-1300
+src/octave_mcp/core/lexer.py                                     543     30    94%   308, 399, 447, 460, 497, 502, 534, 572, 602, 763, 795-798, 827, 1299-1300, 1319-1327, 1400, 1531, 1536-1537, 1598-1599
+src/octave_mcp/core/literal_zone_audit.py                         37      4    89%   58-59, 107-109
+src/octave_mcp/core/parser.py                                   1285    160    88%   84, 105, 195, 255, 262, 302-307, 342-344, 358, 372, 376, 379, 381, 383, 385, 474, 486, 779-785, 789-791, 801-802, 805-809, 827-828, 832-833, 838-841, 855-856, 881, 957, 1038-1039, 1120-1123, 1131, 1156, 1255-1260, 1600-1618, 1737, 1744, 1750, 1802-1808, 1834-1859, 1888-1890, 1927-1931, 1981-1987, 2023-2029, 2065-2071, 2213, 2219, 2222-2227, 2258-2261, 2290, 2313-2315, 2342, 2384-2386, 2478, 2499-2511, 2695-2720, 2757-2772, 2905, 3041-3042, 3046, 3050, 3057, 3068-3070, 3209-3210, 3268-3269
+src/octave_mcp/core/projector.py                                  62      1    98%   82
+src/octave_mcp/core/repair.py                                    109      4    96%   131, 189, 199, 376
+src/octave_mcp/core/repair_log.py                                 50      0   100%
+src/octave_mcp/core/routing.py                                    75      0   100%
+src/octave_mcp/core/schema_extractor.py                          359    119    67%   95, 106, 269, 339, 422-425, 451-452, 513-523, 535-536, 569-570, 652-653, 690, 697, 733-745, 768-821, 840-925, 966-967, 1037
+src/octave_mcp/core/sealer.py                                     59      0   100%
+src/octave_mcp/core/validator.py                                 301     25    92%   154, 305-309, 321-322, 332-333, 347, 357-365, 563, 868, 949, 980-988, 999
+src/octave_mcp/integrations/__init__.py                            4      0   100%
+src/octave_mcp/integrations/llama_cpp.py                          34     21    38%   38, 57-84, 99-103
+src/octave_mcp/integrations/outlines.py                           49     39    20%   41-45, 65-101, 113-119, 134-136
+src/octave_mcp/integrations/vllm.py                               19      6    68%   37, 54-58, 72
+src/octave_mcp/mcp/__init__.py                                     0      0   100%
+src/octave_mcp/mcp/base_tool.py                                   44      4    91%   89, 98, 107, 119
+src/octave_mcp/mcp/compile_grammar.py                            117     25    79%   91, 93, 95-98, 100, 297-327, 335, 353
+src/octave_mcp/mcp/document_mutator.py                           198     15    92%   167-175, 298, 374-378, 390-391, 395, 410, 565, 614, 625-627
+src/octave_mcp/mcp/eject.py                                      177      7    96%   125-128, 242-243, 411-414
+src/octave_mcp/mcp/grammar_resources.py                           68      2    97%   48, 150
+src/octave_mcp/mcp/http_transport.py                              71     15    79%   99, 111-120, 208-220
+src/octave_mcp/mcp/server.py                                     124     27    78%   83, 88, 112-117, 208, 212-214, 258-260, 334-337, 342, 354-356, 374-386, 390
+src/octave_mcp/mcp/validate.py                                   354     26    93%   288, 322, 349, 465-466, 520, 525-526, 532-535, 539-542, 781-782, 921-923, 1042, 1070, 1093, 1102-1105
+src/octave_mcp/mcp/write.py                                      969    125    87%   211, 370, 402, 444-451, 492-495, 499-500, 505-522, 530-533, 635, 946-947, 986, 994-995, 1057, 1530-1538, 1546-1559, 1590-1591, 1729, 1741, 1775, 1801-1803, 1862, 1881, 1906-1912, 2008-2011, 2165, 2263-2264, 2302-2303, 2328-2329, 2364-2370, 2388-2389, 2513-2519, 2759, 2765-2766, 2782-2784, 2814, 2817, 2821, 2865-2897, 3015, 3049-3050
+src/octave_mcp/mcp/write_detection.py                            542     22    96%   399-400, 454-456, 482, 583, 670, 716, 829, 911-914, 935, 994-995, 1043-1044, 1063, 1132, 1345
+src/octave_mcp/mcp/write_format.py                               196     27    86%   133, 137-139, 157, 159, 164, 166, 168, 183, 185, 187, 190, 192, 194, 270, 325-326, 385, 400-403, 411, 417, 466-469
+src/octave_mcp/mcp/write_metrics.py                               23      0   100%
+src/octave_mcp/mcp/write_mutation.py                              86      9    90%   197-205, 226, 339, 343
+src/octave_mcp/resources/__init__.py                               0      0   100%
+src/octave_mcp/resources/cognitions/__init__.py                    0      0   100%
+src/octave_mcp/resources/specs/__init__.py                         0      0   100%
+src/octave_mcp/resources/specs/schemas/__init__.py                 0      0   100%
+src/octave_mcp/resources/specs/schemas/json/__init__.py            0      0   100%
+src/octave_mcp/resources/specs/vocabularies/__init__.py            0      0   100%
+src/octave_mcp/resources/specs/vocabularies/core/__init__.py       0      0   100%
+src/octave_mcp/schemas/__init__.py                                 0      0   100%
+src/octave_mcp/schemas/builtin/__init__.py                         0      0   100%
+src/octave_mcp/schemas/loader.py                                  58      5    91%   88, 92, 210, 215-217
+src/octave_mcp/schemas/repository.py                              17      1    94%   68
+TOTAL                                                           8718    962    89%
