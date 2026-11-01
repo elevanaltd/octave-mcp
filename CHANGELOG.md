@@ -35,7 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which also skips POLICY and FIELDS on a schema-definition file when CONTRACT is present.
   (2) `META.GRAMMAR` has no reader; it is a descriptive label. (3) `octave_validate` returns
   `repairs[]` and `repair_log`, not `corrections[]`; `octave_write` returns `corrections[]`, and
-  a lenient write reports its schema repairs inside `corrections[]`.
+  a lenient write reports its schema repairs inside `corrections[]`. The tool-reference
+  inspection list now also names `validation_errors[]`. `repairs[]` carries parse-level repairs
+  whatever `fix` is, and schema repairs only with `fix=true`; with `fix=false` schema failures
+  sit in `validation_errors[]`. `repair_log` aliases `repairs`.
 - **Primer token budget guard measured the wrong thing (AGR
   `OCTAVE-MCP-PRIMER-TOKEN-BUDGET-500-20260926`).** `octave-primers-spec.oct.md` §1
   `TOKEN_BUDGET` is raised `MAX[300]` → `MAX[500]`, measured as `cl100k_base` (tiktoken)
@@ -73,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the `origin/main` (`cdfc963`) baseline: literacy 220 → 290, mastery 183 → 296, compression
   203 → 300, tool-reference 195 → 260. Every agent binding that loads a kernel pays the
   difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3456, compression 2106 → 2095,
-  and the tool-reference pattern grows 4218 → 4443.
+  and the tool-reference pattern grows 4218 → 4463.
 - **Deleted mythology-teaching content (receipt).** Removed, each item checked against the diff
   to `origin/main`: mastery `§1a` TEST/GOOD/BAD examples, `GLOSS_ON_FIRST_USE`, `WHEN`/`WHEN_NOT`
   and `PARADIGM_BLINDNESS`, `§1b` `SOURCE_PRIORITY`, and `§7` `OPERATOR_SOUP`, `PROSE_BLEED` and
