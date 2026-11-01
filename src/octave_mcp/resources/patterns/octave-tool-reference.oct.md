@@ -88,7 +88,7 @@ META:
   MERGE_GUARD::"nested dict inside a `$op: MERGE` payload: `E_NESTED_DICT_IN_MERGE_PAYLOAD`; scalar over an existing child block via MERGE: `E_OP_TARGET_MISMATCH`; DELETE first or send a bare-dict REPLACE at the parent"
   SCALAR_OVER_BLOCK::"bare scalar at a KEY holding a block replaces it with one flat assignment; never emits duplicate keys"
   NO_AUTO_CREATE::"contract: changes cannot add a key at a path that does not exist (`E_UNRESOLVABLE_PATH`); new keys need a `content=` rewrite or MERGE into an existing block parent"
-  KNOWN_DEFECT::"#517, measured at `cdfc963` (1.16.0 code): absent top-level key created; `§N.NEW` created; `META.NEW` created; `BLOCK.NEW` and `NOPE.CHILD` give `E_UNRESOLVABLE_PATH`; `§2.STEP_1` against a column-0 key creates a duplicate; until fixed, the contract line is intent, not behaviour"
+  KNOWN_DEFECT::"#517, measured on octave-mcp 1.16.0: absent top-level key created; `§N.NEW` created; `META.NEW` created; `BLOCK.NEW` and `NOPE.CHILD` give `E_UNRESOLVABLE_PATH`; `§2.STEP_1` against a column-0 key creates a duplicate; until fixed, the contract line is intent, not behaviour"
   ADDRESSING::"address edits as section dot key (`§N.KEY`), dry-run first, read the diff to confirm where the edit landed"
   RULE_LISTS::"no per-item edit of a rule list: `§N.RULES[0]` gives `E_UNRESOLVABLE_PATH`, a list value is replaced whole; edit with APPEND, or replace the whole list after a dry-run diff"
   OPS::[
@@ -149,7 +149,7 @@ META:
     W_CONSTRUCTOR_MISUSE::"known constructor name (REGEX, PATTERN, ENUM and others) as an assignment key: use the constructor form `NAME[args]` or a different key; agent GRAMMAR blocks with a REGEX key are a known accepted case"
     DETECTION::"all three STRUCTURAL_CHECK tier, `safe: true`; never data loss"
 §7::PROVENANCE
-  RULE::"each sentence points at the source a claim was read from; paths under `src/octave_mcp/`; all re-checked at `cdfc963` (1.16.0 code); re-verify on a version bump"
+  RULE::"each sentence points at the source a claim was read from; paths under `src/octave_mcp/`; all re-checked on octave-mcp 1.16.0; re-verify on a version bump"
   PROVENANCE::[
     "Tool registry, no `octave_fmt`: tool table, `mcp/server.py`.",
     "Content, changes or neither: module docstring, `mcp/write.py`.",
@@ -160,9 +160,9 @@ META:
     "Changes-mode hard break: CHANGELOG 1.15.0 STRATEGY_S3 (#443, #440, #488, #484).",
     "Fence preservation under changes: CHANGELOG 1.14.0 (#460).",
     "Blob detector: `_detect_snake_case_blob`, `mcp/write_detection.py`.",
-    "Column-0 keys are file scope: observed at 1.15.0 and `cdfc963`.",
-    "Section not a MERGE target; deeper paths `E_UNRESOLVABLE_PATH`: observed at 1.15.0 and `cdfc963`; new-key creation contradicts the contract (#517, §4 KNOWN_DEFECT).",
-    "Validate receipts carry `repairs[]` and `repair_log[]`; `E_PATH` on `.txt`: observed at 1.15.0 and `cdfc963`."
+    "Column-0 keys are file scope: observed on 1.15.0 and 1.16.0.",
+    "Section not a MERGE target; deeper paths `E_UNRESOLVABLE_PATH`: observed on 1.15.0 and 1.16.0; new-key creation contradicts the contract (#517, §4 KNOWN_DEFECT).",
+    "Validate receipts carry `repairs[]` and `repair_log[]`; `E_PATH` on `.txt`: observed on 1.15.0 and 1.16.0."
   ]
 §8::USED_BY
   AGENTS::[octave-secretary,octave-specialist]

@@ -90,7 +90,7 @@ META:
     FORM::"`CONTRACT::HOLOGRAPHIC<validation_law_in_document>` in META; the value is an annotation, so use angle brackets, not square ones"
     COMPILER::"the grammar compiler (`src/octave_mcp/core/gbnf_compiler.py`) reads `META.CONTRACT` as a list of `FIELD[name]::constraint_chain` specs"
     ANCHORING::["`HOLOGRAPHIC<frozen@sha256_abc123>` locks the schema to a hash, hermetic; for production documents that need reproducibility.","`HOLOGRAPHIC<latest@local>` resolves to the current local schema, mutable; for active development documents."]
-    KNOWN_GAP::"at `cdfc963` both anchoring forms fail `E_TOKENIZE` (the `@` inside the annotation), so no validated example carries them"
+    KNOWN_GAP::"on octave-mcp 1.16.0 both anchoring forms fail `E_TOKENIZE` (the `@` inside the annotation), so no validated example carries them"
     GRAMMAR_FIELD::"`GRAMMAR::GBNF_COMPILER<generate_constrained_output>` emits GBNF for constrained generation"
     SCHEMA_GAP::"under `schema=META` STRICT, CONTRACT and GRAMMAR give `E007` (#514)"
   §4b::HOLOGRAPHIC_BODY_PATTERN
