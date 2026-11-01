@@ -63,10 +63,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tool-reference kernel carries only the container subset of them (unkeyed lines, a value on a
   section header, keyed and quoted lines, indentation, section-dot-key edits, reading repairs).
 - **Size costs, measured at HEAD with tiktoken `cl100k_base` over file bytes.** Kernels, against
-  the `cdfc963` baseline: literacy 220 → 290, mastery 183 → 296, compression 203 → 300,
-  tool-reference 195 → 260. Every agent binding that loads a kernel
-  pays the difference. Whole files: literacy 5065 → 5061, mastery 3885 → 3351, compression 2106 → 2095, and the
-  tool-reference pattern grows 4218 → 4428.
+  the `origin/main` (`cdfc963`) baseline: literacy 220 → 290, mastery 183 → 296, compression
+  203 → 300, tool-reference 195 → 260. Every agent binding that loads a kernel pays the
+  difference. Whole files: literacy 5065 → 5061, mastery 3885 → 3355, compression 2106 → 2095,
+  and the tool-reference pattern grows 4218 → 4429.
+- **Deleted mythology-teaching content (receipt).** Removed, each item checked against the diff
+  to `origin/main`: mastery `§1a` TEST/GOOD/BAD examples, `GLOSS_ON_FIRST_USE`, `WHEN`/`WHEN_NOT`
+  and `PARADIGM_BLINDNESS`, `§1b` `SOURCE_PRIORITY`, and `§7` `OPERATOR_SOUP`, `PROSE_BLEED` and
+  `§7a` `TELEGRAPHIC_PHRASE`; compression `R3a`, `R5`, `R6`, `§6` `CONSERVATIVE_PLUS_MYTHOLOGY`,
+  and the ULTRA_MYTHIC "60%" figure (now a pointer to `octave-ultra-mythic`); literacy `§0`
+  mythology lines, `ASCII_RULE` and `TELEGRAPHIC_PHRASE`.
+- **Accepted risk: kernel-only agents lose some basic syntax items under the 300-token kernel
+  cap.** The remedy is the P2-8b pointer trim of each kernel to a pointer sentence plus its own
+  items.
 - **`octave-compression` keeps the loss receipt (option a).** Compression outputs still carry
   `COMPRESSION_TIER` and `LOSS_PROFILE` in META, in note form. The skills' own META no longer
   carry them. Both keys are still `E007` under schema=META STRICT until #514 lands.
