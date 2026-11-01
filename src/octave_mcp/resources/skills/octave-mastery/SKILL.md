@@ -85,13 +85,13 @@ META:
   RIGHT_EXAMPLE::"`HEPHAESTUS<faithful_transcription>` with a sibling PRINCIPLE reading: transcribe all content without loss"
 §4::HOLOGRAPHIC_CONTRACTS
   SCOPE::"the only section that teaches writing operator glyphs, and only inside schema-definition files (`TYPE::SCHEMA`), because the validator reads them; every other document writes relations in words"
-  USES::"two uses: CONTRACT in META is document-level law; a holographic pattern in a schema's FIELDS is field-level law"
+  USES::"two places: META.CONTRACT, which a tool reads only in the list form below; and holographic patterns in a schema's FIELDS block, the field-level law the validator reads"
   §4a::CONTRACT_IN_META
-    FORM::"`CONTRACT::HOLOGRAPHIC<validation_law_in_document>` in META; the value is an annotation, so use angle brackets, not square ones"
-    COMPILER::"the grammar compiler (`src/octave_mcp/core/gbnf_compiler.py`) reads `META.CONTRACT` as a list of `FIELD[name]::constraint_chain` specs"
+    FORM::"`CONTRACT::HOLOGRAPHIC<validation_law_in_document>` in META is a descriptive label that no tool interprets (literacy §7d); but `octave_compile_grammar` checks only that CONTRACT is present, so on a schema-definition file the label makes it skip the POLICY and FIELDS blocks; keep it off schema-definition files"
+    COMPILER::"the one CONTRACT form a tool consumes: `octave_compile_grammar` reads `META.CONTRACT` as a list of `FIELD[name]::constraint_chain` specs (`src/octave_mcp/mcp/compile_grammar.py`)"
     ANCHORING::["`HOLOGRAPHIC<frozen@sha256_abc123>` locks the schema to a hash, hermetic; for production documents that need reproducibility.","`HOLOGRAPHIC<latest@local>` resolves to the current local schema, mutable; for active development documents."]
     KNOWN_GAP::"on octave-mcp 1.16.0 both anchoring forms fail `E_TOKENIZE` (the `@` inside the annotation), so no validated example carries them"
-    GRAMMAR_FIELD::"`GRAMMAR::GBNF_COMPILER<generate_constrained_output>` emits GBNF for constrained generation"
+    GRAMMAR_FIELD::"`GRAMMAR::GBNF_COMPILER<generate_constrained_output>` is a descriptive label; no tool reads `META.GRAMMAR`; for GBNF, call `octave_compile_grammar` on a document carrying META.CONTRACT or a POLICY and FIELDS block"
     SCHEMA_GAP::"under `schema=META` STRICT, CONTRACT and GRAMMAR give `E007` (#514)"
   §4b::HOLOGRAPHIC_BODY_PATTERN
     FORM::"in a schema's FIELDS block, each field reads: value, joined by the constraint glyph to its constraints, then the flow glyph to an optional routing target section; see the example"

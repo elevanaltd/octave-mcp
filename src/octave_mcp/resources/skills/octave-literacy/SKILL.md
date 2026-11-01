@@ -19,10 +19,10 @@ META:
   PATTERNS::[octave-tool-reference]
 ---
 §0::CONSUMPTION_DIRECTIVE
-  DIRECTIVE::"Write in note form, in plain words. The tools read keys, not glyphs: structure lives in keys, sections and lists; meaning lives in quoted sentences (§4b)."
+  DIRECTIVE::"Write in note form, in plain words: tools read keys, not glyphs; structure lives in keys, sections and lists, meaning in quoted sentences (§4b)."
 §1::CORE_SYNTAX
   ASSIGNMENT::"`KEY::value`: double colon, no spaces around it"
-  BLOCK::"`KEY:` then a newline and 2-space indented children; use when the value has nested children"
+  BLOCK::"`KEY:`, newline, 2-space indented children; for a value with nested children"
   CHOICE::"scalar value: ASSIGNMENT; nested children: BLOCK; never mix"
   LIST::"`[a,b,c]`: square brackets; never YAML bullets"
   STRING::"a bare word if no spaces or special characters, otherwise double-quoted; escape an inner double quote as `\"`"
@@ -114,7 +114,7 @@ META:
   ]
   §3b::V6_ENVELOPE_STRUCTURE
     FILE_STRUCTURE::"`===NAME===`, then META, then an optional `---` separator, then the body, then `===END===`"
-    SEPARATOR::"`---` marks the metadata boundary for discovery and indexing tools; place after META"
+    SEPARATOR::"`---` after META marks the metadata boundary for discovery and indexing tools"
     META_REQUIRED::[TYPE,VERSION]
     META_OPTIONAL::[STATUS,UPDATED]
     STATUS_NOTE::"STATUS in META is the document lifecycle (ACTIVE, DRAFT); STATUS in the body is the subject's state; both are valid"
@@ -139,7 +139,7 @@ META:
   W_UNQUOTED_SECTION_IN_VALUE::"cause: a bare `§` inside a value; fix: quote the value (§3 rules)"
   W_INLINE_ARRAY_ROOT::"cause: `TOKEN::[KEY::v,...]`, a map as inline root; fix: BLOCK form per §1d"
   W_FLAT_PREFIX_SCALAR::"cause: `PARENT_CHILD::v` key-prefix flattening; fix: BLOCK form per §1d"
-  RECEIPTS::"`octave_write` and `octave_validate` return `corrections[]` and `warnings[]`; empty `warnings[]` is not proof of no normalisation; read octave-tool-reference §3 before trusting a receipt"
+  RECEIPTS::"`octave_write` returns `corrections[]` and `warnings[]`; `octave_validate`, `repairs[]`, `repair_log[]` and `warnings[]`; empty `warnings[]` does not prove no normalisation; read octave-tool-reference §3 before trusting either"
   §4b::INNER_LANGUAGE
     APPLIES::"every value, item, step and sentence you write, in any shape"
     RULES::[
@@ -189,7 +189,7 @@ META:
   ]
   GATE::"Is every line keyed, in plain words, with identifiers exact, and did repairs come back empty?"
 §6::WORKED_EXAMPLE
-  SHOWS::"envelope, META, separator, note-form values, a list, and BLOCK for nested children while scalars use ASSIGNMENT"
+  SHOWS::"envelope, META, separator, note-form values, lists, BLOCK and ASSIGNMENT per §1"
   EXAMPLE:
     ```
     ===DECISION===
@@ -263,7 +263,7 @@ META:
   §7d::SCHEMA_EXEMPTION_VIA_CONTRACT
     RULE::"`CONTRACT::HOLOGRAPHIC<parse_only_governance>` in META: existing documents carry it; no consumer reads it; do not add it to new documents"
   §7e::CANONICAL_AND_SOURCE_META
-    PURPOSE::"path-tracking META fields; canonical-paths pre-commit hook enforces them"
+    PURPOSE::"path-tracking META fields, enforced by the canonical-paths pre-commit hook"
     CANONICAL::"runtime delivery path (for example `.hestai/north-star/...` or `.hestai-sys/...`)"
     SOURCE::"git-committed source path (for example `src/<pkg>/_bundled_hub/...` or repo-local)"
     RULE::"every governance `.oct.md` requires both `META.CANONICAL` and `META.SOURCE`"

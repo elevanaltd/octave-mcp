@@ -12,7 +12,7 @@ META:
 §1::CORE_PRINCIPLE
   ESSENTIAL::"A write is not done when the tool returns. It is done when the receipt has been read."
   ANTI_PATTERN::"trusting `status: success` with empty warnings and unread corrections ships silent data loss as clean"
-  ENFORCEMENT::"after every `octave_write` or `octave_validate` call, inspect status, errors, validation_status, corrections, warnings and repairs before claiming VALIDATED"
+  ENFORCEMENT::"after every call, inspect status, errors, validation_status and each receipt list it returns (`octave_write`: corrections, warnings; `octave_validate`: warnings, repairs, repair_log) before claiming VALIDATED"
   WRITE_GATE::"`*.oct.md` files are written by `mcp__octave__octave_write` only, never by Write or Edit; content decisions belong to the requesting agent"
 §2::TOOL_SURFACE
   TOOLS::[
@@ -56,7 +56,7 @@ META:
   VALIDATION_STATUS::"VALIDATED; UNVALIDATED with no or unknown schema; INVALID with schema violations in `validation_errors[]`"
   CORRECTIONS::"every normalisation and repair applied; entries carry `rule_id`, `before`, `after`, `safe`, `semantics_changed`, tier NORMALIZATION, REPAIR or LENIENT_PARSE"
   WARNINGS::"subset of `corrections[]` with `safe: false`; data-affecting only; benign normalisation never appears here"
-  REPAIRS::"`octave_validate` and lenient writes: schema repairs suggested (`fix=false`) or applied (`fix=true`); `repair_log` is the per-repair audit trail; both empty on a clean artefact; read with `corrections[]`"
+  REPAIRS::"`octave_validate` only: schema repairs suggested (`fix=false`) or applied (`fix=true`); `repair_log` is the per-repair audit trail; both empty on a clean artefact; a lenient write reports its schema repairs inside `corrections[]`"
   EMPTY_WARNINGS_RULE::"empty `warnings[]` does not mean untouched; read `corrections[]` for what changed; only empty corrections, warnings and repairs together mean bytes already canonical"
   TRIAGE:
     DISCARDING::"content lost or corrupted: `W_BARE_LINE_DROPPED`, `W_NUMERIC_KEY_DROPPED`, `W_DUPLICATE_KEY`, `W_UNQUOTED_SECTION_IN_VALUE`, `W_LENIENT_MULTI_WORD_COALESCE` (unquoted multi-word value silently joined), `W_BARE_FLOW` (flow arrow outside brackets, legacy form); fix source and rewrite"
