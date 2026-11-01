@@ -12,7 +12,7 @@ META:
 §1::CORE_PRINCIPLE
   ESSENTIAL::"A write is not done when the tool returns. It is done when the receipt has been read."
   ANTI_PATTERN::"trusting `status: success` with empty warnings and unread corrections ships silent data loss as clean"
-  ENFORCEMENT::"after every call, inspect status, errors, validation_status and each receipt list it returns (`octave_write`: corrections, warnings; `octave_validate`: warnings, repairs, repair_log) before claiming VALIDATED"
+  ENFORCEMENT::"after every call, inspect status, errors, validation_status, `validation_errors` and each receipt list it returns (`octave_write`: corrections, warnings; `octave_validate`: warnings, repairs, repair_log) before claiming VALIDATED"
   WRITE_GATE::"`*.oct.md` files are written by `mcp__octave__octave_write` only, never by Write or Edit; content decisions belong to the requesting agent"
 §2::TOOL_SURFACE
   TOOLS::[
@@ -56,7 +56,7 @@ META:
   VALIDATION_STATUS::"VALIDATED; UNVALIDATED with no or unknown schema; INVALID with schema violations in `validation_errors[]`"
   CORRECTIONS::"every normalisation and repair applied; entries carry `rule_id`, `before`, `after`, `safe`, `semantics_changed`, tier NORMALIZATION, REPAIR or LENIENT_PARSE"
   WARNINGS::"subset of `corrections[]` with `safe: false`; data-affecting only; benign normalisation never appears here"
-  REPAIRS::"`octave_validate` only: schema repairs suggested (`fix=false`) or applied (`fix=true`); `repair_log` is the per-repair audit trail; both empty on a clean artefact; a lenient write reports its schema repairs inside `corrections[]`"
+  REPAIRS::"`octave_validate` only: parse-level repairs (`bare_line_dropped`, `duplicate_key` and others) whatever `fix` is; schema repairs only with `fix=true`; with `fix=false` schema failures sit in `validation_errors[]`; `repair_log` aliases the same list; both empty on a clean artefact; a lenient write reports its schema repairs inside `corrections[]`"
   EMPTY_WARNINGS_RULE::"empty `warnings[]` does not mean untouched; read `corrections[]` for what changed; only empty corrections, warnings and repairs together mean bytes already canonical"
   TRIAGE:
     DISCARDING::"content lost or corrupted: `W_BARE_LINE_DROPPED`, `W_NUMERIC_KEY_DROPPED`, `W_DUPLICATE_KEY`, `W_UNQUOTED_SECTION_IN_VALUE`, `W_LENIENT_MULTI_WORD_COALESCE` (unquoted multi-word value silently joined), `W_BARE_FLOW` (flow arrow outside brackets, legacy form); fix source and rewrite"
@@ -65,7 +65,7 @@ META:
     BENIGN::"tier NORMALIZATION, `safe: true`: whitespace, blank lines, identifier dequoting, `TN_INLINE_MAP_TO_BLOCK`; no action"
   ALIAS:
     MAPPING::"`octave_validate` `repairs[]` entries carry `type` and `subtype`; map to TRIAGE by subtype"
-    DISCARDING_SUBTYPES::"content lost or corrupted, measured: `duplicate_key`, `bare_line_dropped`, `numeric_key_dropped`, `multi_word_coalesce` (unquoted multi-word value silently joined; parser records original and result because the bytes diverge in meaning), `bare_flow` (type `spec_violation`: flow arrow outside brackets, the legacy form UPOG migration removes)"
+    DISCARDING_SUBTYPES::"content lost or corrupted, measured: `duplicate_key`, `bare_line_dropped`, `numeric_key_dropped`, `multi_word_coalesce` (parser records original and result because the bytes diverge in meaning), `bare_flow` (type `spec_violation`: flow arrow outside brackets, the legacy form UPOG migration removes)"
     REPAIR_TIER::"form changes in the 1.15.0 `lenient_parse` set: BENIGN by construction at a mechanical gate, content preserved: `wrong_case`, `pattern_autoquote`, `unquoted_timestamp`, `curly_brace_annotation`, `constraint_outside_brackets`, `chained_tension`, `nested_inline_map`, `deep_nesting`, `constructor_misuse`, `source_compile_value`, `unclosed_list`, `boundary_missing`; an authoring agent also reads before and after, fixes the source when meaning shifted"
     NORMALIZATION_TYPE::"type `normalization` is BENIGN"
     OTHER_SPEC_VIOLATIONS::"other `spec_violation` subtypes surface in `validation_errors[]`, not in triage"
@@ -80,7 +80,7 @@ META:
     ACCEPTOR::"operator in the gated agent's own session; a peer relay is never acceptance, per PEER_AUTHORITY"
     TIMEOUT::"hold bounded by the implementation's timeout; on expiry degrades to the named terminal outcome HELD: artefact not activated, binding not voided, retry budget untouched, surfaced to the dispatching side as `STATUS::NEED_INPUT` carrying UNKNOWN_SUBTYPES; never auto-accept, never a silent stall, never PASS, never VOID"
 §4::CHANGES_MODE
-  HARD_BREAK::"octave-mcp 1.15.0 STRATEGY_S3: hard break from earlier releases; rules below are the post-break contract"
+  HARD_BREAK::"hard break in octave-mcp 1.15.0 STRATEGY_S3; rules below are the post-break contract"
   PATHS::"top-level KEY; `META.FIELD`; `PARENT.CHILD` into a top-level block; `§N.KEY` or `§N::NAME.KEY` into a section; single child key only; a section is not a MERGE target; deeper paths need a `content=` rewrite"
   BARE_DICT_AT_KEY::"`changes={PARENT: {CHILD: x}}` against an existing block: FULL REPLACE, unmentioned children DROPPED"
   PRESERVE_SIBLINGS::"add or change one child, keep the rest: `{PARENT: {$op: MERGE, value: {CHILD: x}}}`"
