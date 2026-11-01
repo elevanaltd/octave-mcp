@@ -635,17 +635,26 @@ def test_A5_no_stale_rule_key_references_in_resources() -> None:
 # ---------------------------------------------------------------------------
 # Spec section 3 C4 ripple list: each prose citation that replaces a rule id
 # must still resolve to a sentence in the target section's RULES list.
-# (citing file, target file, target section token, required substring)
-RULE_CITATIONS: list[tuple[str, str, str, str]] = [
-    # tool-reference :62 cited "literacy R13" (empty KEY:: opens no block)
-    ("tool-reference", "literacy", "3", "KEY::"),
-    # compression :141 cited "literacy R12" (section headers carry no value)
-    ("compression", "literacy", "3", "section header"),
-    # tool-reference :139 cited R3a; successor is the note-form sentence in literacy 4b
-    ("tool-reference", "literacy", "4b", "note form"),
-    # mastery :218 cited R3a; same successor
-    ("mastery", "literacy", "4b", "note form"),
+# (citing file, target file, target section token, required substring in a RULES
+# sentence, citing-side phrase). The citing-side phrase must sit on the SAME line
+# as a citation of "<target> §<token>" in the citing file (cubic review on #542:
+# the citing side was never searched).
+RULE_CITATIONS: list[tuple[str, str, str, str, str]] = [
+    # tool-reference cited "literacy R13" (empty KEY:: opens no block)
+    ("tool-reference", "literacy", "3", "KEY::", "empty `KEY::`"),
+    # compression cited "literacy R12" (section headers carry no value)
+    ("compression", "literacy", "3", "section header", "section header"),
+    # tool-reference cited R3a; successor is the note-form sentence in literacy 4b.
+    # (mastery's R3a citation sat in its section 7a, which the rewrite deleted, so
+    # that pair no longer exists; the deletion is in the CHANGELOG receipt.)
+    ("tool-reference", "literacy", "4b", "note form", "note-form"),
 ]
+
+
+def _citation_found(citing_text: str, target: str, section: str, phrase: str) -> bool:
+    """True if one line cites ``<target> §<section>`` (exact token) and holds the phrase."""
+    cite = re.compile(rf"{re.escape(target)} §{re.escape(section)}(?![0-9a-z])")
+    return any(cite.search(line) and phrase in line for line in citing_text.split("\n"))
 
 
 def _rules_sentences(text: str, section: str) -> list[str]:
@@ -685,17 +694,39 @@ def test_A5b_rules_parser_canary_exact_token_and_own_brackets() -> None:
 
 
 @pytest.mark.parametrize(
-    ("citing", "target", "section", "needle"),
+    ("citing", "target", "section", "needle", "phrase"),
     RULE_CITATIONS,
-    ids=[f"{c}->{t}-§{s}-{n}" for c, t, s, n in RULE_CITATIONS],
+    ids=[f"{c}->{t}-§{s}-{n}" for c, t, s, n, _ in RULE_CITATIONS],
 )
-def test_A5b_rule_citation_target_holds_cited_sentence(citing: str, target: str, section: str, needle: str) -> None:
+def test_A5b_rule_citation_target_holds_cited_sentence(
+    citing: str, target: str, section: str, needle: str, phrase: str
+) -> None:
     sentences = _rules_sentences(_read(target), section)
     assert sentences, f"A5b {citing} cites {target} §{section}: no RULES list of quoted sentences found there"
     assert any(needle in x for x in sentences), (
         f"A5b {citing} cites {target} §{section}: no RULES sentence contains {needle!r} "
         f"({len(sentences)} sentences)"
     )
+
+
+@pytest.mark.parametrize(
+    ("citing", "target", "section", "needle", "phrase"),
+    RULE_CITATIONS,
+    ids=[f"{c}->{t}-§{s}-{p}" for c, t, s, _, p in RULE_CITATIONS],
+)
+def test_A5b_citing_file_cites_the_target(citing: str, target: str, section: str, needle: str, phrase: str) -> None:
+    assert _citation_found(
+        _read(citing), target, section, phrase
+    ), f"A5b {citing}: no line cites '{target} §{section}' together with {phrase!r}"
+
+
+def test_A5b_citing_side_canary_missing_citation_fails() -> None:
+    good = 'HIDDEN::"empty `KEY::` opens no block (literacy §3, the rule)"\n'
+    assert _citation_found(good, "literacy", "3", "empty `KEY::`")
+    assert not _citation_found("OTHER::x\n", "literacy", "3", "empty `KEY::`"), "missing citation must fail"
+    assert not _citation_found(good.replace("§3,", "§3b,"), "literacy", "3", "empty `KEY::`"), "wrong section token"
+    split = 'A::"empty `KEY::` opens no block"\nB::"see literacy §3"\n'
+    assert not _citation_found(split, "literacy", "3", "empty `KEY::`"), "phrase on another line must not count"
 
 
 # ---------------------------------------------------------------------------
