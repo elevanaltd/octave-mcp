@@ -70,7 +70,7 @@ META:
     "Source is a rule or syntax reference: LOSSLESS; a reference compressed below its rules is a broken reference.",
     "Otherwise: CONSERVATIVE."
   ]
-  EVIDENCE::"stated both ways. octave-mcp study (`docs/research/compression-fidelity-round-trip-study.md`): CONSERVATIVE with mythology domain labels as key prefixes kept 11 of 11 decision-relevant facts at 15 percent fewer tokens than the prose, because each labelled field was translated separately, which prevents fact merging. Estate bench (hestai-workbench `.hestai-state/reports/2026-10-19-octave-wire-bench-closing-report.md`): mythology escalates when misapplied and, under exact fit, does no work plain words do not; the operator ruled it is not instruction vocabulary. Write labels in plain words."
+  EVIDENCE::"stated both ways. octave-mcp study (`docs/research/compression-fidelity-round-trip-study.md`): CONSERVATIVE with mythology domain labels as key prefixes kept 11 of 11 decision-relevant facts at 15 percent fewer tokens than the prose, because each labelled field was translated separately, which prevents fact merging. A later bench of this document language: mythology as writing escalates when misapplied and, under exact fit, is harmless and does no work plain words do not (confidence High); myth names as instruction vocabulary carried no readable weight over plain names (confidence Medium: never had headroom to read). Rule: mythology is not instruction vocabulary; write labels in plain words."
 §2::LOSS_ACCOUNTING
   RECEIPT_RULE::"North Star I4 (transform auditability): if bits were dropped, the output carries a receipt; no silent loss"
   REQUIRED_META_FIELDS::[COMPRESSION_TIER,LOSS_PROFILE]
@@ -136,7 +136,7 @@ META:
     "Never invent to fill a slot or field: write `none` or `not known`."
   ]
 §5::ANCHOR_KERNEL
-  TARGET::"prose to OCTAVE at a declared fidelity tier"
+  TARGET::"prose to OCTAVE, tier declared"
   NEVER::[
     "operators in prose or values",
     "mythology as instruction words",
@@ -163,7 +163,9 @@ META:
     "edits addressed as section dot key",
     "repairs read, not only the validation status",
     "tier first; default conservative; references lossless",
-    "compressed output says what was kept and what was dropped"
+    "compressed output says what was kept and what was dropped",
+    "LOSSLESS drops nothing",
+    "one example per abstraction kept"
   ]
   GATE::"Could a reader rebuild every causal chain, condition and number, and does the document say what was dropped?"
 §7::ANTI_PATTERNS

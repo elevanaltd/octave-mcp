@@ -1,6 +1,6 @@
 ---
 name: octave-literacy
-description: "LLM-native structured communication format. Teaches OCTAVE syntax rules, canonical forms, the estate inner language, and warning prevention for zero-error .oct.md authoring."
+description: "LLM-native structured communication format. Teaches OCTAVE syntax rules, canonical forms, the inner language, and warning prevention for zero-error .oct.md authoring."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave format", "write octave", "octave syntax", "structured output", "OCTAVE basics", "OCTAVE literacy", "OCTAVE structure", "key::value", "OCTAVE notation", "llm communication", "loss accounting"]
 version: "5.0.0"
@@ -40,11 +40,11 @@ META:
     AUTHORING::"use `NAME<x>` or `NAME[x]` only where a schema field or parser expects them (archetypes, schema constraints); never inside a quoted value"
     REFERENCE:
       ```
-      ATHENA<strategic_wisdom>        // annotation: identity facet
-      LLM<exclusively>                // annotation
-      REGEX[pattern]                  // constructor: validation arguments
-      ENUM[a,b,c]                     // constructor
-      JIT_GRAMMAR_COMPILATION[META→GBNF]  // constructor
+      ATHENA<strategic_wisdom> // annotation: identity facet
+      LLM<exclusively> // annotation
+      REGEX[pattern] // constructor: validation arguments
+      ENUM[a,b,c] // constructor
+      JIT_GRAMMAR_COMPILATION[META→GBNF] // constructor
       ```
   §1c::LITERAL_ZONES
     SYNTAX::"KEY, then a newline, then a fence of 3 or more backticks"
@@ -132,10 +132,10 @@ META:
     QUOTING::"quote `§` in a content value: `VALUE::\"see §3b\"`, not `VALUE::§3b`"
     NESTING::"`§3b` inside `§3` is a subsection; the prefix digit tracks depth"
 §4::WARNING_PREVENTION
-  // Parser-drop codes: each is silent data loss at parse time. Receipts, changes mode and remediation: octave-tool-reference.
+  // Parser-drop codes: each is silent data loss at parse time.
   W_BARE_LINE_DROPPED::"cause: a line with no `KEY::` prefix; fix: add a key or use a `//` comment"
   W_NUMERIC_KEY_DROPPED::"cause: a bare integer key (`1::thing`); fix: use a named key, or a list"
-  W_DUPLICATE_KEY::"cause: same key twice in one scope, last write wins; fix: BLOCK form per §1d or §7b; hidden causes: an empty `KEY::` where `KEY:` was meant (§3 rules), and column-0 keys under different section headers, which share file scope; STRICT still says VALIDATED, the loss shows only in `repairs[]`"
+  W_DUPLICATE_KEY::"cause: same key twice in one scope, last write wins; fix: BLOCK form per §1d or §7b; hidden causes (§3 rules): empty `KEY::` meant as `KEY:`, and column-0 keys across sections; STRICT still says VALIDATED, only `repairs[]` shows the loss"
   W_UNQUOTED_SECTION_IN_VALUE::"cause: a bare `§` inside a value; fix: quote the value (§3 rules)"
   W_INLINE_ARRAY_ROOT::"cause: `TOKEN::[KEY::v,...]`, a map as inline root; fix: BLOCK form per §1d"
   W_FLAT_PREFIX_SCALAR::"cause: `PARENT_CHILD::v` key-prefix flattening; fix: BLOCK form per §1d"
@@ -167,7 +167,8 @@ META:
     "unkeyed lines",
     "a value on a section header",
     "judgement attributed to a named person",
-    "shortened or merged identifiers"
+    "shortened or merged identifiers",
+    "markdown headings or bullets inside the envelope"
   ]
   MUST::[
     "note form",
@@ -180,7 +181,11 @@ META:
     "every line keyed, multi-word values quoted",
     "contents indented under the section header",
     "edits addressed as section dot key",
-    "repairs read, not only the validation status"
+    "repairs read, not only the validation status",
+    "keys named, never bare numbers",
+    "`§` quoted inside values",
+    "two-space indent, never tabs",
+    "`KEY:` opens a block, `KEY::` never does"
   ]
   GATE::"Is every line keyed, in plain words, with identifiers exact, and did repairs come back empty?"
 §6::WORKED_EXAMPLE
@@ -206,9 +211,9 @@ META:
     ===END===
     ```
 §7::GOVERNANCE_AUTHORING
-  UPOG::"Universal Parse-Only Governance: structure for governance artefacts (North Stars, ADRs, RFCs, project-context docs, agent definitions); builds on the §4b inner language and §3 rules; parse-only validation is the gate, no per-doctype schema registration; convention is the schema, enforced by the strict parser, this skill and the octave-secretary write gate"
+  UPOG::"Universal Parse-Only Governance: structure for governance artefacts (North Stars, ADRs, RFCs, project-context docs, agent definitions); builds on the §4b inner language and §3 rules; enforced by the strict parser, this skill and the octave-secretary write gate"
   §7a::ORGANIZING_PRINCIPLE
-    PRINCIPLE::"the strict AST parse is the gate and this skill is the schema; governance bodies are schema-exempt by declaration, and the META envelope still validates"
+    PRINCIPLE::"the strict AST parse is the gate and this skill is the schema, so no per-doctype schema registration; governance bodies are schema-exempt by declaration, and the META envelope still validates"
     APPLIES_TO::[
       "North Star summaries",
       "architectural decision records",

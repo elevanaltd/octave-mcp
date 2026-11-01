@@ -39,7 +39,7 @@ META:
     READING_RULE::"a figure outside this glossary is valid when it names one distinct domain (format `[A-Z][A-Z_]*`, not membership in a fixed set); read it by that one domain, never as a synonym of another figure; examples: `PHAEDRUS<dialectic>`, `CASSANDRA<foresight_ignored>`, `MNEMOSYNE<memory_persistence>`, `HESTIA<hearth_stability>`, `METIS<cunning_intelligence>`"
   §1c::EVIDENCE
     STUDY::"octave-mcp study: 60 to 70 percent token reduction versus natural language; 88 to 96 percent cross-model zero-shot comprehension; 17 percent more structural sophistication in blind assessment; 4-model validation of Ares and Artemis as behavioural qualifiers (`docs/research/mythology-evidence-synthesis.oct.md`, guide `docs/guides/mythological-compression.md`)"
-    COUNTER_EVIDENCE::"an estate bench found mythology escalates when misapplied and, under exact fit, does no work plain words do not; myth names as instruction vocabulary carried no readable weight over plain names; the operator ruled mythology is not instruction vocabulary (hestai-workbench `.hestai-state/reports/2026-10-19-octave-wire-bench-closing-report.md`)"
+    COUNTER_EVIDENCE::"a later bench of this document language: mythology as writing escalates when misapplied and, under exact fit, is harmless and does no work plain words do not (confidence High); myth names as instruction vocabulary carried no readable weight over plain names (confidence Medium: never had headroom to read); hence the rule in §1a"
 §2::NARRATIVE_FORCES
   PURPOSE::"decode single-token state and trajectory terms met in documents you read; reading only"
   GLOSSARY:
@@ -90,7 +90,7 @@ META:
     FORM::"`CONTRACT::HOLOGRAPHIC<validation_law_in_document>` in META; the value is an annotation, so use angle brackets, not square ones"
     COMPILER::"the grammar compiler (`src/octave_mcp/core/gbnf_compiler.py`) reads `META.CONTRACT` as a list of `FIELD[name]::constraint_chain` specs"
     ANCHORING::["`HOLOGRAPHIC<frozen@sha256_abc123>` locks the schema to a hash, hermetic; for production documents that need reproducibility.","`HOLOGRAPHIC<latest@local>` resolves to the current local schema, mutable; for active development documents."]
-    KNOWN_GAP::"at `72599fc` both anchoring forms fail `E_TOKENIZE` (the `@` inside the annotation), so no validated example carries them"
+    KNOWN_GAP::"at `cdfc963` both anchoring forms fail `E_TOKENIZE` (the `@` inside the annotation), so no validated example carries them"
     GRAMMAR_FIELD::"`GRAMMAR::GBNF_COMPILER<generate_constrained_output>` emits GBNF for constrained generation"
     SCHEMA_GAP::"under `schema=META` STRICT, CONTRACT and GRAMMAR give `E007` (#514)"
   §4b::HOLOGRAPHIC_BODY_PATTERN
@@ -175,7 +175,9 @@ META:
     "contents indented under the section header",
     "edits addressed as section dot key",
     "repairs read, not only the validation status",
-    "holographic constraints only in schema-definition files"
+    "holographic constraints only in schema-definition files",
+    "one facet per archetype, 32 characters at most, in angle brackets",
+    "maps of maps as blocks, never nested inline maps"
   ]
   GATE::"Is every glyph I wrote inside a schema-definition example, and every other relation in words?"
 §6::BLOCK_NOTATION_RULE
