@@ -157,7 +157,7 @@ META:
     ]
     RUNBOOK::"runbooks: numbered steps, no rule history, no forward references"
 §5::ANCHOR_KERNEL
-  TARGET::"parser-safe OCTAVE in the estate language"
+  TARGET::"parser-safe OCTAVE in this document language"
   NEVER::[
     "operators in prose or values",
     "mythology as instruction words",

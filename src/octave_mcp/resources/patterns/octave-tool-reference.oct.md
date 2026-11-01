@@ -130,7 +130,7 @@ META:
     TRIGGER::"record amendment where an annotation exceeds 32 characters or 4 underscore-tokens (`W_ANNOTATION_TOO_LONG` in `corrections[]`)"
     ACTION::["Short qualifier instead: at most 32 characters, at most 4 underscore-tokens.","Full reasoning in a sibling RATIONALE (or PRINCIPLE, GUIDANCE) field as a quoted note-form sentence."]
     EXAMPLE_BEFORE::"`I6<migration_on_moving_target_is_anti_pattern_for_zero_warnings>`"
-    EXAMPLE_AFTER::"`I6<production_grade_quality>`, sibling RATIONALE: migration against a moving target makes strict typing an anti-pattern"
+    EXAMPLE_AFTER::"`I6<production_grade_quality>`, sibling `RATIONALE::\"migration against a moving target makes strict typing an anti-pattern\"`"
     FROZEN_ARCHIVES::"archives (DECISIONS-ARCHIVE, `docs/research/`, benchmark docs) stay frozen; zero return on batch-rewriting historical records"
     DETECTION::"non-blocking, advisory only"
   SNAKE_CASE_BLOB:
