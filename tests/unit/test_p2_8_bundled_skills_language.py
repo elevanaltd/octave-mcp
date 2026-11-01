@@ -850,7 +850,7 @@ def _first_meaningful(lines: list[str]) -> tuple[int, str]:
     return len(lines), ""
 
 
-def _a12_check(name: str, text: str) -> tuple[int, list[str]]:
+def _a12_scan(name: str, text: str) -> tuple[int, list[str], list[str]]:
     """Validate every non-exempt fence STRICT. Returns (fences validated, problems).
 
     Spec r5 R5-1: every fence outside the reading-reference allow-list is
@@ -858,10 +858,11 @@ def _a12_check(name: str, text: str) -> tuple[int, list[str]]:
     non-OCTAVE language. Leading ``//`` and blank lines are skipped when
     classifying. ``===NAME===`` fences are validated as written; ``META:`` and all
     other fences are wrapped in a minimal envelope (plus a META block first for
-    fragments).
+    fragments). Also returns the bodies of the fences that validated cleanly.
     """
     _, blocks = _scan(text)
     problems: list[str] = []
+    clean_bodies: list[str] = []
     checked = 0
     for b in blocks:
         tag = b["info"].split()[0] if b["info"] else ""
@@ -877,6 +878,7 @@ def _a12_check(name: str, text: str) -> tuple[int, list[str]]:
         is_meta = first == "META:"
         body = "\n".join(lines[idx:] if is_envelope else lines)
         checked += 1
+        problems_before = len(problems)
         where = f"fence at line {b['start']} (parent {b['parent_key']})"
         if is_envelope:
             content = body if "===END===" in body else body + "\n===END===\n"
@@ -902,6 +904,13 @@ def _a12_check(name: str, text: str) -> tuple[int, list[str]]:
             ok = e.get("code") == "E007" and (field.startswith("META.") if is_schema else field in allowed)
             if not ok:
                 problems.append(f"{where}: {e.get('code')} on {field}")
+        if len(problems) == problems_before:
+            clean_bodies.append(body)
+    return checked, problems, clean_bodies
+
+
+def _a12_check(name: str, text: str) -> tuple[int, list[str]]:
+    checked, problems, _ = _a12_scan(name, text)
     return checked, problems
 
 
@@ -1016,3 +1025,71 @@ def test_A13_canaries_fire_on_synthetic_bad_input() -> None:
     assert len(_c9_violations(doc)) == 2
     clean = '===S===\nMETA:\n  TYPE::SKILL\n§1::A\n  // note\n  RULES::["x"]\n```\nINSIDE::"fence"\n```\n===END===\n'
     assert _c1_violations(clean) == [] and _c4_violations(clean) == [] and _c9_violations(clean) == []
+
+
+# ---------------------------------------------------------------------------
+# A12 residual guards (TMG T2 advisories)
+# ---------------------------------------------------------------------------
+def test_A12_compression_keeps_validated_template_fence() -> None:
+    """Spec r5 R5-2: the template stays. A validated fence must hold both META keys."""
+    _, _, clean = _a12_scan("compression", _read("compression"))
+    ok = [b for b in clean if "COMPRESSION_TIER" in b and "LOSS_PROFILE" in b]
+    assert ok, "A12 compression: no cleanly validated fence contains both COMPRESSION_TIER and LOSS_PROFILE"
+
+
+_OCTAVE_LOOKING = re.compile(r"^(===(?!END===)[A-Z_][A-Z0-9_]*===$|META:|§\d+[a-z]?::|[A-Z][A-Z0-9_]*(::|:(\s|$)))")
+
+
+def _tag_disguise_problems(name: str, text: str) -> list[str]:
+    """Non-OCTAVE-tagged fences whose first meaningful line looks like OCTAVE.
+
+    Stops an OCTAVE example escaping A12 by carrying a python/json/... tag.
+    Exempt: WRONG_EXAMPLE and the reading-reference allow-list.
+    """
+    _, blocks = _scan(text)
+    problems: list[str] = []
+    for b in blocks:
+        tag = b["info"].split()[0] if b["info"] else ""
+        if tag not in A12_NON_OCTAVE_TAGS:
+            continue
+        if b["parent_key"] == A12_SANCTIONED_WRONG_KEY or _in_reading_reference(name, b["section"]):
+            continue
+        _, first = _first_meaningful(textwrap.dedent("\n".join(b["lines"])).strip("\n").split("\n"))
+        if _OCTAVE_LOOKING.match(first):
+            problems.append(f"fence at line {b['start']} (tag {tag}, parent {b['parent_key']}): starts {first[:40]!r}")
+    return problems
+
+
+@pytest.mark.parametrize("name", ALL)
+def test_A12_non_octave_tagged_fences_do_not_look_like_octave(name: str) -> None:
+    problems = _tag_disguise_problems(name, _read(name))
+    assert not problems, f"A12 {name}: OCTAVE example hidden behind a language tag: {problems}"
+
+
+@pytest.mark.parametrize(
+    "first",
+    ["===X===", "META:", "§3::NAME", 'KEY::"v"', "KEY:", "// note\n\nTARGET::x"],
+)
+def test_A12_tag_disguise_canary_fires(first: str) -> None:
+    for tag in ("python", "json", "yaml", "text", "ts", "regex", "bash"):
+        assert _tag_disguise_problems("literacy", _fenced("EXAMPLE", first + "\n", tag)), f"{tag}: {first!r}"
+
+
+def test_A12_tag_disguise_canary_exemptions_and_plain_code() -> None:
+    assert _tag_disguise_problems("literacy", _fenced("WRONG_EXAMPLE", "KEY::x\n", "text")) == []
+    assert _tag_disguise_problems("literacy", "§1b::R\n  REF:\n    ```text\nKEY::x\n    ```\n") == []
+    assert _tag_disguise_problems("literacy", _fenced("EXAMPLE", "import re\nx = 1\n", "python")) == []
+    assert _tag_disguise_problems("literacy", _fenced("EXAMPLE", '{"a": 1}\n', "json")) == []
+    assert _tag_disguise_problems("literacy", _fenced("EXAMPLE", "KEY::x\n", "")) == []  # untagged is A12's job
+
+
+def test_A12_template_guard_canary_needs_both_keys_and_a_clean_fence() -> None:
+    both = '===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\n  COMPRESSION_TIER::LOSSLESS\n  LOSS_PROFILE::"kept all"\n===END===\n'
+    one = both.replace('  LOSS_PROFILE::"kept all"\n', "")
+    _, _, clean = _a12_scan("compression", _fenced("TEMPLATE", both))
+    assert any("COMPRESSION_TIER" in b and "LOSS_PROFILE" in b for b in clean)
+    _, _, clean = _a12_scan("compression", _fenced("TEMPLATE", one))
+    assert not any("COMPRESSION_TIER" in b and "LOSS_PROFILE" in b for b in clean)
+    bad = both.replace("===END===", "bare prose line\n===END===")
+    _, _, clean = _a12_scan("compression", _fenced("TEMPLATE", bad))
+    assert clean == [], "a fence that fails validation must not count as the template"
