@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the workbench regex (run in node) and odyssean-anchor kernel extraction agreeing, a clean
   dry run, no snake-case blobs, that fenced examples parse, and the container, no-id and META
   rules. Small canaries prove each check fires on bad input. It needs `node` on `PATH` and
-  fails, rather than skips, without it.
+  fails, rather than skips, without it; CI runs on `ubuntu-latest`, which has it. The
+  hub-corpus tests that need `.hestai-sys` skip locally when it is absent, so they do not cover
+  these four files on a machine without it.
 
 ### Fixed
 
@@ -57,7 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   examples. The pattern takes a minor bump. Authority: `LANG-ARCH-RECONCILIATION-RULINGS-20261031`
   (P2-8) and `OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101` (PR #541). Section numbers that
   other files cite are kept; citations of the old rule ids (`R3a`, `R12`, `R13`) now point at the
-  section and its words. Each kernel carries the standard kernel strings.
+  section and its words. Each skill kernel carries the standard kernel strings; the
+  tool-reference kernel carries only the container subset of them (unkeyed lines, a value on a
+  section header, keyed and quoted lines, indentation, section-dot-key edits, reading repairs).
+- **Size costs, measured at HEAD with tiktoken `cl100k_base` over file bytes.** Kernels, against
+  the `cdfc963` baseline: literacy 220 → 290, mastery 183 → 296, compression 203 → 300,
+  tool-reference 195 → 260. Every agent binding that loads a kernel
+  pays the difference. Whole files: literacy 5065 → 5061, mastery 3885 → 3351, compression 2106 → 2095, and the
+  tool-reference pattern grows 4218 → 4428.
 - **`octave-compression` keeps the loss receipt (option a).** Compression outputs still carry
   `COMPRESSION_TIER` and `LOSS_PROFILE` in META, in note form. The skills' own META no longer
   carry them. Both keys are still `E007` under schema=META STRICT until #514 lands.

@@ -1,6 +1,6 @@
 """P2-8 acceptance guard: bundled octave skills taught in the estate language.
 
-RED step. This file implements acceptance criteria A1, A2, A3, A4, A5, A5b,
+This file implements acceptance criteria A1, A2, A3, A4, A5, A5b,
 A8, A9, A10, A11, A12 and A13 of the design spec
 ``.hestai-state/reports/2026-10-31-p2-8-octave-skills-change-spec.md`` at
 revision r5 (sections 5 and 12; TMG T2 rework rulings R5-1 to R5-6). A6 (full
@@ -25,6 +25,10 @@ Rules of this file:
 - Small canary tests prove that the new or changed checks fire on synthetic
   bad input, so a clean result on the real files cannot be vacuous.
 - Nothing is skipped. If ``node`` is missing, A9 fails with a clear message.
+
+Environment: A9 and the A8 workbench-kernel check run the workbench kernel
+regex in ``node`` through ``subprocess``, so ``node`` must be on ``PATH``. CI
+runs on ``ubuntu-latest``, which ships node; a local run needs it installed.
 """
 
 from __future__ import annotations
@@ -133,7 +137,7 @@ STD_MUST = [
 # Spec 4.0 "Own items" (only the strings the spec fixes), by kernel key.
 OWN_KERNEL_STRINGS: dict[str, dict[str, list[str]]] = {
     "literacy": {
-        "TARGET": ["parser-safe OCTAVE in the estate language"],
+        "TARGET": ["parser-safe OCTAVE in this document language"],
         "GATE": ["Is every line keyed, in plain words, with identifiers exact, and did repairs come back empty?"],
     },
     "mastery": {
@@ -190,9 +194,10 @@ TOOL_REFERENCE_KEY_REFERENCES = [
 ]
 STALE_RULE_KEY_REFERENCE = re.compile(r"R3a|literacy R12|literacy R13")
 
-# ONE allow-list source for A3 and A12 (spec r5 R5-4). Pre-rewrite the parent key
-# names are not known, so the allow-list is scoped by enclosing section token
-# (accepted for RED; GREEN tightens it). Reading-reference fences may carry
+# ONE allow-list source for A3 and A12 (spec r5 R5-4). The allow-list is scoped
+# by enclosing section token. This is a deliberate choice that spec section 12
+# accepted, not a pending tightening: section numbers are the stable, cited
+# anchors, whereas parent key names are free to change. Reading-reference fences may carry
 # glyphs and are exempt from A12 (literacy section 1d side-by-side comparison
 # included in both). Schema-definition example fences may carry glyphs but are
 # still validated by A12.
@@ -851,7 +856,9 @@ def _first_meaningful(lines: list[str]) -> tuple[int, str]:
 
 
 def _a12_scan(name: str, text: str) -> tuple[int, list[str], list[str]]:
-    """Validate every non-exempt fence STRICT. Returns (fences validated, problems).
+    """Validate every non-exempt fence STRICT.
+
+    Returns (fences validated, problems, bodies of fences that validated cleanly).
 
     Spec r5 R5-1: every fence outside the reading-reference allow-list is
     validated unless its parent key is WRONG_EXAMPLE or its info tag names a
