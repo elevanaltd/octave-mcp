@@ -79,18 +79,21 @@ BASELINE_E007_FIELDS = {
 # Spec section 3 C8 and section 5 A4.
 KERNEL_CAP_CL100K = 300
 TOOL_REFERENCE_GROWTH_CAP = 250
-# Spec section 5 A10 deviation: see test_A10 docstring. Measured at cdfc963
-# with WriteTool dry_run (not in the spec table); STEP_n runbooks keep their
-# sanctioned W_FLAT_PREFIX_SCALAR (spec C4, r3).
-A10_ALLOWED_ADVISORY = {
+# Spec r4 section 5 A10 (reading confirmed by the coordinator): the only
+# correction code allowed in a dry run is W_FLAT_PREFIX_SCALAR, capped at these
+# per-file counts. MEASURED at cdfc963 by WriteTool(dry_run=True) on each file
+# (counts of corrections[].code == W_FLAT_PREFIX_SCALAR, run 2026-11-01 by this
+# file's author). They are not in the spec table. STEP_n runbooks keep the
+# sanctioned advisory (spec C4, r3).
+A10_FLAT_PREFIX_SCALAR_BASELINE = {
     "literacy": {"W_FLAT_PREFIX_SCALAR": 5},
     "mastery": {"W_FLAT_PREFIX_SCALAR": 1},
     "compression": {},
     "tool-reference": {"W_FLAT_PREFIX_SCALAR": 1},
 }
 
-# Spec section 5 A3, regex "defined, CE r2".
-GLYPH = re.compile(r"[⊕⇌∧∨→∴⧺≠≤≥≈×]|(?<=\w)\s(->|<->|\+|&|~|\|)\s(?=\w)")
+# Spec r4 section 5 A3, regex widened per external review 2.
+GLYPH = re.compile(r"""[⊕⇌∧∨→∴⧺≠≤≥≈×]|(?<=[\w`"'\)\]])\s(->|<->|\+|&|~|\|)\s(?=[\w`"'\(\[])""")
 
 # Spec section 4.0: the standard kernel strings, verbatim.
 STD_NEVER = [
@@ -112,7 +115,7 @@ STD_MUST = [
     "one calibration sentence on a prohibition that can over-fire",
     "code in fenced blocks",
     "a self-contradicting source kept both ways and flagged",
-    "every line keyed, values quoted",
+    "every line keyed, multi-word values quoted",
     "contents indented under the section header",
     "edits addressed as section dot key",
     "repairs read, not only the validation status",
@@ -141,7 +144,7 @@ OWN_KERNEL_STRINGS: dict[str, list[str]] = {
 CONTAINER_KERNEL_STRINGS = [
     "unkeyed lines",
     "a value on a section header",
-    "every line keyed, values quoted",
+    "every line keyed, multi-word values quoted",
     "contents indented under the section header",
     "edits addressed as section dot key",
     "repairs read, not only the validation status",
@@ -280,22 +283,49 @@ def _scan(text: str) -> tuple[list[tuple[int, str]], list[dict[str, Any]]]:
 
 
 def _odyssean_kernel(text: str) -> str | None:
-    """First-match rule of odyssean-anchor.
+    """First-match kernel extraction, copied from odyssean-anchor.
 
-    Source: odyssean-anchor-mcp src/odyssean_anchor/core/extraction.py:964-980
-    (spec section 2 "Second extractor"). It takes the FIRST match of
-    ``§(?:\\d+::)?ANCHOR_KERNEL`` anywhere in the file. Any body text that
-    names the kernel header hijacks the extraction. The region ends at the
-    next line-start ``§N::`` header or ``===END===`` (spec C7). The source
-    file was not readable from this worktree, so the region end follows C7.
+    Source: odyssean-anchor-mcp src/odyssean_anchor/core/extraction.py:964-997
+    (/Volumes/HestAI-Projects/odyssean-anchor-mcp). It takes the FIRST match of
+    ``§(?:\\d+::)?ANCHOR_KERNEL`` anywhere in the file, skips the marker line,
+    then stops at a stripped line starting ``===END_KERNEL===`` or ``===END===``
+    or matching ``^§\\d+::``. Spec section 2 "Second extractor".
     """
-    m = re.search(r"§(?:\d+::)?ANCHOR_KERNEL", text)
-    if not m:
+    kernel_pattern = re.compile(r"§(?:\d+::)?ANCHOR_KERNEL")
+    kernel_match = kernel_pattern.search(text)
+    if kernel_match is None:
         return None
-    rest = text[m.end() :]
-    rest = rest.split("\n", 1)[1] if "\n" in rest else ""
-    end = re.search(r"^(?:§\d+[a-z]?::|===END===)", rest, flags=re.MULTILINE)
-    return (rest[: end.start()] if end else rest).strip()
+
+    start_idx = kernel_match.start()
+
+    # Start extraction after the marker line
+    lines = text[start_idx:].split("\n")
+    kernel_lines: list[str] = []
+    in_kernel = False
+
+    for line in lines:
+        # Skip the marker line itself
+        if kernel_pattern.search(line) and not in_kernel:
+            in_kernel = True
+            continue
+
+        if in_kernel:
+            stripped = line.strip()
+
+            # Stop at end marker
+            if stripped.startswith("===END_KERNEL==="):
+                break
+
+            # Stop at next section or document end
+            if re.match(r"^§\d+::", stripped) or stripped.startswith("===END==="):
+                break
+
+            kernel_lines.append(line)
+
+    if not kernel_lines:
+        return None
+
+    return "\n".join(kernel_lines).strip()
 
 
 def _workbench_kernel(text: str) -> str:
@@ -463,6 +493,60 @@ def test_A5_no_stale_rule_key_references_in_resources() -> None:
 
 
 # ---------------------------------------------------------------------------
+# A5b Inbound rule citations (spec r4 A5b)
+# ---------------------------------------------------------------------------
+# Spec section 3 C4 ripple list: each prose citation that replaces a rule id
+# must still resolve to a sentence in the target section's RULES list.
+# (citing file, target file, target section token, required substring)
+RULE_CITATIONS: list[tuple[str, str, str, str]] = [
+    # tool-reference :62 cited "literacy R13" (empty KEY:: opens no block)
+    ("tool-reference", "literacy", "3", "KEY::"),
+    # compression :141 cited "literacy R12" (section headers carry no value)
+    ("compression", "literacy", "3", "section header"),
+    # tool-reference :139 cited R3a; successor is the note-form sentence in literacy 4b
+    ("tool-reference", "literacy", "4b", "note form"),
+    # mastery :218 cited R3a; same successor
+    ("mastery", "literacy", "4b", "note form"),
+]
+
+
+def _rules_sentences(text: str, section: str) -> list[str]:
+    """Quoted sentences of the ``RULES::[...]`` list in a section (outside fences)."""
+    outside, _ = _scan(text)
+    start = next(
+        (i for i, (_, t) in enumerate(outside) if (m := _SECTION_HEADER.match(t)) and m.group(1) == section), None
+    )
+    if start is None:
+        return []
+    end = len(outside)
+    for i in range(start + 1, len(outside)):
+        m = _SECTION_HEADER.match(outside[i][1])
+        if m and not m.group(1).startswith(section):
+            end = i
+            break
+    region = "\n".join(t for _, t in outside[start:end])
+    m2 = re.search(r"^\s*RULES::\[(.*?)^\s*\]|^\s*RULES::\[(.*?)\]\s*$", region, flags=re.MULTILINE | re.DOTALL)
+    if not m2:
+        return []
+    body = m2.group(1) or m2.group(2) or ""
+    return list(re.findall(r'"((?:[^"\\]|\\.)*)"', body))
+
+
+@pytest.mark.parametrize(
+    ("citing", "target", "section", "needle"),
+    RULE_CITATIONS,
+    ids=[f"{c}->{t}-§{s}-{n}" for c, t, s, n in RULE_CITATIONS],
+)
+def test_A5b_rule_citation_target_holds_cited_sentence(citing: str, target: str, section: str, needle: str) -> None:
+    sentences = _rules_sentences(_read(target), section)
+    assert sentences, f"A5b {citing} cites {target} §{section}: no RULES list of quoted sentences found there"
+    assert any(needle in x for x in sentences), (
+        f"A5b {citing} cites {target} §{section}: no RULES sentence contains {needle!r} "
+        f"({len(sentences)} sentences)"
+    )
+
+
+# ---------------------------------------------------------------------------
 # A8 Kernel coverage
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("name", SKILLS)
@@ -523,9 +607,9 @@ def test_A9_anchor_kernel_named_exactly_once(name: str) -> None:
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("name", ALL)
 def test_A10_write_dry_run_has_no_corrections(name: str) -> None:
-    """Spec A10 says ``corrections == []``.
+    """Spec A10 says ``corrections == []``; confirmed reading (spec r4).
 
-    Deviation, flagged to the reviewer: the spec's own C4 and A1 keep the
+    The spec's own C4 and A1 keep the
     sanctioned ``STEP_n`` runbook, whose ``W_FLAT_PREFIX_SCALAR`` is emitted
     into ``corrections`` by the dry run. A literal ``== []`` would be
     unpassable for literacy and mastery. This test therefore requires that
@@ -536,7 +620,7 @@ def test_A10_write_dry_run_has_no_corrections(name: str) -> None:
     r = _dry_run_write(name)
     assert r["status"] == "success", f"A10 {name}: dry run status {r['status']} errors {r.get('errors')}"
     got = _codes(r.get("corrections", []))
-    allowed = A10_ALLOWED_ADVISORY[name]
+    allowed = A10_FLAT_PREFIX_SCALAR_BASELINE[name]
     extra = {c: n for c, n in got.items() if c not in allowed}
     over = {c: (got[c], allowed[c]) for c in allowed if got[c] > allowed[c]}
     assert not extra, f"A10 {name}: corrections other than the allowed advisories: {extra}"
@@ -563,6 +647,16 @@ def test_A11_detector_canary_fires_on_a_known_blob() -> None:
 # A12 Examples parse
 # ---------------------------------------------------------------------------
 _ENVELOPE_OPEN = re.compile(r"^===(?!END===)[A-Z_][A-Z0-9_]*===$")
+# Spec r4 A12: fences whose first non-blank line is a section header, KEY: or KEY::.
+_FRAGMENT_START = re.compile(r"^(§\d+[a-z]?::|[A-Za-z_][A-Za-z0-9_]*::?)")
+_A12_FRAGMENT_META = 'META:\n  TYPE::EXAMPLE\n  VERSION::"1"\n'
+# Spec r4 A12 exemptions: reading-reference fences on the A3 allow-list (not the
+# mastery section 4 schema examples, which are validated), including the
+# literacy section 1d side-by-side comparison.
+A12_READING_REFERENCE_SECTIONS = {
+    "literacy": r"^(1b|1d|2[a-z]?)$",
+    "mastery": r"^(1|2)[a-z]?$",
+}
 
 
 @pytest.mark.parametrize("name", ALL)
@@ -574,13 +668,23 @@ def test_A12_fenced_examples_parse_strict(name: str) -> None:
         body = textwrap.dedent("\n".join(b["lines"])).strip("\n")
         first = next((ln.strip() for ln in body.split("\n") if ln.strip()), "")
         is_envelope = bool(_ENVELOPE_OPEN.match(first))
-        if not (is_envelope or first == "META:"):
+        is_meta = first == "META:"
+        is_fragment = bool(_FRAGMENT_START.match(first))
+        if not (is_envelope or is_meta or is_fragment):
             continue
         if b["parent_key"] == A12_SANCTIONED_WRONG_KEY:
             continue
+        exempt = A12_READING_REFERENCE_SECTIONS.get(name)
+        if exempt is not None and re.match(exempt, b["section"]):
+            continue
         checked += 1
         where = f"fence at line {b['start']} (parent {b['parent_key']})"
-        content = body if is_envelope else f"===EXAMPLE===\n{body}\n===END===\n"
+        if is_envelope:
+            content = body
+        elif is_meta:
+            content = f"===EXAMPLE===\n{body}\n===END===\n"
+        else:
+            content = f"===EXAMPLE===\n{_A12_FRAGMENT_META}{body}\n===END===\n"
         if is_envelope and "===END===" not in body:
             content += "\n===END===\n"
         try:
