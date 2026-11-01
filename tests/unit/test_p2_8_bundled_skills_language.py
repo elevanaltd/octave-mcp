@@ -1,10 +1,11 @@
 """P2-8 acceptance guard: bundled octave skills taught in the estate language.
 
-RED step. This file implements acceptance criteria A1, A2, A3, A4, A5, A8,
-A9, A10, A11 and A12 of the approved design spec
-``.hestai-state/reports/2026-10-31-p2-8-octave-skills-change-spec.md`` (r3,
-critical-engineer GO), section 5. A6 (full suite) and A7 (CHANGELOG) are not
-in this file.
+RED step. This file implements acceptance criteria A1, A2, A3, A4, A5, A5b,
+A8, A9, A10, A11, A12 and A13 of the design spec
+``.hestai-state/reports/2026-10-31-p2-8-octave-skills-change-spec.md`` at
+revision r5 (sections 5 and 12; TMG T2 rework rulings R5-1 to R5-6). A6 (full
+suite) and A7 (CHANGELOG) are not in this file. A13 is the r5 structural check
+for rules C1, C4 and C9. A5b guards prose citations that replace rule ids.
 
 It guards four tracked files:
 
@@ -20,7 +21,9 @@ Rules of this file:
 - Baseline numbers are hard-coded below, with the spec section that owns
   each one. They are the measured state at ``cdfc963``.
 - Every check is its own test, parametrised over files where it fits, so a
-  failure names the criterion (A1..A12) and the file.
+  failure names the criterion (A1..A13) and the file.
+- Small canary tests prove that the new or changed checks fire on synthetic
+  bad input, so a clean result on the real files cannot be vacuous.
 - Nothing is skipped. If ``node`` is missing, A9 fails with a clear message.
 """
 
@@ -79,21 +82,28 @@ BASELINE_E007_FIELDS = {
 # Spec section 3 C8 and section 5 A4.
 KERNEL_CAP_CL100K = 300
 TOOL_REFERENCE_GROWTH_CAP = 250
-# Spec r4 section 5 A10 (reading confirmed by the coordinator): the only
-# correction code allowed in a dry run is W_FLAT_PREFIX_SCALAR, capped at these
-# per-file counts. MEASURED at cdfc963 by WriteTool(dry_run=True) on each file
-# (counts of corrections[].code == W_FLAT_PREFIX_SCALAR, run 2026-11-01 by this
-# file's author). They are not in the spec table. STEP_n runbooks keep the
-# sanctioned advisory (spec C4, r3).
-A10_FLAT_PREFIX_SCALAR_BASELINE = {
-    "literacy": {"W_FLAT_PREFIX_SCALAR": 5},
-    "mastery": {"W_FLAT_PREFIX_SCALAR": 1},
-    "compression": {},
-    "tool-reference": {"W_FLAT_PREFIX_SCALAR": 1},
+# Spec r5 R5-3 / A10: W_FLAT_PREFIX_SCALAR is the only correction code allowed
+# in a dry run, and only for the prefixes in FLAT_PREFIX_ALLOW, with the total
+# count at most these per-file numbers. MEASURED at cdfc963 by
+# WriteTool(dry_run=True) on each file (count of corrections[].code ==
+# W_FLAT_PREFIX_SCALAR, run 2026-11-01 by this file's author). They are not in
+# the spec table; the skill figures equal the spec's A1 warning baseline.
+A10_FLAT_PREFIX_SCALAR_BASELINE = {"literacy": 5, "mastery": 1, "compression": 0, "tool-reference": 1}
+# Spec r5 R5-3: allowed flat-prefix groups, parsed from the message
+# "share prefix 'X_'". STEP_ is the runbook form (C4); W_ covers the warning-code
+# tables. Every other group must be restructured into a list or a block in GREEN.
+FLAT_PREFIX_ALLOW: dict[str, set[str]] = {
+    "literacy": {"STEP_", "W_"},
+    "tool-reference": {"W_"},
+    "mastery": set(),
+    "compression": set(),
 }
 
-# Spec r4 section 5 A3, regex widened per external review 2.
-GLYPH = re.compile(r"""[⊕⇌∧∨→∴⧺≠≤≥≈×]|(?<=[\w`"'\)\]])\s(->|<->|\+|&|~|\|)\s(?=[\w`"'\(\[])""")
+# Spec r5 R5-5 / section 5 A3. "->" and "<->" count with or without spaces. The
+# forms "+ & ~ |" count only with a space either side, between word characters,
+# backticks, quotes or brackets, because unspaced forms are legitimate text
+# (C++, R&D, ~/.claude).
+GLYPH = re.compile(r"""[⊕⇌∧∨→∴⧺≠≤≥≈×]|<->|->|(?<=[\w`"'\)\]])\s(\+|&|~|\|)\s(?=[\w`"'\(\[])""")
 
 # Spec section 4.0: the standard kernel strings, verbatim.
 STD_NEVER = [
@@ -120,35 +130,38 @@ STD_MUST = [
     "edits addressed as section dot key",
     "repairs read, not only the validation status",
 ]
-# Spec 4.0 "Own items" (only the strings the spec fixes).
-OWN_KERNEL_STRINGS: dict[str, list[str]] = {
-    "literacy": [
-        "parser-safe OCTAVE in the estate language",
-        "Is every line keyed, in plain words, with identifiers exact, and did repairs come back empty?",
-    ],
-    "mastery": [
-        "glyphs outside schema-definition examples",
-        "the glossary used for writing",
-        "holographic constraints only in schema-definition files",
-        "Is every glyph I wrote inside a schema-definition example, and every other relation in words?",
-    ],
-    "compression": [
-        "compressing before choosing the tier",
-        "dropping causal chains, conditions or numbers",
-        "tier first; default conservative; references lossless",
-        "compressed output says what was kept and what was dropped",
-        "Could a reader rebuild every causal chain, condition and number, and does the document say what was dropped?",
+# Spec 4.0 "Own items" (only the strings the spec fixes), by kernel key.
+OWN_KERNEL_STRINGS: dict[str, dict[str, list[str]]] = {
+    "literacy": {
+        "TARGET": ["parser-safe OCTAVE in the estate language"],
+        "GATE": ["Is every line keyed, in plain words, with identifiers exact, and did repairs come back empty?"],
+    },
+    "mastery": {
+        "NEVER": ["glyphs outside schema-definition examples", "the glossary used for writing"],
+        "MUST": ["holographic constraints only in schema-definition files"],
+        "GATE": ["Is every glyph I wrote inside a schema-definition example, and every other relation in words?"],
+    },
+    "compression": {
+        "NEVER": ["compressing before choosing the tier", "dropping causal chains, conditions or numbers"],
+        "MUST": [
+            "tier first; default conservative; references lossless",
+            "compressed output says what was kept and what was dropped",
+        ],
+        "GATE": [
+            "Could a reader rebuild every causal chain, condition and number, and does the document say what was dropped?"
+        ],
+    },
+}
+# Spec 4.4: tool-reference carries the container items only, by kernel key.
+CONTAINER_KERNEL_STRINGS: dict[str, list[str]] = {
+    "NEVER": ["unkeyed lines", "a value on a section header"],
+    "MUST": [
+        "every line keyed, multi-word values quoted",
+        "contents indented under the section header",
+        "edits addressed as section dot key",
+        "repairs read, not only the validation status",
     ],
 }
-# Spec 4.4: tool-reference carries the container items only.
-CONTAINER_KERNEL_STRINGS = [
-    "unkeyed lines",
-    "a value on a section header",
-    "every line keyed, multi-word values quoted",
-    "contents indented under the section header",
-    "edits addressed as section dot key",
-    "repairs read, not only the validation status",
-]
 
 # Spec section 2 "Inbound references that must keep resolving" and A5.
 # Anchored regexes, one per reference. Keyed references (tool-reference) are
@@ -177,18 +190,44 @@ TOOL_REFERENCE_KEY_REFERENCES = [
 ]
 STALE_RULE_KEY_REFERENCE = re.compile(r"R3a|literacy R12|literacy R13")
 
-# Spec section 5 A3 allow-list. Pre-rewrite the parent key names are not
-# known, so the allow-list is scoped by enclosing section token. Tighten to
-# key names at GREEN if the author names them.
-FENCE_SECTION_ALLOW: dict[str, str] = {
-    "literacy": r"^(1b|2[a-z]?)$",
-    "mastery": r"^(1|2|4)[a-z]?$",
+# ONE allow-list source for A3 and A12 (spec r5 R5-4). Pre-rewrite the parent key
+# names are not known, so the allow-list is scoped by enclosing section token
+# (accepted for RED; GREEN tightens it). Reading-reference fences may carry
+# glyphs and are exempt from A12 (literacy section 1d side-by-side comparison
+# included in both). Schema-definition example fences may carry glyphs but are
+# still validated by A12.
+READING_REFERENCE_SECTIONS: dict[str, str] = {
+    "literacy": r"^(1b|1d|2[a-z]?)$",
+    "mastery": r"^(1|2)[a-z]?$",
+}
+SCHEMA_EXAMPLE_SECTIONS: dict[str, str] = {
+    "mastery": r"^4[a-z]?$",
 }
 READING_REFERENCE_MAX_LINES = 40
 
-# Spec section 5 A12.
+
+def _in_reading_reference(name: str, section: str) -> bool:
+    rx = READING_REFERENCE_SECTIONS.get(name)
+    return rx is not None and re.match(rx, section) is not None
+
+
+def _in_schema_examples(name: str, section: str) -> bool:
+    rx = SCHEMA_EXAMPLE_SECTIONS.get(name)
+    return rx is not None and re.match(rx, section) is not None
+
+
+# Spec section 5 A12 and r5 R5-1, R5-2.
 A12_ORDINARY_E007_ALLOWED = {"META.PURPOSE"}
 A12_SANCTIONED_WRONG_KEY = "WRONG_EXAMPLE"
+# R5-2: compression fences only, E007 on exactly these two META keys, reason-coded
+# to operator ruling OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101 (B4 = a:
+# the compression META template keeps the pair) and to #514 (META schema gap).
+# When #514 lands this exception goes. Deleting the template to go green is forbidden.
+A12_COMPRESSION_E007_ALLOWED = {"META.COMPRESSION_TIER", "META.LOSS_PROFILE"}
+# R5-1: per-file minimum number of validated example fences (non-vacuity).
+A12_MIN_VALIDATED = {"literacy": 1, "mastery": 1, "compression": 1, "tool-reference": 0}
+# R5-1: an info tag naming one of these means the fence is not OCTAVE.
+A12_NON_OCTAVE_TAGS = {"python", "json", "yaml", "text", "ts", "regex", "bash"}
 
 # Spec section 5 A9: byte-for-byte from kernel_draft.py (payloadCompiler.ts:75).
 # JS `$` without the m flag differs from Python's, so this runs in node.
@@ -238,7 +277,7 @@ def _codes(items: list[dict[str, Any]], key: str = "code") -> Counter[str]:
     return Counter(str(i.get(key)) for i in items)
 
 
-_FENCE_OPEN = re.compile(r"^\s*(`{3,})")
+_FENCE_OPEN = re.compile(r"^\s*(`{3,})(.*)$")
 _SECTION_HEADER = re.compile(r"^\s*§(\d+[a-z]?)::")
 _KEY_LINE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)::?")
 
@@ -247,7 +286,7 @@ def _scan(text: str) -> tuple[list[tuple[int, str]], list[dict[str, Any]]]:
     """Return (lines outside fences as (lineno, text), fenced blocks).
 
     Each block: start (1-based line of the opening fence), lines (inner),
-    parent_key (nearest key line above the fence), section (nearest section
+    info (lowercased text after the opening backticks), parent_key (nearest key line above the fence), section (nearest section
     token above, ignoring section-looking lines inside fences).
     """
     outside: list[tuple[int, str]] = []
@@ -261,7 +300,13 @@ def _scan(text: str) -> tuple[list[tuple[int, str]], list[dict[str, Any]]]:
             m = _FENCE_OPEN.match(line)
             if m:
                 fence = m.group(1)
-                current = {"start": idx, "lines": [], "parent_key": parent_key, "section": section}
+                current = {
+                    "start": idx,
+                    "lines": [],
+                    "parent_key": parent_key,
+                    "section": section,
+                    "info": m.group(2).strip().lower(),
+                }
                 continue
             outside.append((idx, line))
             sm = _SECTION_HEADER.match(line)
@@ -286,7 +331,7 @@ def _odyssean_kernel(text: str) -> str | None:
     """First-match kernel extraction, copied from odyssean-anchor.
 
     Source: odyssean-anchor-mcp src/odyssean_anchor/core/extraction.py:964-997
-    (/Volumes/HestAI-Projects/odyssean-anchor-mcp). It takes the FIRST match of
+    at SHA 5a41ed6 (/Volumes/HestAI-Projects/odyssean-anchor-mcp). It takes the FIRST match of
     ``§(?:\\d+::)?ANCHOR_KERNEL`` anywhere in the file, skips the marker line,
     then stops at a stripped line starting ``===END_KERNEL===`` or ``===END===``
     or matching ``^§\\d+::``. Spec section 2 "Second extractor".
@@ -345,6 +390,66 @@ def _tokens(text: str) -> int:
     return len(tiktoken.get_encoding("cl100k_base").encode(text))
 
 
+def _bracket_body(text: str) -> str:
+    """Inside of the list that starts at text[0] == '[' (quote-aware, own brackets only)."""
+    assert text.startswith("[")
+    depth = 0
+    in_quote = False
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if in_quote:
+            if ch == "\\":
+                i += 1
+            elif ch == '"':
+                in_quote = False
+        elif ch == '"':
+            in_quote = True
+        elif ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                return text[1:i]
+        i += 1
+    return text[1:]
+
+
+def _key_text(block: str, key: str) -> str | None:
+    """Text of the value of the first ``KEY::`` line in a block (whole list if bracketed)."""
+    m = re.search(rf"^\s*{key}::", block, flags=re.MULTILINE)
+    if not m:
+        return None
+    rest = block[m.end() :]
+    stripped = rest.lstrip(" \t")
+    if stripped.startswith("["):
+        return _bracket_body(stripped)
+    return rest.split("\n", 1)[0]
+
+
+def _flat_prefixes(entries: list[dict[str, Any]]) -> list[str]:
+    """Prefixes of W_FLAT_PREFIX_SCALAR entries, parsed from "share prefix 'X_'"."""
+    found: list[str] = []
+    for e in entries:
+        if e.get("code") != "W_FLAT_PREFIX_SCALAR":
+            continue
+        m = re.search(r"share prefix '([^']+)'", str(e.get("message", "")))
+        found.append(m.group(1) if m else "?")
+    return found
+
+
+def _flat_prefix_problems(name: str, entries: list[dict[str, Any]]) -> list[str]:
+    prefixes = _flat_prefixes(entries)
+    problems: list[str] = []
+    bad = sorted({p for p in prefixes if p not in FLAT_PREFIX_ALLOW[name]})
+    if bad:
+        problems.append(f"flat-prefix groups not allowed {bad} (allowed {sorted(FLAT_PREFIX_ALLOW[name])})")
+    cap = A10_FLAT_PREFIX_SCALAR_BASELINE[name]
+    if len(prefixes) > cap:
+        problems.append(f"{len(prefixes)} flat-prefix groups, baseline cap {cap}")
+    return problems
+
+
 # ---------------------------------------------------------------------------
 # A1 Validation (skills)
 # ---------------------------------------------------------------------------
@@ -365,6 +470,22 @@ def test_A1_skill_warnings_at_most_baseline_per_code(name: str) -> None:
     over = {c: (got[c], base[c]) for c in base if got[c] > base[c]}
     assert not new_codes, f"A1 {name}: new warning codes {new_codes}"
     assert not over, f"A1 {name}: warning counts above baseline (got, base) {over}"
+
+
+@pytest.mark.parametrize("name", SKILLS)
+def test_A1_flat_prefix_groups_only_allowed_prefixes(name: str) -> None:
+    problems = _flat_prefix_problems(name, _validate(name)["warnings"])
+    assert not problems, f"A1 {name}: {problems}"
+
+
+def test_A1_flat_prefix_check_fires_on_a_disallowed_group() -> None:
+    """Canary: the prefix allow-set rejects a group outside it and a count above baseline."""
+    msg = "W_FLAT_PREFIX_SCALAR at line 1: sibling keys share prefix 'ANNOTATION_'; nest under it. Keys: A, B, C"
+    entry = {"code": "W_FLAT_PREFIX_SCALAR", "message": msg}
+    assert _flat_prefix_problems("literacy", [entry])
+    ok = {"code": "W_FLAT_PREFIX_SCALAR", "message": msg.replace("ANNOTATION_", "STEP_")}
+    assert _flat_prefix_problems("literacy", [ok]) == []
+    assert _flat_prefix_problems("compression", [ok])  # compression allows none, baseline 0
 
 
 # ---------------------------------------------------------------------------
@@ -405,26 +526,38 @@ def test_A3_no_glyphs_in_kernel(name: str) -> None:
 @pytest.mark.parametrize("name", ALL)
 def test_A3_glyphs_inside_fences_only_where_allowed(name: str) -> None:
     _, blocks = _scan(_read(name))
-    allow = re.compile(FENCE_SECTION_ALLOW[name]) if name in FENCE_SECTION_ALLOW else None
     problems: list[str] = []
     for b in blocks:
         body = "\n".join(b["lines"])
         hit = bool(GLYPH.search(body))
-        in_allowed = allow is not None and allow.match(b["section"]) is not None
+        reading = _in_reading_reference(name, b["section"])
+        schema = _in_schema_examples(name, b["section"])
         where = f"fence at line {b['start']} (section §{b['section']}, parent {b['parent_key']})"
-        if hit and not in_allowed:
+        if hit and not (reading or schema):
             problems.append(f"{where}: glyphs in a section not on the allow-list")
             continue
-        if not in_allowed:
-            continue
-        if name == "mastery" and re.match(r"^4[a-z]?$", b["section"]):
+        if schema:
             if not re.search(r"^\s*TYPE::SCHEMA\b", body, flags=re.MULTILINE):
-                problems.append(f"{where}: mastery §4 fence lacks TYPE::SCHEMA")
-        elif hit and len(b["lines"]) > READING_REFERENCE_MAX_LINES:
+                problems.append(f"{where}: schema-example fence lacks TYPE::SCHEMA")
+        elif reading and hit and len(b["lines"]) > READING_REFERENCE_MAX_LINES:
             problems.append(
                 f"{where}: reading-reference fence has {len(b['lines'])} lines, max {READING_REFERENCE_MAX_LINES}"
             )
     assert not problems, f"A3 {name}: " + "; ".join(problems)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["a->b", "x <-> y", "do a -> b", "keep `a` + `b`", "one | two", "R & D", "left ~ right", "a ⊕ b"],
+)
+def test_A3_regex_fires_on_relations(text: str) -> None:
+    """Canary (R5-5): arrows count unspaced; + & ~ | count when spaced between words."""
+    assert GLYPH.search(text), f"A3 canary: {text!r} should count as a glyph"
+
+
+@pytest.mark.parametrize("text", ["C++", "R&D", "~/.claude", "a+b", "x|y", "plain words only"])
+def test_A3_regex_ignores_legitimate_text(text: str) -> None:
+    assert not GLYPH.search(text), f"A3 canary: {text!r} must not count as a glyph"
 
 
 # ---------------------------------------------------------------------------
@@ -511,7 +644,11 @@ RULE_CITATIONS: list[tuple[str, str, str, str]] = [
 
 
 def _rules_sentences(text: str, section: str) -> list[str]:
-    """Quoted sentences of the ``RULES::[...]`` list in a section (outside fences)."""
+    """Quoted sentences of the ``RULES::[...]`` list directly in an EXACT section token.
+
+    The region runs from the section header to the next header of any other
+    token, outside fences. Only the RULES list's own brackets are read.
+    """
     outside, _ = _scan(text)
     start = next(
         (i for i, (_, t) in enumerate(outside) if (m := _SECTION_HEADER.match(t)) and m.group(1) == section), None
@@ -521,15 +658,25 @@ def _rules_sentences(text: str, section: str) -> list[str]:
     end = len(outside)
     for i in range(start + 1, len(outside)):
         m = _SECTION_HEADER.match(outside[i][1])
-        if m and not m.group(1).startswith(section):
+        if m and m.group(1) != section:
             end = i
             break
     region = "\n".join(t for _, t in outside[start:end])
-    m2 = re.search(r"^\s*RULES::\[(.*?)^\s*\]|^\s*RULES::\[(.*?)\]\s*$", region, flags=re.MULTILINE | re.DOTALL)
+    m2 = re.search(r"^\s*RULES::(?=\[)", region, flags=re.MULTILINE)
     if not m2:
         return []
-    body = m2.group(1) or m2.group(2) or ""
+    body = _bracket_body(region[m2.end() :])
     return list(re.findall(r'"((?:[^"\\]|\\.)*)"', body))
+
+
+def test_A5b_rules_parser_canary_exact_token_and_own_brackets() -> None:
+    doc = (
+        '§3::CRITICAL\n  RULES::[\n    "An empty `KEY::` opens no block [see x]."\n  ]\n  OTHER::["not a rule"]\n'
+        '  §3b::ENV\n    RULES::["wrong section"]\n§4::W\n'
+    )
+    assert _rules_sentences(doc, "3") == ["An empty `KEY::` opens no block [see x]."]
+    assert _rules_sentences(doc, "3b") == ["wrong section"]
+    assert _rules_sentences(doc, "9") == []
 
 
 @pytest.mark.parametrize(
@@ -547,22 +694,53 @@ def test_A5b_rule_citation_target_holds_cited_sentence(citing: str, target: str,
 
 
 # ---------------------------------------------------------------------------
-# A8 Kernel coverage
+# A8 Kernel coverage (each string under its own key, spec r5 R5-4)
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("name", SKILLS)
-def test_A8_skill_kernel_carries_standard_and_own_strings(name: str) -> None:
-    kernel = _odyssean_kernel(_read(name))
-    assert kernel is not None, f"A8 {name}: no ANCHOR_KERNEL section"
-    required = STD_NEVER + STD_MUST + OWN_KERNEL_STRINGS[name]
-    missing = [s for s in required if s not in kernel]
-    assert not missing, f"A8 {name}: {len(missing)} kernel strings missing, first: {missing[:4]}"
+def _required_by_key(name: str) -> dict[str, list[str]]:
+    if name == "tool-reference":
+        return {k: list(v) for k, v in CONTAINER_KERNEL_STRINGS.items()}
+    req: dict[str, list[str]] = {"NEVER": list(STD_NEVER), "MUST": list(STD_MUST)}
+    for key, strings in OWN_KERNEL_STRINGS[name].items():
+        req.setdefault(key, []).extend(strings)
+    return req
 
 
-def test_A8_tool_reference_kernel_carries_container_strings() -> None:
-    kernel = _odyssean_kernel(_read("tool-reference"))
-    assert kernel is not None, "A8 tool-reference: no ANCHOR_KERNEL section"
-    missing = [s for s in CONTAINER_KERNEL_STRINGS if s not in kernel]
-    assert not missing, f"A8 tool-reference: container strings missing: {missing}"
+def _kernel_coverage_missing(name: str, kernel: str) -> list[str]:
+    missing: list[str] = []
+    for key, strings in _required_by_key(name).items():
+        text = _key_text(kernel, key)
+        if text is None:
+            missing.append(f"{key}:: (key absent)")
+            continue
+        missing.extend(f"{key}: {s}" for s in strings if s not in text)
+    return missing
+
+
+def _kernel_for(name: str, extractor: str) -> str | None:
+    text = _read(name)
+    return _odyssean_kernel(text) if extractor == "odyssean" else _workbench_kernel(text)
+
+
+@pytest.mark.parametrize("extractor", ["odyssean", "workbench"])
+@pytest.mark.parametrize("name", ALL)
+def test_A8_kernel_carries_required_strings_under_their_keys(name: str, extractor: str) -> None:
+    kernel = _kernel_for(name, extractor)
+    assert kernel, f"A8 {name} ({extractor}): no kernel extracted"
+    missing = _kernel_coverage_missing(name, kernel)
+    assert not missing, f"A8 {name} ({extractor}): {len(missing)} strings missing, first: {missing[:4]}"
+
+
+def test_A8_check_fires_on_wrong_key_and_missing_key() -> None:
+    """Canary (R5-4): a NEVER string sitting under MUST does not count; an absent key is reported."""
+    kernel = 'TARGET::"x"\nNEVER::["a"]\nMUST::["unkeyed lines", "contents indented under the section header"]\n'
+    missing = _kernel_coverage_missing("tool-reference", kernel)
+    assert any(m.startswith("NEVER: unkeyed lines") for m in missing)
+    assert any(m.startswith("MUST: every line keyed") for m in missing)
+    assert not any(m == "MUST: contents indented under the section header" for m in missing)
+    assert _kernel_coverage_missing("tool-reference", 'TARGET::"x"\n') == [
+        "NEVER:: (key absent)",
+        "MUST:: (key absent)",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -597,6 +775,21 @@ def test_A9_odyssean_extractor_returns_whole_kernel(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", ALL)
+def test_A9_workbench_and_odyssean_kernels_are_equal(name: str) -> None:
+    text = _read(name)
+    wb = _workbench_kernel(text).strip()
+    od = (_odyssean_kernel(text) or "").strip()
+    assert wb == od, f"A9 {name}: extractors disagree (workbench {len(wb)} chars, odyssean {len(od)} chars)"
+
+
+def test_A9_equality_check_fires_on_the_end_marker_defect() -> None:
+    """Canary: ===END=== inside a MUST item truncates the workbench kernel but not odyssean's."""
+    doc = '===S===\n§5::ANCHOR_KERNEL\n  TARGET::"t"\n  MUST::["a ===END=== b"]\n  GATE::"g"\n===END===\n'
+    assert _workbench_kernel(doc).strip() != (_odyssean_kernel(doc) or "").strip()
+    assert "GATE::" not in _workbench_kernel(doc)
+
+
+@pytest.mark.parametrize("name", ALL)
 def test_A9_anchor_kernel_named_exactly_once(name: str) -> None:
     n = _read(name).count("ANCHOR_KERNEL")
     assert n == 1, f"A9 {name}: ANCHOR_KERNEL appears {n} times, must be exactly once"
@@ -607,24 +800,21 @@ def test_A9_anchor_kernel_named_exactly_once(name: str) -> None:
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("name", ALL)
 def test_A10_write_dry_run_has_no_corrections(name: str) -> None:
-    """Spec A10 says ``corrections == []``; confirmed reading (spec r4).
+    """Spec A10 (r5 R5-3): corrections hold no code other than allow-listed W_FLAT_PREFIX_SCALAR.
 
-    The spec's own C4 and A1 keep the
-    sanctioned ``STEP_n`` runbook, whose ``W_FLAT_PREFIX_SCALAR`` is emitted
-    into ``corrections`` by the dry run. A literal ``== []`` would be
-    unpassable for literacy and mastery. This test therefore requires that
-    every correction code other than ``W_FLAT_PREFIX_SCALAR`` is absent (no
-    normalisation, no reconciliation, no annotation advisories) and that
-    ``W_FLAT_PREFIX_SCALAR`` stays at most the measured baseline count.
+    The spec's own C4 keeps the sanctioned ``STEP_n`` runbook, whose
+    ``W_FLAT_PREFIX_SCALAR`` the dry run emits into ``corrections``, so a literal
+    ``== []`` would be unpassable. Every other code (normalisation, reconciliation,
+    annotation advisories) must be absent. ``W_FLAT_PREFIX_SCALAR`` is allowed only
+    for the prefixes in ``FLAT_PREFIX_ALLOW`` and at most the measured baseline count.
     """
     r = _dry_run_write(name)
     assert r["status"] == "success", f"A10 {name}: dry run status {r['status']} errors {r.get('errors')}"
-    got = _codes(r.get("corrections", []))
-    allowed = A10_FLAT_PREFIX_SCALAR_BASELINE[name]
-    extra = {c: n for c, n in got.items() if c not in allowed}
-    over = {c: (got[c], allowed[c]) for c in allowed if got[c] > allowed[c]}
-    assert not extra, f"A10 {name}: corrections other than the allowed advisories: {extra}"
-    assert not over, f"A10 {name}: advisory counts above baseline (got, allowed) {over}"
+    corrections = r.get("corrections", [])
+    extra = {c: n for c, n in _codes(corrections).items() if c != "W_FLAT_PREFIX_SCALAR"}
+    assert not extra, f"A10 {name}: corrections other than W_FLAT_PREFIX_SCALAR: {extra}"
+    problems = _flat_prefix_problems(name, corrections)
+    assert not problems, f"A10 {name}: {problems}"
 
 
 # ---------------------------------------------------------------------------
@@ -647,46 +837,53 @@ def test_A11_detector_canary_fires_on_a_known_blob() -> None:
 # A12 Examples parse
 # ---------------------------------------------------------------------------
 _ENVELOPE_OPEN = re.compile(r"^===(?!END===)[A-Z_][A-Z0-9_]*===$")
-# Spec r4 A12: fences whose first non-blank line is a section header, KEY: or KEY::.
-_FRAGMENT_START = re.compile(r"^(§\d+[a-z]?::|[A-Za-z_][A-Za-z0-9_]*::?)")
+# Fragment fences (first meaningful line is not an envelope or META:) get a META block first.
 _A12_FRAGMENT_META = 'META:\n  TYPE::EXAMPLE\n  VERSION::"1"\n'
-# Spec r4 A12 exemptions: reading-reference fences on the A3 allow-list (not the
-# mastery section 4 schema examples, which are validated), including the
-# literacy section 1d side-by-side comparison.
-A12_READING_REFERENCE_SECTIONS = {
-    "literacy": r"^(1b|1d|2[a-z]?)$",
-    "mastery": r"^(1|2)[a-z]?$",
-}
 
 
-@pytest.mark.parametrize("name", ALL)
-def test_A12_fenced_examples_parse_strict(name: str) -> None:
-    _, blocks = _scan(_read(name))
+def _first_meaningful(lines: list[str]) -> tuple[int, str]:
+    """Index and stripped text of the first line that is not blank and not a ``//`` comment."""
+    for i, ln in enumerate(lines):
+        t = ln.strip()
+        if t and not t.startswith("//"):
+            return i, t
+    return len(lines), ""
+
+
+def _a12_check(name: str, text: str) -> tuple[int, list[str]]:
+    """Validate every non-exempt fence STRICT. Returns (fences validated, problems).
+
+    Spec r5 R5-1: every fence outside the reading-reference allow-list is
+    validated unless its parent key is WRONG_EXAMPLE or its info tag names a
+    non-OCTAVE language. Leading ``//`` and blank lines are skipped when
+    classifying. ``===NAME===`` fences are validated as written; ``META:`` and all
+    other fences are wrapped in a minimal envelope (plus a META block first for
+    fragments).
+    """
+    _, blocks = _scan(text)
     problems: list[str] = []
     checked = 0
     for b in blocks:
-        body = textwrap.dedent("\n".join(b["lines"])).strip("\n")
-        first = next((ln.strip() for ln in body.split("\n") if ln.strip()), "")
-        is_envelope = bool(_ENVELOPE_OPEN.match(first))
-        is_meta = first == "META:"
-        is_fragment = bool(_FRAGMENT_START.match(first))
-        if not (is_envelope or is_meta or is_fragment):
+        tag = b["info"].split()[0] if b["info"] else ""
+        if tag in A12_NON_OCTAVE_TAGS:
             continue
         if b["parent_key"] == A12_SANCTIONED_WRONG_KEY:
             continue
-        exempt = A12_READING_REFERENCE_SECTIONS.get(name)
-        if exempt is not None and re.match(exempt, b["section"]):
+        if _in_reading_reference(name, b["section"]):
             continue
+        lines = textwrap.dedent("\n".join(b["lines"])).strip("\n").split("\n")
+        idx, first = _first_meaningful(lines)
+        is_envelope = bool(_ENVELOPE_OPEN.match(first))
+        is_meta = first == "META:"
+        body = "\n".join(lines[idx:] if is_envelope else lines)
         checked += 1
         where = f"fence at line {b['start']} (parent {b['parent_key']})"
         if is_envelope:
-            content = body
+            content = body if "===END===" in body else body + "\n===END===\n"
         elif is_meta:
             content = f"===EXAMPLE===\n{body}\n===END===\n"
         else:
             content = f"===EXAMPLE===\n{_A12_FRAGMENT_META}{body}\n===END===\n"
-        if is_envelope and "===END===" not in body:
-            content += "\n===END===\n"
         try:
             r = _validate_content(content)
         except Exception as exc:  # noqa: BLE001 - report any parser failure as a finding
@@ -697,11 +894,125 @@ def test_A12_fenced_examples_parse_strict(name: str) -> None:
         if r["repairs"]:
             problems.append(f"{where}: repairs {[x.get('subtype') for x in r['repairs']]}")
         is_schema = bool(re.search(r"^\s*TYPE::SCHEMA\b", body, flags=re.MULTILINE))
+        allowed = set(A12_ORDINARY_E007_ALLOWED)
+        if name == "compression":
+            allowed |= A12_COMPRESSION_E007_ALLOWED
         for e in r["validation_errors"]:
             field = str(e.get("field"))
-            ok = e.get("code") == "E007" and (
-                field.startswith("META.") if is_schema else field in A12_ORDINARY_E007_ALLOWED
-            )
+            ok = e.get("code") == "E007" and (field.startswith("META.") if is_schema else field in allowed)
             if not ok:
                 problems.append(f"{where}: {e.get('code')} on {field}")
+    return checked, problems
+
+
+@pytest.mark.parametrize("name", ALL)
+def test_A12_fenced_examples_parse_strict(name: str) -> None:
+    checked, problems = _a12_check(name, _read(name))
     assert not problems, f"A12 {name} ({checked} example fences checked): " + "; ".join(problems)
+
+
+@pytest.mark.parametrize("name", SKILLS)
+def test_A12_minimum_validated_fences(name: str) -> None:
+    """R5-1 non-vacuity: a rewrite cannot pass A12 by having no example fences to check."""
+    checked, _ = _a12_check(name, _read(name))
+    assert checked >= A12_MIN_VALIDATED[name], f"A12 {name}: {checked} fences validated, need {A12_MIN_VALIDATED[name]}"
+
+
+_GOOD_DOC = '===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\nKEY::"v"\n===END===\n'
+_BAD_DOC = '===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\nbare prose line here\n===END===\n'
+
+
+def _fenced(parent: str, body: str, tag: str = "") -> str:
+    return f"§1::S\n  {parent}:\n    ```{tag}\n{body}    ```\n"
+
+
+def test_A12_canary_bad_fence_is_reported_and_exemptions_hold() -> None:
+    checked, problems = _a12_check("literacy", _fenced("EXAMPLE", _BAD_DOC))
+    assert checked == 1 and problems, "A12 canary: a bad fence must be reported"
+    assert _a12_check("literacy", _fenced("WRONG_EXAMPLE", _BAD_DOC)) == (0, [])
+    assert _a12_check("literacy", _fenced("EXAMPLE", _BAD_DOC, "python")) == (0, [])
+    assert _a12_check("literacy", _fenced("EXAMPLE", "// note\n\n" + _GOOD_DOC)) == (1, [])
+    reading = "§1b::R\n  REF:\n    ```\n" + _BAD_DOC + "    ```\n"
+    assert _a12_check("literacy", reading) == (0, [])
+
+
+def test_A12_canary_compression_template_exception_is_compression_only() -> None:
+    tmpl = '===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\n  COMPRESSION_TIER::LOSSLESS\n  LOSS_PROFILE::"kept all"\n===END===\n'
+    assert _a12_check("compression", _fenced("TEMPLATE", tmpl)) == (1, [])
+    _, problems = _a12_check("literacy", _fenced("TEMPLATE", tmpl))
+    assert problems, "A12 canary: the E007 allowance must not leak to other files"
+
+
+# ---------------------------------------------------------------------------
+# A13 Structural rules C1, C4, C9 (spec r5 R5-6)
+# ---------------------------------------------------------------------------
+_KEYED_ID = re.compile(r"^\s*(R\d+[a-z]?|AP\d+|P\d+)::")
+
+
+def _c1_violations(text: str) -> list[str]:
+    """Column-0 content lines after the first section header, outside fences.
+
+    Allowed at column 0: section headers, ``===END===`` and ``//`` comments
+    (comments carry orientation only and are not content).
+    """
+    outside, _ = _scan(text)
+    seen = False
+    bad: list[str] = []
+    for n, line in outside:
+        if _SECTION_HEADER.match(line):
+            seen = True
+            continue
+        if not seen or not line.strip() or line[0] in " \t":
+            continue
+        if line.startswith("===END===") or line.startswith("//"):
+            continue
+        bad.append(f"{n}: {line.strip()[:70]}")
+    return bad
+
+
+def _c4_violations(text: str) -> list[str]:
+    outside, _ = _scan(text)
+    return [f"{n}: {t.strip()[:70]}" for n, t in outside if _KEYED_ID.match(t)]
+
+
+def _c9_violations(text: str) -> list[str]:
+    """COMPRESSION_TIER / LOSS_PROFILE keys inside the document's own META block."""
+    bad: list[str] = []
+    in_meta = False
+    for n, line in enumerate(text.split("\n"), start=1):
+        if re.match(r"^META:\s*$", line):
+            in_meta = True
+            continue
+        if in_meta:
+            if line.strip() and line[0] not in " \t":
+                break
+            if re.match(r"^\s*(COMPRESSION_TIER|LOSS_PROFILE)::", line):
+                bad.append(f"{n}: {line.strip()[:70]}")
+    return bad
+
+
+@pytest.mark.parametrize("name", ALL)
+def test_A13_C1_no_column_zero_content_after_first_header(name: str) -> None:
+    bad = _c1_violations(_read(name))
+    assert not bad, f"A13/C1 {name}: {len(bad)} column-0 content lines, first: {bad[:4]}"
+
+
+@pytest.mark.parametrize("name", ALL)
+def test_A13_C4_no_rule_or_item_id_keys(name: str) -> None:
+    bad = _c4_violations(_read(name))
+    assert not bad, f"A13/C4 {name}: {len(bad)} id-keyed lines, first: {bad[:4]}"
+
+
+@pytest.mark.parametrize("name", SKILLS)
+def test_A13_C9_skill_meta_has_no_compression_keys(name: str) -> None:
+    bad = _c9_violations(_read(name))
+    assert not bad, f"A13/C9 {name}: {bad}"
+
+
+def test_A13_canaries_fire_on_synthetic_bad_input() -> None:
+    doc = '===S===\nMETA:\n  TYPE::SKILL\n  COMPRESSION_TIER::LOSSLESS\n  LOSS_PROFILE::"x"\n§1::A\nCOLZERO::"v"\n  R3a::"rule"\n  AP2::"x"\n  P12::"y"\n===END===\n'
+    assert len(_c1_violations(doc)) == 1
+    assert len(_c4_violations(doc)) == 3
+    assert len(_c9_violations(doc)) == 2
+    clean = '===S===\nMETA:\n  TYPE::SKILL\n§1::A\n  // note\n  RULES::["x"]\n```\nINSIDE::"fence"\n```\n===END===\n'
+    assert _c1_violations(clean) == [] and _c4_violations(clean) == [] and _c9_violations(clean) == []
