@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer contains `===END===`, and `ANCHOR_KERNEL` now appears once in each of the four files
   so the odyssean-anchor first-match rule cannot be hijacked. The code-side fix, a
   line-anchored terminator, is hestai-workbench #664.
+- **Three false claims inherited from the old skill text are corrected.** (1) The
+  `META.CONTRACT::HOLOGRAPHIC<...>` label form is no tool's input; only the list form of
+  `META.CONTRACT` (`FIELD[name]::constraint_chain` specs) is read, by `octave_compile_grammar`,
+  which also skips POLICY and FIELDS on a schema-definition file when CONTRACT is present.
+  (2) `META.GRAMMAR` has no reader; it is a descriptive label. (3) `octave_validate` returns
+  `repairs[]` and `repair_log`, not `corrections[]`; `octave_write` returns `corrections[]`, and
+  a lenient write reports its schema repairs inside `corrections[]`.
 - **Primer token budget guard measured the wrong thing (AGR
   `OCTAVE-MCP-PRIMER-TOKEN-BUDGET-500-20260926`).** `octave-primers-spec.oct.md` §1
   `TOKEN_BUDGET` is raised `MAX[300]` → `MAX[500]`, measured as `cl100k_base` (tiktoken)
@@ -65,8 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Size costs, measured at HEAD with tiktoken `cl100k_base` over file bytes.** Kernels, against
   the `origin/main` (`cdfc963`) baseline: literacy 220 → 290, mastery 183 → 296, compression
   203 → 300, tool-reference 195 → 260. Every agent binding that loads a kernel pays the
-  difference. Whole files: literacy 5065 → 5061, mastery 3885 → 3355, compression 2106 → 2095,
-  and the tool-reference pattern grows 4218 → 4429.
+  difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3456, compression 2106 → 2095,
+  and the tool-reference pattern grows 4218 → 4443.
 - **Deleted mythology-teaching content (receipt).** Removed, each item checked against the diff
   to `origin/main`: mastery `§1a` TEST/GOOD/BAD examples, `GLOSS_ON_FIRST_USE`, `WHEN`/`WHEN_NOT`
   and `PARADIGM_BLINDNESS`, `§1b` `SOURCE_PRIORITY`, and `§7` `OPERATOR_SOUP`, `PROSE_BLEED` and
