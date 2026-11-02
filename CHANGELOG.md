@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that `WriteTool` has no `repairs` key, that `ValidateTool` has no `corrections` key and warns
   `E007` under STRICT, and that both anchoring forms fail to tokenize (the anchoring guard relaxes
   by itself if both start to tokenize). Size change against the previous text: compression
-  2095 → 2103, mastery 3456 → 3483, tool-reference 4465 → 4466 `cl100k_base` tokens; kernels are
+  2095 → 2103, mastery 3456 → 3487, tool-reference 4465 → 4463 `cl100k_base` tokens; kernels are
   unchanged.
 - **`octave-literacy` kernel truncation (live defect).** The workbench kernel extractor stops
   at the first `===END===`, and literacy's `§5::ANCHOR_KERNEL` held that string inside a MUST
@@ -96,8 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Size costs, measured at HEAD with tiktoken `cl100k_base` over file bytes.** Kernels, against
   the `origin/main` (`cdfc963`) baseline: literacy 220 → 290, mastery 183 → 296, compression
   203 → 300, tool-reference 195 → 260. Every agent binding that loads a kernel pays the
-  difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3483, compression 2106 → 2103,
-  and the tool-reference pattern grows 4218 → 4466.
+  difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3487, compression 2106 → 2103,
+  and the tool-reference pattern grows 4218 → 4463.
 - **Deleted mythology-teaching content (receipt).** Removed, each item checked against the diff
   to `origin/main`: mastery `§1a` TEST/GOOD/BAD examples, `GLOSS_ON_FIRST_USE`, `WHEN`/`WHEN_NOT`
   and `PARADIGM_BLINDNESS`, `§1b` `SOURCE_PRIORITY`, and `§7` `OPERATOR_SOUP`, `PROSE_BLEED` and
