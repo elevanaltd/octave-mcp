@@ -1131,3 +1131,51 @@ def test_A12_template_guard_canary_needs_both_keys_and_a_clean_fence() -> None:
     bad = both.replace("===END===", "bare prose line\n===END===")
     _, _, clean = _a12_scan("compression", _fenced("TEMPLATE", bad))
     assert clean == [], "a fence that fails validation must not count as the template"
+
+
+# ---------------------------------------------------------------------------
+# A13 META path fields (spec r5+ section 15 R15)
+# ---------------------------------------------------------------------------
+# META CANONICAL and SOURCE are machine-read path fields (a canonical-paths
+# pre-commit hook reads them), so their values must be bare paths: no backtick,
+# no whitespace, no semicolon, and so no prose note.
+_META_PATH_KEYS = ("CANONICAL", "SOURCE")
+
+
+def _meta_path_violations(text: str) -> list[str]:
+    bad: list[str] = []
+    in_meta = False
+    for n, line in enumerate(text.split("\n"), start=1):
+        if re.match(r"^META:\s*$", line):
+            in_meta = True
+            continue
+        if not in_meta:
+            continue
+        if line.strip() and line[0] not in " \t":
+            break
+        m = re.match(r"^\s*(CANONICAL|SOURCE)::(.*)$", line)
+        if not m:
+            continue
+        value = m.group(2).strip()
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = value[1:-1]
+        if "`" in value or ";" in value or re.search(r"\s", value):
+            bad.append(f"{n}: {m.group(1)}::{value[:70]}")
+    return bad
+
+
+@pytest.mark.parametrize("name", ALL)
+def test_A13_R15_meta_path_fields_are_bare_paths(name: str) -> None:
+    bad = _meta_path_violations(_read(name))
+    assert not bad, f"A13/R15 {name}: META path fields must be bare paths (no backtick, whitespace or ';'): {bad}"
+
+
+def test_A13_R15_canary_fires_on_decorated_path_fields() -> None:
+    def doc(extra: str) -> str:
+        return f'===S===\nMETA:\n  TYPE::PATTERN\n{extra}§1::A\n  CANONICAL::"outside meta `ok`"\n===END===\n'
+
+    assert _meta_path_violations(doc('  SOURCE::"src/a/b.oct.md"\n  CANONICAL::".hestai-sys/x.oct.md"\n')) == []
+    assert len(_meta_path_violations(doc('  SOURCE::"`src/a/b.oct.md`"\n'))) == 1  # backticks
+    assert len(_meta_path_violations(doc('  CANONICAL::".hestai-sys/x.oct.md; legacy copy"\n'))) == 1  # ; and prose
+    assert len(_meta_path_violations(doc('  CANONICAL::"two words"\n'))) == 1  # whitespace
+    assert _meta_path_violations(doc("")) == []  # absent keys are fine; body lines are not META
