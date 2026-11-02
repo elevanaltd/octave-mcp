@@ -7,8 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`tests/unit/test_p2_8_bundled_skills_language.py`: acceptance guard for the bundled skills
+  and the tool-reference pattern** (spec criteria A1-A5, A5b, A8-A13). It runs the real
+  `ValidateTool` and `WriteTool` dry run (the parser is never mocked) against the four
+  rewritten files. It checks STRICT validation and warning baselines, the glyph rule, size
+  caps, inbound section and rule citations, the standard kernel strings under their own keys,
+  the workbench regex (run in node) and odyssean-anchor kernel extraction agreeing, a clean
+  dry run, no snake-case blobs, that fenced examples parse, and the container, no-id and META
+  rules. Small canaries prove each check fires on bad input. It needs `node` on `PATH` and
+  fails, rather than skips, without it; CI runs on `ubuntu-latest`, which has it. The
+  hub-corpus tests that need `.hestai-sys` skip locally when it is absent, so they do not cover
+  these four files on a machine without it.
+
 ### Fixed
 
+- **`octave-literacy` kernel truncation (live defect).** The workbench kernel extractor stops
+  at the first `===END===`, and literacy's `§5::ANCHOR_KERNEL` held that string inside a MUST
+  item, so the extracted kernel was cut to 6 lines with no `GATE`. The rewritten kernel no
+  longer contains `===END===`, and `ANCHOR_KERNEL` now appears once in each of the four files
+  so the odyssean-anchor first-match rule cannot be hijacked. The code-side fix, a
+  line-anchored terminator, is hestai-workbench #664.
+- **Three false claims inherited from the old skill text are corrected.** (1) The
+  `META.CONTRACT::HOLOGRAPHIC<...>` label form is no tool's input; only the list form of
+  `META.CONTRACT` (`FIELD[name]::constraint_chain` specs) is read, by `octave_compile_grammar`,
+  which also skips POLICY and FIELDS on a schema-definition file when CONTRACT is present.
+  (2) `META.GRAMMAR` has no reader; it is a descriptive label. (3) `octave_validate` returns
+  `repairs[]` and `repair_log`, not `corrections[]`; `octave_write` returns `corrections[]`, and
+  a lenient write reports its schema repairs inside `corrections[]`. The tool-reference
+  inspection list now also names `validation_errors[]`. `repairs[]` carries parse-level repairs
+  whatever `fix` is, and schema repairs only with `fix=true`; with `fix=false` schema failures
+  land by profile: in `validation_errors[]` under STRICT and STANDARD, but under LENIENT and ULTRA
+  the status is VALIDATED and they are downgraded to `warnings[]`. `repair_log` aliases
+  `repairs`.
+- **`octave-tool-reference` META `SOURCE` and `CANONICAL` are plain paths again.** The rewrite had
+  put backticks and a prose note into these machine-read path fields (a canonical-paths
+  pre-commit hook reads them). That was a regression inside this PR, now guarded by the A13 R15
+  test in the acceptance file; the upstream note lives in the pattern body instead.
 - **Primer token budget guard measured the wrong thing (AGR
   `OCTAVE-MCP-PRIMER-TOKEN-BUDGET-500-20260926`).** `octave-primers-spec.oct.md` §1
   `TOKEN_BUDGET` is raised `MAX[300]` → `MAX[500]`, measured as `cl100k_base` (tiktoken)
@@ -30,6 +66,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Bundled skills and the tool-reference pattern are rewritten to teach the estate document
+  language.** Version bumps: `octave-literacy` 4.0.0 → 5.0.0, `octave-mastery` 4.0.0 → 5.0.0,
+  `octave-compression` 3.1.0 → 4.0.0, `octave-tool-reference` pattern 1.1.9 → 1.2.0. The three
+  skills take a major bump because the teaching inverts: relations in words, note-form values,
+  identifiers copied exactly, rules held as lists of quoted sentences with no rule ids, section
+  contents indented, and glyphs kept only in fenced reading references and schema-definition
+  examples. The pattern takes a minor bump. Authority: `LANG-ARCH-RECONCILIATION-RULINGS-20261031`
+  (P2-8) and `OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101` (PR #541). Section numbers that
+  other files cite are kept; citations of the old rule ids (`R3a`, `R12`, `R13`) now point at the
+  section and its words. Each skill kernel carries the standard kernel strings; the
+  tool-reference kernel carries only the container subset of them (unkeyed lines, a value on a
+  section header, keyed and quoted lines, indentation, section-dot-key edits, reading repairs).
+- **Size costs, measured at HEAD with tiktoken `cl100k_base` over file bytes.** Kernels, against
+  the `origin/main` (`cdfc963`) baseline: literacy 220 → 290, mastery 183 → 296, compression
+  203 → 300, tool-reference 195 → 260. Every agent binding that loads a kernel pays the
+  difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3456, compression 2106 → 2095,
+  and the tool-reference pattern grows 4218 → 4465.
+- **Deleted mythology-teaching content (receipt).** Removed, each item checked against the diff
+  to `origin/main`: mastery `§1a` TEST/GOOD/BAD examples, `GLOSS_ON_FIRST_USE`, `WHEN`/`WHEN_NOT`
+  and `PARADIGM_BLINDNESS`, `§1b` `SOURCE_PRIORITY`, and `§7` `OPERATOR_SOUP`, `PROSE_BLEED` and
+  `§7a` `TELEGRAPHIC_PHRASE`; compression `R3a`, `R5`, `R6`, `§6` `CONSERVATIVE_PLUS_MYTHOLOGY`,
+  and the ULTRA_MYTHIC "60%" figure (now a pointer to `octave-ultra-mythic`); literacy `§0`
+  mythology lines, `ASCII_RULE` and `TELEGRAPHIC_PHRASE`.
+- **Accepted risk: kernel-only agents lose some basic syntax items under the 300-token kernel
+  cap.** The remedy is the P2-8b pointer trim of each kernel to a pointer sentence plus its own
+  items.
+- **`octave-compression` keeps the loss receipt (option a).** Compression outputs still carry
+  `COMPRESSION_TIER` and `LOSS_PROFILE` in META, in note form. The skills' own META no longer
+  carry them. Both keys are still `E007` under schema=META STRICT until #514 lands.
+- **`octave-tool-reference` `§4::CHANGES_MODE` gains `KNOWN_DEFECT` for #517.** The
+  `NO_AUTO_CREATE` contract line is unchanged. The new entry records the measured path matrix
+  and advises addressing edits as section dot key and checking the diff.
+- **Source direction reversed for these four files.** octave-mcp is now the upstream for
+  `octave-literacy`, `octave-mastery`, `octave-compression` and `octave-tool-reference`. Never
+  re-align them FROM the HestAI-MCP hub: this reverses the direction of PR #513. The hub copy is
+  the legacy text and is its owner's concern.
+- **Follow-on, no release in between.** P2-8b aligns the specs, primers, `octave-chatter` and
+  `octave-ultra-mythic` with the new teaching. Do not cut an octave-mcp release between P2-8 and
+  P2-8b, so a published package never ships self-contradicting teaching.
 - **`octave-primers-spec.oct.md` and the bundled primers gained defensive quoting** so they
   round-trip through `octave_write` without loss: a bare `===END===` sitting inside a bracket
   value truncated the whole document on write, chained `KEY::VALUE::extra` lines silently
