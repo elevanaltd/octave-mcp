@@ -1248,6 +1248,9 @@ def _warnings_definition_problems(text: str) -> list[str]:
             problems.append(
                 "octave_validate part of WARNINGS does not mention its own codes (validation_errors or E007)"
             )
+        # An explicit denial ("no corrections[]") is fine; any other mention is a false claim.
+        if "corrections[]" in re.sub(r"\bno\s+`?corrections\[\]`?", "", part):
+            problems.append("octave_validate part of WARNINGS claims corrections[]; that tool has none")
     return problems
 
 
@@ -1263,6 +1266,12 @@ def test_P2_8a_c_canary() -> None:
     assert _warnings_definition_problems(both) == [
         "octave_validate part of WARNINGS does not mention its own codes (validation_errors or E007)"
     ]
+    claims = '  WARNINGS::"`octave_write`: subset of corrections; `octave_validate`: E007 inside corrections[]"'
+    assert _warnings_definition_problems(claims) == [
+        "octave_validate part of WARNINGS claims corrections[]; that tool has none"
+    ], "validate part claiming corrections[] must fail even with E007"
+    denies = '  WARNINGS::"`octave_write`: subset of corrections; `octave_validate`: E007, no `corrections[]` here"'
+    assert _warnings_definition_problems(denies) == [], "an explicit denial is allowed"
     shared = '  WARNINGS::"`octave_write` and `octave_validate` both return corrections[]"'
     assert _warnings_definition_problems(shared), "both-return-corrections must fail"
     good = (
