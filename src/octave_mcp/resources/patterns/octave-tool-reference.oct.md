@@ -53,10 +53,10 @@ META:
     literal_zone_repair_log
   ]
   STATUS::"success or error; error carries `errors[]` with a code (`E_PARSE`, `E_HASH`, `E_UNRESOLVABLE_PATH`, `E_OP_TARGET_MISMATCH` and others), nothing written"
-  VALIDATION_STATUS::"VALIDATED; UNVALIDATED with no or unknown schema; INVALID with schema violations in `validation_errors[]`"
+  VALIDATION_STATUS::"VALIDATED; UNVALIDATED with no or unknown schema; INVALID with schema violations in `validation_errors[]` under STRICT and STANDARD; LENIENT and ULTRA report VALIDATED and downgrade them to `warnings[]`"
   CORRECTIONS::"every normalisation and repair applied; entries carry `rule_id`, `before`, `after`, `safe`, `semantics_changed`, tier NORMALIZATION, REPAIR or LENIENT_PARSE"
   WARNINGS::"subset of `corrections[]` with `safe: false`; data-affecting only; benign normalisation never appears here"
-  REPAIRS::"`octave_validate` only: parse-level repairs (`bare_line_dropped`, `duplicate_key` and others) whatever `fix` is; schema repairs only with `fix=true`; with `fix=false` schema failures sit in `validation_errors[]`; `repair_log` aliases the same list; both empty on a clean artefact; a lenient write reports its schema repairs inside `corrections[]`"
+  REPAIRS::"`octave_validate` only: parse-level repairs (`bare_line_dropped`, `duplicate_key` and others) whatever `fix` is; schema repairs only with `fix=true`; with `fix=false` schema failures land by profile, as VALIDATION_STATUS says; `repair_log` aliases the same list; both empty on a clean artefact; a lenient write reports its schema repairs inside `corrections[]`"
   EMPTY_WARNINGS_RULE::"empty `warnings[]` does not mean untouched; read `corrections[]` for what changed; only empty corrections, warnings and repairs together mean bytes already canonical"
   TRIAGE:
     DISCARDING::"content lost or corrupted: `W_BARE_LINE_DROPPED`, `W_NUMERIC_KEY_DROPPED`, `W_DUPLICATE_KEY`, `W_UNQUOTED_SECTION_IN_VALUE`, `W_LENIENT_MULTI_WORD_COALESCE` (unquoted multi-word value silently joined), `W_BARE_FLOW` (flow arrow outside brackets, legacy form); fix source and rewrite"
@@ -132,7 +132,6 @@ META:
     EXAMPLE_BEFORE::"`I6<migration_on_moving_target_is_anti_pattern_for_zero_warnings>`"
     EXAMPLE_AFTER::"`I6<production_grade_quality>`, sibling `RATIONALE::\"migration against a moving target makes strict typing an anti-pattern\"`"
     FROZEN_ARCHIVES::"archives (DECISIONS-ARCHIVE, `docs/research/`, benchmark docs) stay frozen; zero return on batch-rewriting historical records"
-    DETECTION::"non-blocking, advisory only"
   SNAKE_CASE_BLOB:
     POLICY::"rewrite snake-fragmented prose only when amending a record whose `corrections[]` surfaces `W_SNAKE_CASE_BLOB`"
     TRIGGER::"record amendment where `octave_validate` or `octave_write` returns `W_SNAKE_CASE_BLOB` for a value or list element in a reasoning-field position (octave-mcp 1.13.0 advisory)"
@@ -141,7 +140,6 @@ META:
     ACTION::["Rewrite the value as a quoted note-form sentence, per the note-form rule in the literacy §4b rules list; relations in words.","Atoms belong in structural positions (keys, enum values), not in reasoning-field values."]
     EXAMPLE_BEFORE::"`BECAUSE::migration_on_moving_target_is_anti_pattern_for_zero_warnings_during_strict_typing`"
     EXAMPLE_AFTER::"`BECAUSE::\"migration against a moving target makes strict typing an anti-pattern\"`"
-    DETECTION::"non-blocking, advisory only"
   STRUCTURAL_ADVISORY:
     POLICY::"reshape only the block being amended; never batch-restructure a file for shape warnings alone"
     W_INLINE_ARRAY_ROOT::"`TOKEN::[KEY::v,...]`, map as inline root: block form per octave-literacy §1d (`TOKEN:` plus indented children)"
