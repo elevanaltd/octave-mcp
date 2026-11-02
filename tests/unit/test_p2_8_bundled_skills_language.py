@@ -1140,6 +1140,7 @@ def test_A12_template_guard_canary_needs_both_keys_and_a_clean_fence() -> None:
 # pre-commit hook reads them), so their values must be bare paths: no backtick,
 # no whitespace, no semicolon, and so no prose note.
 _META_PATH_KEYS = ("CANONICAL", "SOURCE")
+_META_PATH_LINE = re.compile(r"^\s*(" + "|".join(re.escape(k) for k in _META_PATH_KEYS) + r")::(.*)$")
 
 
 def _meta_path_violations(text: str) -> list[str]:
@@ -1153,7 +1154,7 @@ def _meta_path_violations(text: str) -> list[str]:
             continue
         if line.strip() and line[0] not in " \t":
             break
-        m = re.match(r"^\s*(CANONICAL|SOURCE)::(.*)$", line)
+        m = _META_PATH_LINE.match(line)
         if not m:
             continue
         value = m.group(2).strip()
