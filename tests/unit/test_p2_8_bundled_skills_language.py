@@ -1187,7 +1187,7 @@ def test_A13_R15_canary_fires_on_decorated_path_fields() -> None:
 # ---------------------------------------------------------------------------
 _PROBE_DOC = '===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\nK::"v"\n===END===\n'
 _PURPOSE_DOC = '===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\n  PURPOSE::"p"\n===END===\n'
-_ANCHOR_PROBE = '===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\n  CONTRACT::HOLOGRAPHIC<latest@local>\n===END===\n'
+_ANCHOR_FORMS = ("HOLOGRAPHIC<latest@local>", "HOLOGRAPHIC<frozen@sha256_abc123>")
 
 
 def _value_of(text: str, key: str) -> str:
@@ -1240,7 +1240,15 @@ def _warnings_definition_problems(text: str) -> list[str]:
     value = _value_of(text, "WARNINGS")
     if not value:
         return ["no WARNINGS key"]
-    return [f"WARNINGS does not name {t}" for t in ("`octave_write`", "`octave_validate`") if t not in value]
+    problems = [f"WARNINGS does not name {t}" for t in ("`octave_write`", "`octave_validate`") if t not in value]
+    if "`octave_validate`" in value:
+        # The octave_validate part is what follows the tool name, up to the next ';' or end.
+        part = value.split("`octave_validate`", 1)[1].split(";", 1)[0].lower()
+        if "validation_errors" not in part and "e007" not in part:
+            problems.append(
+                "octave_validate part of WARNINGS does not mention its own codes (validation_errors or E007)"
+            )
+    return problems
 
 
 def test_P2_8a_c_tool_reference_warnings_distinguishes_the_two_tools() -> None:
@@ -1252,13 +1260,27 @@ def test_P2_8a_c_canary() -> None:
     assert _warnings_definition_problems('  WARNINGS::"subset of `corrections[]` with `safe: false`"')
     assert _warnings_definition_problems("  OTHER::x") == ["no WARNINGS key"]
     both = '  WARNINGS::"`octave_write`: subset of corrections; `octave_validate`: validation codes"'
-    assert _warnings_definition_problems(both) == []
+    assert _warnings_definition_problems(both) == [
+        "octave_validate part of WARNINGS does not mention its own codes (validation_errors or E007)"
+    ]
+    shared = '  WARNINGS::"`octave_write` and `octave_validate` both return corrections[]"'
+    assert _warnings_definition_problems(shared), "both-return-corrections must fail"
+    good = (
+        '  WARNINGS::"`octave_write`: subset of corrections; `octave_validate`: E007 and downgraded validation_errors"'
+    )
+    assert _warnings_definition_problems(good) == []
+    assert _warnings_definition_problems(good.replace("E007", "e007").replace("validation_errors", "x")) == []
 
 
 # a: anchoring forms are not presented as writable while they fail to tokenize
 def _anchor_tokenizes() -> bool:
-    r = asyncio.run(ValidateTool().execute(content=_ANCHOR_PROBE, schema="META", profile="STRICT"))
-    return not any(e.get("code") == "E_TOKENIZE" for e in r.get("errors", []))
+    """True only if BOTH anchoring forms tokenize; one failing form keeps the guard on."""
+    for form in _ANCHOR_FORMS:
+        doc = f'===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\n  CONTRACT::{form}\n===END===\n'
+        r = asyncio.run(ValidateTool().execute(content=doc, schema="META", profile="STRICT"))
+        if any(e.get("code") == "E_TOKENIZE" for e in r.get("errors", [])):
+            return False
+    return True
 
 
 def _anchoring_problems(text: str, tokenizes: bool) -> list[str]:
