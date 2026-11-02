@@ -3,165 +3,178 @@ name: octave-compression
 description: "Workflow for transforming prose into semantic OCTAVE structures. Covers tier selection, transformation phases, loss accounting, and decision rules. REQUIRES octave-literacy."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["compress to octave", "semantic compression", "documentation refactoring", "octave compression", "compress documentation", "knowledge artifact", "semantic density", "OCTAVE format conversion"]
-version: "3.1.0"
+version: "4.0.0"
 ---
 
 ===OCTAVE_COMPRESSION===
 META:
   TYPE::SKILL
-  VERSION::"3.1.0"
+  VERSION::"4.0.0"
   STATUS::ACTIVE
-  PURPOSE::"Decision rules and workflow for transforming prose into semantic OCTAVE at the correct fidelity tier"
+  PURPOSE::"Decision rules and workflow for turning prose into OCTAVE at the right fidelity tier"
   REQUIRES::octave-literacy
   NEXT_SKILLS::[octave-ultra-mythic]
   PATTERNS::[octave-tool-reference]
   SPEC_REFERENCE::octave-data-spec.oct.md
 ---
 §1::TIER_SELECTION
-  // Choose tier BEFORE reading source. Tier drives every subsequent decision.
+  WHEN::"choose the tier before reading the source; the tier drives every later decision"
   TIERS:
     LOSSLESS:
-      TARGET::"100%_fidelity"
+      TARGET::"100 percent fidelity"
       PRESERVE::everything
       DROP::nothing
       USE::[
-        critical_reasoning,
-        legal_documents,
-        safety_analysis,
-        audit_trails,
-        syntax_references
+        "critical reasoning",
+        "legal documents",
+        "safety analysis",
+        "audit trails",
+        "syntax references"
       ]
     CONSERVATIVE:
-      TARGET::"85-90%_fidelity"
-      PRESERVE::explanatory_depth
+      TARGET::"85 to 90 percent fidelity"
+      PRESERVE::"explanatory depth"
       DROP::redundancy
-      LOSS::"10-15%[repetition,verbose_phrasing,some_edge_cases]"
+      LOSS::"10 to 15 percent: repetition, verbose phrasing, some edge cases"
       USE::[
-        research_summaries,
-        design_decisions,
-        technical_analysis
+        "research summaries",
+        "design decisions",
+        "technical analysis"
       ]
     AGGRESSIVE:
-      TARGET::"70%_fidelity"
-      PRESERVE::[core_thesis∧conclusions]
-      DROP::[nuance∨narrative]
-      LOSS::"30%[explanatory_depth,tradeoff_narratives,edge_case_exploration]"
+      TARGET::"70 percent fidelity"
+      PRESERVE::"core thesis and conclusions"
+      DROP::"nuance or narrative"
+      LOSS::"30 percent: explanatory depth, trade-off narratives, edge-case exploration"
       USE::[
-        context_window_scarcity,
-        quick_reference,
-        decision_support
+        "context window scarcity",
+        "quick reference",
+        "decision support"
       ]
     ULTRA:
-      TARGET::"50%_fidelity"
-      PRESERVE::[facts∧structure]
-      DROP::all_narrative
-      LOSS::"50%[almost_all_explanatory_content,tradeoff_reasoning]"
+      TARGET::"50 percent fidelity"
+      PRESERVE::"facts and structure"
+      DROP::"all narrative"
+      LOSS::"50 percent: almost all explanatory content, trade-off reasoning"
       USE::[
-        extreme_scarcity,
-        embedding_generation,
-        dense_reference
+        "extreme scarcity",
+        "embedding generation",
+        "dense reference"
       ]
     ULTRA_MYTHIC:
-      TARGET::"60%_compression"
-      PRESERVE::[soul∧constraints]
-      METHOD::mythological_atoms
-      USE::[agent_binding, identity_transfer]
-      REQUIRES::octave-ultra-mythic
-      // Specialized identity compression skill for agent binding and
-      // identity transfer contexts. See skills/octave-ultra-mythic.
+      POINTER::"identity compression for agent binding and identity transfer lives in the octave-ultra-mythic skill; read it there"
   DECISION_RULES::[
-    "IF[reconstruction_accuracy_critical]→CONSERVATIVE∨LOSSLESS",
-    "IF[context_window_scarce∧loss_acceptable]→AGGRESSIVE∨ULTRA",
-    "IF[decision_relevant_facts_must_survive]→CONSERVATIVE⊕mythology_domain_labels",
-    "IF[source_is_a_rule_or_syntax_reference]→LOSSLESS — a reference compressed below its rules is a broken reference",
-    "DEFAULT→CONSERVATIVE"
+    "Reconstruction accuracy critical: CONSERVATIVE or LOSSLESS.",
+    "Context window scarce and loss acceptable: AGGRESSIVE or ULTRA.",
+    "Decision-relevant facts must survive: CONSERVATIVE.",
+    "Source is a rule or syntax reference: LOSSLESS; a reference compressed below its rules is a broken reference.",
+    "Otherwise: CONSERVATIVE."
   ]
+  EVIDENCE::"stated both ways. octave-mcp study (`docs/research/compression-fidelity-round-trip-study.md`): CONSERVATIVE with mythology domain labels as key prefixes kept 11 of 11 decision-relevant facts at 15 percent fewer tokens than the prose, because each labelled field was translated separately, which prevents fact merging. A later bench of this document language: mythology as writing escalates when misapplied and, under exact fit, is harmless and does no work plain words do not (confidence High); myth names as instruction vocabulary carried no readable weight over plain names (confidence Medium: never had headroom to read). Rule: mythology is not instruction vocabulary; write labels in plain words."
 §2::LOSS_ACCOUNTING
-  // I4::TRANSFORM_AUDITABILITY — every transformation must log what was preserved vs dropped.
-  // These META fields are MANDATORY for any compressed output.
+  RECEIPT_RULE::"North Star I4 (transform auditability): if bits were dropped, the output carries a receipt; no silent loss"
   REQUIRED_META_FIELDS::[COMPRESSION_TIER,LOSS_PROFILE]
-  LOSS_PROFILE_FORMAT::"[preserve:X,drop:Y]"
-  // LOSS_PROFILE must be explicit — never hidden
+  SCOPE::"the pair belongs in the META of compressed outputs only, as the named exception; skills and other documents do not carry it"
+  LOSS_PROFILE_FORM::"a note-form sentence saying what was kept and what was dropped"
   EXAMPLES:
-    CONSERVATIVE::"[preserve:causal_chains,drop:verbose_phrasing]"
-    AGGRESSIVE::"[preserve:core_thesis∧conclusions,drop:explanatory_depth∨edge_cases]"
-    ULTRA::"[preserve:facts∧structure,drop:all_narrative∨tradeoff_reasoning]"
+    CONSERVATIVE::"kept causal chains; dropped verbose phrasing"
+    AGGRESSIVE::"kept core thesis and conclusions; dropped explanatory depth and edge cases"
+    ULTRA::"kept facts and structure; dropped all narrative and trade-off reasoning"
   META_BLOCK_TEMPLATE:
     ```
-META:
-  TYPE::DECISION
-  VERSION::"1.0.0"
-  COMPRESSION_TIER::CONSERVATIVE
-  LOSS_PROFILE::"[preserve:causal_chains,drop:verbose_phrasing]"
+    META:
+      TYPE::DECISION
+      VERSION::"1.0.0"
+      COMPRESSION_TIER::CONSERVATIVE
+      LOSS_PROFILE::"kept causal chains and numbers; dropped verbose phrasing"
     ```
-  I4_RULE::"If bits were dropped, the output must carry a receipt. No silent loss."
-  CONSISTENCY_RULE::"LOSSLESS ⇌ non-empty drop: is a contradiction — if LOSS_PROFILE names anything dropped, the tier is not LOSSLESS"
+  KNOWN_GAP::"under `schema=META` STRICT both keys give `E007` today (#514); the validator still pairs them: `W_META_001` when COMPRESSION_TIER has no LOSS_PROFILE, `W_META_002` when LOSS_PROFILE is `none` on a tier other than LOSSLESS (`src/octave_mcp/core/validator.py`, `_check_meta_warnings`)"
+  CONSISTENCY_RULE::"LOSSLESS with a non-empty dropped list is a contradiction; if LOSS_PROFILE names anything dropped, the tier is not LOSSLESS"
 §3::TRANSFORMATION_WORKFLOW
   PHASE_1_READ:
-    MAP::"Identify all causal chains (A causes B, X requires Y)"
+    MAP::"find every causal chain (A causes B, X requires Y)"
     IDENTIFY::[
-      Redundancy,
-      Verbosity,
-      Conditional_Qualifiers
+      redundancy,
+      verbosity,
+      "conditional qualifiers"
     ]
-    NOTE::"Conditional qualifiers (when X, if Y, unless Z) carry material risk — never drop"
+    NOTE::"conditional qualifiers (when X, if Y, unless Z) carry material risk; never drop them"
   PHASE_2_EXTRACT:
     PRESERVE::[
-      causal_chains,
-      BECAUSE_statements,
+      "causal chains",
+      "BECAUSE statements",
       metrics,
-      conditional_qualifiers
+      "conditional qualifiers",
+      "identifiers, copied exactly",
+      "hedges, copied verbatim"
     ]
     COMPRESS::[
       stopwords,
       repetition,
-      verbose_phrasing,
-      narrative_connectives
+      "verbose phrasing",
+      "narrative connectives"
     ]
-    ANCHOR::"One concrete example per major abstraction — anchors reconstruction fidelity"
+    ANCHOR::"one concrete example per major abstraction anchors reconstruction fidelity"
   PHASE_3_COMPRESS:
-    OPERATORS::"Apply ⊕ ⇌ → ∧ ∨ from octave-literacy §2"
-    HIERARCHY::"Group related concepts under parent BLOCK keys"
-    MYTHOLOGY::"Use domain label prefixes (ARTEMIS::, CHRONOS::) to anchor facts — see §6"
-    ARRAYS::"Convert parallel items to [item1,item2,item3]"
+    HIERARCHY::"group related concepts under parent block keys"
+    ARRAYS::"turn parallel items into a list of quoted sentences or atoms"
+    RELATIONS::"write relations in words, per the literacy §4b rules list"
+    CONTRADICTIONS::"a source that contradicts itself is kept both ways and flagged"
   PHASE_4_VALIDATE:
-    FIDELITY::"Are all causal chains intact?"
-    LOSS_RECEIPT::"Does META carry COMPRESSION_TIER and LOSS_PROFILE?"
-    GROUNDING::"Is there at least one concrete example per major abstraction?"
-    RECEIPTS::"Inspect corrections[] ⊕ warnings[] from octave_write per octave-tool-reference §3 — W_BARE_LINE_DROPPED and W_NUMERIC_KEY_DROPPED are silent data loss; empty warnings[] alone is not a clean receipt"
+    FIDELITY::"are all causal chains intact?"
+    LOSS_RECEIPT::"does META carry COMPRESSION_TIER and LOSS_PROFILE?"
+    GROUNDING::"is there at least one concrete example per major abstraction?"
+    RECEIPTS::"read `corrections[]`, `warnings[]` and `repairs[]` from `octave_write` and triage them per octave-tool-reference §3::TRIAGE; `W_BARE_LINE_DROPPED` and `W_NUMERIC_KEY_DROPPED` are silent data loss; empty warnings alone are not a clean receipt"
 §4::COMPRESSION_RULES
-  R1::"Preserve CAUSALITY — X→Y because Z. Never flatten to X→Y alone."
-  R2::"Preserve CONDITIONAL QUALIFIERS — when X, if Y, unless Z carry material risk info"
-  R3::"Preserve EXPLICIT TRADEOFFS — GAIN⇌LOSS or GAIN vs LOSS"
-  R3a::"TELEGRAPHIC_PHRASE — quoted value, stopwords dropped, operators carry English connectives — e.g. 'security ⇌ usability' not 'security at odds with usability'"
-  R4::"One concrete example per major abstraction — minimum reconstruction anchor"
-  R5::"Use mythology as KEY PREFIXES (CHRONOS::audit_6wk) not embedded values — domain labels are reconstruction anchors"
-  R6::"Use mythology as PATTERN DESCRIPTORS (SISYPHEAN,ODYSSEAN) for single-token trajectory encoding"
-  R7::"Never drop numbers, IDs, thresholds, or named entities — these are irreplaceable"
-  R8::"Never place a value on a section header — §N::NAME::\"value\" drops the value silently (literacy R12). Section headers open scopes; content goes on child lines."
+  RULES::[
+    "Keep causality: X leads to Y because Z; never flatten it to X leads to Y alone.",
+    "Keep conditional qualifiers (when X, if Y, unless Z); they carry material risk.",
+    "Keep trade-offs in words: gain versus loss.",
+    "Keep one concrete example per major abstraction as the minimum reconstruction anchor.",
+    "Never drop numbers, identifiers, thresholds or named entities; they cannot be rebuilt.",
+    "Never place a value on a section header; it is dropped silently (literacy §3, the rule that a section header carries no value); content goes on child lines.",
+    "Never invent to fill a slot or field: write `none` or `not known`."
+  ]
 §5::ANCHOR_KERNEL
-TARGET::prose_to_OCTAVE_at_declared_fidelity_tier
-NEVER::[compress_before_choosing_tier,drop_causal_chains,drop_conditional_qualifiers,drop_numbers_IDs_thresholds,silent_loss_without_META_receipt,LOSSLESS_label_with_nonempty_drop,value_on_section_header]
-MUST::[
-  "tier first: LOSSLESS ∨ CONSERVATIVE ∨ AGGRESSIVE ∨ ULTRA ∨ ULTRA_MYTHIC — DEFAULT CONSERVATIVE; references → LOSSLESS",
-  "META carries COMPRESSION_TIER ⊕ LOSS_PROFILE::[preserve:X,drop:Y]",
-  "operators carry connectives; mythology as KEY prefix ∨ pattern descriptor, never as embedded value",
-  "one concrete example per abstraction survives",
-  "inspect corrections[] ⊕ warnings[] after octave_write"
-]
-GATE::"Could a reader reconstruct every causal chain, qualifier, and number from this output — and does META say what was dropped?"
-§6::CONSERVATIVE_PLUS_MYTHOLOGY
-  // CONSERVATIVE compression + mythology domain labels = maximum fidelity at minimum tokens
-  WHEN::"Decision-relevant content where reconstruction accuracy matters more than minimum tokens"
-  METHOD::"Use mythology terms as KEY prefixes (CHRONOS::audit_6wk) not embedded values"
-  WHY::"Domain labels force agents to translate each labeled field separately — prevents fact merging"
-  RESULT::"11/11 decision-relevant facts preserved at 15% fewer tokens than original prose"
-  EVIDENCE::octave-mcp[docs/research/compression-fidelity-round-trip-study.md]
+  TARGET::"prose to OCTAVE, tier declared"
+  NEVER::[
+    "operators in prose or values",
+    "mythology as instruction words",
+    "snake_case blobs",
+    "invented content; write none or not known",
+    "model-written ids, tags or counts",
+    "unkeyed lines",
+    "a value on a section header",
+    "judgement attributed to a named person",
+    "shortened or merged identifiers",
+    "compressing before choosing the tier",
+    "dropping causal chains, conditions or numbers"
+  ]
+  MUST::[
+    "note form",
+    "identifiers copied exactly, in backticks",
+    "hedges and conditions copied verbatim",
+    "relations in words",
+    "one calibration sentence on a prohibition that can over-fire",
+    "code in fenced blocks",
+    "a self-contradicting source kept both ways and flagged",
+    "every line keyed, multi-word values quoted",
+    "contents indented under the section header",
+    "edits addressed as section dot key",
+    "repairs read, not only the validation status",
+    "tier first; default conservative; references lossless",
+    "compressed output says what was kept and what was dropped",
+    "LOSSLESS drops nothing",
+    "one example per abstraction kept"
+  ]
+  GATE::"Could a reader rebuild every causal chain, condition and number, and does the document say what was dropped?"
 §7::ANTI_PATTERNS
-  AP1::"Markdown inside OCTAVE blocks — no bold, no headers, no bullet hyphens"
-  AP2::"JSON/YAML syntax — no curly braces, no trailing commas, no YAML bullet hyphens"
-  AP3::"Deep nesting beyond 3 levels — restructure with parent BLOCK keys"
-  AP4::"Silent loss — always declare COMPRESSION_TIER and LOSS_PROFILE in META"
-  AP5::"Paradigm drift — validate for LLM parse efficiency, not human readability"
-  AP6::"Compressing the rulebook — a syntax or governance reference at AGGRESSIVE tier drops the examples that make it a reference (R4). References are LOSSLESS."
+  ANTI_PATTERNS::[
+    "Markdown inside OCTAVE: no bold, no headings, no bullet hyphens.",
+    "JSON or YAML syntax: no curly braces, no trailing commas, no YAML bullet hyphens.",
+    "Nesting deeper than 3 levels: restructure with parent block keys.",
+    "Silent loss: a compressed output always declares COMPRESSION_TIER and LOSS_PROFILE in META.",
+    "Paradigm drift: validate for LLM parse efficiency, not human readability.",
+    "Compressing the rulebook: a syntax or governance reference at AGGRESSIVE drops the examples that make it a reference; references are LOSSLESS."
+  ]
 ===END===

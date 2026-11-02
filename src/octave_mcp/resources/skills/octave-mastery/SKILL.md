@@ -1,29 +1,26 @@
 ---
 name: octave-mastery
-description: "Advanced semantic vocabulary, functional mythology, holographic contracts, and structural patterns for OCTAVE. REQUIRES octave-literacy. Absorbs octave-mythology: pantheon, narrative forces, usage law, archetype annotation, v6 contracts, anti-pattern rules."
+description: "Advanced OCTAVE forms that a parser or validator reads: holographic schema definitions, grammar compilation, typed archetype annotations, and structural patterns, plus a reading glossary of mythology and narrative terms. REQUIRES octave-literacy."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced octave", "OCTAVE mastery", "holographic patterns", "archetypes", "high-density specifications", "system architecture", "holographic contracts", "archetype annotation", "mythology", "OCTAVE mythology", "functional mythology", "SISYPHEAN", "ICARIAN", "PROMETHEAN", "mythological domains"]
-version: "4.0.0"
+version: "5.0.0"
 ---
 
 ===OCTAVE_MASTERY===
 META:
   TYPE::SKILL
-  VERSION::"4.0.0"
+  VERSION::"5.0.0"
   STATUS::ACTIVE
-  PURPOSE::"Expert-level OCTAVE: mythology vocabulary and usage law, holographic contracts, archetype annotation, anti-patterns"
+  PURPOSE::"Forms a parser or validator reads (schema definitions, grammar compilation, typed annotations), structural patterns, and a reading glossary"
   REQUIRES::octave-literacy
   NEXT_SKILLS::[octave-ultra-mythic]
-  ABSORBS::"octave-mythology 1.3.0 — vocabulary, usage rule, gloss convention, open-vocabulary rule, anti-patterns; research narrative stays at octave-mcp docs/research/"
+  ABSORBS::"octave-mythology 1.3.0: vocabulary kept as a reading glossary; research narrative stays at octave-mcp `docs/research/`"
   SPEC_REFERENCE::octave-core-spec.oct.md
-  COMPRESSION_TIER::CONSERVATIVE
-  LOSS_PROFILE::"[preserve:vocabulary∧usage_law∧contracts∧anti_patterns,drop:implementation_internals→octave-mcp_source∨research_narrative→octave-mcp_docs]"
 ---
-§1::SEMANTIC_PANTHEON
-  // Compression vocabulary — zero-shot, use directly. Literal term wins when equally clear.
-  // Use as KEY prefixes (ARTEMIS::latency_p99) or PATTERN DESCRIPTORS (SISYPHEAN_DEBT).
-  DEFINITION::"Mythology = pre-trained compression already in the weights, activating rich probability distributions"
-  DOMAINS:
+§1::READING_GLOSSARY
+  PURPOSE::"decode mythology terms met in documents you read; this glossary is for reading, not for writing instructions"
+  GLOSSARY:
+    ```
     ZEUS::"Executive authority, final arbitration, strategic direction"
     ATHENA::"Strategic wisdom, planning, elegant solutions"
     APOLLO::"Analytics, insight, clarity, prediction"
@@ -34,60 +31,44 @@ META:
     POSEIDON::"Storage, databases, data lakes, unstructured pools"
     DEMETER::"Resource allocation, budgeting, scaling, growth"
     DIONYSUS::"UX, engagement, creativity, chaotic innovation"
+    ```
+  READING_NOTES::["A Title_Case prefix (`Artemis_Scrape`, `Ares_BruteForce`) is a qualified action, not a standalone archetype; a standalone archetype matches `[A-Z][A-Z_]*`.","Mythology used as a key prefix (`ARTEMIS::latency_p99`) or a pattern descriptor (`SISYPHEAN_DEBT`) in older documents: read it by the glossary sense."]
   §1a::USAGE_LAW
-    // Mythology compresses BEHAVIOR and STATE — not categories or labels
-    TEST::"Does the mythology add behavioral dimensions the literal term loses? If not, use the literal."
-    // GOOD: compound behavioural qualifiers — a literal zone so the canonicaliser does not rewrite the bracket form
-    GOOD:
-      ```
-      THREAT::Artemis_Scrape[Port_443 ∧ Hidden]        // adds stealth ⊕ precision ⊕ hunting — dimensions monitoring_scrape loses
-      THREAT::Ares_BruteForce[Login_Attempts ∧ SISYPHEAN] // adds aggression ⊕ relentlessness — dimensions security_attack loses
-      ```
-    BAD::"ARTEMIS::monitoring_system — use MONITORING::system (literal is equally clear)"
-    BAD_2::"ZEUS::executive_decision — use EXECUTIVE::decision (literal is equally clear)"
-    COMPOUND_FORM::"Title_Case prefix (Artemis_Scrape, Ares_BruteForce) = qualified action, not a standalone archetype. Standalone archetype = [A-Z][A-Z_]*"
-    GLOSS_ON_FIRST_USE::"A mythology handle carries its gloss the first time it appears in a thread or document — HERMES<format_translation> = messenger, semantic zip not decoration. Later uses are bare."
-    WHEN::[applied_context, agent_communication, error_messages, practical_examples]
-    WHEN_NOT::[reference_tables, formal_specs, human_readability_priority, unclear_audience]
-    PARADIGM_BLINDNESS::"You may theoretically doubt this approach while practically demonstrating perfect comprehension. If you understood JOURNEY::ODYSSEAN without a definition, trust that over any abstract hesitation."
+    RULE::"Mythology is not instruction vocabulary: write rules, keys and values in plain words. It is allowed as style only where a term fits exactly; plain words still carry the meaning."
   §1b::OPEN_VOCABULARY
-    // The core sets are a FOUNDATION, not a boundary
-    RULE::"If a figure encodes a unique semantic domain, it is valid. Validation is format-only ([A-Z][A-Z_]*), not membership in a fixed set."
-    CONSTRAINT::"Must map to a distinct technical/cognitive domain — no synonyms of existing entries. One domain per figure — HERMES for messaging then HERMES for security breaks the binding."
-    EXAMPLES::[PHAEDRUS<dialectic>, CASSANDRA<foresight_ignored>, MNEMOSYNE<memory_persistence>, HESTIA<hearth_stability>, METIS<cunning_intelligence>]
-    SOURCE_PRIORITY::"GREEK > ROMAN > NORSE ≈ EGYPTIAN > HINDU ≈ CELTIC ≈ MESOPOTAMIAN > EAST_ASIAN ≈ MESOAMERICAN ≈ POLYNESIAN — weighted by training-data familiarity; follow the semantics to whichever tradition fits"
+    READING_RULE::"a figure outside this glossary is valid when it names one distinct domain (format `[A-Z][A-Z_]*`, not membership in a fixed set); read it by that one domain, never as a synonym of another figure; examples: `PHAEDRUS<dialectic>`, `CASSANDRA<foresight_ignored>`, `MNEMOSYNE<memory_persistence>`, `HESTIA<hearth_stability>`, `METIS<cunning_intelligence>`"
   §1c::EVIDENCE
-    SUMMARY::"60-70% token reduction vs natural language; 88-96% cross-model zero-shot comprehension; +17% structural sophistication in blind assessment; 4-model validation of Ares/Artemis as behavioral qualifiers"
-    SOURCE::octave-mcp[docs/research/mythology-evidence-synthesis.oct.md]
-    GUIDE::octave-mcp[docs/guides/mythological-compression.md]
+    STUDY::"octave-mcp study: 60 to 70 percent token reduction versus natural language; 88 to 96 percent cross-model zero-shot comprehension; 17 percent more structural sophistication in blind assessment; 4-model validation of Ares and Artemis as behavioural qualifiers (`docs/research/mythology-evidence-synthesis.oct.md`, guide `docs/guides/mythological-compression.md`)"
+    COUNTER_EVIDENCE::"a later bench of this document language: mythology as writing escalates when misapplied and, under exact fit, is harmless and does no work plain words do not (confidence High); myth names as instruction vocabulary carried no readable weight over plain names (confidence Medium: never had headroom to read); hence the rule in §1a"
 §2::NARRATIVE_FORCES
-  // Single-token state and trajectory descriptors
-  TRAJECTORIES:
-    ODYSSEAN::"Long transformative journey with clear goal"
-    SISYPHEAN::"Repetitive endless maintenance, cyclical failure"
-    PROMETHEAN::"Breakthrough challenging status quo"
-    ICARIAN::"Overreach from early success → failure, scope creep"
-    PANDORAN::"Action unleashing unforeseen cascades"
-    TROJAN::"Hidden payload transforming system from within"
-    GORDIAN::"Unconventional cut through impossible problem"
-    ACHILLEAN::"Single critical point of failure"
-    PHOENICIAN::"Necessary destruction and rebirth"
-  FORCES:
-    KAIROS::"Critical fleeting opportunity window"
-    CHRONOS::"Linear time pressure"
-    HUBRIS::"Dangerous overconfidence"
-    NEMESIS::"Inevitable corrective consequence"
-    CHAOS::"Entropy and disorder"
-    COSMOS::"Emergence of order from complexity"
-  FORCE_TRACKING:
-    // Temporal and emotional dynamics as single expressions
-    RISK::"HUBRIS→NEMESIS [overconfidence heading toward consequence]"
-    OPPORTUNITY::"KAIROS_WINDOW [critical timing moment]"
-    STABILITY::"CHAOS→COSMOS [degradation then recovery]"
-    STATE::"HEALTH::[GREEN→YELLOW→ICARIAN] — trajectory encoded in the last token"
+  PURPOSE::"decode single-token state and trajectory terms met in documents you read; reading only"
+  GLOSSARY:
+    ```
+    TRAJECTORIES:
+      ODYSSEAN::"Long transformative journey with clear goal"
+      SISYPHEAN::"Repetitive endless maintenance, cyclical failure"
+      PROMETHEAN::"Breakthrough challenging status quo"
+      ICARIAN::"Overreach from early success → failure, scope creep"
+      PANDORAN::"Action unleashing unforeseen cascades"
+      TROJAN::"Hidden payload transforming system from within"
+      GORDIAN::"Unconventional cut through impossible problem"
+      ACHILLEAN::"Single critical point of failure"
+      PHOENICIAN::"Necessary destruction and rebirth"
+    FORCES:
+      KAIROS::"Critical fleeting opportunity window"
+      CHRONOS::"Linear time pressure"
+      HUBRIS::"Dangerous overconfidence"
+      NEMESIS::"Inevitable corrective consequence"
+      CHAOS::"Entropy and disorder"
+      COSMOS::"Emergence of order from complexity"
+    FORCE_TRACKING:
+      RISK::"HUBRIS→NEMESIS [overconfidence heading toward consequence]"
+      OPPORTUNITY::"KAIROS_WINDOW [critical timing moment]"
+      STABILITY::"CHAOS→COSMOS [degradation then recovery]"
+      STATE::"HEALTH::[GREEN→YELLOW→ICARIAN] — trajectory encoded in the last token"
+    ```
 §3::ARCHETYPE_ANNOTATION
-  // Archetypes in agent definitions use NAME<qualifier> annotation form
-  // <qualifier> is a semantic facet, not a list. It narrows what the archetype IS in this context.
+  FIELD::"typed field `AGENT_DEFINITION.ARCHETYPE`: a list of annotated archetypes, each `NAME<qualifier>`; the qualifier is one behavioural facet that narrows what the archetype is in this context"
   SYNTAX::ARCHETYPE_NAME<behavioral_facet>
   CORRECT::[
     HEPHAESTUS<faithful_transcription>,
@@ -95,41 +76,40 @@ META:
     ATHENA<strategic_wisdom>,
     HERMES<format_translation>
   ]
-  // The <qualifier> activates a specific behavioral dimension of the archetype.
-  // Do NOT use NAME[qualifier] for archetypes — that is constructor syntax, not annotation.
-  // Do NOT stack multiple qualifiers: HEPHAESTUS<a,b> is invalid. Use one facet per archetype.
-  ANTI_PATTERN::"HEPHAESTUS[faithful_transcription] — wrong bracket form for archetype annotation"
-  CONTENT_DISCIPLINE::"Qualifier content MUST be ≤32 chars and ≤4 underscore-tokens. Longer content is snake_case prose masquerading as an annotation — extract to a sibling field."
-  CONTENT_WRONG::"HEPHAESTUS<faithful_and_precise_transcription_of_all_content_without_loss>"
-  CONTENT_RIGHT::"HEPHAESTUS<faithful_transcription> + PRINCIPLE::\"Transcribe all content without loss.\""
-  MULTI_ARCH::"[HEPHAESTUS<faithful_transcription>, ATLAS<reliable_execution>] — list of annotated archetypes"
+  RULES::[
+    "Annotation brackets only: `NAME[qualifier]` is constructor syntax, not annotation.",
+    "One facet per archetype: stacked qualifiers such as `HEPHAESTUS<a,b>` are invalid.",
+    "Qualifier at most 32 characters and at most 4 underscore-tokens; longer content is prose posing as an annotation, so move it to a sibling field."
+  ]
+  WRONG_EXAMPLE::["`HEPHAESTUS[faithful_transcription]`: constructor brackets on an archetype","`HEPHAESTUS<faithful_and_precise_transcription_of_all_content_without_loss>`: qualifier too long"]
+  RIGHT_EXAMPLE::"`HEPHAESTUS<faithful_transcription>` with a sibling PRINCIPLE reading: transcribe all content without loss"
 §4::HOLOGRAPHIC_CONTRACTS
-  // v6: Documents carry their own validation law in META. Two distinct uses:
-  // (A) CONTRACT in META = document-level validation law (what this document must contain)
-  // (B) HOLOGRAPHIC pattern in BODY = field-level constraint (what this field must satisfy)
+  SCOPE::"the only section that teaches writing operator glyphs, and only inside schema-definition files (`TYPE::SCHEMA`), because the validator reads them; every other document writes relations in words"
+  USES::"two places: META.CONTRACT, which a tool reads only in the list form below; and holographic patterns in a schema's FIELDS block, the field-level law the validator reads"
   §4a::CONTRACT_IN_META
-    // Place in META block. Defines validation rules for the whole document.
-    FORM::"CONTRACT::HOLOGRAPHIC<validation_law_in_document>"
-    // CONTRACT value is an annotation — use <> not []
-    // The holographic compiler reads META.CONTRACT to validate all fields below.
-    ANCHORING:
-      FROZEN::"CONTRACT::HOLOGRAPHIC<frozen@sha256_abc123> — locks schema to specific hash, hermetic"
-      LATEST::"CONTRACT::HOLOGRAPHIC<latest@local> — resolves to current local schema, mutable"
-    // Use frozen@ for production documents requiring reproducibility.
-    // Use latest@local for active development documents.
-    GRAMMAR_FIELD::"GRAMMAR::GBNF_COMPILER<generate_constrained_output> — emits GBNF for constrained generation"
+    FORM::"`CONTRACT::HOLOGRAPHIC<validation_law_in_document>` in META is a descriptive label that no tool interprets (literacy §7d); but `octave_compile_grammar` checks only that CONTRACT is present, so on a schema-definition file the label makes it skip the POLICY and FIELDS blocks; keep it off schema-definition files"
+    COMPILER::"the one CONTRACT form a tool consumes: `octave_compile_grammar` reads `META.CONTRACT` as a list of `FIELD[name]::constraint_chain` specs (`src/octave_mcp/mcp/compile_grammar.py`)"
+    ANCHORING::["`HOLOGRAPHIC<frozen@sha256_abc123>` locks the schema to a hash, hermetic; for production documents that need reproducibility.","`HOLOGRAPHIC<latest@local>` resolves to the current local schema, mutable; for active development documents."]
+    KNOWN_GAP::"on octave-mcp 1.16.0 both anchoring forms fail `E_TOKENIZE` (the `@` inside the annotation), so no validated example carries them"
+    GRAMMAR_FIELD::"`GRAMMAR::GBNF_COMPILER<generate_constrained_output>` is a descriptive label; no tool reads `META.GRAMMAR`; for GBNF, call `octave_compile_grammar` on a document carrying META.CONTRACT or a POLICY and FIELDS block"
+    SCHEMA_GAP::"under `schema=META` STRICT, CONTRACT and GRAMMAR give `E007` (#514)"
   §4b::HOLOGRAPHIC_BODY_PATTERN
-    // Field-level constraint in BODY. Syntax: KEY::["value"∧CONSTRAINT→§TARGET]
-    // The brackets contain: value ∧ constraint → routing target
+    FORM::"in a schema's FIELDS block, each field reads: value, joined by the constraint glyph to its constraints, then the flow glyph to an optional routing target section; see the example"
     SYNTAX_BREAKDOWN:
       VALUE::"the literal value or expression"
       CONSTRAINT::"REQ, OPT, ENUM[a,b], REGEX[pattern], RANGE[min,max], MAX_LENGTH[n], ISO8601, DATE"
-      TARGET::"§SECTION — where validated values route (optional)"
+      TARGET::"section where validated values route; optional"
     EXAMPLE:
       ```
-STATUS::["ACTIVE"∧ENUM[ACTIVE,DRAFT,DEPRECATED]→§LIFECYCLE]
-PRIORITY::["HIGH"∧ENUM[HIGH,MEDIUM,LOW]]
-LATENCY::["<200ms"∧REGEX[<\d+ms]]
+      ===STATUS_FIELDS===
+      META:
+        TYPE::SCHEMA
+        VERSION::"1.0"
+      FIELDS:
+        STATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,DRAFT,DEPRECATED]→§LIFECYCLE]
+        PRIORITY::["HIGH"∧OPT∧ENUM[HIGH,MEDIUM,LOW]]
+        LATENCY::["200ms"∧REGEX["^[0-9]+ms$"]]
+      ===END===
       ```
     CONSTRAINT_TYPES:
       CORE::[
@@ -150,70 +130,77 @@ LATENCY::["<200ms"∧REGEX[<\d+ms]]
         ISO8601
       ]
   §4c::CONTRACT_BLOCK_EXAMPLE
-    // Full META block using CONTRACT for a typed document
+    PURPOSE::"a full schema definition: META, POLICY and FIELDS together"
     EXAMPLE:
       ```
-===MY_DOCUMENT===
-META:
-  TYPE::DECISION
-  VERSION::"1.0.0"
-  CONTRACT::HOLOGRAPHIC<latest@local>
----
-STATUS::["ACTIVE"∧ENUM[ACTIVE,DRAFT,DEPRECATED]]
-OWNER::["team-name"∧REQ]
-DECISION::["adopt microservices"∧REQ]
-===END===
+      ===DECISION_RECORD===
+      META:
+        TYPE::SCHEMA
+        VERSION::"1.0"
+        STATUS::ACTIVE
+      POLICY:
+        VERSION::"1.0"
+        UNKNOWN_FIELDS::REJECT
+        TARGETS::["§LIFECYCLE"]
+      FIELDS:
+        STATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,DRAFT,DEPRECATED]→§LIFECYCLE]
+        OWNER::["team-name"∧REQ]
+        DECISION::["adopt microservices"∧REQ]
+      ===END===
       ```
 §5::ANCHOR_KERNEL
-TARGET::expert_OCTAVE_expression_mythology_contracts_archetypes
-NEVER::[mythology_where_literal_is_equally_clear,archetype_in_constructor_brackets,stacked_qualifiers,qualifier_over_32_chars,structural_syntax_inside_quoted_value,nested_inline_map,one_figure_two_domains]
-MUST::[
-  "myth handle only when it adds behavior the literal loses; gloss on first use",
-  "ARCHETYPE<facet> one facet; reasoning → sibling RATIONALE telegraphic phrase",
-  "CONTRACT::HOLOGRAPHIC<…> in META for document law; KEY::[value∧CONSTRAINT] for field law",
-  "maps of maps → BLOCK form; relations inside values → operators only"
-]
-GATE::"Would a literal term carry the same meaning — and does every structural form sit in a key, never a value?"
+  TARGET::"advanced forms a parser or validator reads"
+  NEVER::[
+    "operators in prose or values",
+    "mythology as instruction words",
+    "snake_case blobs",
+    "invented content; write none or not known",
+    "model-written ids, tags or counts",
+    "unkeyed lines",
+    "a value on a section header",
+    "judgement attributed to a named person",
+    "shortened or merged identifiers",
+    "glyphs outside schema-definition examples",
+    "the glossary used for writing"
+  ]
+  MUST::[
+    "note form",
+    "identifiers copied exactly, in backticks",
+    "hedges and conditions copied verbatim",
+    "relations in words",
+    "one calibration sentence on a prohibition that can over-fire",
+    "code in fenced blocks",
+    "a self-contradicting source kept both ways and flagged",
+    "every line keyed, multi-word values quoted",
+    "contents indented under the section header",
+    "edits addressed as section dot key",
+    "repairs read, not only the validation status",
+    "holographic constraints only in schema-definition files",
+    "one facet per archetype, 32 characters at most, in angle brackets",
+    "maps of maps as blocks, never nested inline maps"
+  ]
+  GATE::"Is every glyph I wrote inside a schema-definition example, and every other relation in words?"
 §6::BLOCK_NOTATION_RULE
-  // Hierarchical content MUST use block notation
-  RULE::"Nested structures (maps containing maps) MUST use BLOCK notation: single colon + indented children"
-  NEVER::"Inner value is itself an inline map: KEY::[outer::[inner::val]] — error E_NESTED_INLINE_MAP in strict mode, warning W_NESTED_INLINE_MAP in lenient mode"
-  PRIMARY_CASE::"Agent §2::BEHAVIOR definitions — CONDUCT, PROTOCOL, OUTPUT blocks require block notation"
+  RULE::"nested structures (maps containing maps) MUST use block notation: single colon plus indented children"
+  NEVER::"an inner value that is itself an inline map, `KEY::[outer::[inner::val]]`: error `E_NESTED_INLINE_MAP` in strict mode, warning `W_NESTED_INLINE_MAP` in lenient mode"
+  PRIMARY_CASE::"agent `§2::BEHAVIOR` definitions: CONDUCT, PROTOCOL and OUTPUT blocks need block notation"
   CORRECT:
     ```
-CONDUCT:
-  TONE::"Precise"
-  PROTOCOL:
-    MUST_ALWAYS::[rule_a, rule_b]
+    CONDUCT:
+      TONE::"Precise"
+      PROTOCOL:
+        MUST_ALWAYS::[rule_a, rule_b]
     ```
-  WRONG::"CONDUCT::[TONE::\"Precise\", PROTOCOL::[MUST_ALWAYS::[rule_a]]]"
-  RECOVERY_ON_E_NESTED_INLINE_MAP::"Fix is BLOCK form — NOT flatten-to-scalars (creates FLAT_PREFIX_SCALARS anti-pattern, §7), NOT collapse-to-blob (creates W_SNAKE_CASE_BLOB). The wrong escapes produce a different error class, not a solution."
+  WRONG_EXAMPLE::"`CONDUCT::[TONE::Precise, PROTOCOL::[MUST_ALWAYS::[rule_a]]]`"
+  RECOVERY_ON_E_NESTED_INLINE_MAP::"the fix is block form; not flattening to scalars (creates the flat-prefix anti-pattern, §7), not collapsing to a blob (creates `W_SNAKE_CASE_BLOB`); those escapes give a different error class, not a solution"
 §7::ANTI_PATTERNS
-  // Each has a concrete example of what NOT to do
-  ISOLATED_LIST::"[auth, payments, users] with no relationships — use DECISION::microservice_extraction[auth⊕payments→independent_services] instead"
-  FLAT_HIERARCHY::"All keys at top level with no grouping — group related keys under a parent BLOCK"
-  BURIED_NETWORK::"RELATED_TO::other_service hidden in prose comment — use explicit operator: auth→payments[dependency]"
-  OPERATOR_SOUP::"RESULT::A+B->C~D all in one expression — break into separate keyed fields"
-  PROSE_BLEED::"Stopword-laden English sentences as values — quoted telegraphic phrases ARE valid (see §7a). Ban applies when operators could compress the same semantics."
-  INLINE_ARRAY_ROOT::"TOKEN::[KEY::v, KEY2::v2] — inline map used as multi-field token root. Non-canonical for map tokens even when values are atomic; BLOCK form is mandated. Triggers E_NESTED_INLINE_MAP as soon as any child value needs nesting (§6::BLOCK_NOTATION_RULE). Fix: use BLOCK form (TOKEN: + indented children) from the start."
-  FLAT_PREFIX_SCALARS::"PARENT_CHILD::v, PARENT_CHILD2::v2 — flattened hierarchy via key name prefixes instead of BLOCK nesting. Destroys grouping and LLM attention. Fix: group under a PARENT: block with CHILD::v children."
-  STRUCTURAL_SYNTAX_SCOPE::"Applies to DATA values. Documentation that names a form (literacy §1b: NAME<qualifier>, ENUM[a,b]) or a fenced example is exempt — the rule targets facts smuggled into strings, not syntax being described."
-  STRUCTURAL_SYNTAX_IN_VALUE::"<> annotation ∨ [] constructor embedded INSIDE a quoted telegraphic value — e.g. \"migration[high_risk]<legacy_db> → downtime\" or \"SISYPHEAN[bugs] ⊕ KAIROS[repair]\". Structural forms are key/identifier-only (§3, literacy §1b: <> qualifies identity, [] parameterizes operations). Inside a value the parser treats them as opaque text → all the ambiguity, none of the validation, and it blurs the structural⇌value boundary. Fix: inside a value, relations carry via telegraphic operators only (→ ⇌ ∧ ∨ ⊕); push facets to a sibling field or an annotated KEY. 'migration → downtime' + RISK::high, or open a block MIGRATION<legacy_db>: with the facts as children."
-  CEREMONIAL_MYTHOLOGY::"'As ATHENA, goddess of wisdom, I bestow...' — narrative prose, not functional compression. Mythology is a handle, never a voice."
-  MYTHOLOGY_IN_REFERENCE_TABLES::"Spec tables and formal definitions stay literal; use examples, not tables, to activate mythology."
-  §7a::TELEGRAPHIC_PHRASE
-    DEFINITION::"Quoted value with stopwords dropped; operators ⊕ ⇌ ∧ ∨ → carry relational meaning English connectives would spell out"
-    RULES::[
-      "Drop stopwords (is, at, for, the, a, with, by, of) — operators carry connectives",
-      "Use ⇌ for tension ('security ⇌ usability' not 'security at odds with usability')",
-      "Use → for causality ('migration → conflict' not 'migration causes conflict')",
-      "Preserve named entities, thresholds, IDs — never compress these",
-      "Use ∧ for joint conditions, ∨ for alternatives, ⊕ for emergent synthesis",
-      "Structural syntax (<> / []) is key/identifier-only — NEVER embed inside the quoted value (see §7::STRUCTURAL_SYNTAX_IN_VALUE)"
-    ]
-    EXAMPLE_PAIR:
-      BEFORE::"\"natural language at odds with OCTAVE because stopwords\" (~13 tokens)"
-      AFTER::"\"natural language ⇌ OCTAVE → stopword overhead\" (~5 tokens)"
-    WHY::"operators are parse-efficient for LLM attention — same fidelity, lower token cost"
-    SEE_ALSO::"octave-compression §4::COMPRESSION_RULES R3a for full rule set"
+  ISOLATED_LIST::"a list such as auth, payments, users with no stated relationships; state the relation in words, for example a DECISION reading: extract auth and payments into independent services"
+  FLAT_HIERARCHY::"all keys at top level with no grouping; group related keys under a parent block"
+  BURIED_NETWORK::"a relationship hidden in a prose comment, such as auth depending on payments; state it on a keyed line, for example `DEPENDS_ON::payments` inside the auth block"
+  INLINE_ARRAY_ROOT::"`TOKEN::[KEY::v, KEY2::v2]`, an inline map as a multi-field token root: non-canonical for map tokens even when values are atomic, and it gives `E_NESTED_INLINE_MAP` as soon as a child needs nesting (§6); use block form (`TOKEN:` plus indented children) from the start"
+  FLAT_PREFIX_SCALARS::"`PARENT_CHILD::v`, `PARENT_CHILD2::v2`: a hierarchy flattened into key prefixes instead of block nesting loses grouping and attention; group under a `PARENT:` block with `CHILD::v` children"
+  STRUCTURAL_SYNTAX_IN_VALUE::"an annotation or constructor embedded inside a quoted value, such as `migration[high_risk]<legacy_db>` in a sentence: structural forms are key and identifier only (§3, literacy §1b); inside a value the parser treats them as opaque text, so they bring the ambiguity and none of the validation. Inside a value, write relations in words per the note-form rule in the literacy §4b rules list; push facets to a sibling field (`RISK::high`) or open a block `MIGRATION<legacy_db>:` with the facts as children."
+  STRUCTURAL_SYNTAX_SCOPE::"applies to data values; documentation that names a form (literacy §1b) and fenced examples are exempt, because the rule targets facts smuggled into strings, not syntax being described"
+  CEREMONIAL_MYTHOLOGY::"narrative prose such as 'As ATHENA, goddess of wisdom, I bestow...' is not compression; mythology is a handle, never a voice"
+  MYTHOLOGY_IN_REFERENCE_TABLES::"spec tables and formal definitions stay literal"
 ===END===
