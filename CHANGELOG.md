@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inspection list now also names `validation_errors[]`. `repairs[]` carries parse-level repairs
   whatever `fix` is, and schema repairs only with `fix=true`; with `fix=false` schema failures
   sit in `validation_errors[]`. `repair_log` aliases `repairs`.
+- **`octave-tool-reference` META `SOURCE` and `CANONICAL` are plain paths again.** The rewrite had
+  put backticks and a prose note into these machine-read path fields (a canonical-paths
+  pre-commit hook reads them). That was a regression inside this PR, now guarded by the A13 R15
+  test in the acceptance file; the upstream note lives in the pattern body instead.
 - **Primer token budget guard measured the wrong thing (AGR
   `OCTAVE-MCP-PRIMER-TOKEN-BUDGET-500-20260926`).** `octave-primers-spec.oct.md` §1
   `TOKEN_BUDGET` is raised `MAX[300]` → `MAX[500]`, measured as `cl100k_base` (tiktoken)
@@ -76,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the `origin/main` (`cdfc963`) baseline: literacy 220 → 290, mastery 183 → 296, compression
   203 → 300, tool-reference 195 → 260. Every agent binding that loads a kernel pays the
   difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3456, compression 2106 → 2095,
-  and the tool-reference pattern grows 4218 → 4463.
+  and the tool-reference pattern grows 4218 → 4465.
 - **Deleted mythology-teaching content (receipt).** Removed, each item checked against the diff
   to `origin/main`: mastery `§1a` TEST/GOOD/BAD examples, `GLOSS_ON_FIRST_USE`, `WHEN`/`WHEN_NOT`
   and `PARADIGM_BLINDNESS`, `§1b` `SOURCE_PRIORITY`, and `§7` `OPERATOR_SOUP`, `PROSE_BLEED` and
