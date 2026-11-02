@@ -38,7 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a lenient write reports its schema repairs inside `corrections[]`. The tool-reference
   inspection list now also names `validation_errors[]`. `repairs[]` carries parse-level repairs
   whatever `fix` is, and schema repairs only with `fix=true`; with `fix=false` schema failures
-  sit in `validation_errors[]`. `repair_log` aliases `repairs`.
+  land by profile: in `validation_errors[]` under STRICT and STANDARD, but under LENIENT and ULTRA
+  the status is VALIDATED and they are downgraded to `warnings[]`. `repair_log` aliases
+  `repairs`.
 - **`octave-tool-reference` META `SOURCE` and `CANONICAL` are plain paths again.** The rewrite had
   put backticks and a prose note into these machine-read path fields (a canonical-paths
   pre-commit hook reads them). That was a regression inside this PR, now guarded by the A13 R15
