@@ -55,9 +55,9 @@ META:
   STATUS::"success or error; error carries `errors[]` with a code (`E_PARSE`, `E_HASH`, `E_UNRESOLVABLE_PATH`, `E_OP_TARGET_MISMATCH` and others), nothing written"
   VALIDATION_STATUS::"VALIDATED; UNVALIDATED with no or unknown schema; INVALID with schema violations in `validation_errors[]` under STRICT and STANDARD; LENIENT and ULTRA report VALIDATED and downgrade them to `warnings[]`"
   CORRECTIONS::"every normalisation and repair applied; entries carry `rule_id`, `before`, `after`, `safe`, `semantics_changed`, tier NORMALIZATION, REPAIR or LENIENT_PARSE"
-  WARNINGS::"`octave_write`: subset of `corrections[]` with `safe: false`; `octave_validate`: validation codes such as `E007`, plus schema failures downgraded under LENIENT and ULTRA"
+  WARNINGS::"`octave_write`: subset of `corrections[]` with `safe: false`; `octave_validate`: validation codes such as `E007`, advisory codes such as `W_SNAKE_CASE_BLOB` and `W_FLAT_PREFIX_SCALAR`, plus schema failures downgraded under LENIENT and ULTRA"
   REPAIRS::"`octave_validate` only: parse-level repairs (`bare_line_dropped`, `duplicate_key` and others) whatever `fix` is; schema repairs only with `fix=true`; with `fix=false` schema failures land by profile, as VALIDATION_STATUS says; `repair_log` aliases the same list; both empty on a clean artefact; a lenient write reports its schema repairs inside `corrections[]`"
-  EMPTY_WARNINGS_RULE::"empty `warnings[]` does not mean untouched; read `corrections[]` for what changed; only empty corrections, warnings and repairs together mean bytes already canonical"
+  EMPTY_WARNINGS_RULE::"empty `warnings[]` does not mean untouched; read `corrections[]` (`octave_write`) or `repairs[]` and `validation_errors[]` (`octave_validate`) for what changed; only empty corrections, warnings and repairs together mean bytes already canonical"
   TRIAGE:
     DISCARDING::"content lost or corrupted: `W_BARE_LINE_DROPPED`, `W_NUMERIC_KEY_DROPPED`, `W_DUPLICATE_KEY`, `W_UNQUOTED_SECTION_IN_VALUE`, `W_LENIENT_MULTI_WORD_COALESCE` (unquoted multi-word value silently joined), `W_BARE_FLOW` (flow arrow outside brackets, legacy form); fix source and rewrite"
     HIDDEN_DUPLICATE::"hidden cause of `W_DUPLICATE_KEY`: empty `KEY::` where `KEY:` was meant opens no block; children hoist into parent scope, collide with next record (literacy §3, the rule on empty `KEY::`); STRICT reports VALIDATED with empty warnings; only `repairs[]` shows it"
@@ -126,14 +126,12 @@ META:
 §6::REMEDIATION
   POLICY::"remediate only when already amending the record that surfaced the warning"
   ANNOTATION_MIGRATION:
-    POLICY::"refactor long annotations only when already amending that record"
     TRIGGER::"record amendment where an annotation exceeds 32 characters or 4 underscore-tokens (`W_ANNOTATION_TOO_LONG` in `corrections[]`)"
     ACTION::["Short qualifier instead: at most 32 characters, at most 4 underscore-tokens.","Full reasoning in a sibling RATIONALE (or PRINCIPLE, GUIDANCE) field as a quoted note-form sentence."]
     EXAMPLE_BEFORE::"`I6<migration_on_moving_target_is_anti_pattern_for_zero_warnings>`"
     EXAMPLE_AFTER::"`I6<production_grade_quality>`, sibling `RATIONALE::\"migration against a moving target makes strict typing an anti-pattern\"`"
     FROZEN_ARCHIVES::"archives (DECISIONS-ARCHIVE, `docs/research/`, benchmark docs) stay frozen; zero return on batch-rewriting historical records"
   SNAKE_CASE_BLOB:
-    POLICY::"rewrite snake-fragmented prose only when amending a record whose `corrections[]` surfaces `W_SNAKE_CASE_BLOB`"
     TRIGGER::"record amendment where `octave_validate` or `octave_write` returns `W_SNAKE_CASE_BLOB` for a value or list element in a reasoning-field position (octave-mcp 1.13.0 advisory)"
     DETECTOR::"`_detect_snake_case_blob` in `src/octave_mcp/mcp/write_detection.py`: token over 40 characters with at least 4 underscores (bulk), or at least 2 stopwords across underscore-delimited parts (semantic); ALL-CAPS tokens of at most 16 characters excluded"
     REASONING_FIELDS::"key set `_W_SNAKE_CASE_BLOB_REASONING_FIELDS` in the same file (DECISION, BECAUSE, RATIONALE, WHY, NOTE, EVIDENCE and others)"
@@ -152,7 +150,7 @@ META:
     "Tool registry, no `octave_fmt`: tool table, `mcp/server.py`.",
     "Content, changes or neither: module docstring, `mcp/write.py`.",
     "Format styles and the omitted default: header comment and `FORMAT_STYLE_VALUES`, `mcp/write_format.py`; explicit None deprecated: CHANGELOG 1.13.0.",
-    "Warnings are the corrections with `safe: false`: result warnings drain, `mcp/write.py`.",
+    "`octave_write` warnings are the corrections with `safe: false`: result warnings drain, `mcp/write.py`.",
     "Corrections drained from the TIER_NORMALIZATION log, entry shape: `log_repair`, `core/grammar/tier_normalize.py`.",
     "No-op invariant: CHANGELOG 1.12.0 (#407, SR1-T4).",
     "Changes-mode hard break: CHANGELOG 1.15.0 STRATEGY_S3 (#443, #440, #488, #484).",

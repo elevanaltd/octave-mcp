@@ -91,8 +91,8 @@ META:
     COMPILER::"the one CONTRACT form a tool consumes: `octave_compile_grammar` reads `META.CONTRACT` as a list of `FIELD[name]::constraint_chain` specs (`src/octave_mcp/mcp/compile_grammar.py`)"
     ANCHORING::[
       "Documented intent; do not write either form until the tokenizer accepts `@` (KNOWN_GAP).",
-      "`HOLOGRAPHIC<frozen@sha256_abc123>` locks the schema to a hash, hermetic; for production documents that need reproducibility.",
-      "`HOLOGRAPHIC<latest@local>` resolves to the current local schema, mutable; for active development documents."
+      "`HOLOGRAPHIC<frozen@sha256_abc123>` would lock the schema to a hash, hermetic; intended for production documents that need reproducibility.",
+      "`HOLOGRAPHIC<latest@local>` would resolve to the current local schema, mutable; intended for active development documents."
     ]
     KNOWN_GAP::"on octave-mcp 1.16.0 both anchoring forms fail `E_TOKENIZE` (the `@` inside the annotation), so no validated example carries them"
     GRAMMAR_FIELD::"`GRAMMAR::GBNF_COMPILER<generate_constrained_output>` is a descriptive label; no tool reads `META.GRAMMAR`; for GBNF, call `octave_compile_grammar` on a document carrying META.CONTRACT or a POLICY and FIELDS block"
