@@ -5,8 +5,8 @@ META:
   STATUS::ACTIVE
   PURPOSE::"Procedural contract for `octave_write` and `octave_validate`: modes, receipts, changes-mode semantics, warning remediation. Sole agent-facing home for tool behaviour."
   VERIFIED_AGAINST::"octave-mcp 1.16.0"
-  CANONICAL::"`.hestai-sys/library/patterns/octave-tool-reference.oct.md`; the HestAI-MCP hub copy that feeds it still holds the legacy 1.1.9 text"
-  SOURCE::"`src/octave_mcp/resources/patterns/octave-tool-reference.oct.md`"
+  CANONICAL::".hestai-sys/library/patterns/octave-tool-reference.oct.md"
+  SOURCE::"src/octave_mcp/resources/patterns/octave-tool-reference.oct.md"
   SINGLE_HOME::"tool-behaviour text lives here and nowhere else in the skill family; invocation-level parameter facts belong in the tool descriptions themselves"
   REVERIFY_TRIGGER::"on an octave-mcp minor version bump, re-check every provenance sentence in §7 before trusting this pattern"
 §1::CORE_PRINCIPLE
@@ -29,7 +29,7 @@ META:
     EXCLUSIVITY::"`content` or `changes`, never both; supplying both is an error"
   PARAMETERS:
     SCHEMA::"`schema=NAME` runs schema validation; unknown name lists `available_schemas`, validation_status UNVALIDATED"
-    FORMAT_STYLE::"omitted: full canonical re-emit, today's default; `preserve`: span-aware, clean nodes byte-sliced from baseline; `expanded`: inline maps lifted to block form; `compact`: atom-only blocks collapsed; explicit null: `DeprecationWarning`, default flips to `preserve` in a later release"
+    FORMAT_STYLE::"omitted: full canonical re-emit (default); `preserve`: span-aware, clean nodes byte-sliced from baseline; `expanded`: inline maps lifted to block form; `compact`: atom-only blocks collapsed; explicit null: `DeprecationWarning`, default flips to `preserve` in a later release"
     DRY_RUN::"`dry_run=true` or `corrections_only=true`: receipt without disk write; use before any destructive changes-mode call"
     BASE_HASH::"`base_hash=sha256`: compare-and-swap; mismatch gives `E_HASH`, nothing written"
     LENIENT::"`lenient=true`: deterministic repairs and salvage policy; strict default rejects on parse error"
@@ -166,6 +166,7 @@ META:
   ]
 §8::USED_BY
   AGENTS::[octave-secretary,octave-specialist]
-  KERNEL_ONLY::"any agent that calls `octave_write` directly: north-star-architect, system-steward, agent-expert, skills-expert"
+  KERNEL_ONLY::"agents calling `octave_write` directly: north-star-architect, system-steward, agent-expert, skills-expert"
   CONTEXT::"document authoring, context maintenance, governance artefact amendment"
+  UPSTREAM::"octave-mcp is upstream; the HestAI-MCP hub copy is legacy text, never a re-alignment source"
 ===END===
