@@ -89,7 +89,11 @@ META:
   §4a::CONTRACT_IN_META
     FORM::"`CONTRACT::HOLOGRAPHIC<validation_law_in_document>` in META is a descriptive label that no tool interprets (literacy §7d); but `octave_compile_grammar` checks only that CONTRACT is present, so on a schema-definition file the label makes it skip the POLICY and FIELDS blocks; keep it off schema-definition files"
     COMPILER::"the one CONTRACT form a tool consumes: `octave_compile_grammar` reads `META.CONTRACT` as a list of `FIELD[name]::constraint_chain` specs (`src/octave_mcp/mcp/compile_grammar.py`)"
-    ANCHORING::["`HOLOGRAPHIC<frozen@sha256_abc123>` locks the schema to a hash, hermetic; for production documents that need reproducibility.","`HOLOGRAPHIC<latest@local>` resolves to the current local schema, mutable; for active development documents."]
+    ANCHORING::[
+      "Documented intent; do not write either form until the tokenizer accepts `@` (KNOWN_GAP).",
+      "`HOLOGRAPHIC<frozen@sha256_abc123>` locks the schema to a hash, hermetic; for production documents that need reproducibility.",
+      "`HOLOGRAPHIC<latest@local>` resolves to the current local schema, mutable; for active development documents."
+    ]
     KNOWN_GAP::"on octave-mcp 1.16.0 both anchoring forms fail `E_TOKENIZE` (the `@` inside the annotation), so no validated example carries them"
     GRAMMAR_FIELD::"`GRAMMAR::GBNF_COMPILER<generate_constrained_output>` is a descriptive label; no tool reads `META.GRAMMAR`; for GBNF, call `octave_compile_grammar` on a document carrying META.CONTRACT or a POLICY and FIELDS block"
     SCHEMA_GAP::"under `schema=META` STRICT, CONTRACT and GRAMMAR give `E007` (#514)"

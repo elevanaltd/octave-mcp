@@ -10,7 +10,7 @@ META:
   SINGLE_HOME::"tool-behaviour text lives here and nowhere else in the skill family; invocation-level parameter facts belong in the tool descriptions themselves"
   REVERIFY_TRIGGER::"on an octave-mcp minor version bump, re-check every provenance sentence in §7 before trusting this pattern"
 §1::CORE_PRINCIPLE
-  ESSENTIAL::"A write is not done when the tool returns. It is done when the receipt has been read."
+  ESSENTIAL::"A write is done when the receipt has been read, not when the tool returns."
   ANTI_PATTERN::"trusting `status: success` with empty warnings and unread corrections ships silent data loss as clean"
   ENFORCEMENT::"after every call, inspect status, errors, validation_status, `validation_errors` and each receipt list it returns (`octave_write`: corrections, warnings; `octave_validate`: warnings, repairs, repair_log) before claiming VALIDATED"
   WRITE_GATE::"`*.oct.md` files are written by `mcp__octave__octave_write` only, never by Write or Edit; content decisions belong to the requesting agent"
@@ -25,8 +25,8 @@ META:
   OCTAVE_WRITE_MODES:
     CONTENT::"`content=` full payload creates or overwrites; accepts raw OCTAVE or one markdown-fenced block"
     CHANGES::"`changes=` delta map mutates an existing file (see §4)"
-    NORMALIZE::"omit both to re-emit the existing file in canonical form"
-    EXCLUSIVITY::"`content` or `changes`, never both; supplying both is an error"
+    NORMALIZE::"omit both: re-emit the existing file canonically"
+    EXCLUSIVITY::"`content` or `changes`; supplying both is an error"
   PARAMETERS:
     SCHEMA::"`schema=NAME` runs schema validation; unknown name lists `available_schemas`, validation_status UNVALIDATED"
     FORMAT_STYLE::"omitted: full canonical re-emit (default); `preserve`: span-aware, clean nodes byte-sliced from baseline; `expanded`: inline maps lifted to block form; `compact`: atom-only blocks collapsed; explicit null: `DeprecationWarning`, default flips to `preserve` in a later release"
@@ -55,7 +55,7 @@ META:
   STATUS::"success or error; error carries `errors[]` with a code (`E_PARSE`, `E_HASH`, `E_UNRESOLVABLE_PATH`, `E_OP_TARGET_MISMATCH` and others), nothing written"
   VALIDATION_STATUS::"VALIDATED; UNVALIDATED with no or unknown schema; INVALID with schema violations in `validation_errors[]` under STRICT and STANDARD; LENIENT and ULTRA report VALIDATED and downgrade them to `warnings[]`"
   CORRECTIONS::"every normalisation and repair applied; entries carry `rule_id`, `before`, `after`, `safe`, `semantics_changed`, tier NORMALIZATION, REPAIR or LENIENT_PARSE"
-  WARNINGS::"subset of `corrections[]` with `safe: false`; data-affecting only; benign normalisation never appears here"
+  WARNINGS::"`octave_write`: subset of `corrections[]` with `safe: false`; `octave_validate`: validation codes such as `E007`, plus schema failures downgraded under LENIENT and ULTRA"
   REPAIRS::"`octave_validate` only: parse-level repairs (`bare_line_dropped`, `duplicate_key` and others) whatever `fix` is; schema repairs only with `fix=true`; with `fix=false` schema failures land by profile, as VALIDATION_STATUS says; `repair_log` aliases the same list; both empty on a clean artefact; a lenient write reports its schema repairs inside `corrections[]`"
   EMPTY_WARNINGS_RULE::"empty `warnings[]` does not mean untouched; read `corrections[]` for what changed; only empty corrections, warnings and repairs together mean bytes already canonical"
   TRIAGE:
@@ -147,7 +147,7 @@ META:
     W_CONSTRUCTOR_MISUSE::"known constructor name (REGEX, PATTERN, ENUM and others) as an assignment key: use the constructor form `NAME[args]` or a different key; agent GRAMMAR blocks with a REGEX key are a known accepted case"
     DETECTION::"all three STRUCTURAL_CHECK tier, `safe: true`; never data loss"
 §7::PROVENANCE
-  RULE::"each sentence points at the source a claim was read from; paths under `src/octave_mcp/`; all re-checked on octave-mcp 1.16.0; re-verify on a version bump"
+  RULE::"each sentence points at the source a claim was read from; paths under `src/octave_mcp/`; all re-checked on octave-mcp 1.16.0"
   PROVENANCE::[
     "Tool registry, no `octave_fmt`: tool table, `mcp/server.py`.",
     "Content, changes or neither: module docstring, `mcp/write.py`.",
