@@ -118,7 +118,7 @@ OWN_KERNEL_STRINGS: dict[str, dict[str, list[str]]] = {
     "literacy": {
         "TARGET": ["parser-safe OCTAVE in PITH"],
         "NEVER": [
-            "tabs",
+            "tab characters",
             "bare numeric keys",
             "markdown headings or bullets inside the envelope",
             "nested inline maps",
