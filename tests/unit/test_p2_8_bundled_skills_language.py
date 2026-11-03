@@ -385,11 +385,11 @@ def _odyssean_kernel(text: str) -> str | None:
     return "\n".join(kernel_lines).strip()
 
 
-def _workbench_kernel(text: str) -> str:
+def _workbench_kernel(text: str, js: str = WORKBENCH_JS) -> str:
     node = shutil.which("node")
     if node is None:
         pytest.fail("A9 requires node on PATH to run the workbench regex byte-for-byte; node was not found")
-    proc = subprocess.run([node, "-e", WORKBENCH_JS], input=text, capture_output=True, text=True, check=False)
+    proc = subprocess.run([node, "-e", js], input=text, capture_output=True, text=True, check=False)
     assert proc.returncode == 0, f"A9 node run failed: {proc.stderr}"
     return proc.stdout
 
@@ -437,6 +437,17 @@ def _key_text(block: str, key: str) -> str | None:
     if stripped.startswith("["):
         return _bracket_body(stripped)
     return rest.split("\n", 1)[0]
+
+
+_KERNEL_ITEM = re.compile(r'"((?:[^"\\]|\\.)*)"')
+
+
+def _kernel_items(kernel: str, key: str) -> list[str] | None:
+    """Quoted entries of ``KEY::`` (a list or a scalar), unescaped; None when the key is absent."""
+    body = _key_text(kernel, key)
+    if body is None:
+        return None
+    return [m.group(1).replace('\\"', '"') for m in _KERNEL_ITEM.finditer(body)]
 
 
 def _flat_prefixes(entries: list[dict[str, Any]]) -> list[str]:
@@ -750,11 +761,11 @@ def _required_by_key(name: str) -> dict[str, list[str]]:
 def _kernel_coverage_missing(name: str, kernel: str) -> list[str]:
     missing: list[str] = []
     for key, strings in _required_by_key(name).items():
-        text = _key_text(kernel, key)
-        if text is None:
+        have = _kernel_items(kernel, key)
+        if have is None:
             missing.append(f"{key}:: (key absent)")
             continue
-        missing.extend(f"{key}: {s}" for s in strings if s not in text)
+        missing.extend(f"{key}: {s}" for s in strings if s not in have)
     return missing
 
 
