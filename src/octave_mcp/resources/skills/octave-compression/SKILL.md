@@ -158,10 +158,10 @@ META:
     "receipt fields read, not the status",
     "tier first; default conservative; references lossless",
     "compressed output keeps COMPRESSION_TIER and LOSS_PROFILE in META",
-    "a LOSSLESS tier lists nothing dropped",
+    "a LOSSLESS tier drops nothing",
     "one example per abstraction kept"
   ]
-  GATE::"Could a reader rebuild every causal chain, condition and number from this?"
+  GATE::"Could a reader rebuild every causal chain, condition and number, and does META say what was dropped?"
 §7::ANTI_PATTERNS
   ANTI_PATTERNS::[
     "Markdown inside OCTAVE: no bold, no headings, no bullet hyphens.",
