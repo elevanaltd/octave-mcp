@@ -1,7 +1,7 @@
 ===OCTAVE_TOOL_REFERENCE===
 META:
   TYPE::PATTERN_DEFINITION
-  VERSION::"1.2.0"
+  VERSION::"1.2.1"
   STATUS::ACTIVE
   PURPOSE::"Procedural contract for `octave_write` and `octave_validate`: modes, receipts, changes-mode semantics, warning remediation. Sole agent-facing home for tool behaviour."
   VERIFIED_AGAINST::"octave-mcp 1.16.0"
@@ -103,8 +103,6 @@ META:
 §5::ANCHOR_KERNEL
   TARGET::"verified OCTAVE writes with the receipt read"
   NEVER::[
-    "unkeyed lines",
-    "a value on a section header",
     "`.oct.md` files written with Write or Edit",
     "VALIDATED claimed without a read receipt",
     "empty warnings trusted alone",
@@ -113,10 +111,12 @@ META:
     "remediation of frozen archives"
   ]
   MUST::[
-    "every line keyed, multi-word values quoted",
-    "contents indented under the section header",
-    "edits addressed as section dot key",
-    "repairs read, not only the validation status",
+    "every line keyed, values with spaces or punctuation quoted",
+    "no unkeyed lines",
+    "no value on a section header",
+    "contents indented under the header",
+    "edits addressed as section dot key (§N.KEY)",
+    "receipt fields read, not the status",
     "`octave_write` only; `schema=` when one applies; dry run before a destructive change",
     "status, errors, validation status, corrections, warnings and repairs triaged as discarding, advisory or benign",
     "changes mode: MERGE to keep siblings; a bare dict is a full replace; nested or new keys through `content=` with preserve",
@@ -164,5 +164,5 @@ META:
   AGENTS::[octave-secretary,octave-specialist]
   KERNEL_ONLY::"agents calling `octave_write` directly: north-star-architect, system-steward, agent-expert, skills-expert"
   CONTEXT::"document authoring, context maintenance, governance artefact amendment"
-  UPSTREAM::"octave-mcp is upstream; the HestAI-MCP hub copy is legacy text, never a re-alignment source"
+  UPSTREAM::"octave-mcp is upstream; copies elsewhere are synced from it and are never a re-alignment source"
 ===END===

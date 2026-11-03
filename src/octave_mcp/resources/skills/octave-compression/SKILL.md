@@ -3,13 +3,13 @@ name: octave-compression
 description: "Workflow for transforming prose into semantic OCTAVE structures. Covers tier selection, transformation phases, loss accounting, and decision rules. REQUIRES octave-literacy."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["compress to octave", "semantic compression", "documentation refactoring", "octave compression", "compress documentation", "knowledge artifact", "semantic density", "OCTAVE format conversion"]
-version: "4.0.0"
+version: "4.1.0"
 ---
 
 ===OCTAVE_COMPRESSION===
 META:
   TYPE::SKILL
-  VERSION::"4.0.0"
+  VERSION::"4.1.0"
   STATUS::ACTIVE
   PURPOSE::"Decision rules and workflow for turning prose into OCTAVE at the right fidelity tier"
   REQUIRES::octave-literacy
@@ -136,38 +136,32 @@ META:
     "Never invent to fill a slot or field: write `none` or `not known`."
   ]
 §5::ANCHOR_KERNEL
-  TARGET::"prose to OCTAVE, tier declared"
-  NEVER::[
-    "operators in prose or values",
-    "mythology as instruction words",
-    "snake_case blobs",
-    "invented content; write none or not known",
-    "model-written ids, tags or counts",
-    "unkeyed lines",
-    "a value on a section header",
-    "judgement attributed to a named person",
-    "shortened or merged identifiers",
-    "compressing before choosing the tier",
-    "dropping causal chains, conditions or numbers"
-  ]
+  TARGET::"prose to OCTAVE at a declared tier, written in PITH"
+  NEVER::["compressing before choosing the tier","dropping causal chains, conditions or numbers"]
   MUST::[
-    "note form",
-    "identifiers copied exactly, in backticks",
-    "hedges and conditions copied verbatim",
-    "relations in words",
-    "one calibration sentence on a prohibition that can over-fire",
-    "code in fenced blocks",
-    "a self-contradicting source kept both ways and flagged",
-    "every line keyed, multi-word values quoted",
-    "contents indented under the section header",
-    "edits addressed as section dot key",
-    "repairs read, not only the validation status",
+    "Note form",
+    "Exact identifiers (copied exactly, in backticks; never shortened or merged)",
+    "Hedges verbatim",
+    "Relations in words (no operators in prose or values)",
+    "Nothing invented (none or not known)",
+    "No writer-made ids",
+    "One calibration sentence",
+    "Judgement unattributed",
+    "Code in fences",
+    "Contradictions kept",
+    "Plain vocabulary (no blobs, no mythology as instruction words)",
+    "every line keyed, values with spaces or punctuation quoted",
+    "no unkeyed lines",
+    "no value on a section header",
+    "contents indented under the header",
+    "edits addressed as section dot key (§N.KEY)",
+    "receipt fields read, not the status",
     "tier first; default conservative; references lossless",
-    "compressed output says what was kept and what was dropped",
-    "LOSSLESS drops nothing",
+    "compressed output keeps COMPRESSION_TIER and LOSS_PROFILE in META",
+    "a LOSSLESS tier lists nothing dropped",
     "one example per abstraction kept"
   ]
-  GATE::"Could a reader rebuild every causal chain, condition and number, and does the document say what was dropped?"
+  GATE::"Could a reader rebuild every causal chain, condition and number from this?"
 §7::ANTI_PATTERNS
   ANTI_PATTERNS::[
     "Markdown inside OCTAVE: no bold, no headings, no bullet hyphens.",

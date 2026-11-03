@@ -18,6 +18,7 @@ Official OCTAVE v6 specifications defining the format, operators, and usage patt
 - **octave-rationale-spec.oct.md** - Design rationale and philosophy
 - **octave-primers-spec.oct.md** - Primer specification (token budget: 500 `cl100k_base` tokens per primer)
 - **octave-mcp-architecture.oct.md** - MCP implementation architecture
+- **pith-spec.md** - PITH, the writing standard for every sentence, item and value an agent writes
 
 #### `/specs/schemas/`
 Schema definitions and templates.

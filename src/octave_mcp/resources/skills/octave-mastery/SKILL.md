@@ -3,13 +3,13 @@ name: octave-mastery
 description: "Advanced OCTAVE forms that a parser or validator reads: holographic schema definitions, grammar compilation, typed archetype annotations, and structural patterns, plus a reading glossary of mythology and narrative terms. REQUIRES octave-literacy."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced octave", "OCTAVE mastery", "holographic patterns", "archetypes", "high-density specifications", "system architecture", "holographic contracts", "archetype annotation", "mythology", "OCTAVE mythology", "functional mythology", "SISYPHEAN", "ICARIAN", "PROMETHEAN", "mythological domains"]
-version: "5.0.0"
+version: "5.1.0"
 ---
 
 ===OCTAVE_MASTERY===
 META:
   TYPE::SKILL
-  VERSION::"5.0.0"
+  VERSION::"5.1.0"
   STATUS::ACTIVE
   PURPOSE::"Forms a parser or validator reads (schema definitions, grammar compilation, typed annotations), structural patterns, and a reading glossary"
   REQUIRES::octave-literacy
@@ -153,37 +153,31 @@ META:
       ===END===
       ```
 §5::ANCHOR_KERNEL
-  TARGET::"advanced forms a parser or validator reads"
-  NEVER::[
-    "operators in prose or values",
-    "mythology as instruction words",
-    "snake_case blobs",
-    "invented content; write none or not known",
-    "model-written ids, tags or counts",
-    "unkeyed lines",
-    "a value on a section header",
-    "judgement attributed to a named person",
-    "shortened or merged identifiers",
-    "glyphs outside schema-definition examples",
-    "the glossary used for writing"
-  ]
+  TARGET::"advanced OCTAVE forms a parser reads, written in PITH"
+  NEVER::["glyphs outside schema-definition examples","the glossary used for writing"]
   MUST::[
-    "note form",
-    "identifiers copied exactly, in backticks",
-    "hedges and conditions copied verbatim",
-    "relations in words",
-    "one calibration sentence on a prohibition that can over-fire",
-    "code in fenced blocks",
-    "a self-contradicting source kept both ways and flagged",
-    "every line keyed, multi-word values quoted",
-    "contents indented under the section header",
-    "edits addressed as section dot key",
-    "repairs read, not only the validation status",
+    "Note form",
+    "Exact identifiers (copied exactly, in backticks; never shortened or merged)",
+    "Hedges verbatim",
+    "Relations in words (no operators in prose or values)",
+    "Nothing invented (none or not known)",
+    "No writer-made ids",
+    "One calibration sentence",
+    "Judgement unattributed",
+    "Code in fences",
+    "Contradictions kept",
+    "Plain vocabulary (no blobs, no mythology as instruction words)",
+    "every line keyed, values with spaces or punctuation quoted",
+    "no unkeyed lines",
+    "no value on a section header",
+    "contents indented under the header",
+    "edits addressed as section dot key (§N.KEY)",
+    "receipt fields read, not the status",
     "holographic constraints only in schema-definition files",
     "one facet per archetype, 32 characters at most, in angle brackets",
-    "maps of maps as blocks, never nested inline maps"
+    "maps of maps as blocks"
   ]
-  GATE::"Is every glyph I wrote inside a schema-definition example, and every other relation in words?"
+  GATE::"Is every glyph inside a schema-definition example, every other relation in words?"
 §6::BLOCK_NOTATION_RULE
   RULE::"nested structures (maps containing maps) MUST use block notation: single colon plus indented children"
   NEVER::"an inner value that is itself an inline map, `KEY::[outer::[inner::val]]`: error `E_NESTED_INLINE_MAP` in strict mode, warning `W_NESTED_INLINE_MAP` in lenient mode"

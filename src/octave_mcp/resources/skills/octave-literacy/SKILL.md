@@ -3,13 +3,13 @@ name: octave-literacy
 description: "LLM-native structured communication format. Teaches OCTAVE syntax rules, canonical forms, the inner language, and warning prevention for zero-error .oct.md authoring."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave format", "write octave", "octave syntax", "structured output", "OCTAVE basics", "OCTAVE literacy", "OCTAVE structure", "key::value", "OCTAVE notation", "llm communication", "loss accounting"]
-version: "5.0.0"
+version: "5.1.0"
 ---
 
 ===OCTAVE_LITERACY===
 META:
   TYPE::SKILL
-  VERSION::"5.0.0"
+  VERSION::"5.1.0"
   STATUS::ACTIVE
   PURPOSE::"Zero-error OCTAVE authoring: syntax rules, canonical forms, the inner language, warning prevention, governance-artefact grammar"
   OCTAVE::"Olympian Common Text And Vocabulary Engine: a loss accounting system for LLM communication"
@@ -141,7 +141,7 @@ META:
   W_FLAT_PREFIX_SCALAR::"cause: `PARENT_CHILD::v` key-prefix flattening; fix: BLOCK form per §1d"
   RECEIPTS::"`octave_write` returns `corrections[]` and `warnings[]`; `octave_validate`, `repairs[]`, `repair_log[]` and `warnings[]`; empty `warnings[]` does not prove no normalisation; read octave-tool-reference §3 before trusting either"
   §4b::INNER_LANGUAGE
-    APPLIES::"every value, item, step and sentence you write, in any shape"
+    APPLIES::"PITH: every value, item, step and sentence you write, in any shape"
     RULES::[
       "Write in note form: fragments allowed; no articles or filler; every number, name, path and command kept.",
       "Identifiers (names, numbers, dates, paths, SHAs, tickets, PRs) copied exactly, in backticks, never shortened or merged.",
@@ -157,37 +157,37 @@ META:
     ]
     RUNBOOK::"runbooks: numbered steps, no rule history, no forward references"
 §5::ANCHOR_KERNEL
-  TARGET::"parser-safe OCTAVE in this document language"
+  TARGET::"parser-safe OCTAVE in PITH"
   NEVER::[
-    "operators in prose or values",
-    "mythology as instruction words",
-    "snake_case blobs",
-    "invented content; write none or not known",
-    "model-written ids, tags or counts",
-    "unkeyed lines",
-    "a value on a section header",
-    "judgement attributed to a named person",
-    "shortened or merged identifiers",
-    "markdown headings or bullets inside the envelope"
+    "tab characters",
+    "bare numeric keys",
+    "markdown headings or bullets inside the envelope",
+    "nested inline maps"
   ]
   MUST::[
-    "note form",
-    "identifiers copied exactly, in backticks",
-    "hedges and conditions copied verbatim",
-    "relations in words",
-    "one calibration sentence on a prohibition that can over-fire",
-    "code in fenced blocks",
-    "a self-contradicting source kept both ways and flagged",
-    "every line keyed, multi-word values quoted",
-    "contents indented under the section header",
-    "edits addressed as section dot key",
-    "repairs read, not only the validation status",
-    "keys named, never bare numbers",
-    "`§` quoted inside values",
-    "two-space indent, never tabs",
-    "`KEY:` opens a block, `KEY::` never does"
+    "Note form",
+    "Exact identifiers (copied exactly, in backticks; never shortened or merged)",
+    "Hedges verbatim",
+    "Relations in words (no operators in prose or values)",
+    "Nothing invented (none or not known)",
+    "No writer-made ids",
+    "One calibration sentence",
+    "Judgement unattributed",
+    "Code in fences",
+    "Contradictions kept",
+    "Plain vocabulary (no blobs, no mythology as instruction words)",
+    "every line keyed, values with spaces or punctuation quoted",
+    "no unkeyed lines",
+    "no value on a section header",
+    "contents indented under the header",
+    "edits addressed as section dot key (§N.KEY)",
+    "receipt fields read, not the status",
+    "section signs quoted inside values",
+    "KEY: opens a block, KEY:: never does",
+    "envelope line, META with TYPE and VERSION, body, closing line",
+    "lists in square brackets; true, false, null lowercase"
   ]
-  GATE::"Is every line keyed, in plain words, with identifiers exact, and did repairs come back empty?"
+  GATE::"Is every line keyed, in PITH, identifiers exact, receipts clean?"
 §6::WORKED_EXAMPLE
   SHOWS::"envelope, META, separator, note-form values, lists, BLOCK and ASSIGNMENT per §1"
   EXAMPLE:
