@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name and the home are unchanged.
 - **`tests/unit/test_pith_spec_kernels.py`: drift test for the spec and the four kernels.** It
   reads the item list from the spec, maps it both ways to each kernel (pinned at 11 standard and
-  6 container items), requires every rule heading to have an item, requires `in PITH` or
+  6 container items), requires every rule heading except `Runbook steps` to have an item, requires `in PITH` or
   `written in PITH` in each skill `TARGET`, checks the spec for operator glyphs, repo-relative
   pointers and content tokens near each pointed line, and has canaries for each check. The
   workbench kernel regex copy now follows the line-anchored `===END===` terminator
@@ -108,22 +108,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Bundled skills and the tool-reference pattern are rewritten to teach the estate document
-  language.** Version bumps: `octave-literacy` 4.0.0 → 5.0.0, `octave-mastery` 4.0.0 → 5.0.0,
-  `octave-compression` 3.1.0 → 4.0.0, `octave-tool-reference` pattern 1.1.9 → 1.2.0. The three
+  language.** Version bumps, nothing in between was released: `octave-literacy` 4.0.0 → 5.1.0,
+  `octave-mastery` 4.0.0 → 5.1.0, `octave-compression` 3.1.0 → 4.1.0,
+  `octave-tool-reference` pattern 1.1.9 → 1.2.1. The three
   skills take a major bump because the teaching inverts: relations in words, note-form values,
   identifiers copied exactly, rules held as lists of quoted sentences with no rule ids, section
   contents indented, and glyphs kept only in fenced reading references and schema-definition
-  examples. The pattern takes a minor bump. Authority: `LANG-ARCH-RECONCILIATION-RULINGS-20261031`
+  examples. The pattern takes a minor bump, then a patch. Authority: `LANG-ARCH-RECONCILIATION-RULINGS-20261031`
   (P2-8) and `OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101` (PR #541). Section numbers that
   other files cite are kept; citations of the old rule ids (`R3a`, `R12`, `R13`) now point at the
   section and its words. Each skill kernel carries the standard kernel strings; the
   tool-reference kernel carries only the container subset of them (unkeyed lines, a value on a
   section header, keyed and quoted lines, indentation, section-dot-key edits, reading repairs).
 - **Size costs, measured at HEAD with tiktoken `cl100k_base` over file bytes.** Kernels, against
-  the `origin/main` (`cdfc963`) baseline: literacy 220 → 290, mastery 183 → 296, compression
-  203 → 300, tool-reference 195 → 260. Every agent binding that loads a kernel pays the
-  difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3487, compression 2106 → 2103,
-  and the tool-reference pattern grows 4218 → 4463.
+  the `origin/main` (`cdfc963`) baseline: literacy 220 → 295, mastery 183 → 269, compression
+  203 → 283, tool-reference 195 → 264 (cap 300). Every agent binding that loads a kernel pays the
+  difference. Whole files: literacy 5065 → 5064, mastery 3885 → 3460, compression 2106 → 2086,
+  and the tool-reference pattern grows 4218 → 4463. The new `pith-spec.md` is 4498.
 - **Deleted mythology-teaching content (receipt).** Removed, each item checked against the diff
   to `origin/main`: mastery `§1a` TEST/GOOD/BAD examples, `GLOSS_ON_FIRST_USE`, `WHEN`/`WHEN_NOT`
   and `PARADIGM_BLINDNESS`, `§1b` `SOURCE_PRIORITY`, and `§7` `OPERATOR_SOUP`, `PROSE_BLEED` and
@@ -134,13 +135,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   kernel-only risk recorded below.** Each skill kernel now carries the page's standard and
   container items in full, plus its own items, with the basic syntax items restored for
   kernel-only readers (the workbench `control-tower` profile loads the literacy kernel
-  kernel-only, so it had lost them since P2-8). Versions: `octave-literacy` 5.0.0 → 5.1.0,
-  `octave-mastery` 5.0.0 → 5.1.0, `octave-compression` 4.0.0 → 4.1.0,
-  `octave-tool-reference` 1.2.0 → 1.2.1. Each skill `TARGET` cites PITH in words. Measured at
-  HEAD with tiktoken `cl100k_base`: kernels literacy 286, mastery 261, compression 272,
-  tool-reference 264 (cap 300); whole files literacy 5061, mastery 3452, compression 2075,
-  tool-reference 4463; `pith-spec.md` 4486. The earlier P2-8 kernel sizes in the entries below
-  are as of that change.
+  kernel-only, so it had lost them since P2-8). Each skill `TARGET` cites PITH in words. The
+  standard items keep the page's qualifiers, including `flagged` (contradictions kept and
+  flagged) and `tags or counts` (no writer-made ids, tags or counts). Pre-review restored the
+  compression kernel's strength: `a LOSSLESS tier drops nothing`, and a GATE that asks whether
+  META says what was dropped. Sizes are in the size entry above.
 - **Decision with the operator: items kept in full, not trimmed to a pointer.** LANG-ARCH
   planned that P2-8b would trim each kernel to a pointer sentence plus own items. This change
   keeps the items in full because kernel-only consumers exist and cannot follow a path inside
