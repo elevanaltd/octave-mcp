@@ -110,18 +110,26 @@ def _parse_item_list(
     section = _h2_section(spec, "Skill kernels")
     if not section:
         return [], ["no '## Skill kernels' section"]
-    blocks: list[list[str]] = []
+    fences: list[tuple[str, list[str]]] = []  # every fence under the section: (info string, inner lines)
     cur: list[str] | None = None
+    info = ""
     for line in section:
         s = line.strip()
         if cur is None:
-            if s == "```text":
+            if s.startswith("```"):
+                info = s[3:].strip()
                 cur = []
         elif s == "```":
-            blocks.append(cur)
+            fences.append((info, cur))
             cur = None
         else:
             cur.append(line)
+    if cur is not None:
+        return [], ["unclosed fence under Skill kernels"]
+    others = [i or "(no info string)" for i, _ in fences if i != "text"]
+    if others:
+        return [], [f"fences other than the single `text` list under Skill kernels: {others}"]
+    blocks = [lines for _, lines in fences]
     if len(blocks) != 1:
         return [], [f"expected exactly one ```text fence under Skill kernels, found {len(blocks)}"]
     items: list[tuple[str, str]] = []
@@ -451,6 +459,17 @@ def test_canary_item_list_format_errors_fire() -> None:
     assert any("duplicate" in p for p in _parse_item_list(dupe, GOOD_COUNTS)[1])
 
 
+def test_canary_extra_fences_under_skill_kernels_are_rejected() -> None:
+    extra = GOOD_SPEC.replace("## Amendment", "```python\nx = 1\n```\n\n## Amendment")
+    assert any("fences other than" in p for p in _parse_item_list(extra, GOOD_COUNTS)[1])
+    bare = GOOD_SPEC.replace("## Amendment", "```\nstandard: Smuggled item\n```\n\n## Amendment")
+    assert any("(no info string)" in p for p in _parse_item_list(bare, GOOD_COUNTS)[1])
+    two_text = GOOD_SPEC.replace("## Amendment", "```text\nstandard: Another\n```\n\n## Amendment")
+    assert _parse_item_list(two_text, GOOD_COUNTS)[1]
+    open_fence = GOOD_SPEC.replace("```\n\n## Amendment", "```\n```text\nstandard: x\n")
+    assert any("unclosed" in p for p in _parse_item_list(open_fence, GOOD_COUNTS)[1])
+
+
 def test_canary_pinned_counts_fire_on_shrinkage_and_growth() -> None:
     """Dropping an item from the page (and every kernel) must still fail: the counts are pinned."""
     dropped = "\n".join(ln for ln in GOOD_SPEC.split("\n") if not ln.startswith("container: no unkeyed"))
@@ -498,7 +517,7 @@ def test_canary_heading_check_fires_on_rename_and_addition() -> None:
 def test_canary_target_check_fires() -> None:
     assert _target_problems("literacy", 'TARGET::"parser-safe OCTAVE in this document language"\n')
     assert not _target_problems("literacy", 'TARGET::"parser-safe OCTAVE in PITH"\n')
-    assert _target_problems("mastery", 'TARGET::"advanced forms in PITH"\n')
+    assert _target_problems("mastery", 'TARGET::"advanced OCTAVE forms a parser or validator reads"\n')
     assert not _target_problems("compression", 'TARGET::"prose to OCTAVE, written in PITH"\n')
     assert _target_problems("mastery", 'TARGET::"advanced forms, not written in PITH"\n')
     assert _target_problems("literacy", 'TARGET::"parser-safe OCTAVE, never in PITH"\n')

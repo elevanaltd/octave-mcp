@@ -118,7 +118,7 @@ OWN_KERNEL_STRINGS: dict[str, dict[str, list[str]]] = {
     "literacy": {
         "TARGET": ["parser-safe OCTAVE in PITH"],
         "NEVER": [
-            "tab characters",
+            "tab characters outside literal zones",
             "bare numeric keys",
             "markdown headings or bullets inside the envelope",
             "nested inline maps",
@@ -132,6 +132,7 @@ OWN_KERNEL_STRINGS: dict[str, dict[str, list[str]]] = {
         "GATE": ["Is every line keyed, in PITH, identifiers exact, receipts clean?"],
     },
     "mastery": {
+        "TARGET": ["advanced OCTAVE forms a parser or validator reads, written in PITH"],
         "NEVER": ["glyphs outside schema-definition examples", "the glossary used for writing"],
         "MUST": [
             "holographic constraints only in schema-definition files",
