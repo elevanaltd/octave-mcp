@@ -145,10 +145,12 @@ OWN_KERNEL_STRINGS: dict[str, dict[str, list[str]]] = {
         "MUST": [
             "tier first; default conservative; references lossless",
             "compressed output keeps COMPRESSION_TIER and LOSS_PROFILE in META",
-            "a LOSSLESS tier lists nothing dropped",
+            "a LOSSLESS tier drops nothing",
             "one example per abstraction kept",
         ],
-        "GATE": ["Could a reader rebuild every causal chain, condition and number from this?"],
+        "GATE": [
+            "Could a reader rebuild every causal chain, condition and number, and does META say what was dropped?"
+        ],
     },
     # tool-reference: today's kernel items other than the container items (which the new
     # test owns). Wording is unchanged by P2-8b1.
