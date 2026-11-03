@@ -25,7 +25,7 @@ META:
   BLOCK::"`KEY:`, newline, 2-space indented children; for a value with nested children"
   CHOICE::"scalar value: ASSIGNMENT; nested children: BLOCK; never mix"
   LIST::"`[a,b,c]`: square brackets; never YAML bullets"
-  STRING::"a bare word if no spaces or special characters, otherwise double-quoted; escape an inner double quote as `\"`"
+  STRING::"bare word if no spaces or special characters, otherwise double-quoted; escape an inner double quote as `\"`"
   NUMBER::"`42`, `3.14` or `-1e10`; no quotes"
   BOOLEAN::"`true` or `false`, lowercase only"
   NULL_VALUE::"`null`, lowercase only"
@@ -47,7 +47,7 @@ META:
       JIT_GRAMMAR_COMPILATION[META→GBNF] // constructor
       ```
   §1c::LITERAL_ZONES
-    SYNTAX::"KEY, then a newline, then a fence of 3 or more backticks"
+    SYNTAX::"KEY, then newline, then a fence of 3 or more backticks"
     RULES::[
       "zero processing between fences",
       "tabs allowed",
@@ -130,13 +130,13 @@ META:
   §3d::SECTION_PATH_REFERENCES
     SYNTAX::"`§N::NAME` is a section reference; `§3b::V6_ENVELOPE_STRUCTURE` is a valid cross-reference"
     QUOTING::"quote `§` in a content value: `VALUE::\"see §3b\"`, not `VALUE::§3b`"
-    NESTING::"`§3b` inside `§3` is a subsection; the prefix digit tracks depth"
+    NESTING::"`§3b` inside `§3` is a subsection; prefix digit tracks depth"
 §4::WARNING_PREVENTION
   // Parser-drop codes: each is silent data loss at parse time.
-  W_BARE_LINE_DROPPED::"cause: a line with no `KEY::` prefix; fix: add a key or use a `//` comment"
-  W_NUMERIC_KEY_DROPPED::"cause: a bare integer key (`1::thing`); fix: use a named key, or a list"
+  W_BARE_LINE_DROPPED::"cause: line with no `KEY::` prefix; fix: add a key or use a `//` comment"
+  W_NUMERIC_KEY_DROPPED::"cause: bare integer key (`1::thing`); fix: use a named key, or a list"
   W_DUPLICATE_KEY::"cause: same key twice in one scope, last write wins; fix: BLOCK form per §1d or §7b; hidden causes (§3 rules): empty `KEY::` meant as `KEY:`, and column-0 keys across sections; STRICT still says VALIDATED, only `repairs[]` shows the loss"
-  W_UNQUOTED_SECTION_IN_VALUE::"cause: a bare `§` inside a value; fix: quote the value (§3 rules)"
+  W_UNQUOTED_SECTION_IN_VALUE::"cause: bare `§` inside a value; fix: quote the value (§3 rules)"
   W_INLINE_ARRAY_ROOT::"cause: `TOKEN::[KEY::v,...]`, a map as inline root; fix: BLOCK form per §1d"
   W_FLAT_PREFIX_SCALAR::"cause: `PARENT_CHILD::v` key-prefix flattening; fix: BLOCK form per §1d"
   RECEIPTS::"`octave_write` returns `corrections[]` and `warnings[]`; `octave_validate`, `repairs[]`, `repair_log[]` and `warnings[]`; empty `warnings[]` does not prove no normalisation; read octave-tool-reference §3 before trusting either"
@@ -159,7 +159,7 @@ META:
 §5::ANCHOR_KERNEL
   TARGET::"parser-safe OCTAVE in PITH"
   NEVER::[
-    "tab characters",
+    "tab characters outside literal zones",
     "bare numeric keys",
     "markdown headings or bullets inside the envelope",
     "nested inline maps"
@@ -170,11 +170,11 @@ META:
     "Hedges verbatim",
     "Relations in words (no operators in prose or values)",
     "Nothing invented (none or not known)",
-    "No writer-made ids",
+    "No writer-made ids, tags or counts",
     "One calibration sentence",
     "Judgement unattributed",
     "Code in fences",
-    "Contradictions kept",
+    "Contradictions kept and flagged",
     "Plain vocabulary (no blobs, no mythology as instruction words)",
     "every line keyed, values with spaces or punctuation quoted",
     "no unkeyed lines",

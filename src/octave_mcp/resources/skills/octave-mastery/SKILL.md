@@ -153,7 +153,7 @@ META:
       ===END===
       ```
 §5::ANCHOR_KERNEL
-  TARGET::"advanced OCTAVE forms a parser reads, written in PITH"
+  TARGET::"advanced OCTAVE forms a parser or validator reads, written in PITH"
   NEVER::["glyphs outside schema-definition examples","the glossary used for writing"]
   MUST::[
     "Note form",
@@ -161,11 +161,11 @@ META:
     "Hedges verbatim",
     "Relations in words (no operators in prose or values)",
     "Nothing invented (none or not known)",
-    "No writer-made ids",
+    "No writer-made ids, tags or counts",
     "One calibration sentence",
     "Judgement unattributed",
     "Code in fences",
-    "Contradictions kept",
+    "Contradictions kept and flagged",
     "Plain vocabulary (no blobs, no mythology as instruction words)",
     "every line keyed, values with spaces or punctuation quoted",
     "no unkeyed lines",

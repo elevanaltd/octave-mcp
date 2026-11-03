@@ -140,7 +140,7 @@ Bad: 3. Do what §7 says (we used to do it the other way before the 2026-09 rewr
 ## Skill kernels
 
 - A kernel cites PITH in words on its `TARGET` line, never through a META key (E007 under STRICT).
-- The standard kernel items are the compression of the rules above: Note form; Exact identifiers (copied exactly, in backticks; never shortened or merged); Hedges verbatim; Relations in words (no operators in prose or values); Nothing invented (`none` or `not known`); No writer-made ids; One calibration sentence; Judgement unattributed; Code in fences; Contradictions kept; Plain vocabulary (no blobs, no mythology as instruction words); and the container items (every line keyed, values with spaces or punctuation quoted; no unkeyed lines; no value on a section header; contents indented under the header; edits addressed as section dot key (`§N.KEY`); receipt fields read, not the status). Runbook steps has no kernel item.
+- The standard kernel items are the compression of the rules above: Note form; Exact identifiers (copied exactly, in backticks; never shortened or merged); Hedges verbatim; Relations in words (no operators in prose or values); Nothing invented (`none` or `not known`); No writer-made ids, tags or counts; One calibration sentence; Judgement unattributed; Code in fences; Contradictions kept and flagged; Plain vocabulary (no blobs, no mythology as instruction words); and the container items (every line keyed, values with spaces or punctuation quoted; no unkeyed lines; no value on a section header; contents indented under the header; edits addressed as section dot key (`§N.KEY`); receipt fields read, not the status). Runbook steps has no kernel item.
 - The drift test reads this list; each line is `tag: item`, the item being the exact kernel string.
 ```text
 standard: Note form
@@ -148,11 +148,11 @@ standard: Exact identifiers (copied exactly, in backticks; never shortened or me
 standard: Hedges verbatim
 standard: Relations in words (no operators in prose or values)
 standard: Nothing invented (none or not known)
-standard: No writer-made ids
+standard: No writer-made ids, tags or counts
 standard: One calibration sentence
 standard: Judgement unattributed
 standard: Code in fences
-standard: Contradictions kept
+standard: Contradictions kept and flagged
 standard: Plain vocabulary (no blobs, no mythology as instruction words)
 container: every line keyed, values with spaces or punctuation quoted
 container: no unkeyed lines
