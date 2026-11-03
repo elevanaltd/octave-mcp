@@ -109,62 +109,65 @@ FLAT_PREFIX_ALLOW: dict[str, set[str]] = {
 # (C++, R&D, ~/.claude).
 GLYPH = re.compile(r"""[⊕⇌∧∨→∴⧺≠≤≥≈×]|<->|->|(?<=[\w`"'\)\]])\s(\+|&|~|\|)\s(?=[\w`"'\(\[])""")
 
-# Spec section 4.0: the standard kernel strings, verbatim.
-STD_NEVER = [
-    "operators in prose or values",
-    "mythology as instruction words",
-    "snake_case blobs",
-    "invented content; write none or not known",
-    "model-written ids, tags or counts",
-    "unkeyed lines",
-    "a value on a section header",
-    "judgement attributed to a named person",
-    "shortened or merged identifiers",
-]
-STD_MUST = [
-    "note form",
-    "identifiers copied exactly, in backticks",
-    "hedges and conditions copied verbatim",
-    "relations in words",
-    "one calibration sentence on a prohibition that can over-fire",
-    "code in fenced blocks",
-    "a self-contradicting source kept both ways and flagged",
-    "every line keyed, multi-word values quoted",
-    "contents indented under the section header",
-    "edits addressed as section dot key",
-    "repairs read, not only the validation status",
-]
-# Spec 4.0 "Own items" (only the strings the spec fixes), by kernel key.
+# P2-8b1 owner rule: ``test_pith_spec_kernels.py`` owns the standard and the container
+# kernel strings (it reads them from the machine-readable list in pith-spec.md). This
+# file keeps key presence and each kernel's OWN items only. Own items are constrained by
+# review, not by a test: adding an item plus a row here passes. The strings come from the
+# P2-8b r2 kernel probe (kernel_draft_p28b_r2.py, full item set).
 OWN_KERNEL_STRINGS: dict[str, dict[str, list[str]]] = {
     "literacy": {
-        "TARGET": ["parser-safe OCTAVE in this document language"],
-        "GATE": ["Is every line keyed, in plain words, with identifiers exact, and did repairs come back empty?"],
+        "TARGET": ["parser-safe OCTAVE in PITH"],
+        "NEVER": [
+            "tabs",
+            "bare numeric keys",
+            "markdown headings or bullets inside the envelope",
+            "nested inline maps",
+        ],
+        "MUST": [
+            "section signs quoted inside values",
+            "KEY: opens a block, KEY:: never does",
+            "envelope line, META with TYPE and VERSION, body, closing line",
+            "lists in square brackets; true, false, null lowercase",
+        ],
+        "GATE": ["Is every line keyed, in PITH, identifiers exact, receipts clean?"],
     },
     "mastery": {
         "NEVER": ["glyphs outside schema-definition examples", "the glossary used for writing"],
-        "MUST": ["holographic constraints only in schema-definition files"],
-        "GATE": ["Is every glyph I wrote inside a schema-definition example, and every other relation in words?"],
+        "MUST": [
+            "holographic constraints only in schema-definition files",
+            "one facet per archetype, 32 characters at most, in angle brackets",
+            "maps of maps as blocks",
+        ],
+        "GATE": ["Is every glyph inside a schema-definition example, every other relation in words?"],
     },
     "compression": {
         "NEVER": ["compressing before choosing the tier", "dropping causal chains, conditions or numbers"],
         "MUST": [
             "tier first; default conservative; references lossless",
-            "compressed output says what was kept and what was dropped",
+            "compressed output keeps COMPRESSION_TIER and LOSS_PROFILE in META",
+            "a LOSSLESS tier lists nothing dropped",
+            "one example per abstraction kept",
         ],
-        "GATE": [
-            "Could a reader rebuild every causal chain, condition and number, and does the document say what was dropped?"
+        "GATE": ["Could a reader rebuild every causal chain, condition and number from this?"],
+    },
+    # tool-reference: today's kernel items other than the container items (which the new
+    # test owns). Wording is unchanged by P2-8b1.
+    "tool-reference": {
+        "NEVER": [
+            "`.oct.md` files written with Write or Edit",
+            "VALIDATED claimed without a read receipt",
+            "empty warnings trusted alone",
+            "a bare dict replace where siblings must survive",
+            "a call to `octave_fmt`",
+            "remediation of frozen archives",
+        ],
+        "MUST": [
+            "`octave_write` only; `schema=` when one applies; dry run before a destructive change",
+            "status, errors, validation status, corrections, warnings and repairs triaged as discarding, advisory or benign",
+            "changes mode: MERGE to keep siblings; a bare dict is a full replace; nested or new keys through `content=` with preserve",
+            "advisory warnings remediated only on the record already being amended",
         ],
     },
-}
-# Spec 4.4: tool-reference carries the container items only, by kernel key.
-CONTAINER_KERNEL_STRINGS: dict[str, list[str]] = {
-    "NEVER": ["unkeyed lines", "a value on a section header"],
-    "MUST": [
-        "every line keyed, multi-word values quoted",
-        "contents indented under the section header",
-        "edits addressed as section dot key",
-        "repairs read, not only the validation status",
-    ],
 }
 
 # Spec section 2 "Inbound references that must keep resolving" and A5.
@@ -234,12 +237,16 @@ A12_MIN_VALIDATED = {"literacy": 1, "mastery": 1, "compression": 1, "tool-refere
 # R5-1: an info tag naming one of these means the fence is not OCTAVE.
 A12_NON_OCTAVE_TAGS = {"python", "json", "yaml", "text", "ts", "regex", "bash"}
 
-# Spec section 5 A9: byte-for-byte from kernel_draft.py (payloadCompiler.ts:75).
-# JS `$` without the m flag differs from Python's, so this runs in node.
+# Spec section 5 A9, re-copied for P2-8b1 from hestai-workbench ``main/src/services/payloadCompiler.ts``
+# line 85 (``extractAnchorKernel``) at WORKBENCH_SHA below. #664 moved the terminator:
+# ``===END===`` ends the kernel only at the start of a line (``\n===END===``), as the
+# section header already did. The regex line is byte-identical at origin/main 7e2435f.
+# JS ``$`` without the m flag differs from Python's, so this runs in node.
+WORKBENCH_SHA = "9d1a53e"
 WORKBENCH_JS = (
     r"""const fs=require("fs");const n=fs.readFileSync(0,"utf8").replace(/\r\n?/g,"\n");"""
-    r"""const m=n.match(/§5::ANCHOR_KERNEL\s*\n([\s\S]*?)(?=\n§\d+::|===END===|$)/);"""
-    r"""process.stdout.write(m?m[1].trim():"");"""
+    r"""const m=n.match(/§5::ANCHOR_KERNEL[^\S\n]*(?=\n|$)([\s\S]*?)(?=\n§\d+::|\n===END===|$)/);"""
+    r"""process.stdout.write(m&&m[1]?m[1].trim():"");"""
 )
 
 
@@ -733,9 +740,8 @@ def test_A5b_citing_side_canary_missing_citation_fails() -> None:
 # A8 Kernel coverage (each string under its own key, spec r5 R5-4)
 # ---------------------------------------------------------------------------
 def _required_by_key(name: str) -> dict[str, list[str]]:
-    if name == "tool-reference":
-        return {k: list(v) for k, v in CONTAINER_KERNEL_STRINGS.items()}
-    req: dict[str, list[str]] = {"NEVER": list(STD_NEVER), "MUST": list(STD_MUST)}
+    """Key presence (NEVER, MUST) plus this kernel's own items; standard and container items are not here."""
+    req: dict[str, list[str]] = {"NEVER": [], "MUST": []}
     for key, strings in OWN_KERNEL_STRINGS[name].items():
         req.setdefault(key, []).extend(strings)
     return req
@@ -767,12 +773,11 @@ def test_A8_kernel_carries_required_strings_under_their_keys(name: str, extracto
 
 
 def test_A8_check_fires_on_wrong_key_and_missing_key() -> None:
-    """Canary (R5-4): a NEVER string sitting under MUST does not count; an absent key is reported."""
-    kernel = 'TARGET::"x"\nNEVER::["a"]\nMUST::["unkeyed lines", "contents indented under the section header"]\n'
+    """Canary (R5-4): an own NEVER item sitting under MUST does not count; an absent key is reported."""
+    kernel = 'TARGET::"x"\nNEVER::["a"]\nMUST::["a call to `octave_fmt`"]\n'
     missing = _kernel_coverage_missing("tool-reference", kernel)
-    assert any(m.startswith("NEVER: unkeyed lines") for m in missing)
-    assert any(m.startswith("MUST: every line keyed") for m in missing)
-    assert not any(m == "MUST: contents indented under the section header" for m in missing)
+    assert "NEVER: a call to `octave_fmt`" in missing
+    assert any(m.startswith("MUST: `octave_write` only") for m in missing)
     assert _kernel_coverage_missing("tool-reference", 'TARGET::"x"\n') == [
         "NEVER:: (key absent)",
         "MUST:: (key absent)",
@@ -819,10 +824,14 @@ def test_A9_workbench_and_odyssean_kernels_are_equal(name: str) -> None:
 
 
 def test_A9_equality_check_fires_on_the_end_marker_defect() -> None:
-    """Canary: ===END=== inside a MUST item truncates the workbench kernel but not odyssean's."""
-    doc = '===S===\n§5::ANCHOR_KERNEL\n  TARGET::"t"\n  MUST::["a ===END=== b"]\n  GATE::"g"\n===END===\n'
+    """Canary: an indented ``===END===`` line ends the odyssean kernel (it strips) but not the workbench one.
+
+    Since #664 the workbench terminator is line-anchored, so an inline or indented token no
+    longer truncates it. The extractors still disagree on this input, so the equality check fires.
+    """
+    doc = '===S===\n§5::ANCHOR_KERNEL\n  TARGET::"t"\n  ===END=== tail\n  GATE::"g"\n===END===\n'
     assert _workbench_kernel(doc).strip() != (_odyssean_kernel(doc) or "").strip()
-    assert "GATE::" not in _workbench_kernel(doc)
+    assert "GATE::" in _workbench_kernel(doc)
 
 
 @pytest.mark.parametrize("name", ALL)
