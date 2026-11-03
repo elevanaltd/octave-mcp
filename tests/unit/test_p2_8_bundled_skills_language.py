@@ -1180,3 +1180,141 @@ def test_A13_R15_canary_fires_on_decorated_path_fields() -> None:
     assert len(_meta_path_violations(doc('  CANONICAL::".hestai-sys/x.oct.md; legacy copy"\n'))) == 1  # ; and prose
     assert len(_meta_path_violations(doc('  CANONICAL::"two words"\n'))) == 1  # whitespace
     assert _meta_path_violations(doc("")) == []  # absent keys are fine; body lines are not META
+
+
+# ---------------------------------------------------------------------------
+# P2-8a guards: receipt and anchoring claims tied to the tool truth
+# ---------------------------------------------------------------------------
+_PROBE_DOC = '===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\nK::"v"\n===END===\n'
+_PURPOSE_DOC = '===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\n  PURPOSE::"p"\n===END===\n'
+_ANCHOR_FORMS = ("HOLOGRAPHIC<latest@local>", "HOLOGRAPHIC<frozen@sha256_abc123>")
+
+
+def _value_of(text: str, key: str) -> str:
+    m = re.search(rf"^\s*{key}::(.*)$", text, flags=re.MULTILINE)
+    return m.group(1) if m else ""
+
+
+def _repairs_attributed_to_write(text: str) -> list[str]:
+    """Segments (split on ';' and sentence ends) naming `repairs[]` and `octave_write` but not `octave_validate`."""
+    bad: list[str] = []
+    for line in text.split("\n"):
+        for seg in re.split(r";|\.\s|\.\"|\"$", line):
+            if "repairs[]" in seg and "`octave_write`" in seg and "`octave_validate`" not in seg:
+                bad.append(seg.strip()[:90])
+    return bad
+
+
+# g: repairs[] is not an octave_write receipt field
+@pytest.mark.parametrize("lenient", [False, True])
+def test_P2_8a_g_live_write_result_has_no_repairs_key(lenient: bool) -> None:
+    """Tool truth: if WriteTool starts returning repairs, this fails and the g guard must be revisited."""
+    r = asyncio.run(
+        WriteTool().execute(
+            target_path="/nonexistent-p2-8a/d.oct.md", content=_PROBE_DOC, dry_run=True, lenient=lenient
+        )
+    )
+    assert "repairs" not in r, f"P2-8a g: WriteTool now returns repairs (lenient={lenient}); revisit the guard"
+
+
+@pytest.mark.parametrize("name", ALL)
+def test_P2_8a_g_no_sentence_attributes_repairs_to_octave_write(name: str) -> None:
+    bad = _repairs_attributed_to_write(_read(name))
+    assert not bad, f"P2-8a g {name}: `repairs[]` attributed to octave_write: {bad}"
+
+
+def test_P2_8a_g_canary() -> None:
+    assert _repairs_attributed_to_write('R::"read `corrections[]` and `repairs[]` from `octave_write` and triage"')
+    ok = 'R::"`octave_write` returns `corrections[]`; `octave_validate` returns `repairs[]`"'
+    assert _repairs_attributed_to_write(ok) == []
+
+
+# c: warnings[] differs between the two tools
+def test_P2_8a_c_live_validate_has_no_corrections_and_strict_warns_e007() -> None:
+    v = asyncio.run(ValidateTool().execute(content=_PURPOSE_DOC, schema="META", profile="STRICT"))
+    assert "corrections" not in v, "P2-8a c: ValidateTool now returns corrections; revisit the guard"
+    assert "E007" in [w.get("code") for w in v["warnings"]], "P2-8a c: STRICT warnings no longer carry E007"
+
+
+def _warnings_definition_problems(text: str) -> list[str]:
+    value = _value_of(text, "WARNINGS")
+    if not value:
+        return ["no WARNINGS key"]
+    problems = [f"WARNINGS does not name {t}" for t in ("`octave_write`", "`octave_validate`") if t not in value]
+    if "`octave_validate`" in value:
+        # The octave_validate part is what follows the tool name, up to the next ';' or end.
+        part = value.split("`octave_validate`", 1)[1].split(";", 1)[0].lower()
+        if "validation_errors" not in part and "e007" not in part:
+            problems.append(
+                "octave_validate part of WARNINGS does not mention its own codes (validation_errors or E007)"
+            )
+        # An explicit denial ("no corrections[]") is fine; any other mention is a false claim.
+        if "corrections[]" in re.sub(r"\bno\s+`?corrections\[\]`?", "", part):
+            problems.append("octave_validate part of WARNINGS claims corrections[]; that tool has none")
+    return problems
+
+
+def test_P2_8a_c_tool_reference_warnings_distinguishes_the_two_tools() -> None:
+    problems = _warnings_definition_problems(_read("tool-reference"))
+    assert not problems, f"P2-8a c tool-reference: {problems}"
+
+
+def test_P2_8a_c_canary() -> None:
+    assert _warnings_definition_problems('  WARNINGS::"subset of `corrections[]` with `safe: false`"')
+    assert _warnings_definition_problems("  OTHER::x") == ["no WARNINGS key"]
+    both = '  WARNINGS::"`octave_write`: subset of corrections; `octave_validate`: validation codes"'
+    assert _warnings_definition_problems(both) == [
+        "octave_validate part of WARNINGS does not mention its own codes (validation_errors or E007)"
+    ]
+    claims = '  WARNINGS::"`octave_write`: subset of corrections; `octave_validate`: E007 inside corrections[]"'
+    assert _warnings_definition_problems(claims) == [
+        "octave_validate part of WARNINGS claims corrections[]; that tool has none"
+    ], "validate part claiming corrections[] must fail even with E007"
+    denies = '  WARNINGS::"`octave_write`: subset of corrections; `octave_validate`: E007, no `corrections[]` here"'
+    assert _warnings_definition_problems(denies) == [], "an explicit denial is allowed"
+    shared = '  WARNINGS::"`octave_write` and `octave_validate` both return corrections[]"'
+    assert _warnings_definition_problems(shared), "both-return-corrections must fail"
+    good = (
+        '  WARNINGS::"`octave_write`: subset of corrections; `octave_validate`: E007 and downgraded validation_errors"'
+    )
+    assert _warnings_definition_problems(good) == []
+    assert _warnings_definition_problems(good.replace("E007", "e007").replace("validation_errors", "x")) == []
+
+
+# a: anchoring forms are not presented as writable while they fail to tokenize
+def _anchor_tokenizes() -> bool:
+    """True only if BOTH anchoring forms tokenize; one failing form keeps the guard on."""
+    for form in _ANCHOR_FORMS:
+        doc = f'===X===\nMETA:\n  TYPE::T\n  VERSION::"1"\n  CONTRACT::{form}\n===END===\n'
+        r = asyncio.run(ValidateTool().execute(content=doc, schema="META", profile="STRICT"))
+        if any(e.get("code") == "E_TOKENIZE" for e in r.get("errors", [])):
+            return False
+    return True
+
+
+def _anchoring_problems(text: str, tokenizes: bool) -> list[str]:
+    if tokenizes:
+        return []  # the tokenizer accepts the form, so the guard relaxes
+    m = re.search(r"^\s*ANCHORING::(.*(?:\n(?!\s*[A-Z_]+::).*)*)", text, flags=re.MULTILINE)
+    value = (m.group(1) if m else "").lower()
+    if not value:
+        return ["no ANCHORING key"]
+    if "do not write" not in value and "documented intent" not in value:
+        return [
+            "ANCHORING presents the forms as usable but they fail to tokenize; mark them 'do not write' or 'documented intent'"
+        ]
+    return []
+
+
+def test_P2_8a_a_mastery_anchoring_marked_not_writable_while_untokenizable() -> None:
+    problems = _anchoring_problems(_read("mastery"), _anchor_tokenizes())
+    assert not problems, f"P2-8a a mastery: {problems}"
+
+
+def test_P2_8a_a_canary() -> None:
+    plain = '    ANCHORING::["`HOLOGRAPHIC<latest@local>` resolves to the local schema."]\n'
+    assert _anchoring_problems(plain, tokenizes=False)
+    assert _anchoring_problems(plain, tokenizes=True) == []
+    marked = '    ANCHORING::["Documented intent, do not write: `HOLOGRAPHIC<latest@local>`."]\n'
+    assert _anchoring_problems(marked, tokenizes=False) == []
+    assert _anchoring_problems("  OTHER::x\n", tokenizes=False) == ["no ANCHORING key"]

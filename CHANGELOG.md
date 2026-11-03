@@ -23,6 +23,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Three claims in the merged skill text corrected (P2-8a).** Each was checked against the code.
+  `octave-compression` `RECEIPTS` no longer says `octave_write` returns `repairs[]`: `WriteTool`
+  returns no `repairs` key, strict or lenient, and the text now says `repairs[]` comes only from
+  `octave_validate`. The `octave-tool-reference` `WARNINGS` entry is now defined per tool:
+  `octave_write` warnings are the subset of `corrections[]` with `safe: false`, while
+  `octave_validate` has no `corrections[]` and its `warnings[]` carries validation codes such as
+  `E007` plus the schema failures that LENIENT and ULTRA downgrade. `octave-mastery`
+  `ANCHORING` now marks the `HOLOGRAPHIC<frozen@...>` and `HOLOGRAPHIC<latest@...>` forms as
+  documented intent, not to be written, because both fail `E_TOKENIZE` on 1.16.0. New guards in
+  `tests/unit/test_p2_8_bundled_skills_language.py` tie each fix to the tool behaviour: live checks
+  that `WriteTool` has no `repairs` key, that `ValidateTool` has no `corrections` key and warns
+  `E007` under STRICT, and that both anchoring forms fail to tokenize (the anchoring guard relaxes
+  by itself if both start to tokenize). Size change against the previous text: compression
+  2095 → 2103, mastery 3456 → 3487, tool-reference 4465 → 4463 `cl100k_base` tokens; kernels are
+  unchanged.
 - **`octave-literacy` kernel truncation (live defect).** The workbench kernel extractor stops
   at the first `===END===`, and literacy's `§5::ANCHOR_KERNEL` held that string inside a MUST
   item, so the extracted kernel was cut to 6 lines with no `GATE`. The rewritten kernel no
@@ -81,8 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Size costs, measured at HEAD with tiktoken `cl100k_base` over file bytes.** Kernels, against
   the `origin/main` (`cdfc963`) baseline: literacy 220 → 290, mastery 183 → 296, compression
   203 → 300, tool-reference 195 → 260. Every agent binding that loads a kernel pays the
-  difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3456, compression 2106 → 2095,
-  and the tool-reference pattern grows 4218 → 4465.
+  difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3487, compression 2106 → 2103,
+  and the tool-reference pattern grows 4218 → 4463.
 - **Deleted mythology-teaching content (receipt).** Removed, each item checked against the diff
   to `origin/main`: mastery `§1a` TEST/GOOD/BAD examples, `GLOSS_ON_FIRST_USE`, `WHEN`/`WHEN_NOT`
   and `PARADIGM_BLINDNESS`, `§1b` `SOURCE_PRIORITY`, and `§7` `OPERATOR_SOUP`, `PROSE_BLEED` and

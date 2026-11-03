@@ -124,7 +124,7 @@ META:
     FIDELITY::"are all causal chains intact?"
     LOSS_RECEIPT::"does META carry COMPRESSION_TIER and LOSS_PROFILE?"
     GROUNDING::"is there at least one concrete example per major abstraction?"
-    RECEIPTS::"read `corrections[]`, `warnings[]` and `repairs[]` from `octave_write` and triage them per octave-tool-reference §3::TRIAGE; `W_BARE_LINE_DROPPED` and `W_NUMERIC_KEY_DROPPED` are silent data loss; empty warnings alone are not a clean receipt"
+    RECEIPTS::"read `corrections[]` and `warnings[]` from `octave_write` and triage them per octave-tool-reference §3::TRIAGE; `repairs[]` comes only from `octave_validate`; `W_BARE_LINE_DROPPED` and `W_NUMERIC_KEY_DROPPED` are silent data loss; empty warnings alone are not a clean receipt"
 §4::COMPRESSION_RULES
   RULES::[
     "Keep causality: X leads to Y because Z; never flatten it to X leads to Y alone.",
