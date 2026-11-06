@@ -115,8 +115,8 @@ def _deprecation_problems(text: str, ceiling_bound: bool = False) -> list[str]:
     problems: list[str] = []
     if not re.search(r"^\s*STATUS::DEPRECATED\s*$", meta, re.MULTILINE):
         problems.append("META lacks STATUS::DEPRECATED")
-    if "pith-spec.md" not in meta:
-        problems.append("META does not point to pith-spec.md")
+    if "specs/pith-spec.md" not in meta:
+        problems.append("META does not point to specs/pith-spec.md (path must resolve from the file)")
     if "octave-mastery" not in meta or "glossary" not in meta.lower():
         problems.append("META does not point to the octave-mastery reading glossary")
     if "reading" not in meta.lower():
