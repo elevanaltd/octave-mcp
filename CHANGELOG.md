@@ -197,8 +197,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   advertises it for authoring: its `description` is now a DEPRECATED reading-only notice,
   `allowed-tools` is `["Read"]` (was Read, Write, Edit) and
   `triggers` is one reading trigger (`reading old mythic documents`; the old eight authoring
-  and identity triggers are gone). The primers' `VERSION` is bumped (6.3.2 to 6.3.4 and 7.0.2
-  to 7.0.4) and their declared `TOKENS` re-measured (mythology 423 to 489, ultra-mythic 448 to
+  and identity triggers are gone). The primers' `VERSION` is bumped (6.3.2 to 6.3.5 and 7.0.2
+  to 7.0.5) and their declared `TOKENS` re-measured (mythology 423 to 490, ultra-mythic 448 to
   500, the primer ceiling). The mythology note says reading only, not for new documents,
   deleted in the release after; the ultra-mythic primer note cannot carry that wording inside
   the 500-token ceiling and says only reading only plus the pointers and the record id.
