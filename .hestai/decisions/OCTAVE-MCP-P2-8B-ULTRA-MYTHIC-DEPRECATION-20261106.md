@@ -16,8 +16,8 @@ loss_profile: "[preserve:causal rationale, IDs, named assets, evidence, release 
 non_binding_evidence: "octave-secretary and octave-specialist list the skill only as OPT_IN; workbench archetype-matrix.json has zero references (octave-expert sweep at workbench 0b2c11a); no octave-mcp Python code loads it."
 operator_ruling: "\"Q1. Confirm deprecation\" and \"Q2. I'll take this up in another session. Leave chatter alone\""
 out_of_scope: "octave-chatter Q2 remains unchanged; it is out of scope for this ruling."
-release_hold: "Hold release until the P2-8b2 PR merges."
+release_hold: "P2-8b2 is the follow-on alignment that OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101 requires before release, not a separate prerequisite; this deprecation lands inside it, and the release hold lifts only when the whole P2-8b2 alignment has merged."
 replacement_gate: "No PITH-native replacement; a new identity-compression shape changes PITH rules for LANG-ARCH and requires bench evidence first."
 repository_changes: "Remove octave-ultra-mythic from octave-compression and octave-mastery NEXT_SKILLS; remove ULTRA_MYTHIC pointer from octave-compression; deprecate ULTRA_MYTHIC tier row in octave-data-spec; remove ultra-mythic route from compression primer."
-retention: "Keep the three files for one release to preserve import compatibility, then delete them."
+retention: "Keep the three files for one release at their current paths, still packaged, so an explicit load by skill name or file path keeps working; only the discovery routes (NEXT_SKILLS, the compression ULTRA_MYTHIC pointer, the compression primer route) are removed, and the data-spec tier row stays, marked deprecated. Delete the files in the release after."
 ---
