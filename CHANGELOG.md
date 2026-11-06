@@ -179,7 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PITH Handoff shape, one Handoff-shaped example. The §5 kernel carries the 11 PITH standard
   items plus provenance on every message and no container items. Sizes (cl100k_base, over the
   extracted kernel): kernel 131 to 175 (182 with its header line; the old "138" counted the
-  header), whole file 1975 to 1130. Guards: `chatter` rows in
+  header), whole file 1975 to 1186. Guards: `chatter` rows in
   `tests/unit/test_p2_8_bundled_skills_language.py` and `tests/unit/test_pith_spec_kernels.py`.
   The dispatch-envelope stamp of the kernel is not implemented, so the kernel is a seam target only.
 
