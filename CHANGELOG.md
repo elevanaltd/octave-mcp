@@ -168,6 +168,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in two with no repair emitted. Values containing these characters are now quoted; the
   changes are semantics-preserving (parser-level fixes for the underlying defects are tracked
   separately).
+- **`octave-chatter` 1.1.0 to 2.0.0: PITH on the wire (P2-8b2; record
+  `OCTAVE-MCP-CHATTER-WIRE-PITH-REWRITE-RULINGS-20261106`, operator ruling 2026-11-06).** The
+  skill is kept and rewritten as PITH applied to message bodies. The register split stays its
+  purpose (`.oct.md` files are checked by `octave_validate`, wire messages by the receiving
+  model, decided by who validates). Dropped: the operator table as authoring guidance, the
+  ASCII wire policy, "operators carry the connectives", mythology as a semantic zip with
+  first-use glosses, the stopword-dropping form, `?` as the hedge marker, and the stale
+  primer and token-count claims. Added: rules as a list of quoted sentences, a pointer to the
+  PITH Handoff shape, one Handoff-shaped example. The §5 kernel carries the 11 PITH standard
+  items plus provenance on every message and no container items. Sizes (cl100k_base, over the
+  extracted kernel): kernel 131 to 175 (182 with its header line; the old "138" counted the
+  header), whole file 1975 to 1192. Guards: `chatter` rows in
+  `tests/unit/test_p2_8_bundled_skills_language.py` and `tests/unit/test_pith_spec_kernels.py`.
+  The dispatch-envelope stamp of the kernel is not implemented, so the kernel is a seam target only.
+
+### Deprecated
+
+- **`octave-ultra-mythic` skill, `octave-mythology-primer` and `octave-ultra-mythic-primer` are
+  deprecated and now reading only (P2-8b2; record
+  `OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106`, operator ruling 2026-11-06).** The PITH
+  standard forbids mythology as instruction vocabulary and operator glyphs as relations, and
+  these three files teach both. The files stay at their paths and stay packaged for one
+  release, so an explicit load by name or path still works; they are deleted in the release
+  after. Only their `META` (and, for the skill, its YAML frontmatter) changed: `STATUS::DEPRECATED`
+  plus a note pointing at `specs/pith-spec.md` and the `octave-mastery` reading glossary, with
+  the record id in backticks; bodies are untouched. The skill's frontmatter no longer
+  advertises it for authoring: its `description` is now a DEPRECATED reading-only notice,
+  `allowed-tools` is `["Read"]` (was Read, Write, Edit) and
+  `triggers` is one reading trigger (`reading old mythic documents`; the old eight authoring
+  and identity triggers are gone). The primers' `VERSION` is bumped (6.3.2 to 6.3.5 and 7.0.2
+  to 7.0.5) and their declared `TOKENS` re-measured (mythology 423 to 490, ultra-mythic 448 to
+  500, the primer ceiling). The mythology note says reading only, not for new documents,
+  deleted in the release after; the ultra-mythic primer note cannot carry that wording inside
+  the 500-token ceiling and says only reading only plus the pointers and the record id.
+  No PITH-native replacement is planned until LANG-ARCH bench evidence exists.
+- **Discovery routes removed.** `octave-compression` 4.1.0 to 4.1.1 drops its `NEXT_SKILLS` line and
+  its `ULTRA_MYTHIC` pointer; `octave-mastery` 5.1.0 to 5.1.1 drops its `NEXT_SKILLS` line (the key
+  is removed, not left empty). `octave-compression-primer` 6.7.2 to 6.7.3 drops the
+  identity-or-binding route to ULTRA_MYTHIC (498 to 473 tokens). `octave-data-spec` marks the
+  ULTRA_MYTHIC tier `STATUS::DEPRECATED` (the tier stays one release), drops its
+  `REQUIRES::octave-ultra-mythic` line, and the `SELECTION_GUIDE` no longer recommends it.
+  `resources/README.md` marks the three files deprecated. Guard:
+  `tests/unit/test_p2_8b2_ultra_mythic_deprecation.py`. The rest of P2-8b2 is not in this
+  change, so the release hold stands.
 
 ## [1.16.0] - 2026-09-18 - "Parser AST fixes, CI mcp dependency cap, bundled skill/spec realignment"
 
