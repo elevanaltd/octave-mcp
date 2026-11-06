@@ -1409,39 +1409,57 @@ def _mythology_problems(text: str) -> list[str]:
     return problems
 
 
+_QUESTION_KEYS = {"ASK", "GATE", "QUESTION", "UNCLEAR"}
+_MARKER_TEACHING = re.compile(r"=|\bmarks?\b|\bmeans\b|\bsignals?\b", flags=re.IGNORECASE)
+_KEYED_LINE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)::")
+_APPENDED_QUESTION_MARK = re.compile(r'\w\?(?:"|\s*//)')
+
+
 def _hedge_marker_problems(text: str) -> list[str]:
-    """`?` used to mark doubt: a standalone `?` token, a `?` on a line with hedge words, or any `?` in a fence."""
+    """`?` used or taught as an uncertainty marker, anywhere in the text (fences included).
+
+    Flags (1) a standalone `?` token taught with a hedge word or a defining form ("? = unverified",
+    "`?` marks doubt"); (2) a `?` appended to a claim value whose key is not a question slot
+    (``RISK::"drift repeats?"``); (3) "question mark" taught on a line about hedges. A real question
+    in an ASK, GATE, QUESTION or UNCLEAR value is not flagged.
+    """
     problems: list[str] = []
     for n, line in enumerate(text.split("\n"), start=1):
-        if _STANDALONE_QUESTION_MARK.search(line):
-            problems.append(f"{n}: standalone ? token: {line.strip()[:80]}")
-        elif "?" in line and _HEDGE_WORDS.search(line):
-            problems.append(f"{n}: ? on a line about hedges or doubt: {line.strip()[:80]}")
-    if re.search(r"question\s+mark", text, flags=re.IGNORECASE):
-        problems.append("the text teaches a question mark")
-    _, blocks = _scan(text)
-    for b in blocks:
-        for off, line in enumerate(b["lines"], start=1):
-            if "?" in line:
-                problems.append(
-                    f"{b['start'] + off}: ? inside an example fence (hedges are words): {line.strip()[:70]}"
-                )
+        if _STANDALONE_QUESTION_MARK.search(line) and (_HEDGE_WORDS.search(line) or _MARKER_TEACHING.search(line)):
+            problems.append(f"{n}: ? taught as an uncertainty marker: {line.strip()[:80]}")
+            continue
+        km = _KEYED_LINE.match(line)
+        if km and km.group(1) not in _QUESTION_KEYS and _APPENDED_QUESTION_MARK.search(line):
+            problems.append(f"{n}: ? appended to a {km.group(1)} claim value: {line.strip()[:80]}")
+            continue
+        if re.search(r"question\s+mark", line, flags=re.IGNORECASE) and _HEDGE_WORDS.search(line):
+            problems.append(f"{n}: a question mark taught as a hedge: {line.strip()[:80]}")
     return problems
 
 
-def _rules_lists_unquoted(text: str) -> tuple[int, list[str]]:
-    """(number of RULES lists outside fences, elements that are not one whole quoted sentence)."""
+def _rules_lists_unquoted(text: str) -> tuple[int, list[str], int]:
+    """(RULES lists outside fences, elements that are not one quoted sentence, count of quoted sentences).
+
+    A sentence is a quoted item of at least three words. ``RULES::[]`` and ``RULES::["x"]`` hold none.
+    """
     outside, _ = _scan(text)
     joined = "\n".join(t for _, t in outside)
     count = 0
+    sentences = 0
     bad: list[str] = []
     for m in re.finditer(r"^\s*RULES::(?=\[)", joined, flags=re.MULTILINE):
         count += 1
         body = _bracket_body(joined[m.end() :])
+        for lit in _STRING_LITERAL.findall(body):
+            inner = lit[1:-1]
+            if len(inner.split()) >= 3:
+                sentences += 1
+            else:
+                bad.append(f"RULES item is not a sentence (fewer than three words): {inner[:60]!r}")
         rest = _STRING_LITERAL.sub("", body)
         leftovers = [p.strip() for p in re.split(r"[,\n]", rest) if p.strip()]
         bad += [f"unquoted RULES element: {p[:60]}" for p in leftovers]
-    return count, bad
+    return count, bad, sentences
 
 
 def _register_split_problems(text: str) -> list[str]:
@@ -1458,8 +1476,21 @@ def _register_split_problems(text: str) -> list[str]:
 
 def _handoff_pointer_problems(text: str) -> list[str]:
     problems: list[str] = []
-    if not any(re.search(r"\bPITH\b", ln) and re.search(r"\bHandoff\b", ln) for ln in text.split("\n")):
-        problems.append("no line points at PITH's Handoff shape by name (one line holding both 'PITH' and 'Handoff')")
+
+    def directs(ln: str) -> bool:
+        return (
+            bool(re.search(r"\bPITH\b", ln))
+            and bool(re.search(r"\bHandoff\b", ln))
+            and bool(re.search(r"\bshape\b", ln, flags=re.IGNORECASE))
+            and "pith-spec.md" in ln
+            and len(ln.split()) >= 6
+        )
+
+    if not any(directs(ln) for ln in text.split("\n")):
+        problems.append(
+            "no line directs the reader to PITH's Handoff shape: one line of six or more words naming "
+            "'Handoff', 'PITH', 'shape' and where it lives ('pith-spec.md')"
+        )
     if re.search(r"peer\s+message\s+shape", text, flags=re.IGNORECASE):
         problems.append("points at a 'Peer message shape' that pith-spec.md does not carry yet")
     return problems
@@ -1500,8 +1531,9 @@ def test_chatter_P2_8b2_question_mark_is_not_a_hedge_marker() -> None:
 
 
 def test_chatter_P2_8b2_rules_are_quoted_sentence_lists() -> None:
-    count, bad = _rules_lists_unquoted(_read("chatter"))
-    assert count >= 1, "P2-8b2 chatter: no RULES::[...] list of quoted sentences (rules as quoted sentences)"
+    count, bad, sentences = _rules_lists_unquoted(_read("chatter"))
+    assert count >= 1, "P2-8b2 chatter: no RULES::[...] list (rules as quoted sentences)"
+    assert sentences >= 1, f"P2-8b2 chatter: {count} RULES list(s) hold no quoted sentence (three or more words)"
     assert not bad, f"P2-8b2 chatter: {bad[:3]}"
 
 
@@ -1540,7 +1572,11 @@ def test_chatter_P2_8b2_canaries_fire_on_synthetic_bad_input() -> None:
     assert _hedge_marker_problems('NOTE::"// ? = unverified"')
     assert _hedge_marker_problems('NOTE::"a `?` marks doubt"')
     assert _hedge_marker_problems('RISK::"drift repeats?" // unverified')
-    assert _hedge_marker_problems('```\nASK::"sure?"\n```\n')
+    assert _hedge_marker_problems('```\nRISK::"drift repeats?"\n```\n')
+    assert _hedge_marker_problems('NOTE::"a question mark means doubt"')
+    assert _hedge_marker_problems('```\nASK::"Can you confirm the lockfile?"\n```\n') == []
+    assert _hedge_marker_problems('ASK::"Can you confirm the lockfile?"') == []
+    assert _hedge_marker_problems('UNCLEAR::["which profile loads first?"]') == []
     assert _hedge_marker_problems('GATE::"Could the receiver act on this?"') == []
     assert _hedge_marker_problems('HEDGE::"not verified, may be the runner"') == []
     # teaching phrases
@@ -1550,14 +1586,25 @@ def test_chatter_P2_8b2_canaries_fire_on_synthetic_bad_input() -> None:
     assert _ASCII_POLICY.search("ASCII form: ->")
     assert _OPERATOR_TABLE_HEADER.search("§3::OPERATORS\n")
     # RULES lists
-    assert _rules_lists_unquoted('§1::A\n  RULES::["one.", "two."]\n') == (1, [])
+    assert _rules_lists_unquoted('§1::A\n  RULES::["Keep every id exact.", "State how each fact is known."]\n') == (
+        1,
+        [],
+        2,
+    )
     assert _rules_lists_unquoted("§1::A\n  RULES::[bare_item]\n")[1]
-    assert _rules_lists_unquoted("§1::A\n  OTHER::x\n") == (0, [])
+    assert _rules_lists_unquoted("§1::A\n  OTHER::x\n") == (0, [], 0)
+    # vacuity: an empty list and a one-token item are not rules
+    assert _rules_lists_unquoted("§1::A\n  RULES::[]\n")[2] == 0
+    assert _rules_lists_unquoted('§1::A\n  RULES::["x"]\n')[2] == 0
+    assert _rules_lists_unquoted('§1::A\n  RULES::["x"]\n')[1]
     # register split
     good = 'FORMAL::".oct.md files, parsed by octave_validate"\nWIRE::"message bodies, read by the receiving model"\nS::"decided by who validates"\n'
     assert _register_split_problems(good) == []
     assert len(_register_split_problems("nothing")) == 3
     # handoff pointer
-    assert _handoff_pointer_problems('SHAPES::"For asks and replies use the Handoff shape in PITH"') == []
+    ok = 'SHAPES::"For asks and replies use the Handoff shape in PITH (`pith-spec.md`, Shapes)"'
+    assert _handoff_pointer_problems(ok) == []
+    assert _handoff_pointer_problems('X::"PITH Handoff"'), "the bare word pair is not a pointer"
+    assert _handoff_pointer_problems('X::"the Handoff shape in PITH"'), "names no location"
     assert _handoff_pointer_problems("nothing")
-    assert _handoff_pointer_problems('X::"PITH Handoff and the Peer message shape"')
+    assert _handoff_pointer_problems(ok + '\nY::"and the Peer message shape"')
