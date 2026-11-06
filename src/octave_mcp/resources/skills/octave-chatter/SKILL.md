@@ -49,17 +49,17 @@ META:
   EXAMPLE:
     ```
     ASK::"Can you confirm the lockfile change before merge?"
-    FROM::"implementation-lead[align-octave-skills]"
+    FROM::"`implementation-lead[align-octave-skills]`"
     DECIDED::"the guard tests are approved at `9c58708f`; GREEN may start"
     OUT_OF_SCOPE::"changes to test files"
     DONE::[
-      "measured at `9c58708f`: 195 tests pass",
-      "measured at `9c58708f`: 20 tests fail as expected",
+      "measured at `9c58708f`: `195` tests pass",
+      "measured at `9c58708f`: `20` tests fail as expected",
       "relayed from the review comment: approved",
       "inferred: the lockfile is unchanged"
     ]
     UNCLEAR::"which profile loads first: not known"
-    LEFT_OUT::"restates the ask: confirm the lockfile change"
+    LEFT_OUT::"restates the ask: confirm the lockfile change before merge"
     ```
   // section 4 is deliberately unused: the ratified record OCTAVE-WIRE-POSITION-0-WITHDRAWN-20260909 cites the kernel here as section 5; do not renumber
 §5::ANCHOR_KERNEL

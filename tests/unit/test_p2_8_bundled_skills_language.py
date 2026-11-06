@@ -1414,28 +1414,51 @@ def _mythology_problems(text: str) -> list[str]:
 _QUESTION_KEYS = {"ASK", "GATE", "QUESTION", "UNCLEAR"}
 _MARKER_TEACHING = re.compile(r"=|\bmarks?\b|\bmeans\b|\bsignals?\b", flags=re.IGNORECASE)
 _KEYED_LINE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)::")
-_APPENDED_QUESTION_MARK = re.compile(r'\w\?(?:"|\s*//)')
+
+
+def _without_trailing_comment(value: str) -> str:
+    """``value`` up to the first ``//`` that is outside a quoted string."""
+    in_q = False
+    for i, ch in enumerate(value):
+        if ch == '"':
+            in_q = not in_q
+        elif ch == "/" and not in_q and value[i : i + 2] == "//":
+            return value[:i]
+    return value
 
 
 def _hedge_marker_problems(text: str) -> list[str]:
     """`?` used or taught as an uncertainty marker, anywhere in the text (fences included).
 
     Flags (1) a standalone `?` token taught with a hedge word or a defining form ("? = unverified",
-    "`?` marks doubt"); (2) a `?` appended to a claim value whose key is not a question slot
-    (``RISK::"drift repeats?"``); (3) "question mark" taught on a line about hedges. A real question
-    in an ASK, GATE, QUESTION or UNCLEAR value is not flagged.
+    "`?` marks doubt"); (2) a `?` ANYWHERE in a keyed value whose key is not a question slot
+    (``RISK::"drift repeats?"``, ``RISK::"drift? repeats"``), including the continuation lines of a
+    multi-line value; comments (whole-line and trailing) are not read; (3) "question mark" taught on a
+    line about hedges. A real question in an ASK, GATE, QUESTION or UNCLEAR value is not flagged.
     """
     problems: list[str] = []
+    key: str | None = None
     for n, line in enumerate(text.split("\n"), start=1):
+        stripped = line.strip()
         if _STANDALONE_QUESTION_MARK.search(line) and (_HEDGE_WORDS.search(line) or _MARKER_TEACHING.search(line)):
             problems.append(f"{n}: ? taught as an uncertainty marker: {line.strip()[:80]}")
             continue
-        km = _KEYED_LINE.match(line)
-        if km and km.group(1) not in _QUESTION_KEYS and _APPENDED_QUESTION_MARK.search(line):
-            problems.append(f"{n}: ? appended to a {km.group(1)} claim value: {line.strip()[:80]}")
-            continue
         if re.search(r"question\s+mark", line, flags=re.IGNORECASE) and _HEDGE_WORDS.search(line):
             problems.append(f"{n}: a question mark taught as a hedge: {line.strip()[:80]}")
+            continue
+        if stripped.startswith("//"):
+            continue
+        if not stripped or stripped.startswith(("```", "§", "===")):
+            key = None
+            continue
+        km = _KEYED_LINE.match(line)
+        if km:
+            key = km.group(1)
+            value = _without_trailing_comment(line[km.end() :])
+        else:
+            value = _without_trailing_comment(line)
+        if key is not None and key not in _QUESTION_KEYS and "?" in value:
+            problems.append(f"{n}: ? inside a {key} value (not a question slot): {line.strip()[:80]}")
     return problems
 
 
@@ -1483,12 +1506,13 @@ def _rules_lists_unquoted(text: str) -> tuple[int, list[str], int]:
 
 
 def _register_split_problems(text: str) -> list[str]:
-    lines = text.split("\n")
     problems: list[str] = []
-    if not any("FORMAL" in ln and "octave_validate" in ln for ln in lines):
-        problems.append("no line pairs FORMAL files with octave_validate")
-    if not any("WIRE" in ln and "receiving model" in ln for ln in lines):
-        problems.append("no line pairs WIRE message bodies with the receiving model")
+    formal = re.findall(r"^\s*FORMAL::(.*)$", text, flags=re.MULTILINE)
+    wire = re.findall(r"^\s*WIRE::(.*)$", text, flags=re.MULTILINE)
+    if not any("octave_validate" in v for v in formal):
+        problems.append("no FORMAL:: field whose value names octave_validate")
+    if not any("receiving model" in v for v in wire):
+        problems.append("no WIRE:: field whose value names the receiving model")
     if not re.search(r"who\s+validates", text, flags=re.IGNORECASE):
         problems.append("the split is not stated as decided by who validates")
     return problems
@@ -1608,6 +1632,12 @@ def test_chatter_P2_8b2_canaries_fire_on_synthetic_bad_input() -> None:
     assert _hedge_marker_problems('UNCLEAR::["which profile loads first?"]') == []
     assert _hedge_marker_problems('GATE::"Could the receiver act on this?"') == []
     assert _hedge_marker_problems('HEDGE::"not verified, may be the runner"') == []
+    # a ? anywhere in a claim value, not only at its end; multi-line values; comments are not read
+    assert _hedge_marker_problems('RISK::"drift? repeats"')
+    assert _hedge_marker_problems('DONE::[\n  "fine",\n  "drift? repeats"\n]')
+    assert _hedge_marker_problems('// RISK::"drift? repeats"\nOK::"plain" // maybe? later') == []
+    assert _hedge_marker_problems('ASK::"Can you confirm? Then merge."') == []
+    assert _hedge_marker_problems('UNCLEAR::[\n  "which profile? not known"\n]') == []
     # teaching phrases
     assert _OPERATORS_CARRY.search(_collapse("operators\n carry connectives"))
     assert _TELEGRAPHIC.search("drop stopwords")
@@ -1634,6 +1664,12 @@ def test_chatter_P2_8b2_canaries_fire_on_synthetic_bad_input() -> None:
     good = 'FORMAL::".oct.md files, parsed by octave_validate"\nWIRE::"message bodies, read by the receiving model"\nS::"decided by who validates"\n'
     assert _register_split_problems(good) == []
     assert len(_register_split_problems("nothing")) == 3
+    # unrelated prose with the same words does not satisfy the keyed-field check
+    prose = 'NOTE::"FORMAL files go through octave_validate"\nTEXT::"WIRE bodies go to the receiving model"\nS::"who validates"\n'
+    assert len(_register_split_problems(prose)) == 2
+    assert _register_split_problems(
+        'FORMAL::"files and octave_validate"\nWIRE::"read by the model"\nS::"who validates"\n'
+    )
     # handoff pointer
     ok = 'SHAPES::"For asks and replies use the Handoff shape in PITH (`pith-spec.md`, Shapes)"'
     assert _handoff_pointer_problems(ok) == []
