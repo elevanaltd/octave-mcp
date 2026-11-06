@@ -56,7 +56,16 @@ from test_p2_8_bundled_skills_language import (
 SPEC_REL = "src/octave_mcp/resources/specs/pith-spec.md"
 SPEC_PATH = REPO_ROOT / SPEC_REL
 CONTAINER_ONLY = ["tool-reference"]
-TARGET_FORM = {"literacy": "in PITH", "mastery": "written in PITH", "compression": "written in PITH"}
+# P2-8b2 Q2: the wire register. octave-chatter is PITH applied to message bodies; a message has no container
+# (no META, envelope optional), so its kernel carries the standard items and none of the container items.
+# Record OCTAVE-MCP-CHATTER-WIRE-PITH-REWRITE-RULINGS-20261106. Other kernels are not affected by this list.
+STANDARD_ONLY = ["chatter"]
+TARGET_FORM = {
+    "literacy": "in PITH",
+    "mastery": "written in PITH",
+    "compression": "written in PITH",
+    "chatter": "in PITH",
+}
 EXPECTED_STANDARD = 11  # the ruled number of standard items (the page has 12 rules, Runbook steps has none)
 EXPECTED_CONTAINER = 6  # the ruled number of container items
 UNCHECKED_HEADING = "Runbook steps"  # the page says this rule has no kernel item
@@ -213,10 +222,12 @@ def _mapping_problems(name: str, kernel: str, items: list[tuple[str, str]]) -> l
     listed = set(standard) | set(container)
     own = set(OWN_KERNEL_STRINGS[name].get("NEVER", [])) | set(OWN_KERNEL_STRINGS[name].get("MUST", []))
     problems: list[str] = []
-    wanted = container if name in CONTAINER_ONLY else standard + container
+    wanted = container if name in CONTAINER_ONLY else standard if name in STANDARD_ONLY else standard + container
     problems += [f"MUST lacks listed item: {t}" for t in wanted if t not in must]
     if name in CONTAINER_ONLY:
         problems += [f"container-only kernel carries standard item: {t}" for t in standard if t in must + never]
+    if name in STANDARD_ONLY:
+        problems += [f"standard-only kernel carries container item: {t}" for t in container if t in must + never]
     # items of the list belong in MUST, never NEVER
     problems += [f"listed item sits under NEVER: {t}" for t in never if t in listed]
     # orphans: every kernel item is listed or an own item
@@ -361,6 +372,28 @@ def test_kernel_maps_both_ways_to_the_list(name: str) -> None:
     assert not problems, f"{name}: {len(problems)} mapping problems, first: {problems[:4]}"
 
 
+@pytest.mark.parametrize("name", STANDARD_ONLY)
+def test_wire_kernel_carries_all_standard_items_and_no_container_item(name: str) -> None:
+    """P2-8b2 Q2: the wire kernel names every missing standard item (the mapping test stops at unquoted entries).
+
+    All 11 standard items verbatim under MUST, exactly 11 on the page (pinned by the item list), and none of the
+    6 container items: a message has no container.
+    """
+    items = _items_or_fail()
+    standard = [t for tag, t in items if tag == "standard"]
+    container = [t for tag, t in items if tag == "container"]
+    assert len(standard) == EXPECTED_STANDARD
+    kernel = _odyssean_kernel(_read(name)) or ""
+    must = _kernel_items(kernel, "MUST") or []
+    never = _kernel_items(kernel, "NEVER") or []
+    missing = [t for t in standard if t not in must]
+    assert (
+        not missing
+    ), f"{name}: {len(missing)} of {len(standard)} standard items missing from MUST, first: {missing[:3]}"
+    carried = [t for t in container if t in must + never]
+    assert not carried, f"{name}: container items in a wire kernel: {carried}"
+
+
 def test_every_rule_heading_has_a_list_item() -> None:
     problems = _heading_problems(_spec_text(), _items_or_fail())
     assert not problems, problems
@@ -424,7 +457,11 @@ def _kernel_for(
     name: str, drop: str | None = None, extra_never: str | None = None, extra_must: str | None = None
 ) -> str:
     own = OWN_KERNEL_STRINGS[name]
-    tags = GOOD_ITEMS if name not in CONTAINER_ONLY else [i for i in GOOD_ITEMS if i[0] == "container"]
+    tags = GOOD_ITEMS
+    if name in CONTAINER_ONLY:
+        tags = [i for i in GOOD_ITEMS if i[0] == "container"]
+    if name in STANDARD_ONLY:
+        tags = [i for i in GOOD_ITEMS if i[0] == "standard"]
     must_items = [t for _, t in tags] + own.get("MUST", [])
     never_items = list(own.get("NEVER", []))
     if drop:
@@ -501,6 +538,15 @@ def test_canary_mapping_fires_on_missing_orphan_and_wrong_key() -> None:
     assert any("sits under NEVER" in p for p in wrong_key)
     std_in_tool = _mapping_problems("tool-reference", _kernel_for("tool-reference", extra_must="Note form"), items)
     assert any("container-only kernel carries standard item" in p for p in std_in_tool)
+    # wire register: standard items required, container items refused, both only for the STANDARD_ONLY name
+    assert not _mapping_problems("chatter", _kernel_for("chatter"), items)
+    wire_missing = _mapping_problems("chatter", _kernel_for("chatter", drop="Note form"), items)
+    assert any("MUST lacks listed item: Note form" in p for p in wire_missing)
+    wire_container = _mapping_problems("chatter", _kernel_for("chatter", extra_must="no unkeyed lines"), items)
+    assert any("standard-only kernel carries container item: no unkeyed lines" in p for p in wire_container)
+    # the container items stay required of the other skills: a literacy kernel without one fails
+    lit_missing = _mapping_problems("literacy", _kernel_for("literacy", drop="no unkeyed lines"), items)
+    assert any("MUST lacks listed item: no unkeyed lines" in p for p in lit_missing)
     assert _mapping_problems("literacy", 'TARGET::"x"\n', items) == ["NEVER or MUST key absent"]
 
 
@@ -519,6 +565,8 @@ def test_canary_target_check_fires() -> None:
     assert not _target_problems("literacy", 'TARGET::"parser-safe OCTAVE in PITH"\n')
     assert _target_problems("mastery", 'TARGET::"advanced OCTAVE forms a parser or validator reads"\n')
     assert not _target_problems("compression", 'TARGET::"prose to OCTAVE, written in PITH"\n')
+    assert not _target_problems("chatter", 'TARGET::"auditable OCTAVE messages between agents, in PITH"\n')
+    assert _target_problems("chatter", 'TARGET::"auditable_OCTAVE_messages_between_agents"\n')
     assert _target_problems("mastery", 'TARGET::"advanced forms, not written in PITH"\n')
     assert _target_problems("literacy", 'TARGET::"parser-safe OCTAVE, never in PITH"\n')
     assert _target_problems("literacy", 'TARGET::"parser-safe OCTAVE within PITH"\n')
