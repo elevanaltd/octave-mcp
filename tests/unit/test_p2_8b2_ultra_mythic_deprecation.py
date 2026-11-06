@@ -235,3 +235,19 @@ def test_g_record_id_is_backticked_in_each_note(label: str) -> None:
 def test_g_canary_bare_id_is_flagged() -> None:
     block = f"note {RECORD_TOKEN} here"
     assert block.count(RECORD_TOKEN) != block.count(f"`{RECORD_TOKEN}`")
+
+
+def test_f_deprecated_skill_description_is_a_reading_only_notice() -> None:
+    line = _frontmatter_line(_text(ULTRA_MYTHIC_SKILL), "description")
+    assert line, "description line must stay in the frontmatter"
+    value = line.split(":", 1)[1].strip().strip('"')
+    assert value.startswith("DEPRECATED")
+    for old in ("60% compression", "identity transmission", "binding protocols"):
+        assert old not in value, f"description still advertises: {old}"
+
+
+def test_f_canary_old_description_is_flagged() -> None:
+    old = 'description: "Ultra-high density compression for identity transmission, binding protocols"'
+    value = _frontmatter_line(old, "description").split(":", 1)[1].strip().strip('"')
+    assert not value.startswith("DEPRECATED")
+    assert "identity transmission" in value
