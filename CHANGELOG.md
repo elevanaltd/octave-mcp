@@ -183,8 +183,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/unit/test_p2_8_bundled_skills_language.py` and `tests/unit/test_pith_spec_kernels.py`.
   The dispatch-envelope stamp of the kernel is not implemented, so the kernel is a seam target only.
 
-## [1.16.0] - 2026-09-18 - "Parser AST fixes, CI mcp dependency cap, bundled skill/spec realignment"
-
 ### Deprecated
 
 - **`octave-ultra-mythic` skill, `octave-mythology-primer` and `octave-ultra-mythic-primer` are
@@ -207,6 +205,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `resources/README.md` marks the three files deprecated. Guard:
   `tests/unit/test_p2_8b2_ultra_mythic_deprecation.py`. The rest of P2-8b2 is not in this
   change, so the release hold stands.
+
+## [1.16.0] - 2026-09-18 - "Parser AST fixes, CI mcp dependency cap, bundled skill/spec realignment"
 
 ### Upgrade notes
 
