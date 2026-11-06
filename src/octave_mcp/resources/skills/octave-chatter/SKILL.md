@@ -36,7 +36,7 @@ META:
     "Write a message body in PITH: note form, plain words, one fact per line.",
     "Copy every identifier, number, SHA and role exactly, in backticks; never shorten, merge or paraphrase one.",
     "Write a hedge as words, as the sender wrote it; never mark doubt with a symbol.",
-    "Open every message with its sender and say how each fact is known: measured at a SHA, relayed, or inferred.",
+    "Name the sender in every message and say how each fact is known: measured at a SHA, relayed, or inferred.",
     "Write relations in words; an arrow or other operator in a value is read differently by different receivers.",
     "Write none or not known for an empty slot; never invent a value to fill it.",
     "Keep contradictions: state both claims and flag the conflict.",
@@ -45,19 +45,23 @@ META:
   ]
 §3::SHAPES
   HANDOFF::"For asks and handoffs, use the Handoff shape in PITH (`pith-spec.md`, Shapes)."
-  ENVELOPE::"the envelope line pair is optional on the wire; use it when the message must be quoted as a unit"
+  ENVELOPE::"the envelope line pair is optional on the wire for other messages, to quote one as a unit; a Handoff carries none"
   EXAMPLE:
     ```
-    ===OCTAVE_WIRE===
     ASK::"Can you confirm the lockfile change before merge?"
     FROM::"implementation-lead[align-octave-skills]"
     DECIDED::"the guard tests are approved at `9c58708f`; GREEN may start"
     OUT_OF_SCOPE::"changes to test files"
-    DONE::"measured at `9c58708f`: 195 tests pass and 20 fail as expected; relayed from the review comment: approved; inferred: the lockfile is unchanged"
+    DONE::[
+      "measured at `9c58708f`: 195 tests pass",
+      "measured at `9c58708f`: 20 tests fail as expected",
+      "relayed from the review comment: approved",
+      "inferred: the lockfile is unchanged"
+    ]
     UNCLEAR::"which profile loads first: not known"
     LEFT_OUT::"restates the ask: confirm the lockfile change"
-    ===END===
     ```
+  // section 4 is deliberately unused: the ratified record OCTAVE-WIRE-POSITION-0-WITHDRAWN-20260909 cites the kernel here as section 5; do not renumber
 §5::ANCHOR_KERNEL
   TARGET::"auditable OCTAVE messages between agents, in PITH"
   NEVER::[]
