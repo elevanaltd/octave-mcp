@@ -110,7 +110,7 @@ def test_b_compression_has_no_ultra_mythic_pointer() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _deprecation_problems(text: str) -> list[str]:
+def _deprecation_problems(text: str, ceiling_bound: bool = False) -> list[str]:
     meta = _meta_block(text)
     problems: list[str] = []
     if not re.search(r"^\s*STATUS::DEPRECATED\s*$", meta, re.MULTILINE):
@@ -123,16 +123,19 @@ def _deprecation_problems(text: str) -> list[str]:
         problems.append("META does not say the file is for reading only")
     if RECORD_TOKEN not in meta:
         problems.append("META does not name the record token")
-    if "new documents" not in meta.lower():
-        problems.append("META does not say the file is not for new documents")
-    if "deleted" not in meta.lower():
-        problems.append("META does not say when the file is deleted")
+    if not ceiling_bound:
+        if "new documents" not in meta.lower():
+            problems.append("META does not say the file is not for new documents")
+        if "deleted" not in meta.lower():
+            problems.append("META does not say when the file is deleted")
     return problems
 
 
 @pytest.mark.parametrize("label", list(DEPRECATED_FILES))
 def test_c_deprecated_file_meta_carries_status_and_pointers(label: str) -> None:
-    assert _deprecation_problems(_text(DEPRECATED_FILES[label])) == []
+    # The ultra-mythic primer sits at the 500 cl100k primer ceiling, so its note
+    # cannot also carry the not-for-new-documents and deleted-next-release wording.
+    assert _deprecation_problems(_text(DEPRECATED_FILES[label]), ceiling_bound=label == "ultra-mythic primer") == []
 
 
 def test_c_canary_active_meta_is_flagged() -> None:

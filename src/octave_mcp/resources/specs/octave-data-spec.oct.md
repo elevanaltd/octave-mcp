@@ -131,7 +131,7 @@ TIERS:
       list_compression
     ]
     STATUS::DEPRECATED
-    DEPRECATED::"Reading only, kept one release for old documents. See pith-spec.md and the octave-mastery reading glossary. OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106"
+    DEPRECATED::"Reading only, kept one release for old documents. See pith-spec.md and the octave-mastery reading glossary. `OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106`"
     LOSS::"~40%[prose,nuance]"
     GAIN::[
       semantic_density,

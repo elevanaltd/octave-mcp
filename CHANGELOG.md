@@ -191,10 +191,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standard forbids mythology as instruction vocabulary and operator glyphs as relations, and
   these three files teach both. The files stay at their paths and stay packaged for one
   release, so an explicit load by name or path still works; they are deleted in the release
-  after. Only their `META` changed (`STATUS::DEPRECATED` plus a note pointing at
-  `specs/pith-spec.md` and the `octave-mastery` reading glossary); bodies are untouched. The
-  primers' `VERSION` is bumped (6.3.2 to 6.3.3 and 7.0.2 to 7.0.3) and their declared `TOKENS`
-  re-measured (mythology 423 to 475, ultra-mythic 448 to 500, the primer ceiling).
+  after. Only their `META` (and, for the skill, its YAML frontmatter) changed: `STATUS::DEPRECATED`
+  plus a note pointing at `specs/pith-spec.md` and the `octave-mastery` reading glossary, with
+  the record id in backticks; bodies are untouched. The skill's frontmatter no longer
+  advertises it for authoring: `allowed-tools` is `["Read"]` (was Read, Write, Edit) and
+  `triggers` is one reading trigger (`reading old mythic documents`; the old eight authoring
+  and identity triggers are gone). The primers' `VERSION` is bumped (6.3.2 to 6.3.4 and 7.0.2
+  to 7.0.4) and their declared `TOKENS` re-measured (mythology 423 to 489, ultra-mythic 448 to
+  500, the primer ceiling). The mythology note says reading only, not for new documents,
+  deleted in the release after; the ultra-mythic primer note cannot carry that wording inside
+  the 500-token ceiling and says only reading only plus the pointers and the record id.
   No PITH-native replacement is planned until LANG-ARCH bench evidence exists.
 - **Discovery routes removed.** `octave-compression` 4.1.0 to 4.1.1 drops its `NEXT_SKILLS` line and
   its `ULTRA_MYTHIC` pointer; `octave-mastery` 5.1.0 to 5.1.1 drops its `NEXT_SKILLS` line (the key

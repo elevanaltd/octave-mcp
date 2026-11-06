@@ -1,8 +1,8 @@
 ---
 name: octave-ultra-mythic
 description: "Ultra-high density compression using mythological atoms and semantic shorthand. Preserves soul and constraints at 60% compression for identity transmission, binding protocols, and extreme token scarcity. REQUIRES octave-mastery and octave-compression."
-allowed-tools: ["Read", "Write", "Edit"]
-triggers: ["ultra mythic", "mythological compression", "semantic atoms", "identity compression", "binding passport", "cognitive passport", "60% compression", "soul preservation"]
+allowed-tools: ["Read"]
+triggers: ["reading old mythic documents"]
 version: "2.0.0"
 ---
 
@@ -17,7 +17,7 @@ META:
   TIER::ULTRA_MYTHIC
   SPEC_REFERENCE::octave-data-spec.oct.md
   LOADING::"explicit opt-in only, never bound by default"
-  DEPRECATED::"Reading only, kept for one release so old documents can still be read. Record OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106. Do not use it to write new documents. To read old documents use the reading glossary in octave-mastery and the standard in specs/pith-spec.md. Deleted in the release after."
+  DEPRECATED::"Reading only, kept for one release so old documents can still be read. Record `OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106`. Do not use it to write new documents. To read old documents use the reading glossary in octave-mastery and the standard in specs/pith-spec.md. Deleted in the release after."
 ---
 §1::CORE_MANDATE
   TARGET::"60% token reduction while preserving soul and constraints"
