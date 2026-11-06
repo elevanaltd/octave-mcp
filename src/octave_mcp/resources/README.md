@@ -40,7 +40,7 @@ Complete OCTAVE skills with full documentation and examples (roughly 1,600-5,100
 - **octave-literacy/** - Basic OCTAVE syntax, canonical forms, and governance-artefact grammar
 - **octave-compression/** - Compression workflows and tiers
 - **octave-mastery/** - Advanced patterns, archetypes, and the mythology vocabulary
-- **octave-chatter/** - OCTAVE on the wire: reading and emitting OCTAVE in agent-to-agent messages
+- **octave-chatter/** - PITH on the wire: writing agent-to-agent message bodies in note form with exact identifiers and provenance; messages are checked by the receiving model, not `octave_validate`
 - **octave-ultra-mythic/** - Deprecated, reading only. Kept for one release; to read old documents use `specs/pith-spec.md` and the `octave-mastery` reading glossary
 
 The **octave-mythology** skill was retired; its vocabulary, usage law, and

@@ -168,6 +168,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in two with no repair emitted. Values containing these characters are now quoted; the
   changes are semantics-preserving (parser-level fixes for the underlying defects are tracked
   separately).
+- **`octave-chatter` 1.1.0 to 2.0.0: PITH on the wire (P2-8b2; record
+  `OCTAVE-MCP-CHATTER-WIRE-PITH-REWRITE-RULINGS-20261106`, operator ruling 2026-11-06).** The
+  skill is kept and rewritten as PITH applied to message bodies. The register split stays its
+  purpose (`.oct.md` files are checked by `octave_validate`, wire messages by the receiving
+  model, decided by who validates). Dropped: the operator table as authoring guidance, the
+  ASCII wire policy, "operators carry the connectives", mythology as a semantic zip with
+  first-use glosses, the stopword-dropping form, `?` as the hedge marker, and the stale
+  primer and token-count claims. Added: rules as a list of quoted sentences, a pointer to the
+  PITH Handoff shape, one Handoff-shaped example. The §5 kernel carries the 11 PITH standard
+  items plus provenance on every message and no container items. Sizes (cl100k_base, over the
+  extracted kernel): kernel 131 to 175 (182 with its header line; the old "138" counted the
+  header), whole file 1975 to 1130. Guards: `chatter` rows in
+  `tests/unit/test_p2_8_bundled_skills_language.py` and `tests/unit/test_pith_spec_kernels.py`.
+  The dispatch-envelope stamp of the kernel is not implemented, so the kernel is a seam target only.
 
 ## [1.16.0] - 2026-09-18 - "Parser AST fixes, CI mcp dependency cap, bundled skill/spec realignment"
 
