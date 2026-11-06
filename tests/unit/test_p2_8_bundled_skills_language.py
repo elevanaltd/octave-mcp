@@ -1494,12 +1494,32 @@ def _register_split_problems(text: str) -> list[str]:
     return problems
 
 
+def _pin_in_keyed_value(line: str) -> bool:
+    """True when ``line`` is ``KEY::value`` (not a // comment) and the pin sits in the value, not a trailing comment."""
+    km = _KEYED_LINE.match(line)
+    if km is None or line.lstrip().startswith("//"):
+        return False
+    value = line[km.end() :]
+    # drop a trailing // comment: the first // outside a quoted string
+    in_q = False
+    for i, ch in enumerate(value):
+        if ch == '"':
+            in_q = not in_q
+        elif ch == "/" and not in_q and value[i : i + 2] == "//":
+            value = value[:i]
+            break
+    return HANDOFF_POINTER in value
+
+
 def _handoff_pointer_problems(text: str) -> list[str]:
     problems: list[str] = []
 
     outside, _ = _scan(text)
-    if not any(HANDOFF_POINTER in t for _, t in outside):
-        problems.append(f"no content line outside a fence holds the exact pointer {HANDOFF_POINTER!r}")
+    if not any(_pin_in_keyed_value(t) for _, t in outside):
+        problems.append(
+            f"no keyed content line outside a fence holds the exact pointer {HANDOFF_POINTER!r} in its value "
+            "(not a // comment line, not a trailing // comment)"
+        )
     if re.search(r"peer\s+message\s+shape", text, flags=re.IGNORECASE):
         problems.append("points at a 'Peer message shape' that pith-spec.md does not carry yet")
     return problems
@@ -1621,6 +1641,15 @@ def test_chatter_P2_8b2_canaries_fire_on_synthetic_bad_input() -> None:
     filler = 'X::"For asks use the Handoff shape in PITH, see pith-spec.md for more detail"'
     assert _handoff_pointer_problems(filler), "keyword filler is not the exact pin"
     assert _handoff_pointer_problems("```\n" + ok + "\n```\n"), "the pin inside a fence does not count"
+    assert _handoff_pointer_problems("// " + HANDOFF_POINTER), "a comment-only pin does not count"
+    assert _handoff_pointer_problems(
+        "  // see " + HANDOFF_POINTER + " for asks"
+    ), "an indented comment line does not count"
+    trailing = 'SHAPES::"asks and replies" // ' + HANDOFF_POINTER
+    assert _handoff_pointer_problems(trailing), "a pin in a trailing comment after a keyed value does not count"
+    assert _handoff_pointer_problems(HANDOFF_POINTER), "an unkeyed line does not count"
+    quoted_slashes = 'SHAPES::"a // b: ' + HANDOFF_POINTER + '"'
+    assert _handoff_pointer_problems(quoted_slashes) == [], "// inside a quoted value is not a comment"
     assert _handoff_pointer_problems('X::"the Handoff shape in PITH"'), "names no location"
     assert _handoff_pointer_problems("nothing")
     assert _handoff_pointer_problems(ok + '\nY::"and the Peer message shape"')
