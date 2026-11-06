@@ -1381,6 +1381,8 @@ def test_P2_8a_a_canary() -> None:
 # standard items alone measure 85 tokens; GREEN's target is about 180, not asserted here (the cap is the gate).
 CHATTER_KERNEL_CAP_CL100K = KERNEL_CAP_CL100K
 CHATTER_KERNEL_HEADER = "§5::ANCHOR_KERNEL\n"
+# Exact pin: GREEN writes this string, on a content line outside a fence, to point at PITH's Handoff shape.
+HANDOFF_POINTER = "the Handoff shape in PITH (`pith-spec.md`, Shapes)"
 
 _MYTHOLOGY_NAMES = re.compile(
     r"\b(hermes|sisyphean|sisyphus|icarian|icarus|promethean|prometheus|athena|zeus|apollo|atlas|hephaestus|"
@@ -1437,10 +1439,28 @@ def _hedge_marker_problems(text: str) -> list[str]:
     return problems
 
 
+# Declared limits of the three chatter helpers below (RULES sentences, Handoff pointer, hedge marker).
+# They pin form, not truth: a RULES item passes on a word-count floor and is not checked for being a
+# well-formed, true or useful rule; the Handoff pointer is one exact string and is not checked against what
+# pith-spec.md says; the ? guard sees only the patterns it names. Whether a rule is well formed and true is
+# constrained by review, not by this file (the same declared-limits precedent as test_pith_spec_kernels.py, #545).
+_SENTENCE_FLOOR = "at least 4 words, at least 3 distinct words, at least one word of 4 or more letters"
+
+
+def _is_rule_sentence(item: str) -> bool:
+    words = re.findall(r"[A-Za-z0-9`_.'-]+", item)
+    return (
+        len(words) >= 4
+        and len({w.lower() for w in words}) >= 3
+        and any(len(re.sub(r"[^A-Za-z]", "", w)) >= 4 for w in words)
+    )
+
+
 def _rules_lists_unquoted(text: str) -> tuple[int, list[str], int]:
     """(RULES lists outside fences, elements that are not one quoted sentence, count of quoted sentences).
 
-    A sentence is a quoted item of at least three words. ``RULES::[]`` and ``RULES::["x"]`` hold none.
+    A sentence is a quoted item meeting ``_SENTENCE_FLOOR``. ``RULES::[]``, ``RULES::["x"]``,
+    ``RULES::["x x x"]`` and ``RULES::["a a a a"]`` hold none.
     """
     outside, _ = _scan(text)
     joined = "\n".join(t for _, t in outside)
@@ -1452,10 +1472,10 @@ def _rules_lists_unquoted(text: str) -> tuple[int, list[str], int]:
         body = _bracket_body(joined[m.end() :])
         for lit in _STRING_LITERAL.findall(body):
             inner = lit[1:-1]
-            if len(inner.split()) >= 3:
+            if _is_rule_sentence(inner):
                 sentences += 1
             else:
-                bad.append(f"RULES item is not a sentence (fewer than three words): {inner[:60]!r}")
+                bad.append(f"RULES item is not a sentence (floor: {_SENTENCE_FLOOR}): {inner[:60]!r}")
         rest = _STRING_LITERAL.sub("", body)
         leftovers = [p.strip() for p in re.split(r"[,\n]", rest) if p.strip()]
         bad += [f"unquoted RULES element: {p[:60]}" for p in leftovers]
@@ -1477,20 +1497,9 @@ def _register_split_problems(text: str) -> list[str]:
 def _handoff_pointer_problems(text: str) -> list[str]:
     problems: list[str] = []
 
-    def directs(ln: str) -> bool:
-        return (
-            bool(re.search(r"\bPITH\b", ln))
-            and bool(re.search(r"\bHandoff\b", ln))
-            and bool(re.search(r"\bshape\b", ln, flags=re.IGNORECASE))
-            and "pith-spec.md" in ln
-            and len(ln.split()) >= 6
-        )
-
-    if not any(directs(ln) for ln in text.split("\n")):
-        problems.append(
-            "no line directs the reader to PITH's Handoff shape: one line of six or more words naming "
-            "'Handoff', 'PITH', 'shape' and where it lives ('pith-spec.md')"
-        )
+    outside, _ = _scan(text)
+    if not any(HANDOFF_POINTER in t for _, t in outside):
+        problems.append(f"no content line outside a fence holds the exact pointer {HANDOFF_POINTER!r}")
     if re.search(r"peer\s+message\s+shape", text, flags=re.IGNORECASE):
         problems.append("points at a 'Peer message shape' that pith-spec.md does not carry yet")
     return problems
@@ -1533,7 +1542,7 @@ def test_chatter_P2_8b2_question_mark_is_not_a_hedge_marker() -> None:
 def test_chatter_P2_8b2_rules_are_quoted_sentence_lists() -> None:
     count, bad, sentences = _rules_lists_unquoted(_read("chatter"))
     assert count >= 1, "P2-8b2 chatter: no RULES::[...] list (rules as quoted sentences)"
-    assert sentences >= 1, f"P2-8b2 chatter: {count} RULES list(s) hold no quoted sentence (three or more words)"
+    assert sentences >= 1, f"P2-8b2 chatter: {count} RULES list(s) hold no quoted sentence ({_SENTENCE_FLOOR})"
     assert not bad, f"P2-8b2 chatter: {bad[:3]}"
 
 
@@ -1597,6 +1606,10 @@ def test_chatter_P2_8b2_canaries_fire_on_synthetic_bad_input() -> None:
     assert _rules_lists_unquoted("§1::A\n  RULES::[]\n")[2] == 0
     assert _rules_lists_unquoted('§1::A\n  RULES::["x"]\n')[2] == 0
     assert _rules_lists_unquoted('§1::A\n  RULES::["x"]\n')[1]
+    assert _rules_lists_unquoted('§1::A\n  RULES::["x x x"]\n')[2] == 0
+    assert _rules_lists_unquoted('§1::A\n  RULES::["a a a a"]\n')[2] == 0
+    assert _rules_lists_unquoted('§1::A\n  RULES::["go go go go"]\n')[2] == 0  # 4 words but 2 distinct
+    assert _rules_lists_unquoted('§1::A\n  RULES::["a b c d"]\n')[2] == 0  # no word of 4 letters
     # register split
     good = 'FORMAL::".oct.md files, parsed by octave_validate"\nWIRE::"message bodies, read by the receiving model"\nS::"decided by who validates"\n'
     assert _register_split_problems(good) == []
@@ -1605,6 +1618,9 @@ def test_chatter_P2_8b2_canaries_fire_on_synthetic_bad_input() -> None:
     ok = 'SHAPES::"For asks and replies use the Handoff shape in PITH (`pith-spec.md`, Shapes)"'
     assert _handoff_pointer_problems(ok) == []
     assert _handoff_pointer_problems('X::"PITH Handoff"'), "the bare word pair is not a pointer"
+    filler = 'X::"For asks use the Handoff shape in PITH, see pith-spec.md for more detail"'
+    assert _handoff_pointer_problems(filler), "keyword filler is not the exact pin"
+    assert _handoff_pointer_problems("```\n" + ok + "\n```\n"), "the pin inside a fence does not count"
     assert _handoff_pointer_problems('X::"the Handoff shape in PITH"'), "names no location"
     assert _handoff_pointer_problems("nothing")
     assert _handoff_pointer_problems(ok + '\nY::"and the Peer message shape"')
