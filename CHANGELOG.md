@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`resources/specs/pith-spec.md`: the PITH writing standard ships with the package** (records
+  `INNER-LANGUAGE-NAMED-PITH-20261102` and `PITH-SPEC-HOME-OCTAVE-MCP-20261102`). It is the
+  rules every agent-written sentence, item and value follows inside or outside an OCTAVE
+  container. It differs from the source page by the agreed plain line about HestAI
+  repositories, file:line pointers re-measured at the build SHA (octave-mcp pointers are now
+  repo-relative), corrections where the page misdescribed behaviour (the unquoted section-sign,
+  double-colon and `===END===` cases, the `warnings` key location, section-dot-key wording), and
+  a machine-readable fenced list of the standard and container kernel items. The rules, the
+  name and the home are unchanged.
+- **`tests/unit/test_pith_spec_kernels.py`: drift test for the spec and the four kernels.** It
+  reads the item list from the spec, maps it both ways to each kernel (pinned at 11 standard and
+  6 container items), requires every rule heading except `Runbook steps` to have an item, requires `in PITH` or
+  `written in PITH` in each skill `TARGET`, checks the spec for operator glyphs, repo-relative
+  pointers and content tokens near each pointed line, and has canaries for each check. The
+  workbench kernel regex copy now follows the line-anchored `===END===` terminator
+  (hestai-workbench #664, recorded at `9d1a53e`). `test_p2_8_bundled_skills_language.py` A8 now
+  keeps key presence and each kernel's own items only; this test owns the standard and
+  container strings.
+- **CI: the wheel job installs the built wheel and asserts `octave_mcp/resources/specs/pith-spec.md`
+  exists and is non-empty** (`artifact-validate`), so a packaging gap cannot hide behind an
+  editable install.
+
 - **`tests/unit/test_p2_8_bundled_skills_language.py`: acceptance guard for the bundled skills
   and the tool-reference pattern** (spec criteria A1-A5, A5b, A8-A13). It runs the real
   `ValidateTool` and `WriteTool` dry run (the parser is never mocked) against the four
@@ -22,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   these four files on a machine without it.
 
 ### Fixed
+
+- **`octave-tool-reference` `§8::UPSTREAM` no longer calls the hub copy legacy.** It now says
+  octave-mcp is upstream, copies elsewhere are synced from it, and are never a re-alignment
+  source.
 
 - **Three claims in the merged skill text corrected (P2-8a).** Each was checked against the code.
   `octave-compression` `RECEIPTS` no longer says `octave_write` returns `repairs[]`: `WriteTool`
@@ -82,31 +108,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Bundled skills and the tool-reference pattern are rewritten to teach the estate document
-  language.** Version bumps: `octave-literacy` 4.0.0 → 5.0.0, `octave-mastery` 4.0.0 → 5.0.0,
-  `octave-compression` 3.1.0 → 4.0.0, `octave-tool-reference` pattern 1.1.9 → 1.2.0. The three
+  language.** Version bumps, nothing in between was released: `octave-literacy` 4.0.0 → 5.1.0,
+  `octave-mastery` 4.0.0 → 5.1.0, `octave-compression` 3.1.0 → 4.1.0,
+  `octave-tool-reference` pattern 1.1.9 → 1.2.1. The three
   skills take a major bump because the teaching inverts: relations in words, note-form values,
   identifiers copied exactly, rules held as lists of quoted sentences with no rule ids, section
   contents indented, and glyphs kept only in fenced reading references and schema-definition
-  examples. The pattern takes a minor bump. Authority: `LANG-ARCH-RECONCILIATION-RULINGS-20261031`
+  examples. The pattern takes a minor bump, then a patch. Authority: `LANG-ARCH-RECONCILIATION-RULINGS-20261031`
   (P2-8) and `OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101` (PR #541). Section numbers that
   other files cite are kept; citations of the old rule ids (`R3a`, `R12`, `R13`) now point at the
   section and its words. Each skill kernel carries the standard kernel strings; the
   tool-reference kernel carries only the container subset of them (unkeyed lines, a value on a
   section header, keyed and quoted lines, indentation, section-dot-key edits, reading repairs).
 - **Size costs, measured at HEAD with tiktoken `cl100k_base` over file bytes.** Kernels, against
-  the `origin/main` (`cdfc963`) baseline: literacy 220 → 290, mastery 183 → 296, compression
-  203 → 300, tool-reference 195 → 260. Every agent binding that loads a kernel pays the
-  difference. Whole files: literacy 5065 → 5062, mastery 3885 → 3487, compression 2106 → 2103,
-  and the tool-reference pattern grows 4218 → 4463.
+  the `origin/main` (`cdfc963`) baseline: literacy 220 → 295, mastery 183 → 269, compression
+  203 → 283, tool-reference 195 → 264 (cap 300). Every agent binding that loads a kernel pays the
+  difference. Whole files: literacy 5065 → 5064, mastery 3885 → 3460, compression 2106 → 2086,
+  and the tool-reference pattern grows 4218 → 4463. The new `pith-spec.md` is 4498.
 - **Deleted mythology-teaching content (receipt).** Removed, each item checked against the diff
   to `origin/main`: mastery `§1a` TEST/GOOD/BAD examples, `GLOSS_ON_FIRST_USE`, `WHEN`/`WHEN_NOT`
   and `PARADIGM_BLINDNESS`, `§1b` `SOURCE_PRIORITY`, and `§7` `OPERATOR_SOUP`, `PROSE_BLEED` and
   `§7a` `TELEGRAPHIC_PHRASE`; compression `R3a`, `R5`, `R6`, `§6` `CONSERVATIVE_PLUS_MYTHOLOGY`,
   and the ULTRA_MYTHIC "60%" figure (now a pointer to `octave-ultra-mythic`); literacy `§0`
   mythology lines, `ASCII_RULE` and `TELEGRAPHIC_PHRASE`.
-- **Accepted risk: kernel-only agents lose some basic syntax items under the 300-token kernel
-  cap.** The remedy is the P2-8b pointer trim of each kernel to a pointer sentence plus its own
-  items.
+- **Kernels align to the PITH page's standard items (P2-8b1); this closes the accepted
+  kernel-only risk recorded below.** Each skill kernel now carries the page's standard and
+  container items in full, plus its own items, with the basic syntax items restored for
+  kernel-only readers (the workbench `control-tower` profile loads the literacy kernel
+  kernel-only, so it had lost them since P2-8). Each skill `TARGET` cites PITH in words. The
+  standard items keep the page's qualifiers, including `flagged` (contradictions kept and
+  flagged) and `tags or counts` (no writer-made ids, tags or counts). Pre-review restored the
+  compression kernel's strength: `a LOSSLESS tier drops nothing`, and a GATE that asks whether
+  META says what was dropped. Sizes are in the size entry above.
+- **Decision with the operator: items kept in full, not trimmed to a pointer.** LANG-ARCH
+  planned that P2-8b would trim each kernel to a pointer sentence plus own items. This change
+  keeps the items in full because kernel-only consumers exist and cannot follow a path inside
+  site-packages. Whether to trim anyway is open with the operator. Release hold: no release
+  until P2-8b2 (specs, primers, `octave-chatter`, `octave-ultra-mythic`) merges.
+- **Accepted risk (closed by P2-8b1 above): kernel-only agents lost some basic syntax items under
+  the 300-token kernel cap.** The planned remedy, a pointer trim, was not taken; the restored
+  items are.
 - **`octave-compression` keeps the loss receipt (option a).** Compression outputs still carry
   `COMPRESSION_TIER` and `LOSS_PROFILE` in META, in note form. The skills' own META no longer
   carry them. Both keys are still `E007` under schema=META STRICT until #514 lands.
@@ -116,7 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Source direction reversed for these four files.** octave-mcp is now the upstream for
   `octave-literacy`, `octave-mastery`, `octave-compression` and `octave-tool-reference`. Never
   re-align them FROM the HestAI-MCP hub: this reverses the direction of PR #513. The hub copy is
-  the legacy text and is its owner's concern.
+  a synced copy and is its owner's concern.
 - **Follow-on, no release in between.** P2-8b aligns the specs, primers, `octave-chatter` and
   `octave-ultra-mythic` with the new teaching. Do not cut an octave-mcp release between P2-8 and
   P2-8b, so a published package never ships self-contradicting teaching.

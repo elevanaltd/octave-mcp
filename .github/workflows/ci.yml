@@ -280,6 +280,24 @@ jobs:
           print(f"OK::schema_file_present::{schema_file}")
           PY
 
+      - name: Verify PITH spec shipped in installed wheel
+        run: |
+          TEMP_DIR="$(mktemp -d)"
+          cd "$TEMP_DIR"
+          python -m pip install "$GITHUB_WORKSPACE"/dist/*.whl
+          python - <<'PY'
+          import pathlib
+          import octave_mcp
+          pkg = pathlib.Path(octave_mcp.__file__).resolve().parent
+          # Installed wheel, not an editable install of the checkout.
+          assert "site-packages" in pkg.parts, f"not_an_installed_wheel::{pkg}"
+          spec = pkg / "resources" / "specs" / "pith-spec.md"
+          assert spec.is_file(), f"pith_spec_missing::{spec}"
+          size = spec.stat().st_size
+          assert size > 0, f"pith_spec_empty::{spec}"
+          print(f"OK::pith_spec_present::{spec}::{size}_bytes")
+          PY
+
   integration-from-wheel:
     name: Integration Tests (from wheel)
     runs-on: ubuntu-latest
