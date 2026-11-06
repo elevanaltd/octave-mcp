@@ -1,6 +1,6 @@
 ---
 name: octave-ultra-mythic
-description: "Ultra-high density compression using mythological atoms and semantic shorthand. Preserves soul and constraints at 60% compression for identity transmission, binding protocols, and extreme token scarcity. REQUIRES octave-mastery and octave-compression."
+description: "DEPRECATED, reading only. Explains old mythological-atom OCTAVE documents so they can be read; not for writing new documents. Use pith-spec.md and the octave-mastery reading glossary instead."
 allowed-tools: ["Read"]
 triggers: ["reading old mythic documents"]
 version: "2.0.0"

@@ -194,7 +194,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after. Only their `META` (and, for the skill, its YAML frontmatter) changed: `STATUS::DEPRECATED`
   plus a note pointing at `specs/pith-spec.md` and the `octave-mastery` reading glossary, with
   the record id in backticks; bodies are untouched. The skill's frontmatter no longer
-  advertises it for authoring: `allowed-tools` is `["Read"]` (was Read, Write, Edit) and
+  advertises it for authoring: its `description` is now a DEPRECATED reading-only notice,
+  `allowed-tools` is `["Read"]` (was Read, Write, Edit) and
   `triggers` is one reading trigger (`reading old mythic documents`; the old eight authoring
   and identity triggers are gone). The primers' `VERSION` is bumped (6.3.2 to 6.3.4 and 7.0.2
   to 7.0.4) and their declared `TOKENS` re-measured (mythology 423 to 489, ultra-mythic 448 to
