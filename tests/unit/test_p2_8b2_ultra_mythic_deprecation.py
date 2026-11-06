@@ -123,6 +123,10 @@ def _deprecation_problems(text: str) -> list[str]:
         problems.append("META does not say the file is for reading only")
     if RECORD_TOKEN not in meta:
         problems.append("META does not name the record token")
+    if "new documents" not in meta.lower():
+        problems.append("META does not say the file is not for new documents")
+    if "deleted" not in meta.lower():
+        problems.append("META does not say when the file is deleted")
     return problems
 
 
@@ -133,7 +137,7 @@ def test_c_deprecated_file_meta_carries_status_and_pointers(label: str) -> None:
 
 def test_c_canary_active_meta_is_flagged() -> None:
     doc = '===X===\nMETA:\n  TYPE::SKILL\n  VERSION::"1"\n  STATUS::ACTIVE\n===END===\n'
-    assert len(_deprecation_problems(doc)) >= 4
+    assert len(_deprecation_problems(doc)) >= 6
 
 
 # ---------------------------------------------------------------------------
@@ -167,3 +171,64 @@ def test_e_data_spec_selection_rule_no_longer_recommends_ultra_mythic() -> None:
 def test_e_canary_block_helper_stops_at_sibling() -> None:
     doc = "T:\n  A:\n    X::1\n  B:\n    Y::2\n"
     assert _indented_block(doc, "A:").strip() == "X::1"
+
+
+# ---------------------------------------------------------------------------
+# Cubic review fixes (PR #548): frontmatter and exact-identifier form.
+# ---------------------------------------------------------------------------
+
+OLD_TRIGGERS = [
+    "ultra mythic",
+    "mythological compression",
+    "semantic atoms",
+    "identity compression",
+    "binding passport",
+    "cognitive passport",
+    "60% compression",
+    "soul preservation",
+]
+
+
+def _frontmatter_line(text: str, key: str) -> str:
+    head = text.split("\n---\n", 1)[0]
+    lines = [ln for ln in head.splitlines() if ln.startswith(f"{key}:")]
+    return lines[0] if lines else ""
+
+
+def test_f_deprecated_skill_grants_read_only_tools() -> None:
+    line = _frontmatter_line(_text(ULTRA_MYTHIC_SKILL), "allowed-tools")
+    assert line, "allowed-tools line must stay in the frontmatter"
+    assert "Write" not in line and "Edit" not in line
+    assert "Read" in line
+
+
+def test_f_deprecated_skill_no_longer_advertises_authoring_triggers() -> None:
+    line = _frontmatter_line(_text(ULTRA_MYTHIC_SKILL), "triggers").lower()
+    for old in OLD_TRIGGERS:
+        assert old not in line, f"old trigger still advertised: {old}"
+
+
+def test_f_canary_frontmatter_line_reader() -> None:
+    doc = '---\nallowed-tools: ["Read", "Write"]\n---\nbody'
+    assert "Write" in _frontmatter_line(doc, "allowed-tools")
+
+
+def _note_blocks() -> dict[str, str]:
+    return {
+        "ultra-mythic skill": _meta_block(_text(ULTRA_MYTHIC_SKILL)),
+        "mythology primer": _meta_block(_text(DEPRECATED_FILES["mythology primer"])),
+        "ultra-mythic primer": _meta_block(_text(DEPRECATED_FILES["ultra-mythic primer"])),
+        "data-spec tier": _indented_block(_text(DATA_SPEC), "ULTRA_MYTHIC:"),
+    }
+
+
+@pytest.mark.parametrize("label", ["ultra-mythic skill", "mythology primer", "ultra-mythic primer", "data-spec tier"])
+def test_g_record_id_is_backticked_in_each_note(label: str) -> None:
+    block = _note_blocks()[label]
+    assert f"`{RECORD_TOKEN}`" in block
+    assert block.count(RECORD_TOKEN) == block.count(f"`{RECORD_TOKEN}`")
+
+
+def test_g_canary_bare_id_is_flagged() -> None:
+    block = f"note {RECORD_TOKEN} here"
+    assert block.count(RECORD_TOKEN) != block.count(f"`{RECORD_TOKEN}`")
