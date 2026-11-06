@@ -11,10 +11,17 @@ META:
   DECIDED_BY::operator
   DECIDED::"2026-11-06"
   SCOPE::octave-mcp
-  SUPERSEDES::"REGISTER_SPLIT.RULE line only, of hestai-workbench record OCTAVE-WIRE-POSITION-0-WITHDRAWN-20260909"
-  RELATED::[OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101,INNER-LANGUAGE-NAMED-PITH-20261102,PITH-SPEC-HOME-OCTAVE-MCP-20261102,LANG-ARCH-RECONCILIATION-RULINGS-20261031,OCTAVE-WIRE-POSITION-0-WITHDRAWN-20260909]
-  DECISION::"Keep octave-chatter and rewrite it as PITH applied to message bodies. Supersede only the REGISTER_SPLIT.RULE line of the 2026-09-09 wire record. Fold the rewrite into the single P2-8b2 PR, after PR 545 merges."
-  BECAUSE::"Operator ruled 2026-11-06 in the chatter-review session. LANG-ARCH-RECONCILIATION-RULINGS-20261031 does not explicitly supersede the wire record RULE line, so without this record two ratified records conflict."
+  RELATED::[
+    OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101,
+    INNER-LANGUAGE-NAMED-PITH-20261102,
+    PITH-SPEC-HOME-OCTAVE-MCP-20261102,
+    LANG-ARCH-RECONCILIATION-RULINGS-20261031,
+    OCTAVE-WIRE-POSITION-0-WITHDRAWN-20260909
+  ]
+  DECISION::"Keep `octave-chatter` and rewrite it as PITH applied to message bodies. Supersede only the `REGISTER_SPLIT.RULE` line of the `2026-09-09` wire record. Fold the rewrite into the single `P2-8b2` PR, after `PR #545` merges."
+  BECAUSE::"Operator ruled 2026-11-06 in the chatter-review session. `LANG-ARCH-RECONCILIATION-RULINGS-20261031` does not explicitly supersede the wire record `REGISTER_SPLIT.RULE` line, so without this record two ratified records conflict."
+  AMENDS::OCTAVE-WIRE-POSITION-0-WITHDRAWN-20260909
+  AMENDED_SCOPE::"REGISTER_SPLIT.RULE line only; REGISTER_SPLIT and DELIVERY_SEAM kept; record lives in hestai-workbench"
 RULINGS:
   SOURCE::"operator answers in the chatter-review session on 2026-11-06, verbatim"
   ANSWER_1::"Yes, keep and rewrite"
