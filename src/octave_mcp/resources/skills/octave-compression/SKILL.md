@@ -3,17 +3,16 @@ name: octave-compression
 description: "Workflow for transforming prose into semantic OCTAVE structures. Covers tier selection, transformation phases, loss accounting, and decision rules. REQUIRES octave-literacy."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["compress to octave", "semantic compression", "documentation refactoring", "octave compression", "compress documentation", "knowledge artifact", "semantic density", "OCTAVE format conversion"]
-version: "4.1.0"
+version: "4.1.1"
 ---
 
 ===OCTAVE_COMPRESSION===
 META:
   TYPE::SKILL
-  VERSION::"4.1.0"
+  VERSION::"4.1.1"
   STATUS::ACTIVE
   PURPOSE::"Decision rules and workflow for turning prose into OCTAVE at the right fidelity tier"
   REQUIRES::octave-literacy
-  NEXT_SKILLS::[octave-ultra-mythic]
   PATTERNS::[octave-tool-reference]
   SPEC_REFERENCE::octave-data-spec.oct.md
 ---
@@ -61,8 +60,6 @@ META:
         "embedding generation",
         "dense reference"
       ]
-    ULTRA_MYTHIC:
-      POINTER::"identity compression for agent binding and identity transfer lives in the octave-ultra-mythic skill; read it there"
   DECISION_RULES::[
     "Reconstruction accuracy critical: CONSERVATIVE or LOSSLESS.",
     "Context window scarce and loss acceptable: AGGRESSIVE or ULTRA.",

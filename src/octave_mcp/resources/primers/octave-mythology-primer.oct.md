@@ -1,10 +1,12 @@
 ===OCTAVE_MYTHOLOGY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.3.2"
-  TOKENS::"423"
+  VERSION::"6.3.3"
+  TOKENS::"475"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"[preserve:atom_mappings,drop:rationale]"
+  STATUS::DEPRECATED
+  DEPRECATED::"Reading only. See pith-spec.md and octave-mastery reading glossary. OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106"
 §1::ESSENCE
 PURPOSE::"Map concepts→mythological"
 OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"

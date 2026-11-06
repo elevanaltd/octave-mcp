@@ -1,10 +1,12 @@
 ===ULTRA_MYTHIC_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"7.0.2"
-  TOKENS::"448"
+  VERSION::"7.0.3"
+  TOKENS::"500"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"[preserve:NEVER_constraints∧delegation,drop:rationale]"
+  STATUS::DEPRECATED
+  DEPRECATED::"Reading only. See pith-spec.md and octave-mastery reading glossary. OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106"
 §1::ESSENCE
 PURPOSE::"Crush identity prose→mythic atoms at 60%, soul⊕constraints intact"
 OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"

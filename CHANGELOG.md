@@ -171,6 +171,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.16.0] - 2026-09-18 - "Parser AST fixes, CI mcp dependency cap, bundled skill/spec realignment"
 
+### Deprecated
+
+- **`octave-ultra-mythic` skill, `octave-mythology-primer` and `octave-ultra-mythic-primer` are
+  deprecated and now reading only (P2-8b2; record
+  `OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106`, operator ruling 2026-11-06).** The PITH
+  standard forbids mythology as instruction vocabulary and operator glyphs as relations, and
+  these three files teach both. The files stay at their paths and stay packaged for one
+  release, so an explicit load by name or path still works; they are deleted in the release
+  after. Only their `META` changed (`STATUS::DEPRECATED` plus a note pointing at
+  `specs/pith-spec.md` and the `octave-mastery` reading glossary); bodies are untouched. The
+  primers' `VERSION` is bumped (6.3.2 to 6.3.3 and 7.0.2 to 7.0.3) and their declared `TOKENS`
+  re-measured (mythology 423 to 475, ultra-mythic 448 to 500, the primer ceiling).
+  No PITH-native replacement is planned until LANG-ARCH bench evidence exists.
+- **Discovery routes removed.** `octave-compression` 4.1.0 to 4.1.1 drops its `NEXT_SKILLS` line and
+  its `ULTRA_MYTHIC` pointer; `octave-mastery` 5.1.0 to 5.1.1 drops its `NEXT_SKILLS` line (the key
+  is removed, not left empty). `octave-compression-primer` 6.7.2 to 6.7.3 drops the
+  identity-or-binding route to ULTRA_MYTHIC (498 to 473 tokens). `octave-data-spec` marks the
+  ULTRA_MYTHIC tier `STATUS::DEPRECATED` (the tier stays one release), drops its
+  `REQUIRES::octave-ultra-mythic` line, and the `SELECTION_GUIDE` no longer recommends it.
+  `resources/README.md` marks the three files deprecated. Guard:
+  `tests/unit/test_p2_8b2_ultra_mythic_deprecation.py`. The rest of P2-8b2 is not in this
+  change, so the release hold stands.
+
 ### Upgrade notes
 
 - **Bundled skill `octave-mythology` REMOVED**, absorbed into `octave-mastery` 4.0.0. Anything

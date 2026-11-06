@@ -10,13 +10,14 @@ version: "2.0.0"
 META:
   TYPE::SKILL
   VERSION::"2.0.0"
-  STATUS::ACTIVE
+  STATUS::DEPRECATED
   PURPOSE::"Ultra-high density compression using mythological atoms for identity and knowledge preservation"
   OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
   REQUIRES::[octave-mastery, octave-compression]
   TIER::ULTRA_MYTHIC
   SPEC_REFERENCE::octave-data-spec.oct.md
-  LOADING::"explicit opt-in only — never bound by default; select via octave-compression §1 ULTRA_MYTHIC"
+  LOADING::"explicit opt-in only, never bound by default"
+  DEPRECATED::"Reading only, kept for one release so old documents can still be read. Record OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106. Do not use it to write new documents. To read old documents use the reading glossary in octave-mastery and the standard in specs/pith-spec.md. Deleted in the release after."
 ---
 §1::CORE_MANDATE
   TARGET::"60% token reduction while preserving soul and constraints"

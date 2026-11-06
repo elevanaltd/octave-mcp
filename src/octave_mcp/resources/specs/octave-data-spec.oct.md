@@ -130,7 +130,8 @@ TIERS:
       constraint_preservation,
       list_compression
     ]
-    REQUIRES::octave-ultra-mythic
+    STATUS::DEPRECATED
+    DEPRECATED::"Reading only, kept one release for old documents. See pith-spec.md and the octave-mastery reading glossary. OCTAVE-MCP-P2-8B-ULTRA-MYTHIC-DEPRECATION-20261106"
     LOSS::"~40%[prose,nuance]"
     GAIN::[
       semantic_density,
@@ -142,8 +143,7 @@ SELECTION_GUIDE::[
   "IF[critical_decision→safety_implications]→use_LOSSLESS",
   "IF[research_artifact→audience_needs_context]→use_CONSERVATIVE",
   "IF[context_token_budget→loss_acceptable]→use_AGGRESSIVE",
-  "IF[embedding∨indexing∨lookup]→use_ULTRA",
-  "IF[agent_binding∨identity_transfer]→use_ULTRA_MYTHIC"
+  "IF[embedding∨indexing∨lookup]→use_ULTRA"
 ]
 METADATA_REQUIREMENT:
   ALL_COMPRESSED_DOCS::"include_TIER_in_META[enables_reader_expectations]"
