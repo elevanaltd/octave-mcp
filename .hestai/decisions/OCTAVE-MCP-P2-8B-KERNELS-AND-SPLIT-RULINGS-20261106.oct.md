@@ -9,6 +9,6 @@ META:
   RATIFIED_BY::"human:operator"
   RATIFIED_AT::"2026-11-06T00:00:00Z"
   SCOPE::octave-mcp
-  DECISION::"P2-8b kernels keep PITH standard items in full; no pointer trim while kernel-only consumers exist; token limits may be raised instead of cutting content; one or two PRs acceptable; ultra-mythic and chatter decisions delegated to their review sessions."
-  BECAUSE::"Operator ruled 2026-11-06. Control-tower loads octave-literacy kernel-only, so a pointer delivers no PITH. Overrides LANG-ARCH pointer-trim plan of 2026-11-01. Applied in PR 545, merged caf0458; b2 is single PR 548."
+  DECISION::"P2-8b octave-mcp kernels keep PITH standard items in full while any kernel-only consumer exists; pointer trim deferred, not reversed; token limits may be raised instead of cutting; one or two PRs acceptable; ultra-mythic and chatter delegated to review sessions."
+  BECAUSE::"Operator ruled 2026-11-06. Control-tower loads octave-literacy kernel-only, so a pointer delivers no PITH. The trim was a LANG-ARCH session plan in no ratified record; the PITH page defers it. Applied in PR 545."
 ===END===
