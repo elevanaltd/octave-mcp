@@ -48,8 +48,10 @@ CLAUDE.md
 .hestai/state/
 .hestai/state/sessions/**/*.jsonl
 
-# HestAI shared working state directory (context, reports, sessions, research)
-.hestai-state/
+# HestAI shared working state (context, reports, sessions, research).
+# Usually a symlink to the shared space; no trailing slash, because a
+# trailing slash matches only directories and git sees a symlink as a file.
+.hestai-state
 
 # Git worktrees
 worktrees/
