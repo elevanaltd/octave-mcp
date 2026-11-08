@@ -40,8 +40,8 @@ Complete OCTAVE skills with full documentation and examples (roughly 1,600-5,100
 - **octave-literacy/** - Basic OCTAVE syntax, canonical forms, and governance-artefact grammar
 - **octave-compression/** - Compression workflows and tiers
 - **octave-mastery/** - Advanced patterns, archetypes, and the mythology vocabulary
-- **octave-chatter/** - OCTAVE on the wire: reading and emitting OCTAVE in agent-to-agent messages
-- **octave-ultra-mythic/** - Ultra-high density compression
+- **octave-chatter/** - PITH on the wire: writing agent-to-agent message bodies in note form with exact identifiers and provenance; messages are checked by the receiving model, not `octave_validate`
+- **octave-ultra-mythic/** - Deprecated, reading only. Kept for one release; to read old documents use `specs/pith-spec.md` and the `octave-mastery` reading glossary
 
 The **octave-mythology** skill was retired; its vocabulary, usage law, and
 anti-patterns are absorbed into **octave-mastery** (see its `ABSORBS` META field).
@@ -58,9 +58,9 @@ Compact bootstrapping documents (each within the 500-token `cl100k_base` budget;
 - **octave-literacy-primer.oct.md** - Write basic OCTAVE syntax
 - **octave-compression-primer.oct.md** - Compress prose to OCTAVE
 - **octave-mastery-primer.oct.md** - Master OCTAVE patterns
-- **octave-mythology-primer.oct.md** - Map concepts to mythological atoms
+- **octave-mythology-primer.oct.md** - Deprecated, reading only; see `specs/pith-spec.md` and the `octave-mastery` reading glossary
 - **octave-reading-primer.oct.md** - Understand OCTAVE format on receipt (read-only register)
-- **octave-ultra-mythic-primer.oct.md** - Ultra-compress with 60% reduction
+- **octave-ultra-mythic-primer.oct.md** - Deprecated, reading only; see `specs/pith-spec.md` and the `octave-mastery` reading glossary
 
 ## Usage
 

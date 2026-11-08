@@ -1,8 +1,8 @@
 ===OCTAVE_COMPRESSION_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.7.2"
-  TOKENS::"498"
+  VERSION::"6.7.3"
+  TOKENS::"473"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"[preserve:tier_rules∧transforms,drop:rationale]"
 §1::ESSENCE
@@ -17,7 +17,6 @@ audit∨critical→LOSSLESS[drop::none]
 research∨design→CONSERVATIVE[drop::redundancy]
 quick_ref→AGGRESSIVE[drop::nuance]
 extreme_scarcity→ULTRA[drop::narrative]
-identity∨binding→ULTRA_MYTHIC[drop::narrative,keep::soul∧constraints]
 ```
 TRANSFORMS::
 ```

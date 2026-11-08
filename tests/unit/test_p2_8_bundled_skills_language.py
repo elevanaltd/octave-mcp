@@ -58,8 +58,11 @@ FILES: dict[str, tuple[str, str]] = {
     "mastery": ("src/octave_mcp/resources/skills/octave-mastery/SKILL.md", "SKILL"),
     "compression": ("src/octave_mcp/resources/skills/octave-compression/SKILL.md", "SKILL"),
     "tool-reference": ("src/octave_mcp/resources/patterns/octave-tool-reference.oct.md", "META"),
+    # P2-8b2 Q2: the wire register, held to the same guards (record
+    # OCTAVE-MCP-CHATTER-WIRE-PITH-REWRITE-RULINGS-20261106). Key is "chatter", the skill is octave-chatter.
+    "chatter": ("src/octave_mcp/resources/skills/octave-chatter/SKILL.md", "SKILL"),
 }
-SKILLS = ["literacy", "mastery", "compression"]
+SKILLS = ["literacy", "mastery", "compression", "chatter"]
 ALL = list(FILES)
 RESOURCES_DIR = REPO_ROOT / "src" / "octave_mcp" / "resources"
 
@@ -67,12 +70,15 @@ RESOURCES_DIR = REPO_ROOT / "src" / "octave_mcp" / "resources"
 # Baseline constants. Source: spec section 2 "Baseline" table, measured at
 # octave-mcp cdfc963 (baseline.py). Do not edit to make a test pass.
 # ---------------------------------------------------------------------------
-BASELINE_CL100K = {"literacy": 5065, "mastery": 3885, "compression": 2106, "tool-reference": 4218}
+BASELINE_CL100K = {"literacy": 5065, "mastery": 3885, "compression": 2106, "tool-reference": 4218, "chatter": 1975}
+# chatter: not a cdfc963 number. 1975 cl100k is octave-chatter v1.1.0 as shipped at c743fb9 (the P2-8b2 Q2
+# starting point); A4 holds the rewrite to end below it.
 # Spec section 5 A1: warnings are measured per file, per code.
 BASELINE_WARNINGS: dict[str, dict[str, int]] = {
     "literacy": {"W_FLAT_PREFIX_SCALAR": 5},
     "mastery": {"W_FLAT_PREFIX_SCALAR": 1},
     "compression": {},
+    "chatter": {},
 }
 # Spec section 5 A2 (re-measured at cdfc963 by this file's author: 6 x E007).
 BASELINE_E007_FIELDS = {
@@ -92,7 +98,7 @@ TOOL_REFERENCE_GROWTH_CAP = 250
 # WriteTool(dry_run=True) on each file (count of corrections[].code ==
 # W_FLAT_PREFIX_SCALAR, run 2026-11-01 by this file's author). They are not in
 # the spec table; the skill figures equal the spec's A1 warning baseline.
-A10_FLAT_PREFIX_SCALAR_BASELINE = {"literacy": 5, "mastery": 1, "compression": 0, "tool-reference": 1}
+A10_FLAT_PREFIX_SCALAR_BASELINE = {"literacy": 5, "mastery": 1, "compression": 0, "tool-reference": 1, "chatter": 0}
 # Spec r5 R5-3: allowed flat-prefix groups, parsed from the message
 # "share prefix 'X_'". STEP_ is the runbook form (C4); W_ covers the warning-code
 # tables. Every other group must be restructured into a list or a block in GREEN.
@@ -101,6 +107,7 @@ FLAT_PREFIX_ALLOW: dict[str, set[str]] = {
     "tool-reference": {"W_"},
     "mastery": set(),
     "compression": set(),
+    "chatter": set(),
 }
 
 # Spec r5 R5-5 / section 5 A3. "->" and "<->" count with or without spaces. The
@@ -153,6 +160,13 @@ OWN_KERNEL_STRINGS: dict[str, dict[str, list[str]]] = {
             "Could a reader rebuild every causal chain, condition and number, and does META say what was dropped?"
         ],
     },
+    # chatter: the standard items come from pith-spec.md (the drift test owns them). Own items: only what the
+    # record's REWRITE_SCOPE keeps beyond PITH, which is provenance on every message. Identifiers verbatim in
+    # backticks and hedges verbatim are the standard items "Exact identifiers" and "Hedges verbatim". Wording is
+    # the RED author's proposal; GREEN or review may change it by changing this row.
+    "chatter": {
+        "MUST": ["provenance on every message: measured at a SHA, relayed or inferred"],
+    },
     # tool-reference: today's kernel items other than the container items (which the new
     # test owns). Wording is unchanged by P2-8b1.
     "tool-reference": {
@@ -190,6 +204,11 @@ SECTION_REFERENCES: dict[str, list[tuple[str, str]]] = {
     "compression": [
         (r"^\s*§1::", "§1"),
         (r"^\s*§4::COMPRESSION_RULES\s*$", "§4::COMPRESSION_RULES"),
+    ],
+    # chatter: no inbound section citations exist (git grep at c743fb9). The kernel section is what both
+    # extractors read, so that is the one reference that must keep resolving.
+    "chatter": [
+        (r"^\s*§5::ANCHOR_KERNEL\s*$", "§5::ANCHOR_KERNEL"),
     ],
 }
 # tool-reference: (parent section number, key regex, label)
@@ -236,7 +255,7 @@ A12_SANCTIONED_WRONG_KEY = "WRONG_EXAMPLE"
 # When #514 lands this exception goes. Deleting the template to go green is forbidden.
 A12_COMPRESSION_E007_ALLOWED = {"META.COMPRESSION_TIER", "META.LOSS_PROFILE"}
 # R5-1: per-file minimum number of validated example fences (non-vacuity).
-A12_MIN_VALIDATED = {"literacy": 1, "mastery": 1, "compression": 1, "tool-reference": 0}
+A12_MIN_VALIDATED = {"literacy": 1, "mastery": 1, "compression": 1, "tool-reference": 0, "chatter": 1}
 # R5-1: an info tag naming one of these means the fence is not OCTAVE.
 A12_NON_OCTAVE_TAGS = {"python", "json", "yaml", "text", "ts", "regex", "bash"}
 
@@ -1341,3 +1360,332 @@ def test_P2_8a_a_canary() -> None:
     marked = '    ANCHORING::["Documented intent, do not write: `HOLOGRAPHIC<latest@local>`."]\n'
     assert _anchoring_problems(marked, tokenizes=False) == []
     assert _anchoring_problems("  OTHER::x\n", tokenizes=False) == ["no ANCHORING key"]
+
+
+# ---------------------------------------------------------------------------
+# P2-8b2 Q2: octave-chatter as PITH applied to message bodies (RED guards)
+# ---------------------------------------------------------------------------
+# Authority: record OCTAVE-MCP-CHATTER-WIRE-PITH-REWRITE-RULINGS-20261106 (REWRITE_SCOPE), governance PR #547.
+# octave-chatter is held to every guard above as the "chatter" file (A1 to A13 as each applies; the per-name
+# tables carry its rows). The checks below are chatter-specific: what the rewrite keeps, drops and adds.
+#
+# KEEP: the register split; provenance on every message; identifiers and hedges verbatim; a small kernel.
+# DROP: the operator table as authoring guidance; "operators carry the connectives" and the ASCII wire policy;
+#       mythology as "semantic zip" with first-use glosses; the telegraphic "drop stopwords" form; `?` as hedge marker.
+# ADD:  the PITH standard items (drift test), TARGET citing PITH (drift test), a pointer to PITH's Handoff shape.
+#
+# Kernel budget. The hard cap is KERNEL_CAP_CL100K (300, the estate cap, A4 holds every kernel to it). The measured
+# kernel of octave-chatter v1.1.0 at c743fb9 is 131 cl100k tokens as extracted (A4's span: the extractor output, the
+# text after the section header). The old "138 tokens canonical" claim in the file's META counts the same text plus
+# the header line "§5::ANCHOR_KERNEL" (7 tokens), so the two numbers are the same kernel at two spans. The 11 PITH
+# standard items alone measure 85 tokens; GREEN's target is about 180, not asserted here (the cap is the gate).
+CHATTER_KERNEL_CAP_CL100K = KERNEL_CAP_CL100K
+CHATTER_KERNEL_HEADER = "§5::ANCHOR_KERNEL\n"
+# Exact pin: GREEN writes this string, on a content line outside a fence, to point at PITH's Handoff shape.
+HANDOFF_POINTER = "the Handoff shape in PITH (`pith-spec.md`, Shapes)"
+
+_MYTHOLOGY_NAMES = re.compile(
+    r"\b(hermes|sisyphean|sisyphus|icarian|icarus|promethean|prometheus|athena|zeus|apollo|atlas|hephaestus|"
+    r"daedalus|pandora|ariadne|odyssean|odysseus|cassandra|janus|mnemosyne|clio)\b",
+    flags=re.IGNORECASE,
+)
+_MYTHOLOGY_TEACHING = re.compile(r"semantic\s+zip|first\s+use[^\n]*\bgloss", flags=re.IGNORECASE)
+_OPERATORS_CARRY = re.compile(r"operators?\s+carr(?:y|ies)\s+(?:the\s+)?connectives?", flags=re.IGNORECASE)
+_TELEGRAPHIC = re.compile(r"drop(?:ping)?\s+(?:the\s+)?stop-?words?|quote\s+the\s+phrase", flags=re.IGNORECASE)
+_ASCII_POLICY = re.compile(r"\bASCII\b")
+_OPERATOR_TABLE_HEADER = re.compile(r"^\s*§\d+[a-z]?::OPERATORS?\b", flags=re.MULTILINE)
+# a `?` that is not the end of a word or a bracketed phrase: "? = unverified", "`?` marks", "(?)"
+_STANDALONE_QUESTION_MARK = re.compile(r"(?<![\w)\]])\?")
+_HEDGE_WORDS = re.compile(r"\b(unverified|doubt|hedges?|uncertain|unsure)\b", flags=re.IGNORECASE)
+_STRING_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
+
+
+def _collapse(text: str) -> str:
+    return re.sub(r"\s+", " ", text)
+
+
+def _mythology_problems(text: str) -> list[str]:
+    found = sorted({m.group(1).upper() for m in _MYTHOLOGY_NAMES.finditer(text)})
+    problems = [f"mythology names used: {found}"] if found else []
+    problems += [f"mythology teaching: {m.group(0)!r}" for m in _MYTHOLOGY_TEACHING.finditer(_collapse(text))]
+    return problems
+
+
+_QUESTION_KEYS = {"ASK", "GATE", "QUESTION", "UNCLEAR"}
+_MARKER_TEACHING = re.compile(r"=|\bmarks?\b|\bmeans\b|\bsignals?\b", flags=re.IGNORECASE)
+_KEYED_LINE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)::")
+
+
+def _without_trailing_comment(value: str) -> str:
+    """``value`` up to the first ``//`` that is outside a quoted string."""
+    in_q = False
+    for i, ch in enumerate(value):
+        if ch == '"':
+            in_q = not in_q
+        elif ch == "/" and not in_q and value[i : i + 2] == "//":
+            return value[:i]
+    return value
+
+
+def _hedge_marker_problems(text: str) -> list[str]:
+    """`?` used or taught as an uncertainty marker, anywhere in the text (fences included).
+
+    Flags (1) a standalone `?` token taught with a hedge word or a defining form ("? = unverified",
+    "`?` marks doubt"); (2) a `?` ANYWHERE in a keyed value whose key is not a question slot
+    (``RISK::"drift repeats?"``, ``RISK::"drift? repeats"``), including the continuation lines of a
+    multi-line value; comments (whole-line and trailing) are not read; (3) "question mark" taught on a
+    line about hedges. A real question in an ASK, GATE, QUESTION or UNCLEAR value is not flagged.
+    """
+    problems: list[str] = []
+    key: str | None = None
+    for n, line in enumerate(text.split("\n"), start=1):
+        stripped = line.strip()
+        if _STANDALONE_QUESTION_MARK.search(line) and (_HEDGE_WORDS.search(line) or _MARKER_TEACHING.search(line)):
+            problems.append(f"{n}: ? taught as an uncertainty marker: {line.strip()[:80]}")
+            continue
+        if re.search(r"question\s+mark", line, flags=re.IGNORECASE) and _HEDGE_WORDS.search(line):
+            problems.append(f"{n}: a question mark taught as a hedge: {line.strip()[:80]}")
+            continue
+        if stripped.startswith("//"):
+            continue
+        if not stripped or stripped.startswith(("```", "§", "===")):
+            key = None
+            continue
+        km = _KEYED_LINE.match(line)
+        if km:
+            key = km.group(1)
+            value = _without_trailing_comment(line[km.end() :])
+        else:
+            value = _without_trailing_comment(line)
+        if key is not None and key not in _QUESTION_KEYS and "?" in value:
+            problems.append(f"{n}: ? inside a {key} value (not a question slot): {line.strip()[:80]}")
+    return problems
+
+
+# Declared limits of the three chatter helpers below (RULES sentences, Handoff pointer, hedge marker).
+# They pin form, not truth: a RULES item passes on a word-count floor and is not checked for being a
+# well-formed, true or useful rule; the Handoff pointer is one exact string and is not checked against what
+# pith-spec.md says; the ? guard sees only the patterns it names. Whether a rule is well formed and true is
+# constrained by review, not by this file (the same declared-limits precedent as test_pith_spec_kernels.py, #545).
+_SENTENCE_FLOOR = "at least 4 words, at least 3 distinct words, at least one word of 4 or more letters"
+
+
+def _is_rule_sentence(item: str) -> bool:
+    words = re.findall(r"[A-Za-z0-9`_.'-]+", item)
+    return (
+        len(words) >= 4
+        and len({w.lower() for w in words}) >= 3
+        and any(len(re.sub(r"[^A-Za-z]", "", w)) >= 4 for w in words)
+    )
+
+
+def _rules_lists_unquoted(text: str) -> tuple[int, list[str], int]:
+    """(RULES lists outside fences, elements that are not one quoted sentence, count of quoted sentences).
+
+    A sentence is a quoted item meeting ``_SENTENCE_FLOOR``. ``RULES::[]``, ``RULES::["x"]``,
+    ``RULES::["x x x"]`` and ``RULES::["a a a a"]`` hold none.
+    """
+    outside, _ = _scan(text)
+    joined = "\n".join(t for _, t in outside)
+    count = 0
+    sentences = 0
+    bad: list[str] = []
+    for m in re.finditer(r"^\s*RULES::(?=\[)", joined, flags=re.MULTILINE):
+        count += 1
+        body = _bracket_body(joined[m.end() :])
+        for lit in _STRING_LITERAL.findall(body):
+            inner = lit[1:-1]
+            if _is_rule_sentence(inner):
+                sentences += 1
+            else:
+                bad.append(f"RULES item is not a sentence (floor: {_SENTENCE_FLOOR}): {inner[:60]!r}")
+        rest = _STRING_LITERAL.sub("", body)
+        leftovers = [p.strip() for p in re.split(r"[,\n]", rest) if p.strip()]
+        bad += [f"unquoted RULES element: {p[:60]}" for p in leftovers]
+    return count, bad, sentences
+
+
+def _register_split_problems(text: str) -> list[str]:
+    problems: list[str] = []
+    formal = re.findall(r"^\s*FORMAL::(.*)$", text, flags=re.MULTILINE)
+    wire = re.findall(r"^\s*WIRE::(.*)$", text, flags=re.MULTILINE)
+    if not any("octave_validate" in v for v in formal):
+        problems.append("no FORMAL:: field whose value names octave_validate")
+    if not any("receiving model" in v for v in wire):
+        problems.append("no WIRE:: field whose value names the receiving model")
+    if not re.search(r"who\s+validates", text, flags=re.IGNORECASE):
+        problems.append("the split is not stated as decided by who validates")
+    return problems
+
+
+def _pin_in_keyed_value(line: str) -> bool:
+    """True when ``line`` is ``KEY::value`` (not a // comment) and the pin sits in the value, not a trailing comment."""
+    km = _KEYED_LINE.match(line)
+    if km is None or line.lstrip().startswith("//"):
+        return False
+    value = line[km.end() :]
+    # drop a trailing // comment: the first // outside a quoted string
+    in_q = False
+    for i, ch in enumerate(value):
+        if ch == '"':
+            in_q = not in_q
+        elif ch == "/" and not in_q and value[i : i + 2] == "//":
+            value = value[:i]
+            break
+    return HANDOFF_POINTER in value
+
+
+def _handoff_pointer_problems(text: str) -> list[str]:
+    problems: list[str] = []
+
+    outside, _ = _scan(text)
+    if not any(_pin_in_keyed_value(t) for _, t in outside):
+        problems.append(
+            f"no keyed content line outside a fence holds the exact pointer {HANDOFF_POINTER!r} in its value "
+            "(not a // comment line, not a trailing // comment)"
+        )
+    if re.search(r"peer\s+message\s+shape", text, flags=re.IGNORECASE):
+        problems.append("points at a 'Peer message shape' that pith-spec.md does not carry yet")
+    return problems
+
+
+def _kernel_budget(text: str) -> tuple[int, int]:
+    kernel = _odyssean_kernel(text) or ""
+    return _tokens(kernel), _tokens(CHATTER_KERNEL_HEADER + kernel)
+
+
+def test_chatter_P2_8b2_no_mythology_as_instruction_vocabulary() -> None:
+    problems = _mythology_problems(_read("chatter"))
+    assert not problems, f"P2-8b2 chatter: {problems}"
+
+
+def test_chatter_P2_8b2_no_operator_table_as_authoring_guidance() -> None:
+    """A fenced reading reference is allowed (A3 polices its glyphs); a section teaching the table is not."""
+    outside, _ = _scan(_read("chatter"))
+    hits = [f"{n}: {t.strip()[:70]}" for n, t in outside if _OPERATOR_TABLE_HEADER.match(t)]
+    assert not hits, f"P2-8b2 chatter: operator table kept as a section outside a fence: {hits}"
+
+
+def test_chatter_P2_8b2_no_operators_carry_connectives_or_ascii_policy() -> None:
+    text = _read("chatter")
+    problems = [f"teaches {m.group(0)!r}" for m in _OPERATORS_CARRY.finditer(_collapse(text))]
+    problems += [f"ASCII wire policy: {m.start()}" for m in _ASCII_POLICY.finditer(text)]
+    assert not problems, f"P2-8b2 chatter: {problems[:4]}"
+
+
+def test_chatter_P2_8b2_no_telegraphic_stopword_teaching() -> None:
+    hits = [m.group(0) for m in _TELEGRAPHIC.finditer(_collapse(_read("chatter")))]
+    assert not hits, f"P2-8b2 chatter: telegraphic form still taught (PITH Note form replaces it): {hits}"
+
+
+def test_chatter_P2_8b2_question_mark_is_not_a_hedge_marker() -> None:
+    problems = _hedge_marker_problems(_read("chatter"))
+    assert not problems, f"P2-8b2 chatter: {len(problems)} places use ? as a hedge marker, first: {problems[:3]}"
+
+
+def test_chatter_P2_8b2_rules_are_quoted_sentence_lists() -> None:
+    count, bad, sentences = _rules_lists_unquoted(_read("chatter"))
+    assert count >= 1, "P2-8b2 chatter: no RULES::[...] list (rules as quoted sentences)"
+    assert sentences >= 1, f"P2-8b2 chatter: {count} RULES list(s) hold no quoted sentence ({_SENTENCE_FLOOR})"
+    assert not bad, f"P2-8b2 chatter: {bad[:3]}"
+
+
+def test_chatter_P2_8b2_register_split_survives() -> None:
+    problems = _register_split_problems(_read("chatter"))
+    assert not problems, f"P2-8b2 chatter register split: {problems}"
+
+
+def test_chatter_P2_8b2_points_at_pith_handoff_shape_by_name() -> None:
+    problems = _handoff_pointer_problems(_read("chatter"))
+    assert not problems, f"P2-8b2 chatter: {problems}"
+
+
+def test_chatter_P2_8b2_kernel_within_estate_cap() -> None:
+    """Both spans (extracted body, and body with its header line) stay at or under the cap. 131 / 138 at c743fb9."""
+    body, with_header = _kernel_budget(_read("chatter"))
+    assert body > 0, "P2-8b2 chatter: no kernel extracted"
+    assert (
+        with_header <= CHATTER_KERNEL_CAP_CL100K
+    ), f"P2-8b2 chatter: kernel {body} cl100k (body) / {with_header} (with header) > {CHATTER_KERNEL_CAP_CL100K}"
+
+
+def test_chatter_P2_8b2_kernel_span_is_the_one_the_old_claim_counted() -> None:
+    """The body and body-plus-header spans differ by the header line, so a count must name its span."""
+    body, with_header = _kernel_budget('§5::ANCHOR_KERNEL\n  TARGET::x\n  GATE::"g"\n===END===\n')
+    assert with_header > body
+
+
+def test_chatter_P2_8b2_canaries_fire_on_synthetic_bad_input() -> None:
+    # mythology
+    assert _mythology_problems("RISK::HERMES carries it")
+    assert _mythology_problems("Mythology = semantic zip, not decoration")
+    assert _mythology_problems("First use in a thread carries its gloss")
+    assert _mythology_problems("TARGET::plain words only") == []
+    # hedge marker
+    assert _hedge_marker_problems('NOTE::"// ? = unverified"')
+    assert _hedge_marker_problems('NOTE::"a `?` marks doubt"')
+    assert _hedge_marker_problems('RISK::"drift repeats?" // unverified')
+    assert _hedge_marker_problems('```\nRISK::"drift repeats?"\n```\n')
+    assert _hedge_marker_problems('NOTE::"a question mark means doubt"')
+    assert _hedge_marker_problems('```\nASK::"Can you confirm the lockfile?"\n```\n') == []
+    assert _hedge_marker_problems('ASK::"Can you confirm the lockfile?"') == []
+    assert _hedge_marker_problems('UNCLEAR::["which profile loads first?"]') == []
+    assert _hedge_marker_problems('GATE::"Could the receiver act on this?"') == []
+    assert _hedge_marker_problems('HEDGE::"not verified, may be the runner"') == []
+    # a ? anywhere in a claim value, not only at its end; multi-line values; comments are not read
+    assert _hedge_marker_problems('RISK::"drift? repeats"')
+    assert _hedge_marker_problems('DONE::[\n  "fine",\n  "drift? repeats"\n]')
+    assert _hedge_marker_problems('// RISK::"drift? repeats"\nOK::"plain" // maybe? later') == []
+    assert _hedge_marker_problems('ASK::"Can you confirm? Then merge."') == []
+    assert _hedge_marker_problems('UNCLEAR::[\n  "which profile? not known"\n]') == []
+    # teaching phrases
+    assert _OPERATORS_CARRY.search(_collapse("operators\n carry connectives"))
+    assert _TELEGRAPHIC.search("drop stopwords")
+    assert _TELEGRAPHIC.search("quote the phrase")
+    assert _ASCII_POLICY.search("ASCII form: ->")
+    assert _OPERATOR_TABLE_HEADER.search("§3::OPERATORS\n")
+    # RULES lists
+    assert _rules_lists_unquoted('§1::A\n  RULES::["Keep every id exact.", "State how each fact is known."]\n') == (
+        1,
+        [],
+        2,
+    )
+    assert _rules_lists_unquoted("§1::A\n  RULES::[bare_item]\n")[1]
+    assert _rules_lists_unquoted("§1::A\n  OTHER::x\n") == (0, [], 0)
+    # vacuity: an empty list and a one-token item are not rules
+    assert _rules_lists_unquoted("§1::A\n  RULES::[]\n")[2] == 0
+    assert _rules_lists_unquoted('§1::A\n  RULES::["x"]\n')[2] == 0
+    assert _rules_lists_unquoted('§1::A\n  RULES::["x"]\n')[1]
+    assert _rules_lists_unquoted('§1::A\n  RULES::["x x x"]\n')[2] == 0
+    assert _rules_lists_unquoted('§1::A\n  RULES::["a a a a"]\n')[2] == 0
+    assert _rules_lists_unquoted('§1::A\n  RULES::["go go go go"]\n')[2] == 0  # 4 words but 2 distinct
+    assert _rules_lists_unquoted('§1::A\n  RULES::["a b c d"]\n')[2] == 0  # no word of 4 letters
+    # register split
+    good = 'FORMAL::".oct.md files, parsed by octave_validate"\nWIRE::"message bodies, read by the receiving model"\nS::"decided by who validates"\n'
+    assert _register_split_problems(good) == []
+    assert len(_register_split_problems("nothing")) == 3
+    # unrelated prose with the same words does not satisfy the keyed-field check
+    prose = 'NOTE::"FORMAL files go through octave_validate"\nTEXT::"WIRE bodies go to the receiving model"\nS::"who validates"\n'
+    assert len(_register_split_problems(prose)) == 2
+    assert _register_split_problems(
+        'FORMAL::"files and octave_validate"\nWIRE::"read by the model"\nS::"who validates"\n'
+    )
+    # handoff pointer
+    ok = 'SHAPES::"For asks and replies use the Handoff shape in PITH (`pith-spec.md`, Shapes)"'
+    assert _handoff_pointer_problems(ok) == []
+    assert _handoff_pointer_problems('X::"PITH Handoff"'), "the bare word pair is not a pointer"
+    filler = 'X::"For asks use the Handoff shape in PITH, see pith-spec.md for more detail"'
+    assert _handoff_pointer_problems(filler), "keyword filler is not the exact pin"
+    assert _handoff_pointer_problems("```\n" + ok + "\n```\n"), "the pin inside a fence does not count"
+    assert _handoff_pointer_problems("// " + HANDOFF_POINTER), "a comment-only pin does not count"
+    assert _handoff_pointer_problems(
+        "  // see " + HANDOFF_POINTER + " for asks"
+    ), "an indented comment line does not count"
+    trailing = 'SHAPES::"asks and replies" // ' + HANDOFF_POINTER
+    assert _handoff_pointer_problems(trailing), "a pin in a trailing comment after a keyed value does not count"
+    assert _handoff_pointer_problems(HANDOFF_POINTER), "an unkeyed line does not count"
+    quoted_slashes = 'SHAPES::"a // b: ' + HANDOFF_POINTER + '"'
+    assert _handoff_pointer_problems(quoted_slashes) == [], "// inside a quoted value is not a comment"
+    assert _handoff_pointer_problems('X::"the Handoff shape in PITH"'), "names no location"
+    assert _handoff_pointer_problems("nothing")
+    assert _handoff_pointer_problems(ok + '\nY::"and the Peer message shape"')
