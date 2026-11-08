@@ -3,17 +3,16 @@ name: octave-mastery
 description: "Advanced OCTAVE forms that a parser or validator reads: holographic schema definitions, grammar compilation, typed archetype annotations, and structural patterns, plus a reading glossary of mythology and narrative terms. REQUIRES octave-literacy."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave architecture", "agent design", "semantic pantheon", "advanced octave", "OCTAVE mastery", "holographic patterns", "archetypes", "high-density specifications", "system architecture", "holographic contracts", "archetype annotation", "mythology", "OCTAVE mythology", "functional mythology", "SISYPHEAN", "ICARIAN", "PROMETHEAN", "mythological domains"]
-version: "5.1.0"
+version: "5.1.1"
 ---
 
 ===OCTAVE_MASTERY===
 META:
   TYPE::SKILL
-  VERSION::"5.1.0"
+  VERSION::"5.1.1"
   STATUS::ACTIVE
   PURPOSE::"Forms a parser or validator reads (schema definitions, grammar compilation, typed annotations), structural patterns, and a reading glossary"
   REQUIRES::octave-literacy
-  NEXT_SKILLS::[octave-ultra-mythic]
   ABSORBS::"octave-mythology 1.3.0: vocabulary kept as a reading glossary; research narrative stays at octave-mcp `docs/research/`"
   SPEC_REFERENCE::octave-core-spec.oct.md
 ---
