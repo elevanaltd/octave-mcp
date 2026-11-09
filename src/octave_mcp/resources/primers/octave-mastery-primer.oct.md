@@ -1,50 +1,57 @@
 ===OCTAVE_MASTERY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"7.0.1"
-  TOKENS::"462"
+  VERSION::"8.0.0"
+  TOKENS::"477"
   COMPRESSION_TIER::ULTRA
-  LOSS_PROFILE::"[preserve:forms∧usage_law,drop:rationale∨vocabulary_tables]"
+  LOSS_PROFILE::"keeps forms and usage law; drops rationale and vocabulary tables"
 §1::ESSENCE
-PURPOSE::"Write expert OCTAVE — archetype facets, holographic constraints, mythology as compression"
+PURPOSE::"Write the advanced OCTAVE forms a parser or validator reads"
 OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
-METHOD::[archetype_facet→holographic_constraint→mythic_handle]
+METHOD::[
+  "one facet per identity",
+  "constraints only in schema-definition files",
+  "maps of maps as blocks"
+]
+LANGUAGE::"PITH: plain words; relations in words; mythology terms are read by their one domain, never written as instructions"
 §2::MAP
 EXAMPLES:
   ```
-  identity      → NAME<facet>              HEPHAESTUS<faithful_transcription>
-  NAME[facet]   → constructor, never an archetype
-  field_rule    → KEY::["value"∧CONSTRAINT→§TARGET]
-  document_law  → META CONTRACT::HOLOGRAPHIC<latest@local>
-  behavior      → SISYPHEAN∨ICARIAN∨KAIROS   only when the literal loses behavior
-  nested_map    → KEY: + indented children   never KEY::[K::[…]]
+  NAME<facet>     identity with one facet, 32 characters at most: REVIEWER<strict>
+  NAME[args]      constructor, never an identity: ENUM[ACTIVE,DRAFT]
+  KEY:            nested map: block with indented children
+    child::value
+  KEY::[K::[...]] never: a map of maps as an inline list
   ```
 §3::SYNTAX
-OPERATORS:
+READING_LEGEND:
   ```
-  ::    assign (no spaces around)
-  →     flow / sequence
-  ⊕     synthesis / combine
-  ⇌     tension / opposition
-  ∧     conjunction / all-required
-  ∨     disjunction / alternative
+  ::    assign, no spaces around
+  →     flow
+  ⊕     synthesis
+  ⇌     tension
+  ∧     conjunction, inside brackets
+  ∨     alternative
   <>    facet on an identity
-  []    args on an operation ∨ constraint container
-  §     target_reference
+  []    arguments on an operation, or a constraint container
+  §     target reference
   ```
-§4::ONE_SHOT
-IN::"System validates input then processes it; status must be ACTIVE or DRAFT"
-OUT:
+SCHEMA_EXAMPLE:
   ```
-  FLOW::[VALIDATOR<input>→PROCESSOR<data>]
   STATUS::["ACTIVE"∧ENUM[ACTIVE,DRAFT]]
   ```
+AUTHORING::"glyphs and constraints appear only in schema-definition files; write every other relation in words"
+§4::ONE_SHOT
+IN::"A schema field status must be ACTIVE or DRAFT; a reviewer validates input."
+OUT:
+  REVIEWER::"validates input"
+  STATUS::"ACTIVE or DRAFT"
 §5::VALIDATE
 MUST::[
-  valid_OCTAVE,
-  "preserve_§_names_verbatim",
-  facet_in_angle_brackets,
-  constraint_inside_brackets,
-  mythology_only_where_literal_loses_behavior
+  "valid OCTAVE",
+  "section names kept verbatim",
+  "facet in angle brackets",
+  "constraint inside brackets, schema-definition files only",
+  "every other relation in words"
 ]
 ===END===

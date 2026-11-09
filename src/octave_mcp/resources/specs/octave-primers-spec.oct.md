@@ -1,7 +1,7 @@
 ===OCTAVE_PRIMERS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"6.3.2"
+  VERSION::"6.4.0"
   STATUS::ACTIVE
   TOKENS::"~80"
   REQUIRES::octave-core-spec
@@ -9,7 +9,7 @@ META:
   COMPRESSION_TIER::"ULTRA[\"50%_compression\",facts∧structure_only]"
 §1::DEFINITION
   OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs" // Universal definition for all primers
-  PRIMER::"Minimal bootstrap for a single workflow — execution OR comprehension"
+  PRIMER::"Minimal bootstrap for a single workflow — execution OR comprehension; written in PITH (pith-spec.md)"
   PRIMER_MODES::["EXECUTION[write_without_deep_understanding]∨READING[comprehend_without_output_generation]"]
   SKILL::"Complete reference with rationale and examples"
   PRIMER_VS_SKILL::"PRIMER[single_workflow]⇌SKILL[full_reference]→PRIMER"
@@ -28,11 +28,11 @@ META:
       OCTAVE_definition,
       method
     ]
-    EXAMPLE::"PURPOSE::Write_OCTAVE OCTAVE::Olympian_Common_Text_And_Vocabulary_Engine—Semantic_DSL_for_LLMs"
+    EXAMPLE::"PURPOSE::\"Write OCTAVE\" OCTAVE::\"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs\""
     UNIVERSAL::ALL_PRIMERS_USE_SAME_OCTAVE_DEF
   §2b::MAP
     PURPOSE::"Direct transformation rules"
-    FORMAT::"INPUT→OUTPUT[selection_hint]"
+    FORMAT::"input and output as plain-word rows with the selection hint in words"
     NO::[
       explanations,
       rationale,
@@ -40,12 +40,12 @@ META:
     ]
     YES::[
       equivalencies,
-      arrows,
+      plain_word_rows,
       selection_hints
     ]
-    EXAMPLE::"ARCHETYPE→ZEUS∨ATLAS[pick_by_intent]"
+    EXAMPLE::"audit or critical work: use the LOSSLESS tier"
   §2c::SYNTAX
-    PURPOSE::"Operator legend with meanings"
+    PURPOSE::"Reading legend: the operators a reader meets in documents it receives; never an authoring instruction, relations are written in words (pith-spec.md)"
     FORMAT::"SYMBOL::meaning"
     REQUIRED::minimum_4_operators_defined
     EXAMPLE::[
@@ -60,7 +60,7 @@ META:
   §2e::VALIDATE
     PURPOSE::"Success criteria"
     FORMAT::"MUST::[criterion_list]"
-    REQUIRED::[valid_OCTAVE,"preserve_§_names_verbatim"]
+    REQUIRED::["valid OCTAVE","section names kept verbatim"]
     TOKENS::"<10"
 §3::ANTI_PATTERNS
   AVOID::[
@@ -68,7 +68,8 @@ META:
     "Multiple_examples[one_perfect_shot]",
     "Human_readability[optimize_for_LLM]",
     "Exceeding_500_tokens[defeats_purpose]",
-    "Teaching_theory[only_workflow_activation_matters]"
+    "Teaching_theory[only_workflow_activation_matters]",
+    "Teaching mythology or operators as authoring vocabulary: write in PITH (pith-spec.md)"
   ]
 §4::COMPARISON_MATRIX
   ASPECT::PRIMER→SKILL
@@ -84,7 +85,8 @@ META:
     "tokens<=500",
     has_one_shot,
     has_purpose_line,
-    has_operator_legend,
+    has_reading_legend,
+    "written_in_PITH[pith-spec.md]",
     no_explanations,
     executable_immediately,
     "self_referential[uses_format_it_teaches]",

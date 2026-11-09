@@ -1,48 +1,48 @@
 ===OCTAVE_LITERACY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.4.1"
-  TOKENS::"424"
+  VERSION::"7.0.0"
+  TOKENS::"446"
   COMPRESSION_TIER::ULTRA
-  LOSS_PROFILE::"[preserve:syntax_rules,drop:rationale]"
+  LOSS_PROFILE::"keeps syntax rules; drops rationale"
 §1::ESSENCE
 PURPOSE::"Read and write OCTAVE"
 OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
-STRUCTURE::"KEY::value, [list], indent_2"
-§1b::READING
-MYTHOLOGY::"Semantic zip files — compressed meaning, not system names"
-CONTEXT::"Adjacent text determines which aspect of a myth applies"
-FORMAT_SIGNAL::"Distinct syntax (::, →, ⇌) signals structured data — parse, not paraphrase"
-FALLBACK::"If a term is unclear, translate literally and note the ambiguity"
+STRUCTURE::"KEY::value, [list], indent 2 spaces"
+LANGUAGE::"Write in PITH: note form in plain words; identifiers copied exactly, in backticks; hedges verbatim; relations in words; none or not known for an empty slot; code in fences"
+READING::"A distinct syntax marks structured data: parse it, do not paraphrase it; read a term by its plain meaning; if a term is unclear, translate it literally and note the ambiguity"
 §2::MAP
 EXAMPLES::
 ```
-KEY::value        → assignment
-[a,b,c]           → list
-KEY:              → block (indent 2 spaces)
+KEY::value        assignment, no spaces around the double colon
+[a,b,c]           list
+KEY:              block opener; children indented 2 spaces
   child::value
-KEY::             → NOT a block: empty value, children below hoist out
-§1::NAME          → section header, never carries a value
+KEY::             not a block: empty value, children below hoist out
+§1::NAME          section header, never carries a value
 ```
 §3::SYNTAX
-OPERATORS::
+READING_LEGEND::
 ```
-::    assign (no spaces around)
-→     flow / sequence
-⊕     synthesis / combine
-⇌     tension / opposition
-∧     conjunction / all-required
-∨     disjunction / alternative
+::    assign
+→     flow
+⊕     synthesis
+⇌     tension
+∧     conjunction
+∨     disjunction
 ```
-TELEGRAPHIC_PHRASE::"see octave-compression-primer §1::ESSENCE — quoted value, stopwords dropped, operators carry English connectives"
+AUTHORING::"these operators appear in documents you read; write each relation in words"
 §4::ONE_SHOT
-IN::"flow from A to B"
-OUT::[A→B]
+IN::"The auth service validates tokens. Failed logins alert the on-call. Rate limit: not known."
+OUT:
+  AUTH::"validates tokens"
+  ALERT::"failed logins page the on-call"
+  RISK::"rate limit not known"
 §5::VALIDATE
 MUST::[
-  valid_OCTAVE,
-  "preserve_§_names_verbatim",
-  "no_spaces_around_::",
-  "===END==="
+  "valid OCTAVE",
+  "section names kept verbatim",
+  "no spaces around the double colon",
+  "closing line ===END==="
 ]
 ===END===
