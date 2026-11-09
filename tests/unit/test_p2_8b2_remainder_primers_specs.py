@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 from test_p2_8_bundled_skills_language import (
+    _OPERATORS_CARRY,
     _TELEGRAPHIC,
     GLYPH,
     REPO_ROOT,
     _detect_snake_case_blob,
     _mythology_problems,
-    _OPERATORS_CARRY,
     _scan,
     _tokens,
     _validate_content,
