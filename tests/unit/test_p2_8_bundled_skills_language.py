@@ -1383,6 +1383,7 @@ CHATTER_KERNEL_CAP_CL100K = KERNEL_CAP_CL100K
 CHATTER_KERNEL_HEADER = "§5::ANCHOR_KERNEL\n"
 # Exact pin: GREEN writes this string, on a content line outside a fence, to point at PITH's Handoff shape.
 HANDOFF_POINTER = "the Handoff shape in PITH (`pith-spec.md`, Shapes)"
+PEER_POINTER = "the Peer message shape in PITH (`pith-spec.md`, Shapes)"
 
 _MYTHOLOGY_NAMES = re.compile(
     r"\b(hermes|sisyphean|sisyphus|icarian|icarus|promethean|prometheus|athena|zeus|apollo|atlas|hephaestus|"
@@ -1518,7 +1519,7 @@ def _register_split_problems(text: str) -> list[str]:
     return problems
 
 
-def _pin_in_keyed_value(line: str) -> bool:
+def _pin_in_keyed_value(line: str, pin: str = HANDOFF_POINTER) -> bool:
     """True when ``line`` is ``KEY::value`` (not a // comment) and the pin sits in the value, not a trailing comment."""
     km = _KEYED_LINE.match(line)
     if km is None or line.lstrip().startswith("//"):
@@ -1532,7 +1533,7 @@ def _pin_in_keyed_value(line: str) -> bool:
         elif ch == "/" and not in_q and value[i : i + 2] == "//":
             value = value[:i]
             break
-    return HANDOFF_POINTER in value
+    return pin in value
 
 
 def _handoff_pointer_problems(text: str) -> list[str]:
@@ -1544,8 +1545,11 @@ def _handoff_pointer_problems(text: str) -> list[str]:
             f"no keyed content line outside a fence holds the exact pointer {HANDOFF_POINTER!r} in its value "
             "(not a // comment line, not a trailing // comment)"
         )
-    if re.search(r"peer\s+message\s+shape", text, flags=re.IGNORECASE):
-        problems.append("points at a 'Peer message shape' that pith-spec.md does not carry yet")
+    if not any(_pin_in_keyed_value(t, PEER_POINTER) for _, t in outside):
+        problems.append(
+            f"no keyed content line outside a fence holds the exact pointer {PEER_POINTER!r} in its value "
+            "(PITH-PEER-MESSAGE-SHAPE-20261108: octave-chatter points to the Peer message shape by name)"
+        )
     return problems
 
 
@@ -1595,7 +1599,7 @@ def test_chatter_P2_8b2_register_split_survives() -> None:
     assert not problems, f"P2-8b2 chatter register split: {problems}"
 
 
-def test_chatter_P2_8b2_points_at_pith_handoff_shape_by_name() -> None:
+def test_chatter_P2_8b2_points_at_pith_handoff_and_peer_shapes_by_name() -> None:
     problems = _handoff_pointer_problems(_read("chatter"))
     assert not problems, f"P2-8b2 chatter: {problems}"
 
@@ -1670,22 +1674,37 @@ def test_chatter_P2_8b2_canaries_fire_on_synthetic_bad_input() -> None:
     assert _register_split_problems(
         'FORMAL::"files and octave_validate"\nWIRE::"read by the model"\nS::"who validates"\n'
     )
-    # handoff pointer
-    ok = 'SHAPES::"For asks and replies use the Handoff shape in PITH (`pith-spec.md`, Shapes)"'
+    # handoff and peer pointers (both required; PITH-PEER-MESSAGE-SHAPE-20261108)
+    ok_h = 'SHAPES::"For asks and replies use the Handoff shape in PITH (`pith-spec.md`, Shapes)"'
+    ok_p = (
+        'PEER::"For a message from one session to another use the Peer message shape in PITH (`pith-spec.md`, Shapes)"'
+    )
+    ok = ok_h + "\n" + ok_p
     assert _handoff_pointer_problems(ok) == []
+    assert _handoff_pointer_problems(ok_h), "the Handoff pointer alone is missing the Peer pointer"
+    assert _handoff_pointer_problems(ok_p), "the Peer pointer alone is missing the Handoff pointer"
     assert _handoff_pointer_problems('X::"PITH Handoff"'), "the bare word pair is not a pointer"
     filler = 'X::"For asks use the Handoff shape in PITH, see pith-spec.md for more detail"'
-    assert _handoff_pointer_problems(filler), "keyword filler is not the exact pin"
-    assert _handoff_pointer_problems("```\n" + ok + "\n```\n"), "the pin inside a fence does not count"
-    assert _handoff_pointer_problems("// " + HANDOFF_POINTER), "a comment-only pin does not count"
+    assert _handoff_pointer_problems(filler + "\n" + ok_p), "keyword filler is not the exact pin"
+    assert _handoff_pointer_problems("```\n" + ok_h + "\n```\n" + ok_p), "the pin inside a fence does not count"
+    assert _handoff_pointer_problems("// " + HANDOFF_POINTER + "\n" + ok_p), "a comment-only pin does not count"
     assert _handoff_pointer_problems(
-        "  // see " + HANDOFF_POINTER + " for asks"
+        "  // see " + HANDOFF_POINTER + " for asks\n" + ok_p
     ), "an indented comment line does not count"
     trailing = 'SHAPES::"asks and replies" // ' + HANDOFF_POINTER
-    assert _handoff_pointer_problems(trailing), "a pin in a trailing comment after a keyed value does not count"
-    assert _handoff_pointer_problems(HANDOFF_POINTER), "an unkeyed line does not count"
+    assert _handoff_pointer_problems(
+        trailing + "\n" + ok_p
+    ), "a pin in a trailing comment after a keyed value does not count"
+    assert _handoff_pointer_problems(HANDOFF_POINTER + "\n" + ok_p), "an unkeyed line does not count"
     quoted_slashes = 'SHAPES::"a // b: ' + HANDOFF_POINTER + '"'
-    assert _handoff_pointer_problems(quoted_slashes) == [], "// inside a quoted value is not a comment"
-    assert _handoff_pointer_problems('X::"the Handoff shape in PITH"'), "names no location"
+    assert _handoff_pointer_problems(quoted_slashes + "\n" + ok_p) == [], "// inside a quoted value is not a comment"
+    assert _handoff_pointer_problems('X::"the Handoff shape in PITH"\n' + ok_p), "names no location"
     assert _handoff_pointer_problems("nothing")
-    assert _handoff_pointer_problems(ok + '\nY::"and the Peer message shape"')
+    # peer pointer canaries
+    assert _handoff_pointer_problems(ok_h + '\nY::"and the Peer message shape"'), "the bare phrase is not the pin"
+    assert _handoff_pointer_problems(ok_h + "\n```\n" + ok_p + "\n```\n"), "the peer pin inside a fence does not count"
+    assert _handoff_pointer_problems(ok_h + "\n// " + PEER_POINTER), "a comment-only peer pin does not count"
+    assert _handoff_pointer_problems(
+        ok_h + '\nPEER::"messages between sessions" // ' + PEER_POINTER
+    ), "a peer pin in a trailing comment does not count"
+    assert _handoff_pointer_problems(ok_h + "\n" + PEER_POINTER), "an unkeyed peer line does not count"
