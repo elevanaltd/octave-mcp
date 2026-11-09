@@ -102,25 +102,13 @@ def test_primer_at_most_500_cl100k(name: str) -> None:
     assert _tokens(_text(PRIMERS[name])) <= 500
 
 
-# BLOCKED (reported to the dispatcher): the skills and patterns specs cannot be edited through octave_write
-# without silent loss (header comments dropped; lenient parse drops list items; nested section lines mangled),
-# and Write/Edit on *.oct.md is not allowed. strict xfail: it turns into a failure the moment the spec is
-# aligned, so the marker cannot rot.
-_BLOCKED = pytest.mark.xfail(strict=True, reason="spec not editable through octave_write without silent loss")
-SPEC_PARAMS = [
-    pytest.param("skills", marks=_BLOCKED),
-    "primers",
-    pytest.param("patterns", marks=_BLOCKED),
-]
-
-
-@pytest.mark.parametrize("name", SPEC_PARAMS)
+@pytest.mark.parametrize("name", SPECS)
 def test_spec_teaches_no_old_language(name: str) -> None:
     hits = sorted({m.group(0) for m in OLD_TEACHING.finditer(_text(SPECS[name]))})
     assert not hits, f"{name} spec teaches the old language: {hits}"
 
 
-@pytest.mark.parametrize("name", SPEC_PARAMS)
+@pytest.mark.parametrize("name", SPECS)
 def test_spec_points_at_pith_spec(name: str) -> None:
     text = _text(SPECS[name])
     assert "pith-spec.md" in text and "PITH" in text, f"{name} spec does not point at pith-spec.md"
@@ -138,3 +126,25 @@ def test_canary_primer_glyph_scan_fires() -> None:
     doc = 'KEY::"a ⊕ b"\nREADING_LEGEND::\n```\n⊕ synthesis\n```\n'
     outside, blocks = _scan(doc)
     assert [t for _, t in outside if GLYPH.search(t)] and blocks[0]["parent_key"] == "READING_LEGEND"
+
+
+# Migration guards for the two full-content rewrites (no silent loss through octave_write).
+@pytest.mark.parametrize("name", ["skills", "patterns"])
+def test_migrated_spec_dry_run_write_drops_nothing(name: str) -> None:
+    import asyncio
+
+    from octave_mcp.mcp.write import WriteTool
+
+    res = asyncio.run(
+        WriteTool().execute(target_path="/nonexistent-p2-8b2/dry.oct.md", content=_text(SPECS[name]), dry_run=True)
+    )
+    codes = [w.get("code") for w in res.get("warnings", [])] + [c.get("code") for c in res.get("corrections", [])]
+    assert "W_BARE_LINE_DROPPED" not in codes, codes
+    assert res.get("errors") == [], res.get("errors")
+
+
+@pytest.mark.parametrize("name", ["skills", "patterns"])
+def test_migrated_spec_keeps_header_comments_as_keyed_notes(name: str) -> None:
+    text = _text(SPECS[name])
+    assert not re.search(r"^\s*//", text, flags=re.MULTILINE), "a // comment line remains; comments drop on rewrite"
+    assert re.search(r"^\s*NOTE", text, flags=re.MULTILINE)
