@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`octave_write` `receipt` parameter: opt-in `"summary"` level (tool-fidelity slice 1, PR-1).** `receipt` defaults to `"full"`, which keeps today's receipt unchanged. `"summary"` keeps `status`, `path`, `canonical_hash`, `corrections`, `warnings`, `errors`, `validation_status`, `mode` and the literal-zone flags, and leaves out `diff`, `diff_unified`, `validation_hint`, `debug_info`, `zone_report`, `literal_zone_repair_log` and an empty `compilations`. Error receipts are identical at both levels; an invalid value returns `E_INPUT`. Non-breaking (record `OCTAVE-MCP-DIRECTION-CONTAINER-RECEIPTS-PITH-20261110`).
 - **`resources/specs/pith-spec.md`: the PITH writing standard ships with the package** (records
   `INNER-LANGUAGE-NAMED-PITH-20261102` and `PITH-SPEC-HOME-OCTAVE-MCP-20261102`). It is the
   rules every agent-written sentence, item and value follows inside or outside an OCTAVE
