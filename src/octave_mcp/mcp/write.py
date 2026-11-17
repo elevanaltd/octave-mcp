@@ -762,7 +762,7 @@ class WriteTool(BaseTool):
             "Replaces octave_create and octave_amend."
         )
 
-    def get_input_schema(self) -> dict[str, Any]:
+    def _base_input_schema(self) -> dict[str, Any]:
         """Get input schema."""
         schema = SchemaBuilder()
 
@@ -2074,7 +2074,7 @@ class WriteTool(BaseTool):
 
         return result
 
-    async def execute(self, **kwargs: Any) -> dict[str, Any]:
+    async def _execute_pipeline(self, **kwargs: Any) -> dict[str, Any]:
         """Execute write pipeline.
 
         Args:
@@ -2157,7 +2157,7 @@ class WriteTool(BaseTool):
                 "format_style='preserve'. To accept the future default "
                 "silently, omit the parameter entirely.",
                 DeprecationWarning,
-                stacklevel=2,
+                stacklevel=3,
             )
         format_style = params.get("format_style")
 
@@ -3090,3 +3090,36 @@ class WriteTool(BaseTool):
             )
 
         return result
+
+    def get_input_schema(self) -> dict[str, Any]:
+        """Get input schema: the base parameters plus the optional ``receipt`` level."""
+        # Local import: see execute() for why this module's line layout is held stable.
+        from octave_mcp.mcp.write_receipt import add_receipt_parameter
+
+        return add_receipt_parameter(self._base_input_schema())
+
+    async def execute(self, **kwargs: Any) -> dict[str, Any]:
+        """Execute the write pipeline and shape the receipt.
+
+        ``receipt`` is ``"full"`` (default, today's receipt unchanged) or
+        ``"summary"`` (see ``write_receipt``). It only shapes the returned
+        dict; ``_execute_pipeline`` runs identically for both. Error envelopes
+        are never trimmed, and an invalid value is a structured ``E_INPUT``
+        error that writes nothing. The pipeline docstring above documents the
+        remaining parameters and the receipt fields.
+        """
+        # Local import keeps this module's line layout stable: spec pointers
+        # (pith-spec.md) cite line numbers in this file.
+        from octave_mcp.mcp.write_receipt import (
+            RECEIPT_FULL,
+            RECEIPT_SUMMARY,
+            invalid_receipt_error,
+            is_valid_receipt,
+            summarize_receipt,
+        )
+
+        receipt = kwargs.pop("receipt", RECEIPT_FULL)
+        if not is_valid_receipt(receipt):
+            return self._error_envelope(str(kwargs.get("target_path", "")), [invalid_receipt_error(receipt)])
+        result = await self._execute_pipeline(**kwargs)
+        return summarize_receipt(result) if receipt == RECEIPT_SUMMARY else result
