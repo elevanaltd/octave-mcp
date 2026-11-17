@@ -93,6 +93,36 @@ _GH385_DEEP_NESTING_XFAIL_REASON = (
 )
 
 
+# Tool-fidelity slice 1, PR-2, R5 corpus gate (build plan section 5 R5):
+# fixtures whose dry-run write is REFUSED with E_FIDELITY because writing them
+# would drop or alter content. Each entry is triaged real loss with its reason;
+# there are no silent xfails. A fixture listed here that stops being refused
+# fails the suite, so a parser or emitter fix must remove its entry.
+_LIST_OF_PAIRS_FLATTENED = (
+    "real loss: an indented [K::V,...] list under §3::FINDINGS is re-emitted as "
+    "bare top-level assignments; the brackets and the nesting are lost"
+)
+_EXPECTED_FIDELITY_REFUSALS: dict[str, str] = {
+    "tests/fixtures/crs_review/malformed_missing_file.oct.md": _LIST_OF_PAIRS_FLATTENED,
+    "tests/fixtures/crs_review/malformed_missing_issue.oct.md": _LIST_OF_PAIRS_FLATTENED,
+    "tests/fixtures/crs_review/malformed_missing_severity.oct.md": _LIST_OF_PAIRS_FLATTENED,
+    "tests/fixtures/crs_review/valid_complete_review.oct.md": _LIST_OF_PAIRS_FLATTENED,
+    "tests/fixtures/crs_review/valid_finding_uses_fix_alias.oct.md": _LIST_OF_PAIRS_FLATTENED,
+    "tests/fixtures/crs_review/valid_finding_uses_required_fix.oct.md": _LIST_OF_PAIRS_FLATTENED,
+    "tests/fixtures/symmetry/numeric_key_warning_trigger.oct.md": (
+        "real loss: numeric keys 1:: and 2:: are dropped by the parser (W_NUMERIC_KEY_DROPPED)"
+    ),
+    "tests/fixtures/test_complex.oct.md": (
+        "real loss: [ATHENA:STRATEGIC_REDUCTION+APOLLO:METRIC_FOCUS] is split into three "
+        "list elements with a quoted '⊕' element"
+    ),
+    "tests/fixtures/w_snake_case_blob_corpus.oct.md": (
+        'real loss: an empty-valued KEY:: with indented children is emitted as KEY::"\\n" '
+        "and its children are re-parented to the top level"
+    ),
+}
+
+
 def _build_fixture_params() -> list[Any]:
     """Build the parametrize argument list, applying strict xfail to the
     known audit-cardinality breaches and leaving every other fixture as a
@@ -193,6 +223,18 @@ async def test_hard_symmetry_roundtrip(fixture_path: Path) -> None:
     finally:
         os.unlink(tmp_path)
 
+    # R5 (tool-fidelity PR-2): triaged real-loss fixtures must be refused,
+    # never written. The refusal carries its violations in full.
+    if fixture_id in _EXPECTED_FIDELITY_REFUSALS:
+        assert write_result.get("status") == "error", (
+            f"{fixture_id} is listed as an expected E_FIDELITY refusal "
+            f"({_EXPECTED_FIDELITY_REFUSALS[fixture_id]}) but the write returned "
+            f"status={write_result.get('status')!r}"
+        )
+        assert [e["code"] for e in write_result["errors"]] == ["E_FIDELITY"], write_result["errors"]
+        assert write_result.get("fidelity_violations"), "a refusal must name its violations"
+        return
+
     # Step 3a: status must be success.
     assert write_result.get("status") == "success", (
         f"HARD_SYMMETRY violation in {fixture_id}: octave_validate accepted "
@@ -237,6 +279,12 @@ async def test_hard_symmetry_roundtrip(fixture_path: Path) -> None:
         f"(structural-check corrections excluded: "
         f"{[c for c in corrections if c.get('tier') == 'STRUCTURAL_CHECK']!r})"
     )
+
+
+def test_expected_fidelity_refusals_name_real_fixtures() -> None:
+    """Guard: a stale entry (renamed or deleted fixture) must not linger."""
+    fixture_ids = {_fixture_id(p) for p in FIXTURES}
+    assert set(_EXPECTED_FIDELITY_REFUSALS) <= fixture_ids, set(_EXPECTED_FIDELITY_REFUSALS) - fixture_ids
 
 
 @pytest.mark.asyncio
