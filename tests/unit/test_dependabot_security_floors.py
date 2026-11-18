@@ -126,15 +126,81 @@ class TestDevSecurityFloors:
         assert sorted(data["project"]["optional-dependencies"]["dev"]) == sorted(data["dependency-groups"]["dev"])
 
 
-class TestEveryCveCommentedSpecifierIsGuarded:
-    """Meta-assertion: a CVE/GHSA-commented dependency line must be guarded here."""
+# Guard floor table for each manifest section (tomllib section id -> table).
+# A section absent from this map has NO guard, so any CVE-commented specifier
+# in it is reported as unguarded.
+SECTION_TABLES = {
+    "project.dependencies": RUNTIME_FLOORS,
+    "project.optional-dependencies.http": HTTP_EXTRA_FLOORS,
+    "project.optional-dependencies.dev": DEV_FLOORS,
+    "dependency-groups.dev": DEV_FLOORS,
+}
+_CVE_COMMENT = re.compile(r"#.*(?:CVE-|GHSA-)")
 
-    def test_all_cve_commented_specifiers_are_in_floor_tables(self):
-        guarded = {name.lower() for table in (RUNTIME_FLOORS, HTTP_EXTRA_FLOORS, DEV_FLOORS) for name in table}
-        line_re = re.compile(r'^\s*"([A-Za-z0-9_.\-]+)[^"]*"\s*,?\s*#.*(?:CVE-|GHSA-)')
-        commented = {
-            m.group(1).lower() for line in PYPROJECT_PATH.read_text().splitlines() if (m := line_re.match(line))
-        }
-        assert commented, "no CVE-commented dependency lines found; the scan itself is broken"
-        unguarded = sorted(commented - guarded)
-        assert not unguarded, f"CVE/GHSA-commented dependencies missing from the guard floor tables: {unguarded}"
+
+def _sections(data: dict) -> dict[str, list[str]]:
+    """Section id -> specifier strings, in file order, from the parsed TOML."""
+    sections = {"project.dependencies": list(data["project"].get("dependencies", []))}
+    for extra, reqs in data["project"].get("optional-dependencies", {}).items():
+        sections[f"project.optional-dependencies.{extra}"] = list(reqs)
+    for group, reqs in data.get("dependency-groups", {}).items():
+        sections[f"dependency-groups.{group}"] = list(reqs)
+    return sections
+
+
+def _cve_commented(raw_text: str, sections: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Per section, the specifiers whose raw line carries a CVE-/GHSA- comment.
+
+    Section structure comes from tomllib; raw lines are used only to learn which
+    specifiers carry a comment. A specifier is matched to its raw line by its
+    text inside a quoted TOML string (either quote style). Identical specifier
+    text appearing in several sections is paired by order of occurrence, which
+    holds because tomllib preserves file order.
+    """
+    lines = raw_text.splitlines()
+    seen: dict[str, int] = {}
+    commented: dict[str, list[str]] = {}
+    for section, specs in sections.items():
+        for spec in specs:
+            raw = [ln for ln in lines if f'"{spec}"' in ln or f"'{spec}'" in ln]
+            index = seen.get(spec, 0)
+            seen[spec] = index + 1
+            assert index < len(raw), f"could not locate {spec!r} in the raw pyproject text"
+            line = raw[index]
+            tail = line.split(f'"{spec}"', 1)[-1] if f'"{spec}"' in line else line.split(f"'{spec}'", 1)[-1]
+            if _CVE_COMMENT.search(tail):
+                commented.setdefault(section, []).append(spec)
+    return commented
+
+
+def _unguarded(raw_text: str, data: dict) -> list[str]:
+    """CVE-commented specifiers whose package is not in THEIR OWN section's table."""
+    out = []
+    for section, specs in _cve_commented(raw_text, _sections(data)).items():
+        table = {canonicalize_name(name) for name in SECTION_TABLES.get(section, {})}
+        out += [f"{section}: {spec}" for spec in specs if canonicalize_name(Requirement(spec).name) not in table]
+    return sorted(out)
+
+
+class TestEveryCveCommentedSpecifierIsGuarded:
+    """Meta-assertion: a CVE/GHSA-commented specifier must be guarded in its own section."""
+
+    def test_all_cve_commented_specifiers_are_in_their_section_tables(self):
+        raw = PYPROJECT_PATH.read_text()
+        data = tomllib.loads(raw)
+        assert _cve_commented(raw, _sections(data)), "no CVE-commented specifiers found; the scan is broken"
+        unguarded = _unguarded(raw, data)
+        assert not unguarded, f"CVE/GHSA-commented specifiers missing from their section's guard table: {unguarded}"
+
+    def test_single_quoted_commented_specifier_is_detected(self):
+        raw = "[project]\ndependencies = [\n  'newpkg>=1.0',  # CVE-2099-0001: x\n]\n"
+        assert _unguarded(raw, tomllib.loads(raw)) == ["project.dependencies: newpkg>=1.0"]
+
+    def test_specifier_guarded_only_by_another_section_is_detected(self):
+        # black is guarded for the dev extra/group, NOT for runtime dependencies.
+        raw = '[project]\ndependencies = [\n  "black>=26.10.1",  # CVE-2026-114134\n]\n'
+        assert _unguarded(raw, tomllib.loads(raw)) == ["project.dependencies: black>=26.10.1"]
+
+    def test_guarded_specifier_in_its_own_section_passes(self):
+        raw = '[project]\ndependencies = [\n  "PyJWT>=2.15.0",  # CVE-2026-101917\n]\n'
+        assert _unguarded(raw, tomllib.loads(raw)) == []
