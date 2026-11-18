@@ -7,6 +7,8 @@ would close Dependabot alerts while changing nothing users actually
 install, so the floors themselves are the artifact to pin.
 
 Tests verify:
+- Every specifier carrying a `# CVE-`/`GHSA-` comment is in a floor table
+  below (meta-assertion), so a future security floor cannot go unguarded.
 - Each direct dependency carries a `>=` floor at or above the first
   patched version of its open advisories.
 - The `dev` extra and the PEP-735 `dev` dependency-group stay in sync.
@@ -29,7 +31,7 @@ RUNTIME_FLOORS = {
     "mcp": "1.30.0",
 }
 HTTP_EXTRA_FLOORS = {"starlette": "1.3.1"}
-DEV_FLOORS = {"virtualenv": "21.14.9", "black": "26.10.1"}
+DEV_FLOORS = {"virtualenv": "21.14.9", "black": "26.10.1", "Pygments": "2.20.0"}  # Pygments: CVE-2025-61833
 
 
 def _data() -> dict:
@@ -80,3 +82,17 @@ class TestDevSecurityFloors:
     def test_dev_extra_and_group_stay_in_sync(self):
         data = _data()
         assert sorted(data["project"]["optional-dependencies"]["dev"]) == sorted(data["dependency-groups"]["dev"])
+
+
+class TestEveryCveCommentedSpecifierIsGuarded:
+    """Meta-assertion: a CVE/GHSA-commented dependency line must be guarded here."""
+
+    def test_all_cve_commented_specifiers_are_in_floor_tables(self):
+        guarded = {name.lower() for table in (RUNTIME_FLOORS, HTTP_EXTRA_FLOORS, DEV_FLOORS) for name in table}
+        line_re = re.compile(r'^\s*"([A-Za-z0-9_.\-]+)[^"]*"\s*,?\s*#.*(?:CVE-|GHSA-)')
+        commented = {
+            m.group(1).lower() for line in PYPROJECT_PATH.read_text().splitlines() if (m := line_re.match(line))
+        }
+        assert commented, "no CVE-commented dependency lines found; the scan itself is broken"
+        unguarded = sorted(commented - guarded)
+        assert not unguarded, f"CVE/GHSA-commented dependencies missing from the guard floor tables: {unguarded}"
