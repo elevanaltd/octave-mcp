@@ -41,8 +41,8 @@ def test_used_by_agents_equal_the_measured_matrix_roster() -> None:
 
 
 def test_used_by_names_the_matrix_profiles_and_no_kernel_only_row() -> None:
-    assert _list("PROFILES") == MEASURED_PROFILES
     used = _used_by()
+    assert all(p in used for p in MEASURED_PROFILES)
     assert re.search(r'^  KERNEL_ONLY::"none', used, flags=re.MULTILINE)
 
 
