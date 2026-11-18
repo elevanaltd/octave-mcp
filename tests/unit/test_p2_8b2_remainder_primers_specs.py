@@ -245,3 +245,33 @@ def test_patterns_spec_chassis_example_is_a_nested_block() -> None:
     assert re.search(
         r"^( +)PROFILES:\n\1  STANDARD:\n\1    \w+::", text, flags=re.MULTILINE
     ), "PROFILES and STANDARD are not nested parent keys (a real block or a fenced literal example)"
+
+
+# ---------------------------------------------------------------------------
+# #559 rework 2: cubic threads on 954ff9d
+# ---------------------------------------------------------------------------
+def test_skills_spec_version_is_9_2_0_and_the_skill_schema_implements_it() -> None:
+    spec = _text(SPECS["skills"])
+    assert re.search(r'^  VERSION::"9\.2\.0"$', spec, flags=re.MULTILINE)
+    schema = (RES / "specs/schemas/skill.oct.md").read_text(encoding="utf-8")
+    assert 'IMPLEMENTS_SPEC::"octave-skills-spec@9.2.0"' in schema
+
+
+def test_primers_spec_meta_records_its_own_loss_profile() -> None:
+    text = _text(SPECS["primers"])
+    meta = text[: text.index("§1::")]
+    assert re.search(r"^  COMPRESSION_TIER::", meta, flags=re.MULTILINE)
+    m = re.search(r'^  LOSS_PROFILE::"([^"]*)"', meta, flags=re.MULTILINE)
+    assert m and " " in m.group(1) and not re.search(r"[\[\]:]", m.group(1)), "LOSS_PROFILE is not a PITH sentence"
+
+
+def test_primers_spec_legend_example_has_at_least_four_operator_rows() -> None:
+    _, blocks = _scan(_text(SPECS["primers"]))
+    legend = [b for b in blocks if b["parent_key"] == "READING_LEGEND"]
+    assert len(legend) == 1
+    rows = [ln for ln in legend[0]["lines"] if ln.strip()]
+    assert len(rows) >= 4, rows
+
+
+def test_compression_primer_states_the_conservative_default() -> None:
+    assert "otherwise choose CONSERVATIVE" in _text(PRIMERS["compression"])
