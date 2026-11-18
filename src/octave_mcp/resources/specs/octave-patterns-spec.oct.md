@@ -103,6 +103,7 @@ NOTE_VERSION::"v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec,
 §7::EXAMPLE_PATTERNS
   NOTE::"Reference: .hestai-sys/library/patterns/mip-orchestration.oct.md"
   MIP_ORCHESTRATION_SUMMARY:
+    ```
     ENVELOPE::MIP_ORCHESTRATION
     META::[
       "TYPE::PATTERN",
@@ -121,7 +122,9 @@ NOTE_VERSION::"v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec,
       MUST,
       GATE
     ]
+    ```
   TDD_DISCIPLINE_SUMMARY:
+    ```
     ENVELOPE::TDD_DISCIPLINE
     META::[
       "TYPE::PATTERN",
@@ -133,6 +136,7 @@ NOTE_VERSION::"v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec,
       "§2::GIT_WORKFLOW[PATTERN::[test_commit,feat_commit,refactor_commit]]",
       "§3::ANTI_PATTERNS[AVOID::[TEST_AFTER,SINGLE_COMMIT,MOCKING_EVERYTHING]]"
     ]
+    ```
 §8::CHASSIS_PROFILE_LOADING
   NOTE::"Patterns participate in the chassis-profile capability tiering (ADR-0283) exactly as skills do. Agent definitions reference patterns in §3::CAPABILITIES."
   LOADING_CONTEXTS::[
@@ -142,11 +146,13 @@ NOTE_VERSION::"v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec,
   ]
   NOTE_EXAMPLE::"Example: in an agent definition with chassis-profile structure, under §3::CAPABILITIES:"
   EXAMPLE_AGENT_DEFINITION:
+    ```
     CHASSIS::[ho-mode]
     PROFILES:
       STANDARD:
         patterns::[mip-orchestration]
         kernel_only::[phase-transition-cleanup]
+    ```
   EXAMPLE_NOTES::[
     "CHASSIS lists skills only; patterns are rarely chassis-level",
     "patterns entries load the full body",

@@ -58,6 +58,7 @@ NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallbac
 §3::DOCUMENT_TEMPLATE
   NOTE::"V9.1 template: YAML frontmatter shown but marked optional."
   V9_TEMPLATE_STRUCTURE:
+    ```
     YAML_FRONTMATTER::"OPTIONAL<name,description,\"allowed-tools\",triggers,version>"
     OCTAVE_ENVELOPE:
       META::[
@@ -73,11 +74,12 @@ NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallbac
         "§5::ANCHOR_KERNEL[TARGET,NEVER,MUST,GATE,LANE,DELEGATE,TEMPLATE,SIGNALS]"
       ]
       END::marker
+    ```
   CASCADING_FALLBACK::[
-    "PRIORITY_1::§5::ANCHOR_KERNEL[primary_source_if_present]",
-    "PRIORITY_2::§3::GOVERNANCE[fallback_MUST_NEVER_and_ALLOWED]",
-    "PRIORITY_3::SIGNALS_or_PATTERNS_blocks<fallback_for_detection_skills>",
-    "PRIORITY_4::WARN_UNSTRUCTURED<emitted_if_no_kernel_or_governance_found>"
+    "PRIORITY_1: use §5::ANCHOR_KERNEL, the primary source, if present",
+    "PRIORITY_2: otherwise use §3::GOVERNANCE, the fallback for MUST_NEVER and ALLOWED",
+    "PRIORITY_3: otherwise use the SIGNALS or PATTERNS blocks, the fallback for detection skills",
+    "PRIORITY_4: otherwise warn UNSTRUCTURED, emitted when no kernel or governance is found"
   ]
 §4::SIZE_CONSTRAINTS
   TARGET::"500 _lines_max"

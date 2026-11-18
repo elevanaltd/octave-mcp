@@ -52,7 +52,7 @@ BUDGET::"`60%` of the quarterly budget burned on this migration alone"
 
 Each fact sits in its own labelled field, in plain words, with its numbers and its hedges copied exactly. There is no narrative to retell, so there is less for a later reader to merge or escalate. See the [PITH specification](src/octave_mcp/resources/specs/pith-spec.md) for the rules and the evidence behind each one.
 
-Documents written earlier with operators or mythology terms stay readable: the parser still reads them, and normalisation changes syntax, never meaning (North Star I1 and I3). New documents are written in plain words instead. [Why](#pith-the-writing-standard).
+Documents written earlier with operators or mythology terms stay readable: the parser still reads them. Normalisation is designed to change syntax and not meaning (North Star I1 and I3), but known edge cases exist where a value can be split or lost without the status showing it (see the PITH specification, Inside an OCTAVE container), so read the receipt fields, not the status alone. New documents are written in plain words instead. [Why](#pith-the-writing-standard).
 
 If an LLM writes it slightly wrong (extra spaces, or an ASCII operator where the Unicode form is canonical), the normaliser autocorrects and gives you a receipt:
 

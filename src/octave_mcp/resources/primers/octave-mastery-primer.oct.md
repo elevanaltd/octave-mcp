@@ -1,8 +1,8 @@
 ===OCTAVE_MASTERY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"8.0.0"
-  TOKENS::"477"
+  VERSION::"8.0.1"
+  TOKENS::"482"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"keeps forms and usage law; drops rationale and vocabulary tables"
 §1::ESSENCE
@@ -45,7 +45,7 @@ AUTHORING::"glyphs and constraints appear only in schema-definition files; write
 IN::"A schema field status must be ACTIVE or DRAFT; a reviewer validates input."
 OUT:
   REVIEWER::"validates input"
-  STATUS::"ACTIVE or DRAFT"
+  STATUS::"schema field status must be ACTIVE or DRAFT"
 §5::VALIDATE
 MUST::[
   "valid OCTAVE",
