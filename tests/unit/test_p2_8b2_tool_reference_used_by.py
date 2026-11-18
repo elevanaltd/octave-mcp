@@ -61,3 +61,15 @@ def test_other_section_8_keys_are_kept() -> None:
         'UPSTREAM::"octave-mcp is upstream; copies elsewhere are synced from it and are never a re-alignment source"'
         in used
     )
+
+
+def test_version_is_1_2_2_in_the_top_level_meta_block() -> None:
+    text = TOOL_REFERENCE.read_text(encoding="utf-8")
+    start = text.index("\nMETA:\n") + len("\nMETA:\n")
+    meta = []
+    for line in text[start:].split("\n"):
+        if line and not line.startswith(" "):
+            break
+        meta.append(line)
+    assert re.findall(r'^  VERSION::"([^"]+)"$', "\n".join(meta), flags=re.MULTILINE) == ["1.2.2"]
+    assert "1.2.1" not in text
