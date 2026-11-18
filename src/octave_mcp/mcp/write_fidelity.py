@@ -37,6 +37,14 @@ E4  constructor canonicalization ``NAME[a, b]`` -> ``NAME<a,b>`` (GH#276),
     refused when two words would be joined. Added from the R5 corpus run.
 E5  envelope completion: ``===NAME===`` and ``===END===`` added by the
     emitter when the input omitted them. Added from the R4/R5 runs.
+E6  a line break between two list items stands for the comma the emitter
+    writes: inside brackets the parser ends an item at a line break
+    (``Parser.parse_list``), so ``[\n  x\n  y\n]`` and ``[x,y]`` hold the
+    same items. Applied to both sides as a separator key before alignment.
+    Added from the estate R5 run.
+
+E2 never regroups across a list boundary: a run holding a comma, a bracket
+or a comment is not a regroup (``[a, b]`` -> ``["a, b"]`` is refused).
 """
 
 from __future__ import annotations
@@ -130,6 +138,11 @@ _TYPE_ONLY = frozenset(
 _SKIPPED = frozenset({TokenType.NEWLINE, TokenType.INDENT, TokenType.EOF})
 _TYPED_LITERALS = frozenset({TokenType.NUMBER, TokenType.BOOLEAN, TokenType.NULL, TokenType.VERSION})
 _REGROUP_TYPES = frozenset({TokenType.STRING, TokenType.IDENTIFIER})
+# A regroup run may not hold these: they carry list structure or comments.
+_REGROUP_BARRIERS = frozenset({TokenType.COMMA, TokenType.LIST_START, TokenType.LIST_END, TokenType.COMMENT})
+# E6: no implied separator right after these, or right before these.
+_NO_SEPARATOR_AFTER = frozenset({TokenType.COMMA, TokenType.LIST_START})
+_NO_SEPARATOR_BEFORE = frozenset({TokenType.COMMA, TokenType.LIST_END, TokenType.COMMENT})
 
 # Parser warning classes whose appearance in the OUTPUT parse (beyond the
 # reference parse) means the output is not a canonical fixed point (F2).
@@ -173,11 +186,28 @@ class _Lexed:
         tokens, _ = tokenize(body)
         self.items: list[_Item] = []
         last_line = -1
+        depth = 0
+        prev: Token | None = None  # last kept token that is not a comment
         for tok in tokens:
             if tok.type in _SKIPPED:
                 continue
+            if (
+                depth > 0
+                and prev is not None
+                and tok.line != prev.line
+                and prev.type not in _NO_SEPARATOR_AFTER
+                and tok.type not in _NO_SEPARATOR_BEFORE
+            ):
+                # E6: the line break ends the previous list item.
+                self.items.append(_Item(("COMMA",), _implied_separator(tok), False))
             self.items.append(_Item(_key(tok), tok, tok.line != last_line))
             last_line = tok.line
+            if tok.type == TokenType.LIST_START:
+                depth += 1
+            elif tok.type == TokenType.LIST_END:
+                depth = max(0, depth - 1)
+            if tok.type != TokenType.COMMENT:
+                prev = tok
 
     def source(self, i: int, k: int) -> str:
         """Exact source text of items[i:k]."""
@@ -202,6 +232,18 @@ class _Lexed:
         if not self.items:
             return 0
         return self.items[min(i, len(self.items) - 1)].tok.line
+
+
+def _implied_separator(before: Token) -> Token:
+    """A zero-width COMMA at the start of ``before`` (E6)."""
+    return Token(
+        type=TokenType.COMMA,
+        value=",",
+        line=before.line,
+        column=before.column,
+        start_byte=before.start_byte,
+        end_byte=before.start_byte,
+    )
 
 
 def _key(tok: Token) -> tuple[Any, ...]:
@@ -238,6 +280,8 @@ def _regroup(side: _Lexed, i: int, other: _Lexed, j: int) -> int | None:
         return None
     value = tok.value
     for k in range(i + 1, len(side.items) + 1):
+        if side.items[k - 1].tok.type in _REGROUP_BARRIERS:
+            return None  # never regroup across a list boundary or a comment
         if k == i + 1 and side.items[i].tok.type in _TYPED_LITERALS:
             # A typed literal never becomes (or comes from) a string.
             return None
