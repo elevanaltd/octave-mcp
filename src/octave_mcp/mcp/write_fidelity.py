@@ -46,7 +46,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from octave_mcp.core.ast_nodes import (
+from octave_mcp.core.emitter import emit, emit_assignment, emit_block, emit_meta, emit_section
+from octave_mcp.core.grammar.cst import (
     Absent,
     Assignment,
     Block,
@@ -58,7 +59,6 @@ from octave_mcp.core.ast_nodes import (
     LiteralZoneValue,
     Section,
 )
-from octave_mcp.core.emitter import emit, emit_assignment, emit_block, emit_meta, emit_section
 from octave_mcp.core.lexer import Token, TokenType, normalize_content, tokenize
 from octave_mcp.core.parser import _strip_yaml_frontmatter, parse, parse_with_warnings
 from octave_mcp.mcp.document_mutator import resolve_change_route
