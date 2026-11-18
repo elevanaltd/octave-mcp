@@ -672,6 +672,24 @@ class TestCompileGrammar543:
         assert result["status"] == "error", result
         assert [e["code"] for e in result["errors"]] == ["E_GRAMMAR_FIELDS_DROPPED"]
 
+    @pytest.mark.parametrize("block", ["FIELDS", "POLICY"])
+    async def test_contract_with_policy_or_fields_in_a_sibling_envelope_is_refused(self, block: str) -> None:
+        """#543 across envelopes: the CONTRACT branch never reads a sibling
+        envelope's POLICY or FIELDS either, so they would be dropped silently."""
+        from octave_mcp.mcp.compile_grammar import CompileGrammarTool
+
+        body = (
+            '  STATUS::["ACTIVE"∧REQ∧ENUM[ACTIVE,DRAFT]→§SELF]\n' if block == "FIELDS" else "  UNKNOWN_FIELDS::REJECT\n"
+        )
+        content = (
+            '===S===\nMETA:\n  TYPE::SCHEMA\n  VERSION::"1"\n  CONTRACT::HOLOGRAPHIC<law>\n===END===\n'
+            f"===SIB===\n{block}:\n{body}===END===\n"
+        )
+        result = await CompileGrammarTool().execute(content=content)
+        assert result["status"] == "error", result
+        assert [e["code"] for e in result["errors"]] == ["E_GRAMMAR_FIELDS_DROPPED"]
+        assert block in result["errors"][0]["message"]
+
     async def test_without_contract_the_fields_reach_the_grammar(self) -> None:
         from octave_mcp.mcp.compile_grammar import CompileGrammarTool
 
@@ -711,3 +729,55 @@ class TestCliWrite:
         assert result.exit_code == 1, result.output
         assert "E_FIDELITY" in result.output
         assert _snapshot(path) == before
+
+    @pytest.mark.parametrize(
+        "changes",
+        [
+            pytest.param({"NEW": "x"}, id="new_top_level_key"),
+            pytest.param({"NOPE.CHILD": "x"}, id="missing_parent_path"),
+            pytest.param({"B.NEW": "x"}, id="missing_block_child"),
+            pytest.param({"B": "scalar"}, id="second_top_level_B_beside_the_block"),
+        ],
+    )
+    def test_cli_changes_refuses_creating_a_key(self, tmp_path: Path, changes: dict[str, Any]) -> None:
+        """One write rule for both front doors (plan section 3 C2, NO_AUTO_CREATE):
+        a declared change may not create a key. octave_write refuses these
+        (E_FIDELITY created, or E_UNRESOLVABLE_PATH); the CLI must not create
+        them either."""
+        import json
+
+        from click.testing import CliRunner
+
+        from octave_mcp.cli.main import cli
+
+        path = tmp_path / "cli_create.oct.md"
+        path.write_text(_CLI_BASE, encoding="utf-8")
+        before = _snapshot(path)
+        result = CliRunner().invoke(cli, ["write", str(path), "--changes", json.dumps(changes)])
+        assert result.exit_code == 1, result.output
+        assert "E_FIDELITY" in result.output and "declared_change_mismatch" in result.output
+        assert "created" in result.output
+        assert _snapshot(path) == before
+
+    @pytest.mark.parametrize(
+        ("changes", "expect"),
+        [
+            pytest.param({"META.NEW": "x"}, "NEW::x", id="meta_field_set"),
+            pytest.param({"K": "w"}, "K::w", id="existing_top_level_key"),
+        ],
+    )
+    def test_cli_changes_permitted_still_succeed(self, tmp_path: Path, changes: dict[str, Any], expect: str) -> None:
+        import json
+
+        from click.testing import CliRunner
+
+        from octave_mcp.cli.main import cli
+
+        path = tmp_path / "cli_ok.oct.md"
+        path.write_text(_CLI_BASE, encoding="utf-8")
+        result = CliRunner().invoke(cli, ["write", str(path), "--changes", json.dumps(changes)])
+        assert result.exit_code == 0, result.output
+        assert expect in path.read_text(encoding="utf-8")
+
+
+_CLI_BASE = '===D===\nMETA:\n  TYPE::T\n  VERSION::"1"\nK::v\nB:\n  X::1\n§1::S\n  Y::y\n===END===\n'

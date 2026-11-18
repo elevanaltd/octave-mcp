@@ -607,7 +607,13 @@ META:
         assert result.exit_code == 0
 
     def test_write_changes_add_new_field(self, tmp_path):
-        """Should add new field when field doesn't exist."""
+        """A changes-mode set may not create an absent key (tool-fidelity PR-2).
+
+        Plan section 3 C2 and the octave_write NO_AUTO_CREATE contract: the CLI
+        and the MCP tool share one write rule, so an absent top-level key is
+        refused with E_FIDELITY (declared_change_mismatch, created) and the
+        file is untouched. Until v1.17.0 the CLI created it.
+        """
         target_file = tmp_path / "add_field.oct.md"
         target_file.write_text("""===ADD_FIELD===
 META:
@@ -615,10 +621,13 @@ META:
   VERSION::"1.0"
 ===END===""")
 
+        before = target_file.read_bytes()
         changes = '{"NEW_FIELD": "new value"}'
         runner = CliRunner()
         result = runner.invoke(cli, ["write", str(target_file), "--changes", changes])
-        assert result.exit_code == 0
+        assert result.exit_code == 1
+        assert "E_FIDELITY" in result.output and "created" in result.output
+        assert target_file.read_bytes() == before
 
     def test_write_invalid_json_changes(self, tmp_path):
         """Should error on invalid JSON in --changes."""

@@ -170,6 +170,14 @@ class TestContentModeEquivalences:
         await _ok(path, content="Hello, world!", lenient=True)
         assert 'RAW::"Hello, world!"' in path.read_text(encoding="utf-8")
 
+    async def test_plain_text_wrap_allows_nfc_normalization(self, tmp_path: Path) -> None:
+        """E0 applies to the plain-text path rule too: decomposed input is
+        wrapped as its NFC form, logged, and not refused."""
+        path = tmp_path / "raw_nfc.oct.md"
+        result = await _ok(path, content="Cafe\u0301 au lait!", lenient=True)
+        assert "NFC_NORMALIZATION" in _codes(result)
+        assert 'RAW::"Caf\u00e9 au lait!"' in path.read_text(encoding="utf-8")
+
     async def test_yaml_frontmatter_segment(self, tmp_path: Path) -> None:
         path = tmp_path / "fm.oct.md"
         await _ok(path, content="---\nname: agent\ndescription: plain\n---\n\n===D===\nK::v\n===END===\n")
