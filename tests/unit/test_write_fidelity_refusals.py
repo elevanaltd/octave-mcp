@@ -262,6 +262,36 @@ class TestLexicalComparator:
                 "===D===\nN::A<xy>\n===END===\n",
                 id="constructor_word_join",
             ),
+            # E2 must not regroup across a list boundary: these change the
+            # item count or turn a list into a string (estate R5 follow-up).
+            pytest.param(
+                "===D===\nL::[a, b]\n===END===\n", '===D===\nL::["a, b"]\n===END===\n', id="regroup_across_comma"
+            ),
+            pytest.param(
+                "===D===\nL::[x]\n===END===\n", '===D===\nL::"[x]"\n===END===\n', id="regroup_across_brackets"
+            ),
+            # E6 (line break as list separator) must not hide a dropped,
+            # altered, joined or re-split item.
+            pytest.param(
+                "===D===\nL::[\n  x\n  y\n  z\n]\n===END===\n",
+                "===D===\nL::[x,z]\n===END===\n",
+                id="multiline_item_dropped",
+            ),
+            pytest.param(
+                "===D===\nL::[\n  x\n  y\n]\n===END===\n",
+                "===D===\nL::[x,w]\n===END===\n",
+                id="multiline_item_altered",
+            ),
+            pytest.param(
+                "===D===\nL::[\n  x\n  y\n]\n===END===\n",
+                '===D===\nL::["x y"]\n===END===\n',
+                id="multiline_items_joined",
+            ),
+            pytest.param(
+                "===D===\nL::[\n  x y\n  z\n]\n===END===\n",
+                '===D===\nL::[x,"y z"]\n===END===\n',
+                id="multiline_boundary_moved",
+            ),
         ],
     )
     def test_meaning_change_is_a_violation(self, reference: str, output: str) -> None:

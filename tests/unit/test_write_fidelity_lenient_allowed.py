@@ -78,6 +78,64 @@ class TestContentModeEquivalences:
         assert "REQ<mandatory>" in written and "OPT<a,b>" in written
 
     @pytest.mark.parametrize(
+        ("value", "items"),
+        [
+            pytest.param("[\n  x\n  y\n]", ["x", "y"], id="plain_ids"),
+            pytest.param('[\n  "x y"\n  "z"\n]', ["x y", "z"], id="quoted_strings"),
+            pytest.param("[\n  x y\n  z\n]", ["x y", "z"], id="multi_word_item"),
+            pytest.param("[\n  a→\n  b\n]", ["a→", "b"], id="trailing_operator"),
+            pytest.param("[\n  x,\n  y\n  z\n]", ["x", "y", "z"], id="mixed_commas"),
+            pytest.param("[\n  [a, b]\n  c\n]", None, id="nested_list"),
+            pytest.param('[\n  TEXT::"one"\n  TEXT::"two"\n]', None, id="inline_map_items"),
+        ],
+    )
+    async def test_e6_line_break_separates_list_items(
+        self, tmp_path: Path, value: str, items: list[str] | None
+    ) -> None:
+        """E6: inside brackets the parser ends an item at a line break, so a
+        multi-line list without commas means the same as its comma form. The
+        emitter writes the commas; the rewrite is logged (estate R5: seven
+        false refusals of this shape at d7ca83d)."""
+        from octave_mcp.core.parser import parse
+
+        path = tmp_path / "e6.oct.md"
+        result = await _ok(path, content=f"===D===\nL::{value}\n===END===\n")
+        assert "TN_RECONCILE_CANONICAL" in _codes(result)
+        written = parse(path.read_text(encoding="utf-8")).sections[0].value.items
+        assert len(written) == len(parse(f"===D===\nL::{value}\n===END===\n").sections[0].value.items)
+        if items is not None:
+            assert written == items
+
+    async def test_e2_section_refs_in_a_list_are_auto_quoted_per_item(self, tmp_path: Path) -> None:
+        """The SECTION_ORDER shape (estate R5 follow-up). The write path's
+        logged § auto-quote turns each comma-delimited element into one
+        string with every character kept, and the output re-reads to the same
+        items: no content is lost or altered across the write. Plan section 3
+        (F1 reference text; E2 makes the legitimate auto-quote pass)."""
+        from octave_mcp.core.parser import parse
+
+        path = tmp_path / "order.oct.md"
+        result = await _ok(path, content="===D===\nSECTION_ORDER::[§1::ALPHA, §2::BETA_TWO, §3::GAMMA]\n===END===\n")
+        assert "W_UNQUOTED_SECTION_IN_VALUE" in _codes(result)
+        written = parse(path.read_text(encoding="utf-8")).sections[0].value.items
+        assert written == ["§1::ALPHA", "§2::BETA_TWO", "§3::GAMMA"]
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "KNOWN-NOT-COVERED #535: a bare parse() of unquoted [§1::A, ...] splits each element into "
+            "'§1', '::', 'A'. This is a reader-side parse defect; octave_write never sees it because the "
+            "logged § auto-quote runs before its parse, so F1 has nothing to compare. Remove this xfail "
+            "when #535 is fixed."
+        ),
+    )
+    def test_bare_parse_of_unquoted_section_refs_in_a_list_535(self) -> None:
+        from octave_mcp.core.parser import parse
+
+        items = parse("===D===\nSECTION_ORDER::[§1::ALPHA, §2::BETA_TWO]\n===END===\n").sections[0].value.items
+        assert items == ["§1::ALPHA", "§2::BETA_TWO"]
+
+    @pytest.mark.parametrize(
         "content",
         [
             pytest.param("A::1\nB::two\n", id="no_envelope"),
