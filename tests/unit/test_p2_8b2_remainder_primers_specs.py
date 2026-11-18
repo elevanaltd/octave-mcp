@@ -86,6 +86,7 @@ KNOWN_E007_FIELDS = {"META.TOKENS", "META.COMPRESSION_TIER", "META.LOSS_PROFILE"
 @pytest.mark.parametrize("name", PRIMERS)
 def test_primer_validates_strict_with_only_the_known_meta_e007(name: str) -> None:
     res = _validate_content(_text(PRIMERS[name]))
+    assert res.get("errors") == [], res.get("errors")
     errors = {(e.get("code"), e.get("field")) for e in res.get("validation_errors", [])}
     assert errors <= {("E007", f) for f in KNOWN_E007_FIELDS}, errors
     assert not res.get("repairs"), res.get("repairs")
@@ -139,7 +140,8 @@ def test_migrated_spec_dry_run_write_drops_nothing(name: str) -> None:
         WriteTool().execute(target_path="/nonexistent-p2-8b2/dry.oct.md", content=_text(SPECS[name]), dry_run=True)
     )
     codes = [w.get("code") for w in res.get("warnings", [])] + [c.get("code") for c in res.get("corrections", [])]
-    assert "W_BARE_LINE_DROPPED" not in codes, codes
+    lossy = {"W_BARE_LINE_DROPPED", "W_NUMERIC_KEY_DROPPED", "W_DUPLICATE_KEY"}
+    assert not lossy & set(codes), sorted(lossy & set(codes))
     assert res.get("errors") == [], res.get("errors")
 
 
@@ -148,3 +150,98 @@ def test_migrated_spec_keeps_header_comments_as_keyed_notes(name: str) -> None:
     text = _text(SPECS[name])
     assert not re.search(r"^\s*//", text, flags=re.MULTILINE), "a // comment line remains; comments drop on rewrite"
     assert re.search(r"^\s*NOTE", text, flags=re.MULTILINE)
+
+
+# ---------------------------------------------------------------------------
+# #559 rework: SR items 1-3, cubic threads
+# ---------------------------------------------------------------------------
+READING_FENCE_KEYS = {"READING_LEGEND", "SCHEMA_EXAMPLE"}
+
+
+def _spec_glyph_hits(text: str) -> list[str]:
+    """Glyphs in a spec value, comment or key outside a fenced reading legend or schema example."""
+    outside, blocks = _scan(text)
+    hits = [f"{n}: {t.strip()[:70]}" for n, t in outside if GLYPH.search(t)]
+    hits += [
+        f"fence {b['start']} under {b['parent_key']!r}"
+        for b in blocks
+        if any(GLYPH.search(ln) for ln in b["lines"]) and b["parent_key"] not in READING_FENCE_KEYS
+    ]
+    return hits
+
+
+@pytest.mark.parametrize("name", SPECS)
+def test_spec_values_have_no_glyph_relations(name: str) -> None:
+    hits = _spec_glyph_hits(_text(SPECS[name]))
+    assert not hits, f"{name} spec: glyph relation outside a fenced reading legend: {hits}"
+
+
+def test_spec_glyph_guard_canaries() -> None:
+    assert _spec_glyph_hits('KEY::"a⊕b"')
+    assert _spec_glyph_hits("// v1→v2 notes")
+    assert _spec_glyph_hits('X::"a->b"')
+    assert not _spec_glyph_hits("READING_LEGEND:\n  ```\n  ⊕ synthesis\n  ```\n")
+    assert _spec_glyph_hits("OTHER:\n  ```\n  ⊕ synthesis\n  ```\n")
+    assert not _spec_glyph_hits('KEY::"a and b, then c"')
+
+
+def test_primers_spec_documents_the_fenced_reading_legend() -> None:
+    text = _text(SPECS["primers"])
+    assert re.search(
+        r"^\s+READING_LEGEND:\s*$", text, flags=re.MULTILINE
+    ), "the legend example is not a READING_LEGEND block"
+    assert "fenced READING_LEGEND" in text, "§2c does not say the legend must be a fenced READING_LEGEND block"
+    valid = text[text.index("VALID_PRIMER") :]
+    assert "fenced_READING_LEGEND" in valid or "fenced READING_LEGEND" in valid
+
+
+def test_primers_spec_does_not_require_ultra_or_present_it_as_current() -> None:
+    text = _text(SPECS["primers"])
+    assert "compression_tier==ULTRA" not in text
+    assert "ULTRA[50%]" not in text
+    assert "META_records_its_own_tier_and_loss_profile" in text
+
+
+def test_compression_primer_has_no_live_aggressive_or_ultra_selection() -> None:
+    text = _text(PRIMERS["compression"])
+    outside, blocks = _scan(text)
+    meta_free = [t for _, t in outside if not t.lstrip().startswith(("COMPRESSION_TIER", "LOSS_PROFILE"))]
+    for line in meta_free + [ln for b in blocks for ln in b["lines"]]:
+        if re.search(r"AGGRESSIVE|ULTRA", line):
+            assert re.search(r"frozen|reading", line, flags=re.IGNORECASE), f"live tier guidance: {line.strip()}"
+    assert "choose the tier" not in text
+    assert "LOSSLESS" in text and "CONSERVATIVE" in text
+
+
+def test_literacy_primer_keeps_alert_in_the_one_shot() -> None:
+    text = _text(PRIMERS["literacy"])
+    assert "page the on-call" not in text
+    assert "failed logins alert the on-call" in text
+
+
+def test_compression_primer_one_shot_keeps_relation_and_subject_and_invents_nothing() -> None:
+    text = _text(PRIMERS["compression"])
+    shot = text[text.index("§4::ONE_SHOT") : text.index("§5::VALIDATE")]
+    assert "validate" not in shot.lower().split("out:")[1]
+    out = shot.split("OUT:")[1]
+    assert re.search(r'AUTH::"authenticate before the dashboard"', out)
+    assert re.search(r'FAIL::"failed logins alert"', out)
+
+
+def test_reading_primer_mythology_is_read_by_one_domain_not_shorthand() -> None:
+    text = _text(PRIMERS["reading"])
+    assert "shorthand" not in text
+    assert "mythology terms read by their one domain, not as system names" in text
+
+
+def test_chatter_peer_line_says_no_envelope() -> None:
+    chatter = (RES / "skills/octave-chatter/SKILL.md").read_text(encoding="utf-8")
+    peer = [ln for ln in chatter.split("\n") if ln.strip().startswith("PEER::")]
+    assert len(peer) == 1 and "no envelope" in peer[0], peer
+
+
+def test_patterns_spec_chassis_example_is_a_nested_block() -> None:
+    text = _text(SPECS["patterns"])
+    assert re.search(
+        r"^( +)PROFILES:\n\1  STANDARD:\n\1    \w+::", text, flags=re.MULTILINE
+    ), "PROFILES and STANDARD are not nested parent keys (a real block or a fenced literal example)"

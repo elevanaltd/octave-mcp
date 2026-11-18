@@ -32,6 +32,9 @@ PEER_SHAPE_TEXT = (
     "confirmation asks for it in the first line."
 )
 
+# The complete Handoff bullet as shipped at 90c954a (PITH-PEER-MESSAGE-SHAPE-20261108 leaves Handoff unchanged).
+HANDOFF_BULLET = "Handoff. No envelope, no META. Seven slots in order: ASK, FROM, DECIDED, OUT_OF_SCOPE, DONE, UNCLEAR, LEFT_OUT; LEFT_OUT restates the ask in one clause; DECIDED holds standing rules and warnings; DONE says how each fact is known. Heading `## SLOT` or `SLOT::`. Only `missing_slot` blocks; flags persist in `egress_flags`. Bound roles: `implementation-lead`, `technical-architect`, `ideator`, `critical-engineer` (`messageContract.ts:84`); a bound dispatch is not sent its role's MUST_USE and keeps MUST_NOT (`payloadCompiler.ts:498,566,717`)."
+
 
 def _lines() -> list[str]:
     return SPEC_PATH.read_text(encoding="utf-8").split("\n")
@@ -70,4 +73,4 @@ def test_peer_bullet_is_placed_after_handoff_and_handoff_is_unchanged() -> None:
     handoff = [i for i, b in enumerate(bullets) if b.startswith("Handoff. ")]
     peer = [i for i, b in enumerate(bullets) if b.startswith("Peer message.")]
     assert handoff and peer and peer[0] > handoff[0]
-    assert "Seven slots in order: ASK, FROM, DECIDED, OUT_OF_SCOPE, DONE, UNCLEAR, LEFT_OUT" in bullets[handoff[0]]
+    assert bullets[handoff[0]] == HANDOFF_BULLET, "the Handoff bullet changed"

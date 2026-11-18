@@ -9,16 +9,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from test_p2_8_bundled_skills_language import _scan
+from test_p2_8_bundled_skills_language import _MYTHOLOGY_NAMES, _scan
 
 # Operator glyphs only. The skills GLYPH regex also flags a spaced "|" or "+", which a README uses in tables.
 GLYPH = re.compile(r"[⊕⇌∧∨→∴⧺]|<->|->")
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
-MYTH = re.compile(
-    r"\b(sisyphean|sisyphus|artemis|chronos|demeter|athena|odyssean|solomonic|hermes|zeus|apollo|hephaestus)\b",
-    flags=re.IGNORECASE,
-)
+# Shared vocabulary from the skills guard, plus the names the README example used.
+MYTH = re.compile(_MYTHOLOGY_NAMES.pattern[:-3] + r"|artemis|chronos|demeter|solomonic)\b", flags=re.IGNORECASE)
 SELLING = re.compile(
     r"semantic\s+zip|mythological\s+compression|mythology\s+(?:works|isn't|is)\s|pre-compressed|"
     r"that's not branding|encourage operational use",
@@ -86,3 +84,33 @@ def test_canaries_fire() -> None:
     assert SELLING.search("### Mythological compression")
     assert MYTH.search("`ARTEMIS::x`")
     assert not MYTH.search("plain words only")
+
+
+def _quick_example_fence() -> str:
+    text = _text()
+    start = text.index("written in PITH:")
+    fence = text.index("```octave", start)
+    return text[fence : text.index("```", fence + 5)]
+
+
+def test_quick_example_is_one_fact_per_field_with_source_forms_kept() -> None:
+    block = _quick_example_fence()
+    fields = [ln for ln in block.split("\n") if "::" in ln]
+    assert len(fields) >= 5, fields
+    for word in ("three", "six", "60%", "security", "specifically"):
+        assert word in block, f"source form {word!r} not kept"
+    for ln in fields:
+        assert ln.count(";") == 0 and ln.count(" and ") == 0, f"two facts in one field: {ln}"
+
+
+def test_no_stale_lead_in_and_evidence_claim_is_narrowed() -> None:
+    text = _text()
+    assert "sounds like it shouldn't work" not in text
+    assert "did no work plain words do not" not in text
+    assert "escalated when misapplied" in text
+
+
+def test_agents_prohibition_is_limited_to_instruction_vocabulary_or_keys() -> None:
+    text = _text()
+    assert "do not write them" not in text
+    assert "operators and mythology as instruction vocabulary or keys" in text

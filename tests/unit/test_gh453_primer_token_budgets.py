@@ -26,12 +26,15 @@ token-counting test), not at module import, so an offline test runner
 only errors the specific tests that need the tokenizer rather than
 failing collection for the whole module.
 
-GH-453 makes the operator-legend section additive (adds ``∧`` and ``∨``
-glosses to each primer's legend) and names the ``TELEGRAPHIC_PHRASE`` form
-in the compression primer plus a cross-reference from the literacy primer.
-The canonical-operator and TELEGRAPHIC_PHRASE tests below guard those
-additions; they are unrelated to the token-budget measurement change and
-are left unchanged.
+GH-453 made the operator-legend section additive (adds ``∧`` and ``∨``
+glosses to each primer's legend). The canonical-operator legend test below
+still guards that: every primer keeps the six reading operators, now in a
+fenced ``READING_LEGEND``. The ``TELEGRAPHIC_PHRASE`` form GH-453 added to the
+compression primer, and the literacy primer's cross-reference to it, are
+retired (OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101): PITH note form
+replaces them, so the two TELEGRAPHIC_PHRASE tests below now assert its
+absence. The token-budget tests are unrelated to that change and are left
+unchanged.
 """
 
 from __future__ import annotations
