@@ -1,0 +1,16 @@
+---
+type: "DECISION_RECORD"
+version: "1.4"
+token: "OCTAVE-MCP-TOOL-REFERENCE-USED-BY-SCOPE-20261118"
+status: "PROPOSED"
+tier: "TACTICAL"
+authored_at: "2026-11-18T03:51:55Z"
+decision: "Amend OCTAVE-MCP-LITERACY-WRITER-SCOPE-AND-LIMITS-20261118 (merged PR #557) by widening audit scope one file: P2-8b2 PR #559 may correct octave-tool-reference §8 USED_BY from hestai-workbench archetype-matrix rows loading the reference, naming octave-secretary as sole governance writer; all other reference content stays out of scope."
+because: "§7h exclusivity is ratified operator wording in hestai-workbench LIBRARY-EXPERT-LOAD-CHECK-DISPOSITIONS-20261118 R1; §8's legacy-hub roster is stale because agent-expert and skills-expert merged into library-expert, while north-star-architect and system-steward are absent from V9 library."
+amends: "OCTAVE-MCP-LITERACY-WRITER-SCOPE-AND-LIMITS-20261118"
+scope: "octave-mcp"
+compression_tier: "CONSERVATIVE"
+loss_profile: "[preserve:decision,causal reasoning,IDs,named entities,scope limits,quoted ruling;drop:question narrative,repeated recommendation]"
+operator_ruling: "\"Yes, pass it on\""
+out_of_scope: "Any other octave-tool-reference change, hub and workbench copy timing, any merge or release."
+---
