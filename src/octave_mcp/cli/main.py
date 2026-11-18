@@ -632,12 +632,19 @@ def write(
             )
         )
         if fidelity.violations:
+            from octave_mcp.mcp.write_fidelity import cap_violations
+
+            shown, counts, truncated = cap_violations(fidelity.violations)
+            breakdown = ", ".join(f"{kind}: {n}" for kind, n in sorted(counts.items()))
             click.echo(
-                f"Error: E_FIDELITY write refused: {len(fidelity.violations)} fidelity violation(s); "
-                "the output would not reproduce the input exactly in meaning. Nothing was written.",
+                f"Error: E_FIDELITY write refused: {len(fidelity.violations)} fidelity violation(s) "
+                f"({breakdown}); the output would not reproduce the input exactly in meaning. "
+                "Nothing was written.",
                 err=True,
             )
-            for v in fidelity.violations:
+            if truncated:
+                click.echo(f"fidelity_violations: showing {len(shown)} of {len(fidelity.violations)}", err=True)
+            for v in shown:
                 click.echo(
                     f"fidelity_violation: {v['kind']} line {v['line']}: "
                     f"expected {v['expected']!r} found {v['found']!r}",

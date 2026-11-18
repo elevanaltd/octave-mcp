@@ -90,6 +90,9 @@ DECLARED_CHANGE_MISMATCH = "declared_change_mismatch"
 
 NFC_NORMALIZATION = "NFC_NORMALIZATION"
 
+# Display cap for fidelity_violations[]. The checks themselves never stop
+# early; the cap is applied once, in cap_violations(), which keeps one
+# witness per detected kind and reports complete per-kind counts.
 _MAX_VIOLATIONS = 20
 _RESYNC_WINDOW = 300
 _SNIPPET = 160
@@ -424,8 +427,6 @@ def _align(ref: _Lexed, out: _Lexed, allow: _Allowances) -> list[dict[str, Any]]
                 out.source(j + b1, j + b2),
             )
         )
-        if len(found) >= _MAX_VIOLATIONS:
-            break
         i, j = i + a2, j + b2
     return found
 
@@ -469,7 +470,7 @@ def lexical_violations(
     found = _frontmatter_violations(want_fm, out.frontmatter)
     allow = _Allowances(Counter(substitutions or []))
     found.extend(_align(ref, out, allow))
-    return found[:_MAX_VIOLATIONS]
+    return found
 
 
 _HINT_UNLEXABLE = (
@@ -792,7 +793,7 @@ def baseline_roundtrip_violations(baseline: str, edited_doc: Any, format_style: 
     if meta_dirty and fresh.meta_start_byte is not None and fresh.meta_end_byte is not None:
         body, gap = split_node_gap(baseline_bytes[fresh.meta_start_byte : fresh.meta_end_byte].decode("utf-8"))
         found.extend(lexical_violations(body, _strip_gap_comments(emit_meta(fresh.meta), gap)))
-    return found[:_MAX_VIOLATIONS]
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -1004,7 +1005,7 @@ def declared_change_violations(
         found.append(violation(DECLARED_CHANGE_MISMATCH, 0, expected, actual))
     for key, value, t0, t1 in targets:
         found.extend(_check_one(key, value, t0, t1, doc0, doc1))
-    return found[:_MAX_VIOLATIONS]
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -1182,7 +1183,7 @@ def check_write_fidelity(req: FidelityRequest) -> FidelityResult:
             pre_style_text=pre_style if styled else None,
         )
     )
-    return FidelityResult(violations=found[:_MAX_VIOLATIONS], corrections=extra)
+    return FidelityResult(violations=found, corrections=extra)
 
 
 def _mutation_violations(req: FidelityRequest) -> list[dict[str, Any]]:
@@ -1207,18 +1208,53 @@ def _mutation_violations(req: FidelityRequest) -> list[dict[str, Any]]:
     return found
 
 
+def cap_violations(
+    violations: list[dict[str, Any]], limit: int = _MAX_VIOLATIONS
+) -> tuple[list[dict[str, Any]], dict[str, int], bool]:
+    """Cap the violations for display without hiding a kind.
+
+    Returns ``(shown, counts, truncated)``. ``shown`` holds at most
+    ``limit`` entries in detection order and always includes the first
+    violation of every detected kind; ``counts`` is the complete number of
+    violations per kind; ``truncated`` is true when ``shown`` is shorter
+    than the full list.
+    """
+    # Critical-Engineer: consulted for Write fidelity refusal evidence completeness
+    counts: dict[str, int] = {}
+    first: dict[str, int] = {}
+    for idx, v in enumerate(violations):
+        counts[v["kind"]] = counts.get(v["kind"], 0) + 1
+        first.setdefault(v["kind"], idx)
+    keep = set(first.values())
+    for idx in range(len(violations)):
+        if len(keep) >= limit:
+            break
+        keep.add(idx)
+    shown = [violations[idx] for idx in sorted(keep)]
+    return shown, counts, len(shown) < len(violations)
+
+
 def refusal_envelope(base: dict[str, Any], violations: list[dict[str, Any]]) -> dict[str, Any]:
-    """Turn an error envelope into the E_FIDELITY refusal."""
-    kinds = sorted({v["kind"] for v in violations})
+    """Turn an error envelope into the E_FIDELITY refusal.
+
+    ``fidelity_violations`` is capped for display (one witness per kind is
+    always kept); ``fidelity_violation_counts`` and
+    ``fidelity_violations_truncated`` describe the complete set.
+    """
+    shown, counts, truncated = cap_violations(violations)
+    breakdown = ", ".join(f"{kind}: {n}" for kind, n in sorted(counts.items()))
+    shown_note = f" ({len(shown)} shown)" if truncated else ""
     base["errors"] = [
         {
             "code": E_FIDELITY,
             "message": (
-                f"Write refused: {len(violations)} fidelity violation(s) ({', '.join(kinds)}). "
+                f"Write refused: {len(violations)} fidelity violation(s){shown_note} ({breakdown}). "
                 "The output would not reproduce the input exactly in meaning; nothing was written. "
-                "See fidelity_violations."
+                "See fidelity_violations and fidelity_violation_counts."
             ),
         }
     ]
-    base["fidelity_violations"] = violations
+    base["fidelity_violations"] = shown
+    base["fidelity_violation_counts"] = counts
+    base["fidelity_violations_truncated"] = truncated
     return base
