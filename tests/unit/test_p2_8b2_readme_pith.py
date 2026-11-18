@@ -114,3 +114,10 @@ def test_agents_prohibition_is_limited_to_instruction_vocabulary_or_keys() -> No
     text = _text()
     assert "do not write them" not in text
     assert "operators and mythology as instruction vocabulary or keys" in text
+
+
+def test_normalisation_claim_is_narrowed_and_points_at_the_receipt() -> None:
+    text = _outside_fences(_text())
+    assert "changes syntax, never meaning" not in text
+    assert "designed to change syntax and not meaning" in text
+    assert "edge cases" in text and "receipt" in text

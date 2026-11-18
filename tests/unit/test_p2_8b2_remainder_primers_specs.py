@@ -275,3 +275,65 @@ def test_primers_spec_legend_example_has_at_least_four_operator_rows() -> None:
 
 def test_compression_primer_states_the_conservative_default() -> None:
     assert "otherwise choose CONSERVATIVE" in _text(PRIMERS["compression"])
+
+
+# ---------------------------------------------------------------------------
+# #559 rework 3: CIV CONDITIONAL on 78731d5
+# ---------------------------------------------------------------------------
+def _one_shot_out(primer: str) -> str:
+    text = _text(PRIMERS[primer])
+    return text[text.index("OUT:", text.index("§4::ONE_SHOT")) : text.index("§5::VALIDATE")]
+
+
+def test_mastery_one_shot_keeps_the_must_and_the_schema_field_scope() -> None:
+    out = _one_shot_out("mastery")
+    assert re.search(r'STATUS::"schema field status must be ACTIVE or DRAFT"', out), out
+
+
+def test_literacy_one_shot_adds_no_classification_and_keeps_auth_service() -> None:
+    out = _one_shot_out("literacy")
+    assert "RISK" not in out
+    assert 'AUTH_SERVICE::"validates tokens"' in out
+    assert 'RATE_LIMIT::"not known"' in out
+
+
+def _example_key_problems(text: str, keys: list[str]) -> list[str]:
+    """Each illustrative key holds a fenced literal example directly beneath it, not live nested OCTAVE."""
+    lines = text.split("\n")
+    problems = []
+    for key in keys:
+        idx = [i for i, ln in enumerate(lines) if re.match(rf"^\s*{key}:\s*$", ln)]
+        if len(idx) != 1:
+            problems.append(f"{key}: key line found {len(idx)} times")
+            continue
+        nxt = lines[idx[0] + 1]
+        if not nxt.lstrip().startswith("```"):
+            problems.append(f"{key}: live content, not a fence, beneath the key: {nxt.strip()[:50]}")
+    return problems
+
+
+PATTERNS_EXAMPLE_KEYS = ["MIP_ORCHESTRATION_SUMMARY", "TDD_DISCIPLINE_SUMMARY", "EXAMPLE_AGENT_DEFINITION"]
+SKILLS_EXAMPLE_KEYS = ["V9_TEMPLATE_STRUCTURE"]
+
+
+def test_patterns_spec_examples_are_fenced_literals() -> None:
+    assert _example_key_problems(_text(SPECS["patterns"]), PATTERNS_EXAMPLE_KEYS) == []
+
+
+def test_skills_spec_template_is_a_fenced_literal() -> None:
+    assert _example_key_problems(_text(SPECS["skills"]), SKILLS_EXAMPLE_KEYS) == []
+
+
+def test_example_fence_guard_canaries() -> None:
+    live = "EX:\n  A::1\n"
+    fenced = "EX:\n  ```\n  A::1\n  ```\n"
+    assert _example_key_problems(live, ["EX"])
+    assert _example_key_problems(fenced, ["EX"]) == []
+    assert _example_key_problems(fenced, ["MISSING"])
+
+
+def test_skills_spec_cascading_fallback_is_plain_words() -> None:
+    text = _text(SPECS["skills"])
+    block = text[text.index("CASCADING_FALLBACK::[") : text.index("]", text.index("CASCADING_FALLBACK::["))]
+    assert not re.search(r"PRIORITY_\d::|_or_|<[a-z_]+>", block), block
+    assert block.count("PRIORITY_") == 4
