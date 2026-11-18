@@ -35,15 +35,20 @@ classifiers = [
     "Typing :: Typed"
 ]
 dependencies = [
-    "mcp>=1.27.0,<2",  # GH#519: mcp 2.x renamed camelCase kwargs to snake_case (breaking)
+    "mcp>=1.30.0,<2",  # GH#519: <2 ceiling (mcp 2.x renamed camelCase kwargs to snake_case, breaking); CVE-2026-116684, CVE-2026-116685, CVE-2026-116686, CVE-2026-59951: floor 1.30.0 clears open advisories
     "click>=8.1.0",
     "pydantic>=2.12.0",
     "python-dotenv>=1.2.2",
     "PyYAML>=6.0.3",
-    "PyJWT>=2.12.1",  # CVE-2025-61726: crit header validation
-    "python-multipart>=0.0.27",  # CVE-2025-48074, CVE-2025-48075: DoS and path traversal
-    "cryptography>=47.0.0",  # CVE-2025-61727, CVE-2025-50635, CVE-2025-50636: buffer overflow and subgroup validation
-    "filelock>=3.29.0",  # CVE-2025-68146: TOCTOU symlink vulnerability
+    "PyJWT>=2.15.0",  # CVE-2026-101917, CVE-2026-102270, CVE-2026-102271, CVE-2026-48523..48526: JWT validation advisories (GHSA-pxh4-856f-4h89 range <= 2.13.0 per alert #53)
+    "python-multipart>=0.0.31",  # CVE-2026-53537, CVE-2026-53538, CVE-2026-53539, CVE-2026-53540: multipart parsing advisories
+    "cryptography>=50.0.0",  # CVE-2026-69247, CVE-2026-69248, CVE-2026-69249, GHSA-537c-gmf6-5ccf: floor 50.0.0 clears open advisories
+    "filelock>=4.2.1",  # CVE-2026-112907, CVE-2026-112909, CVE-2026-112910, CVE-2026-112913, CVE-2026-112915, CVE-2026-112935, CVE-2026-112936, CVE-2026-112939, CVE-2026-112940: lock-file advisories
+    "anyio>=4.14.2",  # CVE-2026-64847, CVE-2026-63374: transitive via mcp; floored because pip ignores uv.lock
+    "certifi>=2026.10.18",  # GHSA-6q48-6c7w-9gw2: transitive via httpx (mcp); floored because pip ignores uv.lock
+    "idna>=3.15",  # CVE-2026-45409: transitive via httpx/anyio (mcp); floored because pip ignores uv.lock
+    "pydantic-settings>=2.14.2",  # GHSA-4xgf-cpjx-pc3j: transitive via mcp; floored because pip ignores uv.lock
+    "starlette>=1.3.1",  # CVE-2026-54283, CVE-2026-48710, CVE-2026-48817, CVE-2026-48818: transitive via mcp; core floor because pip ignores uv.lock (also kept in the http extra)
 ]
 
 [project.urls]
@@ -55,7 +60,7 @@ Changelog = "https://github.com/elevanaltd/octave-mcp/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 http = [
-    "starlette>=0.52.0",
+    "starlette>=1.3.1",  # CVE-2026-54283, CVE-2026-48710, CVE-2026-48817, CVE-2026-48818: HTTP transport advisories
     "uvicorn>=0.34.0",
     "httpx>=0.28.0",  # For testing HTTP transport
     "sse-starlette>=2.2.0",  # SSE support for streaming
@@ -68,12 +73,12 @@ dev = [
     "mypy>=1.14.0",
     "types-PyYAML>=6.0.12",
     "ruff>=0.9.0",
-    "black>=26.0.0",
+    "black>=26.10.1",  # CVE-2026-114134
     "hypothesis>=6.122.0",
     "pre-commit>=4.1.0",
     "httpx>=0.28.0",  # For testing HTTP transport
     "Pygments>=2.20.0",  # CVE-2025-61833: ReDoS vulnerability
-    "virtualenv>=20.36.2",  # CVE-2025-68147: TOCTOU vulnerabilities
+    "virtualenv>=21.14.9",  # CVE-2026-113714..113726 (incl. CVE-2026-113718, CVE-2026-113724): TOCTOU and related advisories
     "tiktoken>=0.14.0",  # GH-primer-token-budget-500: real cl100k_base token counts in tests
 ]
 
@@ -94,12 +99,12 @@ dev = [
     "mypy>=1.14.0",
     "types-PyYAML>=6.0.12",
     "ruff>=0.9.0",
-    "black>=26.0.0",
+    "black>=26.10.1",  # CVE-2026-114134
     "hypothesis>=6.122.0",
     "pre-commit>=4.1.0",
     "httpx>=0.28.0",  # For testing HTTP transport
     "Pygments>=2.20.0",  # CVE-2025-61833: ReDoS vulnerability
-    "virtualenv>=20.36.2",  # CVE-2025-68147: TOCTOU vulnerabilities
+    "virtualenv>=21.14.9",  # CVE-2026-113714..113726 (incl. CVE-2026-113718, CVE-2026-113724): TOCTOU and related advisories
     "tiktoken>=0.14.0",  # GH-primer-token-budget-500: real cl100k_base token counts in tests
 ]
 
