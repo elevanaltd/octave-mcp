@@ -20,7 +20,15 @@ RESOURCE_FILES = sorted(RESOURCES.rglob("*.oct.md"))
 
 # Files whose refusal is a product (emitter) defect, not an input defect: no workaround in the spec text.
 # strict=True makes the xfail fail loudly the moment the emitter is fixed, so the mark gets removed.
-EMITTER_DEFECTS: dict[str, str] = {}
+EMITTER_DEFECTS: dict[str, str] = {
+    # L77 ERROR_ORDERING::"a→b→c" is valid input; the emitter dequotes it and the output re-parses with
+    # W_BARE_FLOW (not_fixed_point). Tracked by gh#510.
+    "specs/octave-execution-spec.oct.md": "gh#510: emitter dequotes a quoted scalar containing '→', re-parse warns bare_flow",
+    # L24 CHAIN::"constraint∧constraint∧constraint" is valid input; same dequote defect with '∧' re-parses
+    # with W_CONSTRAINT_OUTSIDE_BRACKETS. gh#510 covers the '→' case only; the '∧' case is its sibling.
+    "specs/octave-schema-spec.oct.md": "gh#510 sibling: emitter dequotes a quoted scalar containing '∧', "
+    "re-parse warns constraint_outside_brackets",
+}
 
 
 def _param(path: Path) -> object:
