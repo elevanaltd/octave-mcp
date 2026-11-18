@@ -3,13 +3,13 @@ name: octave-literacy
 description: "LLM-native structured communication format. Teaches OCTAVE syntax rules, canonical forms, the inner language, and warning prevention for zero-error .oct.md authoring."
 allowed-tools: ["Read", "Write", "Edit"]
 triggers: ["octave format", "write octave", "octave syntax", "structured output", "OCTAVE basics", "OCTAVE literacy", "OCTAVE structure", "key::value", "OCTAVE notation", "llm communication", "loss accounting"]
-version: "5.1.0"
+version: "5.1.1"
 ---
 
 ===OCTAVE_LITERACY===
 META:
   TYPE::SKILL
-  VERSION::"5.1.0"
+  VERSION::"5.1.1"
   STATUS::ACTIVE
   PURPOSE::"Zero-error OCTAVE authoring: syntax rules, canonical forms, the inner language, warning prevention, governance-artefact grammar"
   OCTAVE::"Olympian Common Text And Vocabulary Engine: a loss accounting system for LLM communication"
@@ -281,7 +281,7 @@ META:
   §7h::ENFORCEMENT_LOCI
     LOCI::[
       "This skill declares the pattern (vault delivery via `_bundled_hub`).",
-      "The octave-secretary agent is the sole valid `.oct.md` write path and calls `octave_write` (procedure: octave-tool-reference).",
+      "Governance artefacts (decision records, North Stars, ADRs, RFCs, project context) are written only by the octave-secretary agent through `octave_write` (procedure: octave-tool-reference); library content (agent files, skill and pattern bodies, archetype files) is written by library-expert through `octave_write`.",
       "The octave-mcp 1.13 STRICT lexer refuses non-compliant grammar at parse."
     ]
     DRIFT_DETECTION::"a drift in any one locus is detectable: file hash on the bundled-hub skill source, and pre-commit OCTAVE validation"

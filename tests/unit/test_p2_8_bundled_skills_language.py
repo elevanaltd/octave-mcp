@@ -70,7 +70,10 @@ RESOURCES_DIR = REPO_ROOT / "src" / "octave_mcp" / "resources"
 # Baseline constants. Source: spec section 2 "Baseline" table, measured at
 # octave-mcp cdfc963 (baseline.py). Do not edit to make a test pass.
 # ---------------------------------------------------------------------------
-BASELINE_CL100K = {"literacy": 5065, "mastery": 3885, "compression": 2106, "tool-reference": 4218, "chatter": 1975}
+BASELINE_CL100K = {"literacy": 5105, "mastery": 3885, "compression": 2106, "tool-reference": 4218, "chatter": 1975}
+# literacy: re-pinned 5065 -> 5105 (measured 5104 at 5.1.1, test is strict "<") under
+# OCTAVE-MCP-LITERACY-WRITER-SCOPE-AND-LIMITS-20261118 ("create the right file, then re-pin token baselines
+# instead of cutting content"). Literacy only; no other baseline moved.
 # chatter: not a cdfc963 number. 1975 cl100k is octave-chatter v1.1.0 as shipped at c743fb9 (the P2-8b2 Q2
 # starting point); A4 holds the rewrite to end below it.
 # Spec section 5 A1: warnings are measured per file, per code.
