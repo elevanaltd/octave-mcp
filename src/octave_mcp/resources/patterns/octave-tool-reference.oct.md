@@ -1,7 +1,7 @@
 ===OCTAVE_TOOL_REFERENCE===
 META:
   TYPE::PATTERN_DEFINITION
-  VERSION::"1.2.1"
+  VERSION::"1.2.2"
   STATUS::ACTIVE
   PURPOSE::"Procedural contract for `octave_write` and `octave_validate`: modes, receipts, changes-mode semantics, warning remediation. Sole agent-facing home for tool behaviour."
   VERIFIED_AGAINST::"octave-mcp 1.16.0"
@@ -161,8 +161,8 @@ META:
     "Validate receipts carry `repairs[]` and `repair_log[]`; `E_PATH` on `.txt`: observed on 1.15.0 and 1.16.0."
   ]
 §8::USED_BY
-  AGENTS::[octave-secretary,octave-specialist]
-  KERNEL_ONLY::"agents calling `octave_write` directly: north-star-architect, system-steward, agent-expert, skills-expert"
+  AGENTS::[octave-secretary]
+  KERNEL_ONLY::"none: no row of the workbench archetype-matrix (hestai-workbench dbbfa13) loads this pattern as kernel_only; the only loader is octave-secretary, profiles document_authoring and context_maintenance, both under patterns; octave-secretary is the only governance writer (octave-literacy §7h)"
   CONTEXT::"document authoring, context maintenance, governance artefact amendment"
   UPSTREAM::"octave-mcp is upstream; copies elsewhere are synced from it and are never a re-alignment source"
 ===END===

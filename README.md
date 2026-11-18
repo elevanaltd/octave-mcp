@@ -25,7 +25,7 @@ This README serves three audiences. We know that's unusual, and we're being upfr
 
 ## For Engineers
 
-OCTAVE is a structured document format with an MCP server and CLI. Documents normalise to a single canonical form, validate against their own schema, and log every transformation. It's infrastructure for AI documents that need to survive compression, multi-agent handoffs, and auditing.
+OCTAVE is a structured document format with an MCP server and CLI. Documents normalise to a single canonical form, validate against their own schema, and log every transformation. It's infrastructure for AI documents that need to survive compression, multi-agent handoffs, and auditing. The writing standard inside the container is [PITH](src/octave_mcp/resources/specs/pith-spec.md): plain words, exact identifiers, hedges kept. OCTAVE is the strict container around it: schema validation, a repair log and loss receipts.
 
 ### Quick example: what changes
 
@@ -40,20 +40,21 @@ through 60% of the quarterly budget on this migration alone.
 
 Ask another LLM to restate that in English and it will paraphrase — silently dropping facts, merging details, escalating "priority area" to "vulnerability." That's not a bug in the LLM. It's what prose invites: retelling.
 
-OCTAVE structures the same information as labelled fields:
+OCTAVE structures the same information as labelled fields, written in PITH:
 
 ```octave
-migration::auth_service[3_sprints∧SISYPHEAN_FAILURES]
-CHRONOS::audit_6wk
-  ARTEMIS::session_mgmt_targeted
-DEMETER::"60%_quarterly_burned[this_migration_alone]"
+MIGRATION::"auth migration running for three sprints"
+PROBLEMS::"keeps hitting the same problems"
+AUDIT::"security audit in six weeks"
+FLAGGED::"auditors specifically flagged session management as a priority area"
+BUDGET::"`60%` of the quarterly budget burned on this migration alone"
 ```
 
-Pass that to any LLM — even one that has never seen OCTAVE — and it translates each field separately. `ARTEMIS` (monitoring/targeting domain) reconstructs as "specifically targeted," not "vulnerability." `CHRONOS` (time pressure) stays distinct from `DEMETER` (budget). Facts don't merge because the structure tells the agent "these are labelled data points," not "this is a narrative to retell."
+Each fact sits in its own labelled field, in plain words, with its numbers and its hedges copied exactly. There is no narrative to retell, so there is less for a later reader to merge or escalate. See the [PITH specification](src/octave_mcp/resources/specs/pith-spec.md) for the rules and the evidence behind each one.
 
-The mythology terms (`SISYPHEAN`, `ARTEMIS`, `CHRONOS`, `DEMETER`) work like semantic zip files — compressed meaning that's already in the model weights. No training needed. [Why that works](#mythological-compression).
+Documents written earlier with operators or mythology terms stay readable: the parser still reads them. Normalisation is designed to change syntax and not meaning (North Star I1 and I3), but known edge cases exist where a value can be split or lost without the status showing it (see the PITH specification, Inside an OCTAVE container), so read the receipt fields, not the status alone. New documents are written in plain words instead. [Why](#pith-the-writing-standard).
 
-If an LLM writes it slightly wrong (extra spaces, ASCII `->` instead of `→`), the normaliser autocorrects and gives you a receipt:
+If an LLM writes it slightly wrong (extra spaces, or an ASCII operator where the Unicode form is canonical), the normaliser autocorrects and gives you a receipt:
 
 ```
 normalization: '->' → '→' at line 3
@@ -140,8 +141,6 @@ octave eject document.oct.md --mode executive --format markdown
 
 ## For Researchers
 
-Two architectural ideas and one that sounds like it shouldn't work but does.
-
 ### Self-describing artifacts
 
 Most structured output validates at a single point and then becomes a plain object. OCTAVE documents are different — the schema, compression tier, and transformation log travel *with* the document. A downstream agent doesn't infer integrity; it reads it.
@@ -152,63 +151,38 @@ This creates a property that JSON Schema or Pydantic don't give you: the validat
 
 A document's `META.CONTRACT` block compiles to a GBNF grammar that can constrain LLM generation at decode time. The schema doesn't just validate output after the fact — it can shape generation while it happens. This bridges the gap between "check if it's valid" and "make it valid by construction."
 
-### Mythological compression
+### PITH: the writing standard
 
-This is the part where we lose some of you. We know how it sounds. Just look at it from an inquisitive perspective and consider it for a moment.
+Two architectural ideas, and one decision about language.
 
-OCTAVE is named **Olympian** Common Text And Vocabulary Engine. That's not branding — it's the hypothesis. Classical mythology seems to be so deeply represented in LLM training data that mythological terms function as a pre-compressed semantic vocabulary that's already in the weights.
+OCTAVE once leaned on operators and mythology terms as a compression vocabulary. Bench results recorded in the [PITH specification](src/octave_mcp/resources/specs/pith-spec.md) (Plain vocabulary) reported that mythology used as writing escalated when misapplied, and allows an established idiom only where its dictionary sense fits exactly. So the project retires mythology as instruction vocabulary and as keys. The project keeps the container and replaces the writing standard.
 
-| Term | What it encodes |
-|------|----------------|
-| `JOURNEY::ODYSSEAN` | Long, difficult, full of unforeseen obstacles |
-| `CHALLENGE::SISYPHEAN` | Repetitive, frustrating, cyclical, futile |
-| `CHOICE::SOLOMONIC` | Requires wisdom to divide fairly between competing claims |
-| `STRATEGY::ATHENA` | Find a clever solution balancing competing constraints |
+PITH is the standard for every sentence, item, step and quoted value an agent writes, in any document shape:
 
-`SISYPHEAN_FAILURES` — a single term that carries repetition, frustration, cyclicality, and futility. In prose, that's 10–15 tokens. Here, it's one.
+- Note form in plain words, one fact per line.
+- Identifiers, numbers and SHAs copied exactly, in backticks.
+- Hedges copied verbatim; `none` or `not known` for an empty slot, never an invented value.
+- Relations written in words, not with operators.
+- Contradictions kept and flagged.
 
-But mythology isn't just compression. In round-trip testing, mythology terms used as **domain labels** (`ARTEMIS::session_mgmt_targeted` instead of bare `session_mgmt_flagged`) consistently prevented downstream agents from misinterpreting facts. `ARTEMIS` (precision targeting) reconstructed as "specifically targeted" — never "vulnerability." The domain label anchored the agent to the right semantic register. [Evidence](docs/research/compression-fidelity-round-trip-study.md).
+PITH is not a file format or a compression scheme. OCTAVE is one container it sits inside; the container adds the schema, the repair log and the loss receipts. Existing documents that use operators or mythology stay readable under the parser, which is the point of the mirror constraint (I3): it reflects what is present and creates nothing.
 
-In informal cross-model testing (GPT-4, Claude, Gemini, Llama, Mistral), these terms were consistently interpreted as expected without few-shot priming. No fine-tuning, no examples, no definitions provided. Personally, we've seen zero-shot comprehension in every model we've tried, but that's bias. Like every good hypothesis, we want to prove it wrong until we can't.
-
-There's a paradox worth noting: when asked *theoretically* whether mythology works as compression, models hesitate and cite cultural concerns. When given `JOURNEY::ODYSSEAN` *practically*, they understand it instantly. We don't fully understand why that gap exists — but the practical result is consistent. So OCTAVE primers explicitly encourage operational use rather than meta-discussion.
-
-This is exploratory. We're not claiming a universal law. We are claiming it works reliably in practice, across every model we've tested, and that it's worth investigating why.
-
-If you're sceptical, fair enough. If you want to falsify this quickly, the guide includes a short replication protocol.
-
-Evidence and methodology: [The Mythological Compression Principle](docs/guides/mythological-compression.md) | [Compression Fidelity Study](docs/research/compression-fidelity-round-trip-study.md)
+Evidence, evidence classes and the checks for each rule: [PITH specification](src/octave_mcp/resources/specs/pith-spec.md). The earlier study is kept for the record: [mythology study (superseded)](docs/guides/mythological-compression.md) | [Compression Fidelity Study](docs/research/compression-fidelity-round-trip-study.md).
 
 ---
 
 ## For AI Agents
 
-The compact ~140-token block below (`cl100k_base`) makes you OCTAVE-literate:
+Write in PITH: note form in plain words, identifiers copied exactly in backticks, hedges kept, relations in words, `none` or `not known` for an empty slot. The rules are in the [PITH specification](src/octave_mcp/resources/specs/pith-spec.md). The syntax primer is `src/octave_mcp/resources/primers/octave-literacy-primer.oct.md`.
+
+A value in PITH:
 
 ```octave
-===OCTAVE_LITERACY_PRIMER===
-META:
-  TYPE::PRIMER
-  VERSION::"6.0.0"
-
-§1::ESSENCE
-OCTAVE::"Semantic DSL for LLMs"
-STRUCTURE::KEY::value,[list],indent_2
-
-§2::SYNTAX
-::::"assign"
-→::"flow"
-⊕::"synthesis"
-⇌::"tension"
-
-§3::ONE_SHOT
-IN::"flow from A to B"
-OUT::A→B
-
-§4::VALIDATE
-MUST::[valid_OCTAVE,preserve_§_names,"===END==="]
-===END===
+STATUS::"blocked; the lockfile change is not confirmed"
+EVIDENCE::"measured at `9c58708f`: `195` tests pass"
 ```
+
+Documents you receive may still use operators or mythology terms. Read them by their plain meaning; do not write operators and mythology as instruction vocabulary or keys.
 
 **Working on this codebase:**
 ```octave

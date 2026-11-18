@@ -123,6 +123,7 @@ Bad: 3. Do what §7 says (we used to do it the other way before the 2026-09 rewr
 - Runbook. `.md`, never written or validated through octave tooling. The visual `===NAME===`, `META:` and numbered section skeleton stays so cross-references hold; it is not OCTAVE.
 - Role file. `.oct.md`, the parser's keys (`agentFileParser.ts`). PITH acts on the bound tier: MUST_ALWAYS, MUST_NEVER, AUTHORITY BLOCKING, GATES (`payloadCompilerContentSource.ts:560-578`). The shown identity tier stays verbatim until a bench line says what it does. One quoted sentence per array item; nothing outside parsed keys, because the editor rebuilds the file from them (`agentFileWriter.ts:246-287`; `#649`).
 - Standing context doc. HOLD for CTX-EXPERIMENT. `PHASE::`, the section 1 `CURRENT_STATE` keys and `I<n>` lines are load-bearing. PITH applies to values on the next refresh; no slot set is settled.
+- Peer message. One session to another through `SendMessage`; no envelope, no checker; dispatch bodies and replies stay Handoff. First line: one sentence that stands alone, the request or the fact itself, saying whether a reply is wanted; no sender preamble. Request: the first line is the `ASK` slot, written once, and names what the reply must contain; after it, only the other Handoff slots that have something to say, in Handoff order; a standing warning, an exclusion or an omission in the source is never dropped with its slot. Report: each fact with how it is known; a pointer in place of restated evidence only where the receiver can open it, otherwise the evidence. Relay of an operator ruling: the words verbatim with their conditions, session and date, marked relayed; it informs what was decided, and an operator-gated, irreversible or outward-facing act still needs authorisation in the receiving session. Acknowledgement: sent when the sender asked for one or when it changes what the sender does next; one line; no echo. A sender that needs confirmation asks for it in the first line.
 
 ## Inside an OCTAVE container
 
@@ -163,7 +164,7 @@ container: receipt fields read, not the status
 ```
 - Two container items are worded here as recommended to the kernel owner ("values with spaces or punctuation quoted"; "receipt fields read, not the status"); the drift test reads the fenced list's exact strings, so whichever string the shipped kernel carries is the string the list carries.
 - Drift test: parse each shipped kernel's `NEVER::[...]` and `MUST::[...]` arrays through the real workbench regex (`payloadCompiler.ts:85`, in Node) and the odyssean-anchor first-match rule; the standard items map both ways to this page and fail on an orphan; a skill's own extra items are checked against that skill's contract; a kernel over 300 cl100k tokens fails.
-- Until the kernels are trimmed to a pointer plus own items, each kernel carries the standard items in full; compile-time de-duplication is not built.
+- Each kernel carries the standard items in full while any kernel-only consumer exists (OCTAVE-MCP-P2-8B-KERNELS-AND-SPLIT-RULINGS-20261106); a pointer alone would deliver no PITH to a kernel-only load. Compile-time de-duplication is not built; token limits are raised before content is cut.
 
 ## Amendment
 
