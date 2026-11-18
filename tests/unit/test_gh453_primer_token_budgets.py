@@ -28,8 +28,11 @@ failing collection for the whole module.
 
 GH-453 made the operator-legend section additive (adds ``∧`` and ``∨``
 glosses to each primer's legend). The canonical-operator legend test below
-still guards that: every primer keeps the six reading operators, now in a
-fenced ``READING_LEGEND``. The ``TELEGRAPHIC_PHRASE`` form GH-453 added to the
+still guards that: it searches the whole file of every primer for each of the
+six reading operators. It does not require a fenced ``READING_LEGEND``: the
+deprecated mythology and ultra-mythic primers have no such section. The fence
+is checked for the four live primers in test_p2_8b2_remainder_primers_specs.py.
+The ``TELEGRAPHIC_PHRASE`` form GH-453 added to the
 compression primer, and the literacy primer's cross-reference to it, are
 retired (OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101): PITH note form
 replaces them, so the two TELEGRAPHIC_PHRASE tests below now assert its

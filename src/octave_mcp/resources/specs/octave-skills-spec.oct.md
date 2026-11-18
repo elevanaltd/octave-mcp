@@ -1,7 +1,7 @@
 ===OCTAVE_SKILLS===
 META:
   TYPE::SKILL_DEFINITION
-  VERSION::"9.1.0"
+  VERSION::"9.2.0"
   STATUS::ACTIVE
   TOKENS::"~250"
   REQUIRES::octave-core-spec

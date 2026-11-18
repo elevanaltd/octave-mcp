@@ -1,8 +1,8 @@
 ===OCTAVE_COMPRESSION_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"7.1.0"
-  TOKENS::"485"
+  VERSION::"7.1.1"
+  TOKENS::"495"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"keeps tier rules and transforms; drops rationale"
 §1::ESSENCE
@@ -22,6 +22,7 @@ TIER_SELECTION::
 audit or critical         LOSSLESS      drops nothing
 research or design        CONSERVATIVE  drops redundancy
 ```
+DEFAULT::"otherwise choose CONSERVATIVE"
 READING_TIERS::"AGGRESSIVE and ULTRA appear in documents you read; they are frozen for reading and are not chosen for new writing"
 TRANSFORMS::
 ```

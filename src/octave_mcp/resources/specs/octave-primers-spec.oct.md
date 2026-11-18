@@ -1,12 +1,13 @@
 ===OCTAVE_PRIMERS===
 META:
   TYPE::LLM_PROFILE
-  VERSION::"6.5.0"
+  VERSION::"6.5.1"
   STATUS::ACTIVE
   TOKENS::"~80"
   REQUIRES::octave-core-spec
   PURPOSE::"Ultra-compressed context injection for immediate capability"
   COMPRESSION_TIER::"ULTRA: 50 percent compression, facts and structure only"
+  LOSS_PROFILE::"keeps facts and structure; drops rationale and narrative"
 §1::DEFINITION
   OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs" // Universal definition for all primers
   PRIMER::"Minimal bootstrap for a single workflow — execution OR comprehension; written in PITH (pith-spec.md)"
@@ -52,6 +53,7 @@ META:
       ```
       ⊕         synthesis
       →         transform
+      ⇌         tension
       NEVER[]   constraint
       ```
   §2d::ONE_SHOT
