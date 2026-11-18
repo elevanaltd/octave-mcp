@@ -1,7 +1,7 @@
 ===OCTAVE_TOOL_REFERENCE===
 META:
   TYPE::PATTERN_DEFINITION
-  VERSION::"1.2.1"
+  VERSION::"1.2.2"
   STATUS::ACTIVE
   PURPOSE::"Procedural contract for `octave_write` and `octave_validate`: modes, receipts, changes-mode semantics, warning remediation. Sole agent-facing home for tool behaviour."
   VERIFIED_AGAINST::"octave-mcp 1.16.0"
