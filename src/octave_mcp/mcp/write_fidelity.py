@@ -1096,7 +1096,12 @@ def _path_rule_violations(req: FidelityRequest, reference: str) -> list[dict[str
             raw = next(c.value for c in body.children if isinstance(c, Assignment) and c.key == "RAW")
         except Exception:  # noqa: BLE001
             raw = None
-        if raw != reference:
+        try:
+            # E0: RAW went through the lexer's NFC; compare in the same form.
+            expected = normalize_content(reference)
+        except Exception:  # noqa: BLE001 -- fail closed: compare the raw text exactly
+            expected = reference
+        if raw != expected:
             return [
                 violation(CONTENT_LOSS, 0, reference, str(raw), "The plain-text wrap must keep the raw text exactly.")
             ]
@@ -1132,6 +1137,30 @@ def _repair_substitutions(corrections: list[dict[str, Any]]) -> list[tuple[str, 
         for c in corrections
         if c.get("tier") == "REPAIR" and isinstance(c.get("before"), str) and isinstance(c.get("after"), str)
     ]
+
+
+def cli_created_violations(baseline: str, changes: dict[str, Any]) -> list[dict[str, Any]]:
+    """C2 creation rule for the CLI's ``--changes`` contract.
+
+    The CLI sets a top-level key, a ``META.<FIELD>`` or the whole ``META``.
+    One write rule covers both front doors (build plan section 3 C2;
+    NO_AUTO_CREATE): a key that is not already a top-level assignment in
+    the baseline would be created, so it is refused, as octave_write
+    refuses it. A ``META.<FIELD>`` set and a whole-``META`` replace are the
+    permitted additions. Declared values landing is F2's check here.
+    """
+    try:
+        doc0 = parse(baseline)
+    except Exception as exc:  # noqa: BLE001
+        return [violation(CONTENT_LOSS, 0, "a baseline that parses", f"{type(exc).__name__}: {exc}", _HINT_UNLEXABLE)]
+    existing = {s.key for s in doc0.sections if isinstance(s, Assignment)}
+    found = []
+    for key, value in changes.items():
+        if key.startswith("META.") or (key == "META" and isinstance(value, dict)):
+            continue
+        if key not in existing:
+            found.append(_mismatch(key, "(absent in baseline)", project_value(value), hint=_HINT_CREATED))
+    return found
 
 
 def check_write_fidelity(req: FidelityRequest) -> FidelityResult:
@@ -1174,6 +1203,9 @@ def check_write_fidelity(req: FidelityRequest) -> FidelityResult:
             found.extend(
                 declared_change_violations(req.tool, req.baseline, req.output, req.changes or {}, req.mutations)
             )
+        elif req.tool is None and req.changes:
+            # The CLI front door: its own --changes contract, the same rule.
+            found.extend(cli_created_violations(req.baseline, req.changes))
 
     found.extend(
         fixed_point_violations(
@@ -1218,6 +1250,11 @@ def cap_violations(
     violation of every detected kind; ``counts`` is the complete number of
     violations per kind; ``truncated`` is true when ``shown`` is shorter
     than the full list.
+
+    Contract: ``len(shown) <= max(limit, number of detected kinds)``. A
+    witness per kind wins over the limit, so with more kinds than ``limit``
+    every kind is still shown (at most five kinds exist; the default limit
+    is 20).
     """
     # Critical-Engineer: consulted for Write fidelity refusal evidence completeness
     counts: dict[str, int] = {}

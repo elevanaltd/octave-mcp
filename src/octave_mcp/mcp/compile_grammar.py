@@ -281,11 +281,14 @@ class CompileGrammarTool(BaseTool):
             # #543 (tool-fidelity slice 1, PR-2): the CONTRACT branch below
             # never reads POLICY or FIELDS, so a document carrying both would
             # compile to a grammar without its fields and still report
-            # success. I5: if it cannot be compiled faithfully, say so.
+            # success. I5: if it cannot be compiled faithfully, say so. Sibling
+            # envelopes are scanned too: the CONTRACT branch reads none of them.
             if doc.meta and "CONTRACT" in doc.meta:
+                envelopes = [doc, *(getattr(doc, "additional_envelopes", None) or [])]
                 dropped = [
                     str(node.key)
-                    for node in doc.sections
+                    for env in envelopes
+                    for node in env.sections
                     if isinstance(node, Block | Section) and node.key in ("POLICY", "FIELDS")
                 ]
                 if dropped:
