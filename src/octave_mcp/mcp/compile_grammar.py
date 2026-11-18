@@ -21,6 +21,7 @@ from octave_mcp.core.constraints import (
     TypeConstraint,
 )
 from octave_mcp.core.gbnf_compiler import GBNFCompiler, compile_gbnf_from_meta
+from octave_mcp.core.grammar.cst import Block, Section
 from octave_mcp.core.parser import parse
 from octave_mcp.core.schema_extractor import (
     SchemaDefinition,
@@ -276,6 +277,31 @@ class CompileGrammarTool(BaseTool):
                         }
                     ]
                 )
+
+            # #543 (tool-fidelity slice 1, PR-2): the CONTRACT branch below
+            # never reads POLICY or FIELDS, so a document carrying both would
+            # compile to a grammar without its fields and still report
+            # success. I5: if it cannot be compiled faithfully, say so.
+            if doc.meta and "CONTRACT" in doc.meta:
+                dropped = [
+                    str(node.key)
+                    for node in doc.sections
+                    if isinstance(node, Block | Section) and node.key in ("POLICY", "FIELDS")
+                ]
+                if dropped:
+                    return self._error_response(
+                        [
+                            {
+                                "code": "E_GRAMMAR_FIELDS_DROPPED",
+                                "message": (
+                                    f"META.CONTRACT is present, so the {' and '.join(dropped)} "
+                                    "block(s) would not reach the grammar. Remove CONTRACT from "
+                                    "META to compile from POLICY/FIELDS, or remove POLICY/FIELDS "
+                                    "to compile from CONTRACT."
+                                ),
+                            }
+                        ]
+                    )
 
             # Check for META.CONTRACT first (v6 self-describing documents)
             if doc.meta and "CONTRACT" in doc.meta:

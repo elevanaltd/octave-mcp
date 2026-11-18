@@ -169,10 +169,13 @@ ITEMS::[old_item]
 
     @pytest.mark.asyncio
     async def test_changes_mode_adds_new_list_field(self):
-        """When changes adds a new field with a Python list, output must be valid.
+        """When changes sets a field to a Python list, output must be valid.
 
-        This tests the code path at line 348 in write.py where a new Assignment
-        is created for a non-existing field.
+        Tool-fidelity PR-2 (#517 class): changes may no longer CREATE a
+        top-level key that is absent from the baseline; that is refused with
+        E_FIDELITY declared_change_mismatch (detail ``created``) and the file
+        is untouched. The list serialization this test guards is exercised by
+        replacing an existing field instead.
         """
         from octave_mcp.mcp.write import WriteTool
 
@@ -181,14 +184,24 @@ ITEMS::[old_item]
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = os.path.join(tmpdir, "test.oct.md")
 
-            # Create initial file WITHOUT the field we'll add
             initial = """===TEST===
 EXISTING::value
+NEW_LIST::placeholder
 ===END==="""
             with open(target_path, "w") as f:
                 f.write(initial)
 
-            # Apply changes that adds a NEW field with list value
+            # Creating an absent key is refused (#517 class, PR-2).
+            refused = await tool.execute(
+                target_path=target_path,
+                changes={"ABSENT_LIST": ["one", "two", "three"]},
+            )
+            assert refused["status"] == "error"
+            assert [e["code"] for e in refused["errors"]] == ["E_FIDELITY"]
+            with open(target_path) as f:
+                assert f.read() == initial
+
+            # Apply changes that set an existing field to a list value
             result = await tool.execute(
                 target_path=target_path,
                 changes={"NEW_LIST": ["one", "two", "three"]},

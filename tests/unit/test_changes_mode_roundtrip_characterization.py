@@ -357,10 +357,14 @@ class TestCharacterizationKnownDefects:
         which strict-re-parses cleanly. Retained as the negative-history regression guard
         (converse of ``test_bare_dict_new_top_key_nested_value_emits_block``).
         """
-        result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
-        assert result.get("status") == "success"
-        assert _strict_reparses(emitted), f"GH#487 Q2: BLOCK-form emit must round-trip; got:\n{emitted}"
-        assert "[OUTER::" not in emitted, f"GH#487 Q2: no inline nested map; got:\n{emitted}"
+        # Tool-fidelity PR-2 (#517 class): creating an absent top-level key via
+        # changes is now refused (E_FIDELITY declared_change_mismatch, detail
+        # ``created``). The BLOCK synthesis for a nested dict stays covered by
+        # test_existing_scalar_replaced_by_nested_dict_emits_block.
+        result, _emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
+        assert result.get("status") == "error"
+        assert [e["code"] for e in result["errors"]] == ["E_FIDELITY"]
+        assert any("created" in v["hint"] for v in result["fidelity_violations"])
 
     @pytest.mark.asyncio
     async def test_bare_dict_top_key_over_block_full_replace_gh443a(self) -> None:
@@ -536,11 +540,12 @@ class TestDesiredContractGH440:
 
     @pytest.mark.asyncio
     async def test_bare_dict_new_top_key_nested_value_emits_block(self) -> None:
-        result, emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
-        assert result.get("status") == "success"
-        assert _strict_reparses(emitted), f"DESIRED: BLOCK-form emit must round-trip; got:\n{emitted}"
-        # Desired canonical nested form is BLOCK, not an inline map.
-        assert "[OUTER::" not in emitted, f"DESIRED: no inline nested map; got:\n{emitted}"
+        # Tool-fidelity PR-2 (#517 class, NO_AUTO_CREATE): a NEW top-level key is
+        # refused rather than created; nested-dict BLOCK synthesis is pinned on an
+        # existing key by test_existing_scalar_replaced_by_nested_dict_emits_block.
+        result, _emitted = await _roundtrip(_DOC_SCALAR_KEY, {"NEWKEY": {"OUTER": {"INNER": "v"}}})
+        assert result.get("status") == "error"
+        assert [e["code"] for e in result["errors"]] == ["E_FIDELITY"]
 
     @pytest.mark.asyncio
     async def test_existing_scalar_replaced_by_nested_dict_emits_block(self) -> None:

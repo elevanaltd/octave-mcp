@@ -26,6 +26,7 @@ semantic behaviours behind this single API.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from octave_mcp.core.grammar import tier_normalize
@@ -49,6 +50,73 @@ if TYPE_CHECKING:
     from octave_mcp.mcp.write import WriteTool
 
 
+@dataclass(frozen=True)
+class ChangeRoute:
+    """Which DocumentMutator branch handles one changes-mode key (PR-2).
+
+    ``kind`` is one of: ``section_child``, ``noop``, ``meta_flat_atom``,
+    ``meta_field``, ``meta_whole``, ``block_child``, ``top_delete``,
+    ``block_full_replace``, ``anchored``, ``top_merge``, ``top_array_op``,
+    ``top_block_to_scalar``, ``top_assignment``.
+    """
+
+    kind: str
+    section_id: str | None = None
+    section_name: str | None = None
+    child_key: str | None = None
+    parent_key: str | None = None
+    index: int | None = None
+
+
+def resolve_change_route(tool: WriteTool, doc: Any, key: str, new_value: Any) -> ChangeRoute:
+    """Resolve a change path to the mutator branch that applies it, without
+    mutating ``doc``.
+
+    The conditions are the mutator's own, in its own order:
+    ``DocumentMutator.apply_change`` dispatches on the result, and the
+    tool-fidelity C2 check resolves the same path text with it against both
+    the baseline AST and the re-parsed output AST (build plan section 3, C2
+    path resolution), so the two cannot drift.
+    """
+    if key.startswith("§"):
+        match = _SECTION_PATH_RE.match(key)
+        if not match:
+            return ChangeRoute("noop")
+        section_id, section_name, child_key = match.groups()
+        return ChangeRoute("section_child", section_id=section_id, section_name=section_name, child_key=child_key)
+    if key.startswith("META."):
+        field_name = key[5:]
+        if doc.name == "META":
+            for idx, section in enumerate(doc.sections):
+                if isinstance(section, Assignment) and section.key == field_name:
+                    return ChangeRoute("meta_flat_atom", index=idx)
+        return ChangeRoute("meta_field")
+    if key == "META" and isinstance(new_value, dict):
+        return ChangeRoute("meta_whole")
+    if (
+        "." in key
+        and key.count(".") == 1
+        and tool._find_block(doc, key.split(".", 1)[0]) is not None
+        and not any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
+    ):
+        parent_key, _, child_key = key.partition(".")
+        return ChangeRoute("block_child", parent_key=parent_key, child_key=child_key)
+    if _is_delete_sentinel(new_value) and not tool._is_anchored_change(doc, key):
+        return ChangeRoute("top_delete")
+    if isinstance(new_value, dict) and not _is_op_descriptor(new_value) and tool._find_block(doc, key) is not None:
+        return ChangeRoute("block_full_replace")
+    if tool._is_anchored_change(doc, key):
+        return ChangeRoute("anchored")
+    op, _payload, _ = _extract_op_descriptor(new_value)
+    if op == "MERGE":
+        return ChangeRoute("top_merge")
+    if op in ("APPEND", "PREPEND"):
+        return ChangeRoute("top_array_op")
+    if any(isinstance(s, Block) and s.key == key for s in doc.sections):
+        return ChangeRoute("top_block_to_scalar")
+    return ChangeRoute("top_assignment")
+
+
 class DocumentMutator:
     """Owns transition logic + structural AST synthesis for changes-mode.
 
@@ -66,11 +134,16 @@ class DocumentMutator:
         This is the per-key body relocated verbatim from ``WriteTool._apply_changes``
         (B-1, no behaviour change). Path validation / fail-fast is still performed by
         the caller (``WriteTool._apply_changes`` runs ``_validate_change_paths`` first).
+
+        Tool-fidelity PR-2: which branch handles the key is decided once by
+        :func:`resolve_change_route`, the same resolver the C2 fidelity check
+        uses, so the mutator and the check cannot drift.
         """
         tool = self._tool
+        route = resolve_change_route(tool, doc, key, new_value)
 
         # GH#353: Section-prefixed paths (§N.KEY or §N::NAME.KEY)
-        if key.startswith("§"):
+        if route.kind in ("section_child", "noop"):
             match = _SECTION_PATH_RE.match(key)
             if match:
                 section_id, section_name, child_key = match.groups()
@@ -79,7 +152,7 @@ class DocumentMutator:
             return
 
         # Check for dot-notation: META.FIELD
-        if key.startswith("META."):
+        if route.kind in ("meta_flat_atom", "meta_field"):
             # Extract the field name after "META."
             field_name = key[5:]  # Remove "META." prefix
 
@@ -161,7 +234,7 @@ class DocumentMutator:
                 doc.meta_dirty[field_name] = True
             return
 
-        if key == "META" and isinstance(new_value, dict):
+        if route.kind == "meta_whole":
             if _is_delete_sentinel(new_value):
                 # DELETE sentinel on META clears the entire block
                 doc.meta = {}
@@ -201,12 +274,7 @@ class DocumentMutator:
                         doc.meta_dirty[mk] = True
             return
 
-        if (
-            "." in key
-            and key.count(".") == 1
-            and tool._find_block(doc, key.split(".", 1)[0]) is not None
-            and not any(isinstance(s, Assignment) and s.key == key for s in doc.sections)
-        ):
+        if route.kind == "block_child":
             # GH#369: PARENT.CHILD where PARENT is a top-level Block and the
             # literal dotted key does NOT already exist as a flat top-level
             # Assignment. Route into the Block instead of falling through to
@@ -221,7 +289,7 @@ class DocumentMutator:
             tool._apply_block_change(doc, key, parent_key, child_key, new_value)
             return
 
-        if _is_delete_sentinel(new_value) and not tool._is_anchored_change(doc, key):
+        if route.kind == "top_delete":
             # I2: DELETE sentinel - remove field entirely from sections.
             # #460 Case B (rework B2): the bare-DELETE branch matches by
             # ``s.key == key`` and never matches an anchored path, so it
@@ -241,7 +309,7 @@ class DocumentMutator:
             doc.dirty = True
             return
 
-        if isinstance(new_value, dict) and not _is_op_descriptor(new_value) and tool._find_block(doc, key) is not None:
+        if route.kind == "block_full_replace":
             # GH#487 Q1 (#443a) FULL REPLACE [HARD BREAK v1.15]: a bare-dict at a
             # top-level KEY that already holds a Block executes a FULL REPLACEMENT
             # of that Block's children. Unmentioned children are DROPPED (honours
@@ -258,7 +326,7 @@ class DocumentMutator:
             self._full_replace_block(t7_block, new_value)
             return
 
-        if tool._is_anchored_change(doc, key):
+        if route.kind == "anchored":
             # #460 Case B: ANCHOR/KEY anchored-path. Resolve-literal-first —
             # _is_anchored_change is True only when no literal top-level
             # Assignment matches the raw key verbatim (that case is handled
@@ -323,7 +391,7 @@ class DocumentMutator:
         # full-replacement.
         op, payload, _ = _extract_op_descriptor(new_value)
 
-        if op == "MERGE":
+        if route.kind == "top_merge":
             # Validator restricts MERGE to block/section/meta targets.
             target_block: Block | None = tool._find_block(doc, key)
             if target_block is not None:
@@ -401,7 +469,9 @@ class DocumentMutator:
                 ]
             )
 
-        if op in ("APPEND", "PREPEND"):
+        if route.kind == "top_array_op" and op in ("APPEND", "PREPEND"):
+            # The resolver chose this route because op is APPEND or PREPEND;
+            # the explicit test keeps that narrowing visible to mypy.
             for section in doc.sections:
                 if isinstance(section, Assignment) and section.key == key:
                     _apply_array_op_inplace(section, op, payload)

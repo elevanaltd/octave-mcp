@@ -38,7 +38,12 @@ class TestBareLineDroppedCorrectionCode:
                 lenient=True,
             )
 
-            assert result["status"] == "success"
+            # Tool-fidelity PR-2 (build plan sections 1.2 and 4): a dropped
+            # bare line is meaning-altering loss (I1), so the write is refused
+            # with E_FIDELITY and nothing is written. GH#349's guarantee
+            # stands on the refusal: the loss is still named in corrections.
+            assert result["status"] == "error"
+            assert [e["code"] for e in result["errors"]] == ["E_FIDELITY"]
 
             # Must have a correction with code W_BARE_LINE_DROPPED
             bare_corrections = [c for c in result.get("corrections", []) if c.get("code") == "W_BARE_LINE_DROPPED"]
@@ -150,7 +155,10 @@ class TestBareLineDroppedTopLevelWarnings:
                 lenient=True,
             )
 
-            assert result["status"] == "success"
+            # Tool-fidelity PR-2: refused (bare line dropped is loss, I1); the
+            # refusal envelope keeps the GH#349 top-level warnings.
+            assert result["status"] == "error"
+            assert [e["code"] for e in result["errors"]] == ["E_FIDELITY"]
             assert "warnings" in result, "Response must include top-level warnings"
 
             warning_codes = [w.get("code") for w in result["warnings"]]

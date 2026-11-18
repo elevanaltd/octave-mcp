@@ -610,6 +610,42 @@ def write(
                 spans_valid_for_baseline=True,
             )
 
+        # Tool-fidelity slice 1, PR-2: the same write rule as octave_write,
+        # through the shared entry point. A violation refuses the write and
+        # nothing is written. The CLI's --changes contract (top-level set or
+        # add, META.FIELD set, whole-META replace) only assigns the declared
+        # targets on the parsed baseline, so C2 reduces to F2 here: siblings
+        # are untouched by construction, and F2 checks that the output
+        # re-parses to the edited document, declared values included. C1 and
+        # F2 run; octave_write's mutator-specific C2 does not.
+        from octave_mcp.mcp.write_fidelity import FidelityRequest, check_write_fidelity
+
+        fidelity = check_write_fidelity(
+            FidelityRequest(
+                mode="content" if content is not None else "changes",
+                doc=doc,
+                output=canonical_content,
+                reference=content or "",
+                baseline=(baseline_for_preserve_raw or "") if content is None else "",
+                format_style=format_style,
+                corrections=cli_corrections,
+            )
+        )
+        if fidelity.violations:
+            click.echo(
+                f"Error: E_FIDELITY write refused: {len(fidelity.violations)} fidelity violation(s); "
+                "the output would not reproduce the input exactly in meaning. Nothing was written.",
+                err=True,
+            )
+            for v in fidelity.violations:
+                click.echo(
+                    f"fidelity_violation: {v['kind']} line {v['line']}: "
+                    f"expected {v['expected']!r} found {v['found']!r}",
+                    err=True,
+                )
+            raise SystemExit(1)
+        cli_corrections.extend(fidelity.corrections)
+
         # Schema validation if requested
         validation_status = "UNVALIDATED"
         if schema:
