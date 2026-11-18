@@ -62,7 +62,10 @@ META:
 
 §1::BODY
 DESCRIPTION::"Document with a fenced literal zone"
-
+// Tool-fidelity PR-2: the fence is owned by CODE::. Before v1.17.0 it had no
+// owning key, and the parser dropped it silently (no correction, no warning),
+// so this fixture never exercised Zone-3; a lossy write is now refused.
+CODE::
 ```python
 def f(x):
     return x + 1

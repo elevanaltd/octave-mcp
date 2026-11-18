@@ -1815,10 +1815,12 @@ KEY::new
             with open(target_path, "w") as f:
                 f.write(original)
 
-            # Modify via changes
+            # Modify via changes. Tool-fidelity PR-2: the section child is
+            # addressed by its section path; a bare "KEY" would CREATE a new
+            # top-level key, which is now refused (#517 class).
             result = await tool.execute(
                 target_path=target_path,
-                changes={"KEY": "new_value"},
+                changes={"\u00a71.KEY": "new_value"},
             )
 
             assert result["status"] == "success"
@@ -1967,8 +1969,11 @@ class TestWriteToolNestedDictSerialization:
             target_path = os.path.join(tmpdir, "test.oct.md")
 
             # Create initial file
+            # Tool-fidelity PR-2: CONFIG exists, so the change replaces it
+            # (creating an absent key via changes is refused, #517 class).
             initial = """===TEST===
 KEY::old_value
+CONFIG::old_config
 ===END==="""
             with open(target_path, "w") as f:
                 f.write(initial)
@@ -2021,8 +2026,10 @@ KEY::old_value
             target_path = os.path.join(tmpdir, "test.oct.md")
 
             # Create initial file
+            # Tool-fidelity PR-2: OUTER exists, so the change replaces it.
             initial = """===TEST===
 KEY::value
+OUTER::old_outer
 ===END==="""
             with open(target_path, "w") as f:
                 f.write(initial)
@@ -2059,8 +2066,10 @@ KEY::value
             target_path = os.path.join(tmpdir, "test.oct.md")
 
             # Create initial file
+            # Tool-fidelity PR-2: CONFIG exists, so the change replaces it.
             initial = """===TEST===
 KEY::value
+CONFIG::old_config
 ===END==="""
             with open(target_path, "w") as f:
                 f.write(initial)
@@ -4400,7 +4409,15 @@ META:
 
     @pytest.mark.asyncio
     async def test_section_number_add_new_key(self):
-        """§N.NEW_KEY should add a new key to section N when it doesn't exist."""
+        """§N.NEW_KEY at a key absent from section N is refused, not created.
+
+        Tool-fidelity PR-2 (build plan section 3 C2, "which operations may
+        create a target"; section 5 R2, the #517 repro): the octave_write
+        contract is NO_AUTO_CREATE, so a changes-mode set at a missing path
+        is refused with E_FIDELITY declared_change_mismatch (detail
+        ``created``) and the file is untouched. Until v1.17.0 this test
+        pinned the #517 auto-create.
+        """
         from octave_mcp.mcp.write import WriteTool
 
         tool = WriteTool()
@@ -4423,20 +4440,11 @@ META:
                 changes={"§1.NEW_FIELD": "new_value"},
             )
 
-            assert result["status"] == "success", f"§1.NEW_FIELD should be resolvable, got: {result.get('errors', [])}"
-
+            assert result["status"] == "error", result
+            assert [e["code"] for e in result["errors"]] == ["E_FIDELITY"]
+            assert any("created" in v["hint"] for v in result["fidelity_violations"])
             with open(target_path) as f:
-                content = f.read()
-            # GH#361r3: Verify the value appears UNDER the section, not just
-            # as generic string presence anywhere in the document.
-            assert "NEW_FIELD" in content
-            assert "new_value" in content
-            section_pos = content.find("§1::IDENTITY")
-            field_pos = content.find("NEW_FIELD")
-            assert section_pos != -1, "Section header §1::IDENTITY must be present"
-            assert (
-                field_pos > section_pos
-            ), f"NEW_FIELD (pos {field_pos}) must appear AFTER §1::IDENTITY (pos {section_pos})"
+                assert f.read() == initial
 
     @pytest.mark.asyncio
     async def test_section_number_delete_key(self):

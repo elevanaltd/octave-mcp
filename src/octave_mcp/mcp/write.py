@@ -3001,6 +3001,36 @@ class WriteTool(BaseTool):
             content_changed=content_changed,
         )
 
+        # Tool-fidelity slice 1, PR-2: the write rule, exact in meaning (F1, F2,
+        # C1, C2). Runs on every write, dry_run included; a violation refuses
+        # the write with E_FIDELITY and nothing is written. Local import keeps
+        # this module's line layout stable (spec pointers cite its lines).
+        from octave_mcp.mcp.write_fidelity import FidelityRequest, check_write_fidelity, refusal_envelope
+
+        fidelity = check_write_fidelity(
+            FidelityRequest(
+                mode="normalize" if normalize_mode else ("changes" if changes is not None else "content"),
+                doc=doc,
+                output=canonical_content,
+                reference=content or "",
+                baseline=baseline_content_for_diff,
+                format_style=format_style,
+                lenient=lenient,
+                changes=changes,
+                mutations=mutations,
+                corrections=result["corrections"],
+                tool=self,
+                strict_structure=not lenient,
+            )
+        )
+        if fidelity.violations:
+            envelope = self._error_envelope(target_path, [], result["corrections"])
+            # GH#349 (I4): data-loss corrections stay visible as top-level
+            # warnings on the refusal, as they are on success.
+            envelope["warnings"] = result["warnings"]
+            return refusal_envelope(envelope, fidelity.violations)
+        result["corrections"].extend(fidelity.corrections)
+
         if corrections_only:
             # Explicit dry-run: no filesystem writes, no mkdir side effects
             return result

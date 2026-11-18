@@ -101,17 +101,21 @@ class TestCLIWriteChangesPreserve:
         assert 'VERSION::"1.0"' in written, f"unchanged META.VERSION lost; file is: {written!r}"
 
     def test_new_top_level_key_addition(self, tmp_path: Path) -> None:
-        """A new top-level key not present in the source must appear in the output."""
+        """A new top-level key is refused, not created (tool-fidelity PR-2).
+
+        One write rule for the CLI and octave_write (plan section 3 C2,
+        NO_AUTO_CREATE): E_FIDELITY declared_change_mismatch, created, and
+        the file is untouched. Until v1.17.0 the CLI created the key.
+        """
         initial = "===TEST===\nEXISTING::value\n===END===\n"
-        exit_code, _output, written = _write_then_read(
+        exit_code, output, written = _write_then_read(
             tmp_path,
             initial_content=initial,
             changes={"NEW_KEY": "new_value"},
         )
-        assert exit_code == 0
-        assert "NEW_KEY::new_value" in written, f"new key missing; file is: {written!r}"
-        # And the existing key must still be present.
-        assert "EXISTING::value" in written, f"existing key lost; file is: {written!r}"
+        assert exit_code == 1
+        assert "E_FIDELITY" in output and "created" in output
+        assert written == initial, f"a refused write changed the file: {written!r}"
 
     def test_whole_meta_replacement(self, tmp_path: Path) -> None:
         """Whole-META replacement must apply all new fields and drop the old.
