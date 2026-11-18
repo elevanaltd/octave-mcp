@@ -9,8 +9,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from test_p2_8_bundled_skills_language import GLYPH, _scan
+from test_p2_8_bundled_skills_language import _scan
 
+# Operator glyphs only. The skills GLYPH regex also flags a spaced "|" or "+", which a README uses in tables.
+GLYPH = re.compile(r"[⊕⇌∧∨→∴⧺]|<->|->")
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
 MYTH = re.compile(
