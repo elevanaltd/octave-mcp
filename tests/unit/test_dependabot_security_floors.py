@@ -12,7 +12,13 @@ Tests verify:
 - Each direct dependency carries a `>=` floor at or above the first
   patched version of its open advisories.
 - The `dev` extra and the PEP-735 `dev` dependency-group stay in sync.
-- The mcp `<2` ceiling (GH#519) survives the floor raise.
+- The mcp `<2` ceiling (GH#519) survives the floor raise and excludes every
+  2.x release, including 2.0 pre-releases.
+
+Version handling uses `packaging` (PEP 440), not hand-rolled parsing, so
+`>=2.15` equals `>=2.15.0` and a pre-release floor such as `>=2.15.0rc1`
+fails the guard. `packaging` is a dependency of pytest, black and
+virtualenv, so it is present under `pip install -e ".[dev]"`.
 """
 
 import re
@@ -20,6 +26,10 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
+from packaging.utils import canonicalize_name
+from packaging.version import Version
 
 PYPROJECT_PATH = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
@@ -38,46 +48,78 @@ def _data() -> dict:
     return tomllib.loads(PYPROJECT_PATH.read_text())
 
 
-def _version_tuple(version: str) -> tuple[int, ...]:
-    return tuple(int(part) for part in version.split("."))
+def _requirement(requirements: list[str], package: str) -> Requirement:
+    """Return the single parsed requirement for `package` (name-normalised)."""
+    parsed = [Requirement(r) for r in requirements]
+    matches = [r for r in parsed if canonicalize_name(r.name) == canonicalize_name(package)]
+    assert len(matches) == 1, f"Expected exactly one '{package}' declaration, found {len(matches)}"
+    return matches[0]
 
 
-def _declared_floor(requirements: list[str], package: str) -> tuple[int, ...]:
-    """Return the `>=` floor declared for `package` in a requirements list."""
-    pattern = re.compile(rf"^{re.escape(package)}\s*>=\s*([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE)
-    matches = [m for req in requirements if (m := pattern.match(req))]
-    assert len(matches) == 1, f"Expected exactly one '{package}>=' declaration, found {len(matches)}"
-    return _version_tuple(matches[0].group(1))
+def _declared_floor(requirements: list[str], package: str) -> Version:
+    """Return the `>=` floor declared for `package` as a Version."""
+    req = _requirement(requirements, package)
+    floors = [Version(spec.version) for spec in req.specifier if spec.operator == ">="]
+    assert len(floors) == 1, f"Expected exactly one '>=' floor on {package}, found {[str(f) for f in floors]}"
+    return floors[0]
+
+
+def _assert_floor(requirements: list[str], package: str, floor: str) -> None:
+    declared = _declared_floor(requirements, package)
+    assert not declared.is_prerelease, f"{package} floor {declared} is a pre-release; floors must be final releases"
+    assert declared >= Version(floor), f"{package} floor {declared} is below security floor {floor}"
+
+
+def _assert_excludes_v2(spec: SpecifierSet) -> None:
+    for probe in ("2.0", "2.0.0rc1", "2.2.0"):
+        assert not spec.contains(probe, prereleases=True), f"mcp {spec} admits {probe}"
+    assert spec.contains("1.99", prereleases=True), f"mcp {spec} excludes 1.99; ceiling too tight"
+
+
+class TestFloorComparisonSemantics:
+    """The comparison helpers themselves must not false-green or false-red."""
+
+    def test_trailing_zero_equivalence(self):
+        _assert_floor(["pkg>=2.15"], "pkg", "2.15.0")
+
+    def test_prerelease_floor_rejected(self):
+        with pytest.raises(AssertionError, match="pre-release"):
+            _assert_floor(["pkg>=2.15.0rc1"], "pkg", "2.15.0")
+
+    def test_lower_floor_rejected(self):
+        with pytest.raises(AssertionError, match="below security floor"):
+            _assert_floor(["pkg>=2.14.9"], "pkg", "2.15.0")
 
 
 class TestRuntimeSecurityFloors:
     @pytest.mark.parametrize("package,floor", sorted(RUNTIME_FLOORS.items()))
     def test_runtime_dependency_floor(self, package: str, floor: str):
-        declared = _declared_floor(_data()["project"]["dependencies"], package)
-        assert declared >= _version_tuple(floor), f"{package} floor {declared} is below security floor {floor}"
+        _assert_floor(_data()["project"]["dependencies"], package, floor)
 
     def test_mcp_keeps_v2_ceiling(self):
-        mcp = [d for d in _data()["project"]["dependencies"] if d.startswith("mcp")]
-        assert len(mcp) == 1 and "<2" in mcp[0], f"GH#519 ceiling lost: {mcp}"
+        """GH#519: every 2.x release (including 2.0 pre-releases) must stay excluded."""
+        _assert_excludes_v2(_requirement(_data()["project"]["dependencies"], "mcp").specifier)
+
+    @pytest.mark.parametrize("bad", ["mcp>=1.30.0,<2.5", "mcp>=1.30.0,<20", "mcp>=1.30.0"])
+    def test_ceiling_check_rejects_loose_caps(self, bad: str):
+        with pytest.raises(AssertionError, match="admits"):
+            _assert_excludes_v2(Requirement(bad).specifier)
 
 
 class TestHttpExtraSecurityFloors:
     @pytest.mark.parametrize("package,floor", sorted(HTTP_EXTRA_FLOORS.items()))
     def test_http_extra_floor(self, package: str, floor: str):
-        declared = _declared_floor(_data()["project"]["optional-dependencies"]["http"], package)
-        assert declared >= _version_tuple(floor), f"{package} floor {declared} is below security floor {floor}"
+        _assert_floor(_data()["project"]["optional-dependencies"]["http"], package, floor)
 
 
 class TestDevSecurityFloors:
     @pytest.mark.parametrize("package,floor", sorted(DEV_FLOORS.items()))
     def test_dev_extra_floor(self, package: str, floor: str):
-        declared = _declared_floor(_data()["project"]["optional-dependencies"]["dev"], package)
-        assert declared >= _version_tuple(floor), f"{package} floor {declared} is below security floor {floor}"
+        _assert_floor(_data()["project"]["optional-dependencies"]["dev"], package, floor)
 
     @pytest.mark.parametrize("package,floor", sorted(DEV_FLOORS.items()))
     def test_dependency_group_floor(self, package: str, floor: str):
-        declared = _declared_floor(_data()["dependency-groups"]["dev"], package)
-        assert declared >= _version_tuple(floor), f"{package} floor {declared} is below security floor {floor}"
+        _assert_floor(_data()["dependency-groups"]["dev"], package, floor)
 
     def test_dev_extra_and_group_stay_in_sync(self):
         data = _data()
