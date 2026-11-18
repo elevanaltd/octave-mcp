@@ -19,14 +19,15 @@ RESOURCES = REPO_ROOT / "src" / "octave_mcp" / "resources"
 RESOURCE_FILES = sorted(RESOURCES.rglob("*.oct.md"))
 
 # Files whose refusal is a product (emitter) defect, not an input defect: no workaround in the spec text.
+# raises=AssertionError limits the xfail to a refusal (a crash in WriteTool.execute still fails the test).
 # strict=True makes the xfail fail loudly the moment the emitter is fixed, so the mark gets removed.
 EMITTER_DEFECTS: dict[str, str] = {
     # L77 ERROR_ORDERING::"a→b→c" is valid input; the emitter dequotes it and the output re-parses with
     # W_BARE_FLOW (not_fixed_point). Tracked by gh#510.
     "specs/octave-execution-spec.oct.md": "gh#510: emitter dequotes a quoted scalar containing '→', re-parse warns bare_flow",
     # L24 CHAIN::"constraint∧constraint∧constraint" is valid input; same dequote defect with '∧' re-parses
-    # with W_CONSTRAINT_OUTSIDE_BRACKETS. gh#510 covers the '→' case only; the '∧' case is its sibling.
-    "specs/octave-schema-spec.oct.md": "gh#510 sibling: emitter dequotes a quoted scalar containing '∧', "
+    # with W_CONSTRAINT_OUTSIDE_BRACKETS. gh#510 covers the '→' case only; the '∧' case is tracked by gh#571.
+    "specs/octave-schema-spec.oct.md": "gh#571: emitter dequotes a quoted scalar containing '∧', "
     "re-parse warns constraint_outside_brackets",
 }
 
@@ -34,7 +35,7 @@ EMITTER_DEFECTS: dict[str, str] = {
 def _param(path: Path) -> object:
     rel = path.relative_to(RESOURCES).as_posix()
     reason = EMITTER_DEFECTS.get(rel)
-    marks = [pytest.mark.xfail(strict=True, reason=reason)] if reason else []
+    marks = [pytest.mark.xfail(raises=AssertionError, strict=True, reason=reason)] if reason else []
     return pytest.param(path, id=rel, marks=marks)
 
 
