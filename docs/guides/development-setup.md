@@ -45,7 +45,7 @@ pip install -e ".[dev]"
 ```
 
 This installs:
-- **Core**: `mcp>=1.27.0,<2`, `click>=8.1.0`, `pydantic>=2.12.0`
+- **Core**: `mcp>=1.30.0,<2`, `click>=8.1.0`, `pydantic>=2.12.0`
 - **Development**: `pytest`, `pytest-cov`, `mypy`, `ruff`, `black`, `hypothesis`
 
 #### Verifying / repairing the dev toolchain (issue #462)
@@ -253,7 +253,7 @@ docs: Update API reference for parser module
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| mcp | >=1.27.0,<2 | Model Context Protocol SDK (capped below 2.x, GH#519) |
+| mcp | >=1.30.0,<2 | Model Context Protocol SDK (capped below 2.x, GH#519) |
 | click | >=8.1.0 | CLI framework |
 | pydantic | >=2.12.0 | Data validation |
 | python-dotenv | >=1.2.2 | Environment config |
