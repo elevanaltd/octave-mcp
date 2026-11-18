@@ -242,6 +242,90 @@ class TestContentModeLoss:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Evidence completeness under the display cap (CE BLOCKED at 49d2e1f)
+# ---------------------------------------------------------------------------
+
+_MANY = 25
+
+
+def _many_losses_then(tail: str) -> str:
+    """A body with _MANY separate bare-line losses, then ``tail``."""
+    body = "".join(f"B{i}:\n  K::v\n  lost words {i}\n" for i in range(_MANY))
+    return '===D===\nMETA:\n  TYPE::T\n  VERSION::"1"\n' + body + tail + "===END===\n"
+
+
+class TestViolationCapKeepsEveryClass:
+    """The refusal may show at most 20 violations, but more than 20 findings
+    of one class must not hide a later class, and the counts are complete."""
+
+    def test_comparator_reports_a_later_class_after_many_of_another(self) -> None:
+        """The CE counterexample: 25 separate deletions, then one addition."""
+        from octave_mcp.mcp.write_fidelity import lexical_violations
+
+        # C::kept separates the last deletion from the addition, so the
+        # addition is a pure insert (adjacent, the pair is one replacement).
+        reference = "===D===\n" + "".join(f"A{i}::kept\nB{i}::lost\n" for i in range(_MANY)) + "C::kept\n===END===\n"
+        output = "===D===\n" + "".join(f"A{i}::kept\n" for i in range(_MANY)) + "C::kept\nZ::added\n===END===\n"
+        kinds = [v["kind"] for v in lexical_violations(reference, output)]
+        assert kinds.count("content_loss") == _MANY
+        assert "content_added" in kinds
+
+    async def test_refusal_shows_every_class_and_complete_counts(self, tmp_path: Path) -> None:
+        """End to end: F1 finds _MANY content_loss, F2 then finds a
+        not_fixed_point (#510); both classes are in the refusal."""
+        path = tmp_path / "many.oct.md"
+        result = await _run(path, content=_many_losses_then('FLOW::"A→B"\n'))
+        _assert_refused(result, path, None)
+        shown = result["fidelity_violations"]
+        assert len(shown) <= 20
+        assert {v["kind"] for v in shown} == {"content_loss", "not_fixed_point"}
+        counts = result["fidelity_violation_counts"]
+        assert counts["content_loss"] == _MANY and counts["not_fixed_point"] >= 1
+        assert sum(counts.values()) > len(shown)
+        assert result["fidelity_violations_truncated"] is True
+        message = result["errors"][0]["message"]
+        assert "content_loss" in message and "not_fixed_point" in message
+        assert str(sum(counts.values())) in message
+
+    async def test_summary_receipt_keeps_the_counts(self, tmp_path: Path) -> None:
+        path = tmp_path / "many_s.oct.md"
+        content = _many_losses_then('FLOW::"A→B"\n')
+        full = await _run(path, content=content)
+        summary = await _run(path, content=content, receipt="summary")
+        assert summary == full
+        assert summary["fidelity_violation_counts"] == full["fidelity_violation_counts"]
+
+    async def test_untruncated_refusal_has_exact_counts(self, tmp_path: Path) -> None:
+        path = tmp_path / "one.oct.md"
+        result = await _run(path, content=_BARE_LINE)
+        _assert_refused(result, path, None, "content_loss")
+        assert result["fidelity_violation_counts"] == {"content_loss": len(result["fidelity_violations"])}
+        assert result["fidelity_violations_truncated"] is False
+
+    def test_display_cap_reserves_one_witness_per_class(self) -> None:
+        """The cap applies once, at display, wherever the findings came from
+        (F1, F2, C1, C2): each detected class keeps its first witness."""
+        from octave_mcp.mcp.write_fidelity import cap_violations, violation
+
+        found = (
+            [violation("content_loss", i, f"x{i}", "") for i in range(30)]
+            + [violation("declared_change_mismatch", 99, "a", "b")]
+            + [violation("not_fixed_point", 100, "c", "d")]
+            + [violation("content_added", 101, "", "e")]
+        )
+        shown, counts, truncated = cap_violations(found)
+        assert len(shown) == 20 and truncated is True
+        assert {v["kind"] for v in shown} == {
+            "content_loss",
+            "declared_change_mismatch",
+            "not_fixed_point",
+            "content_added",
+        }
+        assert counts == {"content_loss": 30, "declared_change_mismatch": 1, "not_fixed_point": 1, "content_added": 1}
+        assert [v["line"] for v in shown] == sorted(v["line"] for v in shown), "witnesses keep detection order"
+
+
 class TestLexicalComparator:
     @pytest.mark.parametrize(
         ("reference", "output"),
