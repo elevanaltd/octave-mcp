@@ -111,7 +111,7 @@ OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
 
 ## Version Alignment
 
-Resources target the OCTAVE v6 protocol. Each file carries its own `VERSION` in `META`; versions differ per file (e.g. `octave-core-spec` 6.0.1, `octave-primers-spec` 6.3.2, `octave-skills-spec` 9.1.0), so check the file rather than assuming a shared version.
+Resources target the OCTAVE v6 protocol. Each file carries its own `VERSION` in `META`; versions differ per file (e.g. `octave-core-spec` 6.0.1, `octave-primers-spec` 6.5.1, `octave-skills-spec` 9.2.0), so check the file rather than assuming a shared version.
 
 ## Implementation Notes
 
