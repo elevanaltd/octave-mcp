@@ -44,6 +44,11 @@ dependencies = [
     "python-multipart>=0.0.31",  # CVE-2026-53537, CVE-2026-53538, CVE-2026-53539, CVE-2026-53540: multipart parsing advisories
     "cryptography>=50.0.0",  # CVE-2026-69247, CVE-2026-69248, CVE-2026-69249, GHSA-537c-gmf6-5ccf: floor 50.0.0 clears open advisories
     "filelock>=4.2.1",  # CVE-2026-112907, CVE-2026-112909, CVE-2026-112910, CVE-2026-112913, CVE-2026-112915, CVE-2026-112935, CVE-2026-112936, CVE-2026-112939, CVE-2026-112940: lock-file advisories
+    "anyio>=4.14.2",  # CVE-2026-64847, CVE-2026-63374: transitive via mcp; floored because pip ignores uv.lock
+    "certifi>=2026.10.18",  # GHSA-6q48-6c7w-9gw2: transitive via httpx (mcp); floored because pip ignores uv.lock
+    "idna>=3.15",  # CVE-2026-45409: transitive via httpx/anyio (mcp); floored because pip ignores uv.lock
+    "pydantic-settings>=2.14.2",  # GHSA-4xgf-cpjx-pc3j: transitive via mcp; floored because pip ignores uv.lock
+    "starlette>=1.3.1",  # CVE-2026-54283, CVE-2026-48710, CVE-2026-48817, CVE-2026-48818: transitive via mcp; core floor because pip ignores uv.lock (also kept in the http extra)
 ]
 
 [project.urls]

@@ -773,15 +773,20 @@ name = "octave-mcp"
 version = "1.16.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
+    { name = "certifi" },
     { name = "click" },
     { name = "cryptography" },
     { name = "filelock" },
+    { name = "idna" },
     { name = "mcp" },
     { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
     { name = "pyyaml" },
+    { name = "starlette" },
 ]
 
 [package.optional-dependencies]
@@ -828,17 +833,21 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.14.2" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=26.10.1" },
+    { name = "certifi", specifier = ">=2026.10.18" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "filelock", specifier = ">=4.2.1" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'http'", specifier = ">=0.28.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.122.0" },
+    { name = "idna", specifier = ">=3.15" },
     { name = "mcp", specifier = ">=1.30.0,<2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "pydantic", specifier = ">=2.12.0" },
+    { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pygments", marker = "extra == 'dev'", specifier = ">=2.20.0" },
     { name = "pyjwt", specifier = ">=2.15.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
@@ -850,6 +859,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
     { name = "sse-starlette", marker = "extra == 'http'", specifier = ">=2.2.0" },
+    { name = "starlette", specifier = ">=1.3.1" },
     { name = "starlette", marker = "extra == 'http'", specifier = ">=1.3.1" },
     { name = "tiktoken", marker = "extra == 'dev'", specifier = ">=0.14.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12" },
