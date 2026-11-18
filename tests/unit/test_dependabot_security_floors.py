@@ -39,6 +39,12 @@ RUNTIME_FLOORS = {
     "filelock": "4.2.1",
     "python-multipart": "0.0.31",
     "mcp": "1.30.0",
+    # Transitive via mcp/httpx, floored in core metadata because pip ignores uv.lock.
+    "anyio": "4.14.2",
+    "certifi": "2026.10.18",
+    "idna": "3.15",
+    "pydantic-settings": "2.14.2",
+    "starlette": "1.3.1",
 }
 HTTP_EXTRA_FLOORS = {"starlette": "1.3.1"}
 DEV_FLOORS = {"virtualenv": "21.14.9", "black": "26.10.1", "Pygments": "2.20.0"}  # Pygments: CVE-2025-61833
