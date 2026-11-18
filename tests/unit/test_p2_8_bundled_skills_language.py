@@ -70,7 +70,9 @@ RESOURCES_DIR = REPO_ROOT / "src" / "octave_mcp" / "resources"
 # Baseline constants. Source: spec section 2 "Baseline" table, measured at
 # octave-mcp cdfc963 (baseline.py). Do not edit to make a test pass.
 # ---------------------------------------------------------------------------
-BASELINE_CL100K = {"literacy": 5109, "mastery": 3885, "compression": 2106, "tool-reference": 4218, "chatter": 1975}
+BASELINE_CL100K = {"literacy": 5109, "mastery": 3885, "compression": 2106, "tool-reference": 4247, "chatter": 1975}
+# tool-reference: re-pinned 4218 -> 4247 (section 8 USED_BY rebuilt from the archetype-matrix; measured 4497 = 4247 + cap 250)
+# under OCTAVE-MCP-TOOL-REFERENCE-USED-BY-SCOPE-20261118 (PR #560), which extends the #557 re-pin rule to this file. Tool-reference only.
 # literacy: re-pinned 5065 -> 5105 (5.1.1 writer scope), then 5105 -> 5109 (UPOG and 7a relabel, measured 5108; test is strict "<") under
 # OCTAVE-MCP-LITERACY-WRITER-SCOPE-AND-LIMITS-20261118 ("create the right file, then re-pin token baselines
 # instead of cutting content"). Literacy only; no other baseline moved.
