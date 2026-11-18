@@ -347,15 +347,17 @@ class TestCharacterizationKnownDefects:
         assert "{" not in emitted, f"GH#487 #488: no Python-repr braces; got:\n{emitted}"
 
     @pytest.mark.asyncio
-    async def test_bare_dict_new_top_key_nested_value_emits_block_gh440(self) -> None:
-        """INVERTED (GH#487 B-4, Q2 dict->BLOCK landed): nested dict now emits BLOCK form.
+    async def test_bare_dict_new_top_key_nested_value_is_refused_as_created_gh440(self) -> None:
+        """Tool-fidelity PR-2: a nested dict at a NEW top-level key is refused (#517 class).
+
+        History (GH#487 B-4, Q2 dict->BLOCK landed): the nested dict used to emit BLOCK form.
 
         Formerly a characterization pin documenting the dict->InlineMap coercion bug (nested
         ``NEWKEY::[OUTER::[INNER::v]]`` failing strict re-parse with E_NESTED_INLINE_MAP). GH#487
         Q2 (#440) DEFERRED_CANONICALIZATION abolishes the coercion: a bare-dict at a NEW top-level
         KEY whose value is a nested dict is synthesized as BLOCK form (sole canonical nested form),
         which strict-re-parses cleanly. Retained as the negative-history regression guard
-        (converse of ``test_bare_dict_new_top_key_nested_value_emits_block``).
+        (converse of ``test_bare_dict_new_top_key_nested_value_is_refused``).
         """
         # Tool-fidelity PR-2 (#517 class): creating an absent top-level key via
         # changes is now refused (E_FIDELITY declared_change_mismatch, detail
@@ -539,7 +541,8 @@ class TestDesiredContractGH440:
     """#440 / Q2: nested dict values serialize as BLOCK at emit (dict->InlineMap abolished)."""
 
     @pytest.mark.asyncio
-    async def test_bare_dict_new_top_key_nested_value_emits_block(self) -> None:
+    async def test_bare_dict_new_top_key_nested_value_is_refused(self) -> None:
+        """Tool-fidelity PR-2: a NEW top-level key is refused, not created."""
         # Tool-fidelity PR-2 (#517 class, NO_AUTO_CREATE): a NEW top-level key is
         # refused rather than created; nested-dict BLOCK synthesis is pinned on an
         # existing key by test_existing_scalar_replaced_by_nested_dict_emits_block.

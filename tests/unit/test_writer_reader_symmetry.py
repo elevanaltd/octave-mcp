@@ -193,12 +193,42 @@ async def test_hard_symmetry_roundtrip(fixture_path: Path) -> None:
     try:
         content = content_bytes.decode("utf-8")
     except UnicodeDecodeError:
+        assert fixture_id not in _EXPECTED_FIDELITY_REFUSALS, f"{fixture_id}: listed refusal fixture is not utf-8"
         pytest.skip(f"{fixture_id}: not utf-8")
 
     validate_tool = ValidateTool()
     write_tool = WriteTool()
 
-    # Step 1: validate. We try the META schema first (covers every
+    # Step 2: round-trip via dry-run write. The target holds the fixture
+    # bytes, and a dry run (refused or not) must leave them untouched.
+    with tempfile.NamedTemporaryFile(suffix=".oct.md", delete=False, mode="wb") as tmp:
+        tmp.write(content_bytes)
+        tmp_path = tmp.name
+    try:
+        write_result = await write_tool.execute(
+            target_path=tmp_path,
+            content=content,
+            dry_run=True,
+        )
+        with open(tmp_path, "rb") as f:
+            assert f.read() == content_bytes, f"{fixture_id}: a dry-run write changed the target"
+    finally:
+        os.unlink(tmp_path)
+
+    # R5 (tool-fidelity PR-2): triaged real-loss fixtures must be refused,
+    # never written. Checked before the validate skip below, so a listed
+    # fixture cannot drop out of the refusal coverage.
+    if fixture_id in _EXPECTED_FIDELITY_REFUSALS:
+        assert write_result.get("status") == "error", (
+            f"{fixture_id} is listed as an expected E_FIDELITY refusal "
+            f"({_EXPECTED_FIDELITY_REFUSALS[fixture_id]}) but the write returned "
+            f"status={write_result.get('status')!r}"
+        )
+        assert [e["code"] for e in write_result["errors"]] == ["E_FIDELITY"], write_result["errors"]
+        assert write_result.get("fidelity_violations"), "a refusal must name its violations"
+        return
+
+    # Step 3: validate. We try the META schema first (covers every
     # OCTAVE doc). If validation reports the fixture as invalid we skip —
     # HARD_SYMMETRY only applies to docs that octave_validate accepts.
     validate_result = await validate_tool.execute(content=content, schema="META")
@@ -209,31 +239,6 @@ async def test_hard_symmetry_roundtrip(fixture_path: Path) -> None:
             f"errors={len(validate_result.get('errors', []))}); "
             f"HARD_SYMMETRY is conditioned on validate.valid"
         )
-
-    # Step 2: round-trip via dry-run write.
-    with tempfile.NamedTemporaryFile(suffix=".oct.md", delete=False, mode="wb") as tmp:
-        tmp.write(content_bytes)
-        tmp_path = tmp.name
-    try:
-        write_result = await write_tool.execute(
-            target_path=tmp_path,
-            content=content,
-            dry_run=True,
-        )
-    finally:
-        os.unlink(tmp_path)
-
-    # R5 (tool-fidelity PR-2): triaged real-loss fixtures must be refused,
-    # never written. The refusal carries its violations in full.
-    if fixture_id in _EXPECTED_FIDELITY_REFUSALS:
-        assert write_result.get("status") == "error", (
-            f"{fixture_id} is listed as an expected E_FIDELITY refusal "
-            f"({_EXPECTED_FIDELITY_REFUSALS[fixture_id]}) but the write returned "
-            f"status={write_result.get('status')!r}"
-        )
-        assert [e["code"] for e in write_result["errors"]] == ["E_FIDELITY"], write_result["errors"]
-        assert write_result.get("fidelity_violations"), "a refusal must name its violations"
-        return
 
     # Step 3a: status must be success.
     assert write_result.get("status") == "success", (

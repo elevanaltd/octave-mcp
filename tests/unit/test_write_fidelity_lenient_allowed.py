@@ -66,7 +66,9 @@ class TestContentModeEquivalences:
 
     async def test_e2_dequote_with_ascii_alias_inside_the_run(self, tmp_path: Path) -> None:
         """``#1`` lexes as SECTION(#→§) + NUMBER; the output quotes it as "§1"."""
-        await _ok(tmp_path / "e2a.oct.md", content="===D===\nREF::#1\n===END===\n")
+        path = tmp_path / "e2a.oct.md"
+        await _ok(path, content="===D===\nREF::#1\n===END===\n")
+        assert 'REF::"§1"' in path.read_text(encoding="utf-8")
 
     async def test_e3_trailing_comma(self, tmp_path: Path) -> None:
         await _ok(tmp_path / "e3.oct.md", content="===D===\nL::[a,b,]\n===END===\n")
@@ -101,10 +103,14 @@ class TestContentModeEquivalences:
         path = tmp_path / "e6.oct.md"
         result = await _ok(path, content=f"===D===\nL::{value}\n===END===\n")
         assert "TN_RECONCILE_CANONICAL" in _codes(result)
-        written = parse(path.read_text(encoding="utf-8")).sections[0].value.items
-        assert len(written) == len(parse(f"===D===\nL::{value}\n===END===\n").sections[0].value.items)
+        from octave_mcp.mcp.write_fidelity import project_value
+
+        written = parse(path.read_text(encoding="utf-8")).sections[0].value
+        source = parse(f"===D===\nL::{value}\n===END===\n").sections[0].value
+        # Same items, compared by value (spans and tokens left out).
+        assert project_value(written) == project_value(source)
         if items is not None:
-            assert written == items
+            assert written.items == items
 
     async def test_e2_section_refs_in_a_list_are_auto_quoted_per_item(self, tmp_path: Path) -> None:
         """The SECTION_ORDER shape (estate R5 follow-up). The write path's
@@ -144,6 +150,8 @@ class TestContentModeEquivalences:
     )
     async def test_e5_envelope_completion(self, tmp_path: Path, content: str) -> None:
         await _ok(tmp_path / "e5.oct.md", content=content)
+        written = (tmp_path / "e5.oct.md").read_text(encoding="utf-8")
+        assert written.startswith("===") and written.rstrip().endswith("===END===")
 
     async def test_e0_decomposed_unicode_is_logged(self, tmp_path: Path) -> None:
         decomposed = '===D===\nK::"cafe\u0301"\n===END===\n'
@@ -176,7 +184,9 @@ class TestContentModeEquivalences:
 
     async def test_salvage_keeps_the_raw_text(self, tmp_path: Path) -> None:
         path = tmp_path / "salvage.oct.md"
-        await _ok(path, content="===DOC===\nKEY::a\tb\n===END===", lenient=True, parse_error_policy="salvage")
+        result = await _ok(path, content="===DOC===\nKEY::a\tb\n===END===", lenient=True, parse_error_policy="salvage")
+        # The salvage path ran (so the F1 salvage path rule was the one applied).
+        assert {"W_SALVAGE_LOCALIZED", "W_SALVAGE_LINE"} <= set(_codes(result))
         assert "_PARSE_ERROR_LINE_2" in path.read_text(encoding="utf-8")
 
     async def test_mutations_in_content_mode(self, tmp_path: Path) -> None:
@@ -240,7 +250,9 @@ class TestChangesModePathForms:
             "===D===\nITEMS:\n  NAME::a\n  STATE::old\n  NAME::b\n  STATE::other\n===END===\n", encoding="utf-8"
         )
         await _ok(path, changes={"NAME/STATE": "new"})
-        assert "STATE::new" in path.read_text(encoding="utf-8")
+        written = path.read_text(encoding="utf-8")
+        assert written.count("STATE::new") == 1
+        assert "STATE::other" in written and "STATE::old" not in written
 
     async def test_named_section_path(self, tmp_path: Path) -> None:
         path = tmp_path / "secname.oct.md"

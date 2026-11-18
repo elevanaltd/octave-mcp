@@ -323,7 +323,21 @@ class TestViolationCapKeepsEveryClass:
             "content_added",
         }
         assert counts == {"content_loss": 30, "declared_change_mismatch": 1, "not_fixed_point": 1, "content_added": 1}
-        assert [v["line"] for v in shown] == sorted(v["line"] for v in shown), "witnesses keep detection order"
+        # First 17 losses fill the cap after the three other kinds' first
+        # witnesses are reserved; detection order is kept.
+        assert shown == found[:17] + found[30:]
+
+    def test_display_cap_contract_when_kinds_exceed_the_limit(self) -> None:
+        """Contract: at most max(limit, number of detected kinds) entries;
+        one witness per kind always wins over the limit."""
+        from octave_mcp.mcp.write_fidelity import cap_violations, violation
+
+        kinds = ["content_loss", "content_added", "not_fixed_point", "declared_change_mismatch"]
+        found = [violation(k, n, "x", "y") for n, k in enumerate(kinds)] * 2
+        shown, counts, truncated = cap_violations(found, limit=2)
+        assert [v["kind"] for v in shown] == kinds
+        assert len(shown) == max(2, len(kinds)) and truncated is True
+        assert counts == dict.fromkeys(kinds, 2)
 
 
 class TestLexicalComparator:
