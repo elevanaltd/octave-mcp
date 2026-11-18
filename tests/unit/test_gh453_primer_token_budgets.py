@@ -26,12 +26,18 @@ token-counting test), not at module import, so an offline test runner
 only errors the specific tests that need the tokenizer rather than
 failing collection for the whole module.
 
-GH-453 makes the operator-legend section additive (adds ``∧`` and ``∨``
-glosses to each primer's legend) and names the ``TELEGRAPHIC_PHRASE`` form
-in the compression primer plus a cross-reference from the literacy primer.
-The canonical-operator and TELEGRAPHIC_PHRASE tests below guard those
-additions; they are unrelated to the token-budget measurement change and
-are left unchanged.
+GH-453 made the operator-legend section additive (adds ``∧`` and ``∨``
+glosses to each primer's legend). The canonical-operator legend test below
+still guards that: it searches the whole file of every primer for each of the
+six reading operators. It does not require a fenced ``READING_LEGEND``: the
+deprecated mythology and ultra-mythic primers have no such section. The fence
+is checked for the four live primers in test_p2_8b2_remainder_primers_specs.py.
+The ``TELEGRAPHIC_PHRASE`` form GH-453 added to the
+compression primer, and the literacy primer's cross-reference to it, are
+retired (OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101): PITH note form
+replaces them, so the two TELEGRAPHIC_PHRASE tests below now assert its
+absence. The token-budget tests are unrelated to that change and are left
+unchanged.
 """
 
 from __future__ import annotations
@@ -181,26 +187,23 @@ def test_primer_legends_canonical_operator_set(primer_path: Path) -> None:
     )
 
 
-def test_compression_primer_names_telegraphic_phrase() -> None:
-    """GH-453 Finding 2: the compression primer must name the
-    operator-bearing-quoted-value form as ``TELEGRAPHIC_PHRASE``.
+def test_compression_primer_does_not_teach_telegraphic_phrase() -> None:
+    """P2-8b2 (OCTAVE-MCP-P2-8-SKILLS-LANGUAGE-RULINGS-20261101): PITH note form replaces the
+    operator-bearing quoted ``TELEGRAPHIC_PHRASE`` form GH-453 Finding 2 had the compression primer name.
+    The legend of canonical operators (Finding 1, above) stays, as a reading reference.
     """
     path = PRIMERS_DIR / "octave-compression-primer.oct.md"
     content = path.read_text(encoding="utf-8")
-    assert "TELEGRAPHIC_PHRASE" in content, (
-        f"{path.name}: GH-453 Finding 2 requires a named form " f"(TELEGRAPHIC_PHRASE::...) in §1::ESSENCE or §2::MAP."
+    assert "TELEGRAPHIC_PHRASE" not in content, (
+        f"{path.name}: the telegraphic form is replaced by PITH note form " f"(pith-spec.md, Note form)."
     )
 
 
-def test_literacy_primer_cross_references_telegraphic_phrase() -> None:
-    """GH-453: literacy primer must cross-reference the named form so
-    both reader-facing primers expose the label.
-    """
+def test_literacy_primer_does_not_cross_reference_telegraphic_phrase() -> None:
+    """P2-8b2: the literacy primer no longer points at the replaced ``TELEGRAPHIC_PHRASE`` form."""
     path = PRIMERS_DIR / "octave-literacy-primer.oct.md"
     content = path.read_text(encoding="utf-8")
-    assert "TELEGRAPHIC_PHRASE" in content, (
-        f"{path.name}: GH-453 requires a cross-reference to " f"TELEGRAPHIC_PHRASE (named in compression primer)."
-    )
+    assert "TELEGRAPHIC_PHRASE" not in content, f"{path.name}: cross-reference to the replaced telegraphic form."
 
 
 class TestDeclaredTokensHelper:

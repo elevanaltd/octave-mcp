@@ -4,7 +4,7 @@ META:
   VERSION::"1.1"
   STATUS::ACTIVE
   PURPOSE::"Schema for HestAI skill definition files at .hestai-sys/library/skills/*/SKILL.md. Validates the canonical SKILL envelope: Zone 2 YAML frontmatter (name/description/allowed-tools, enforced only when a frontmatter block is present — see POLICY.FRONTMATTER_PRESENCE), META block (TYPE/VERSION/STATUS), and Zone 1 section body coverage (section 1 presence required; ANCHOR_KERNEL TARGET/NEVER/MUST/GATE quartet enforced when present). WAVE_3 of pre-v1.13.0 Schema Sweep (GH-428) extends I5 SCHEMA_SOVEREIGNTY from Zone 2 (#244) into Zone 1 section coverage. v1.1 (GH#520) realigns Zone 2 with octave-skills-spec v9.1, which makes YAML OPTIONAL at the hub location this schema governs."
-  IMPLEMENTS_SPEC::"octave-skills-spec@9.1.0"
+  IMPLEMENTS_SPEC::"octave-skills-spec@9.2.0"
 POLICY:
   VERSION::"1.0"
   UNKNOWN_FIELDS::WARN

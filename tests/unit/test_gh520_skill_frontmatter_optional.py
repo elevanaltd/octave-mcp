@@ -171,7 +171,9 @@ class TestSchemaDeclaresSpecAlignment:
             "skill.oct.md META must carry IMPLEMENTS_SPEC naming octave-skills-spec "
             "and its version, so spec/schema drift is visible at a glance (GH#520)."
         )
-        assert "9.1.0" in text, "skill.oct.md must record that it implements octave-skills-spec v9.1.0 (GH#520)."
+        assert (
+            "octave-skills-spec@9.2.0" in text
+        ), "skill.oct.md must record that it implements octave-skills-spec v9.2.0 (9.1.0 rules, PITH body and kernel rules)."
 
     def test_schema_version_bumped_past_1_0(self) -> None:
         """The schema version must move when its contract changes."""

@@ -45,6 +45,7 @@ META:
   ]
 §3::SHAPES
   HANDOFF::"For asks and handoffs, use the Handoff shape in PITH (`pith-spec.md`, Shapes)."
+  PEER::"For a message from one session to another, use the Peer message shape in PITH (`pith-spec.md`, Shapes); a peer message carries no envelope."
   ENVELOPE::"the envelope line pair is optional on the wire for other messages, to quote one as a unit; a Handoff carries none"
   EXAMPLE:
     ```

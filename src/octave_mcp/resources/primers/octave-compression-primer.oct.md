@@ -1,58 +1,64 @@
 ===OCTAVE_COMPRESSION_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"6.7.3"
-  TOKENS::"473"
+  VERSION::"7.1.1"
+  TOKENS::"495"
   COMPRESSION_TIER::ULTRA
-  LOSS_PROFILE::"[preserve:tier_rules∧transforms,drop:rationale]"
+  LOSS_PROFILE::"keeps tier rules and transforms; drops rationale"
 §1::ESSENCE
-PURPOSE::"Compress prose→OCTAVE by tier"
+PURPOSE::"Compress prose into OCTAVE at a lossless or conservative tier"
 OCTAVE::"Olympian Common Text And Vocabulary Engine — Semantic DSL for LLMs"
-METHOD::["READ→SELECT_TIER→EXTRACT[why,evidence]→COMPRESS→VALIDATE"]
-TELEGRAPHIC_PHRASE::"quoted, stopwords dropped, operators replace connectives — 'security ⇌ usability' not 'security at odds with usability'"
+METHOD::[
+  "read the source",
+  "choose LOSSLESS or CONSERVATIVE",
+  "extract why and evidence",
+  compress,
+  validate
+]
+LANGUAGE::"PITH: note form in plain words; identifiers, numbers and hedges copied exactly; relations in words"
 §2::MAP
 TIER_SELECTION::
 ```
-audit∨critical→LOSSLESS[drop::none]
-research∨design→CONSERVATIVE[drop::redundancy]
-quick_ref→AGGRESSIVE[drop::nuance]
-extreme_scarcity→ULTRA[drop::narrative]
+audit or critical         LOSSLESS      drops nothing
+research or design        CONSERVATIVE  drops redundancy
 ```
+DEFAULT::"otherwise choose CONSERVATIVE"
+READING_TIERS::"AGGRESSIVE and ULTRA appear in documents you read; they are frozen for reading and are not chosen for new writing"
 TRANSFORMS::
 ```
-content→PRESERVE[causality∧numbers∧IDs∧§_names]
-noise→DROP[stopwords∧redundancy∧prose_connectors]
-sentences→KEY::value
-repetition→[array]
-because∨therefore→A→B[reason]
-tradeoffs→GAIN⇌LOSS
-groupings→parent::[children]
+keep      causality, numbers, identifiers, section names
+drop      redundancy, filler, connectors
+sentence  KEY::"note-form sentence"
+repeats   one list
+reasons   cause and effect stated in words
+trade-off both sides stated in words
+group     parent block with children
 ```
 §3::SYNTAX
-OPERATORS::
+READING_LEGEND::
 ```
-:: assign
-→ flow
-⊕ synthesis
-⇌ tension
-∧ conjunction
-∨ disjunction
-[,] list
+::    assign
+→     flow
+⊕     synthesis
+⇌     tension
+∧     conjunction
+∨     disjunction
+[,]   list
 ```
+AUTHORING::"these operators appear in documents you read; write each relation in words"
 §4::ONE_SHOT
-IN::"Authenticate before dashboard; failed logins alert; security vs usability."
+IN::"Authenticate before the dashboard; failed logins alert; security versus usability."
 OUT:
-  AUTH::[login→validate→dashboard]
-  FAIL::alert
-  INTENT::"security ⇌ usability"
+  AUTH::"authenticate before the dashboard"
+  FAIL::"failed logins alert"
+  TRADEOFF::"security versus usability"
 §5::VALIDATE
 MUST::[
-  valid_OCTAVE,
-  "preserve_§_names_verbatim",
-  preserve_numbers∧IDs∧causality,
-  no_markdown,
-  no_JSON,
-  no_YAML,
-  "nesting<=3"
+  "valid OCTAVE",
+  "section names kept verbatim",
+  "numbers, identifiers and causality kept",
+  "META keeps COMPRESSION_TIER and LOSS_PROFILE",
+  "no markdown, JSON or YAML",
+  "nesting at most 3"
 ]
 ===END===
