@@ -131,6 +131,23 @@ K::v
 ===END===
 """
 
+# A fenced block with no owning ``KEY::`` is dropped by the parser with no
+# correction and no warning (found by the SR1-T4 no-op suite during PR-2).
+_ORPHAN_FENCE = """===D===
+META:
+  TYPE::T
+  VERSION::"1"
+§1::BODY
+DESCRIPTION::"a fenced block follows"
+
+```python
+def f(x):
+    return x + 1
+```
+
+===END===
+"""
+
 _QUOTED_FLOW = """===REPRO_DEQUOTE===
 META:
   TYPE::LLM_PROFILE
@@ -169,12 +186,23 @@ class TestContentModeLoss:
             pytest.param(_NUMERIC_KEY, id="numeric_key_dropped"),
             pytest.param(_META_DUPLICATE_KEY, id="meta_duplicate_key"),
             pytest.param(_META_COMMENT, id="meta_comment_511"),
+            pytest.param(_ORPHAN_FENCE, id="orphan_fence_block"),
         ],
     )
     async def test_loss_codes_are_refused(self, tmp_path: Path, content: str) -> None:
         path = tmp_path / "loss.oct.md"
         result = await _run(path, content=content)
         _assert_refused(result, path, None, "content_loss")
+
+    async def test_refusal_keeps_data_loss_warnings_visible(self, tmp_path: Path) -> None:
+        """GH#349 (I4): the refusal envelope still carries the data-loss
+        corrections and their top-level warnings, so a caller sees what the
+        parser would have dropped as well as why the write was refused."""
+        path = tmp_path / "w.oct.md"
+        result = await _run(path, content=_BARE_LINE, lenient=True)
+        _assert_refused(result, path, None, "content_loss")
+        assert "W_BARE_LINE_DROPPED" in [c["code"] for c in result["corrections"]]
+        assert "W_BARE_LINE_DROPPED" in [w["code"] for w in result["warnings"]]
 
     async def test_overwrite_refusal_leaves_existing_file_untouched(self, tmp_path: Path) -> None:
         path = tmp_path / "existing.oct.md"

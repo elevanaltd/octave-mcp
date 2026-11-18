@@ -240,9 +240,8 @@ class TestSemanticProjection:
     )
 
     def _proj(self, text: str) -> Any:
-        from octave_mcp.mcp.write_fidelity import semantic_projection
-
         from octave_mcp.core.parser import parse
+        from octave_mcp.mcp.write_fidelity import semantic_projection
 
         return semantic_projection(parse(text))
 
