@@ -1,8 +1,8 @@
 ===OCTAVE_READING_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"2.0.0"
-  TOKENS::"299"
+  VERSION::"2.0.1"
+  TOKENS::"302"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"keeps operator meanings; drops rationale"
 §1::ESSENCE
@@ -29,7 +29,7 @@ MEANS::"There is time pressure: an audit is due in 6 weeks"
 §5::VALIDATE
 MUST::[
   "all facts kept",
-  "mythology read as shorthand, not as system names",
+  "mythology terms read by their one domain, not as system names",
   "ambiguity noted when unsure"
 ]
 ===END===

@@ -43,9 +43,11 @@ Ask another LLM to restate that in English and it will paraphrase — silently d
 OCTAVE structures the same information as labelled fields, written in PITH:
 
 ```octave
-MIGRATION::"auth service; `3` sprints, the same problems repeating"
-AUDIT::"due in `6` weeks; auditors flagged session management as a priority area"
-BUDGET::"`60` percent of the quarterly budget burned on this migration alone"
+MIGRATION::"auth migration running for three sprints"
+PROBLEMS::"keeps hitting the same problems"
+AUDIT::"security audit in six weeks"
+FLAGGED::"auditors specifically flagged session management as a priority area"
+BUDGET::"`60%` of the quarterly budget burned on this migration alone"
 ```
 
 Each fact sits in its own labelled field, in plain words, with its numbers and its hedges copied exactly. There is no narrative to retell, so there is less for a later reader to merge or escalate. See the [PITH specification](src/octave_mcp/resources/specs/pith-spec.md) for the rules and the evidence behind each one.
@@ -139,8 +141,6 @@ octave eject document.oct.md --mode executive --format markdown
 
 ## For Researchers
 
-Two architectural ideas and one that sounds like it shouldn't work but does.
-
 ### Self-describing artifacts
 
 Most structured output validates at a single point and then becomes a plain object. OCTAVE documents are different — the schema, compression tier, and transformation log travel *with* the document. A downstream agent doesn't infer integrity; it reads it.
@@ -155,7 +155,7 @@ A document's `META.CONTRACT` block compiles to a GBNF grammar that can constrain
 
 Two architectural ideas, and one decision about language.
 
-OCTAVE once leaned on operators and mythology terms as a compression vocabulary. Bench results recorded in the [PITH specification](src/octave_mcp/resources/specs/pith-spec.md) (Plain vocabulary) found that mythology used as writing escalated when misapplied, and that where it fitted exactly it did no work plain words do not. So it is retired as authoring vocabulary. The project keeps the container and replaces the writing standard.
+OCTAVE once leaned on operators and mythology terms as a compression vocabulary. Bench results recorded in the [PITH specification](src/octave_mcp/resources/specs/pith-spec.md) (Plain vocabulary) reported that mythology used as writing escalated when misapplied, and allows an established idiom only where its dictionary sense fits exactly. So the project retires mythology as instruction vocabulary and as keys. The project keeps the container and replaces the writing standard.
 
 PITH is the standard for every sentence, item, step and quoted value an agent writes, in any document shape:
 
@@ -182,7 +182,7 @@ STATUS::"blocked; the lockfile change is not confirmed"
 EVIDENCE::"measured at `9c58708f`: `195` tests pass"
 ```
 
-Documents you receive may still use operators or mythology terms. Read them by their plain meaning; do not write them.
+Documents you receive may still use operators or mythology terms. Read them by their plain meaning; do not write operators and mythology as instruction vocabulary or keys.
 
 **Working on this codebase:**
 ```octave

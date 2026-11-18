@@ -64,7 +64,7 @@ NOTE_VERSION::"v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec,
   TARGET::"100_lines_max[all_patterns]"
   HARD_LIMIT::"150_lines[NEVER_exceed]"
   REASON::patterns_are_decision_aids_not_documentation
-  OVERFLOW_STRATEGY::[if_pattern_exceeds_limit→consider_splitting_or_promoting_to_skill]
+  OVERFLOW_STRATEGY::["if a pattern exceeds the limit, consider splitting it or promoting it to a skill"]
 §5::VALIDATION
   VALIDATION_RULES:
     META_REQUIRED::[
@@ -140,14 +140,17 @@ NOTE_VERSION::"v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec,
     "PROFILE_PATTERNS::pattern_loaded_full_body_when_profile_active",
     "PROFILE_KERNEL_ONLY::§5::ANCHOR_KERNEL_extracted_only[awareness_without_procedural_weight]"
   ]
-  NOTE_EXAMPLE::"Example: In an agent definition with chassis-profile structure:"
-  EXAMPLE_AGENT_DEFINITION::[
-    "§3::CAPABILITIES",
-    "CHASSIS::[ho-mode]  // skills only — patterns rarely chassis-level",
-    "PROFILES:",
-    "STANDARD:",
-    "patterns::[mip-orchestration]       // full body loaded",
-    "kernel_only::[phase-transition-cleanup]  // §5::ANCHOR_KERNEL only"
+  NOTE_EXAMPLE::"Example: in an agent definition with chassis-profile structure, under §3::CAPABILITIES:"
+  EXAMPLE_AGENT_DEFINITION:
+    CHASSIS::[ho-mode]
+    PROFILES:
+      STANDARD:
+        patterns::[mip-orchestration]
+        kernel_only::[phase-transition-cleanup]
+  EXAMPLE_NOTES::[
+    "CHASSIS lists skills only; patterns are rarely chassis-level",
+    "patterns entries load the full body",
+    "kernel_only entries load §5::ANCHOR_KERNEL only"
   ]
   KERNEL_ONLY_RATIONALE::"Patterns in kernel_only provide decision gate awareness (GATE, NEVER, MUST) without full framework weight. Agent knows the pattern exists and what it prevents, without loading metrics, examples, or decision trees."
 §9::FORBIDDEN
@@ -176,14 +179,14 @@ NOTE_VERSION::"v2: META.TYPE fixed, §5::ANCHOR_KERNEL aligned with skills spec,
       SKILLS::recommended_for_anchor_injection
       PATTERNS::required_for_anchor_injection
     CHASSIS_PROFILE:
-      SKILLS::"appear_in_CHASSIS_or_PROFILES[skills⊕kernel_only]"
-      PATTERNS::"appear_in_PROFILES[patterns⊕kernel_only][rarely_chassis]"
+      SKILLS::"appear in CHASSIS or PROFILES: skills and kernel_only"
+      PATTERNS::"appear in PROFILES: patterns and kernel_only; rarely in the chassis"
 §11::LEGACY_COMPATIBILITY
-  NOTE::"v1→v2 migration notes"
+  NOTE::"v1 to v2 migration notes"
   V1_MIGRATION::[
-    "META_TYPE::LLM_PROFILE→PATTERN_DEFINITION",
-    "ANCHOR_KERNEL::\"§ANCHOR_KERNEL→§5::ANCHOR_KERNEL\"[section_header]",
-    "KERNEL_TERMINATOR::END_KERNEL→not_needed[section_header_self_terminates]"
+    "META_TYPE::LLM_PROFILE is migrated to PATTERN_DEFINITION",
+    "ANCHOR_KERNEL: the legacy §ANCHOR_KERNEL form is migrated to the §5::ANCHOR_KERNEL section header",
+    "KERNEL_TERMINATOR: END_KERNEL is not needed because the section header terminates itself"
   ]
   GRACE_PERIOD::"v2.0 through v2.x — parsers SHOULD accept both §5::ANCHOR_KERNEL and legacy §ANCHOR_KERNEL forms"
   HARD_REMOVAL::"v3.0 — legacy §ANCHOR_KERNEL no longer accepted"

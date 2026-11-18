@@ -1,7 +1,7 @@
 ===OCTAVE_LITERACY_PRIMER===
 META:
   TYPE::PRIMER
-  VERSION::"7.0.0"
+  VERSION::"7.0.1"
   TOKENS::"446"
   COMPRESSION_TIER::ULTRA
   LOSS_PROFILE::"keeps syntax rules; drops rationale"
@@ -36,7 +36,7 @@ AUTHORING::"these operators appear in documents you read; write each relation in
 IN::"The auth service validates tokens. Failed logins alert the on-call. Rate limit: not known."
 OUT:
   AUTH::"validates tokens"
-  ALERT::"failed logins page the on-call"
+  ALERT::"failed logins alert the on-call"
   RISK::"rate limit not known"
 §5::VALIDATE
 MUST::[

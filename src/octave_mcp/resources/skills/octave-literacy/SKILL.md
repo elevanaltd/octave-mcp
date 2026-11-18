@@ -211,9 +211,9 @@ META:
     ===END===
     ```
 §7::GOVERNANCE_AUTHORING
-  UPOG::"Universal Parse-Only Governance: structure for governance artefacts (North Stars, ADRs, RFCs, project-context docs, agent definitions); builds on the §4b inner language and §3 rules; enforced by the strict parser, this skill and the octave-secretary write gate"
+  UPOG::"Universal Parse-Only Governance: structure for governance and library artefacts (North Stars, ADRs, RFCs, project-context docs, agent definitions); builds on the §4b inner language and §3 rules; enforced by the strict parser, this skill and the octave-secretary write gate"
   §7a::ORGANIZING_PRINCIPLE
-    PRINCIPLE::"the strict AST parse is the gate and this skill is the schema, so no per-doctype schema registration; governance bodies are schema-exempt by declaration, and the META envelope still validates"
+    PRINCIPLE::"the strict AST parse is the gate and this skill is the schema, so no per-doctype schema registration; governance and library bodies are schema-exempt by declaration, and the META envelope still validates"
     APPLIES_TO::[
       "North Star summaries",
       "architectural decision records",

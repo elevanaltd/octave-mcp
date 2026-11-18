@@ -11,7 +11,7 @@ META:
 ---
 NOTE::"OCTAVE (Olympian Common Text And Vocabulary Engine) SKILLS: Universal format for AI agent skill documents."
 NOTE_V91::"v9.1: YAML frontmatter optional based on deployment context. OCTAVE envelope is the universal constant."
-NOTE_V90::"v9.0: §5::ANCHOR_KERNEL section header + compression mandate + canonical sections + token budget."
+NOTE_V90::"v9.0: §5::ANCHOR_KERNEL section header, compression mandate, canonical sections and token budget."
 NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallback until v10 (see §11)."
 §1::SKILL_DOCUMENT_STRUCTURE
   SEQUENCE::[OCTAVE_ENVELOPE,"§5::ANCHOR_KERNEL"]
@@ -37,24 +37,24 @@ NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallbac
   BODY::"octave_syntax<full_L1-L4_support>"
   LANGUAGE::"Write every value, item and sentence in PITH (pith-spec.md): note form in plain words, identifiers exact, relations in words."
   DESCRIPTION_ROLE::retrieval_only<NOT_behavioral_constraint>
-  ENFORCEMENT_SOURCE::"OCTAVE_body[§2::PROTOCOL⊕§3::GOVERNANCE]"
+  ENFORCEMENT_SOURCE::"the OCTAVE body: §2::PROTOCOL and §3::GOVERNANCE"
   NOTE_YAML_PRESENT::"When YAML is present: no duplicate TRIGGERS/TOOLS in OCTAVE META. YAML is source of truth for discovery fields."
   NOTE_YAML_ABSENT::"When YAML is absent: OCTAVE META is the sole source of truth."
 §2::BODY_FORMAT
   COMPRESSION::[
     "BODY::PITH note form in plain words (pith-spec.md): one fact per line, identifiers exact, relations in words; keep 1-2 examples and causal chains; drop narrative and verbose phrasing",
-    "YAML_FRONTMATTER::LOSSLESS<natural_language_for_BM25⊕embedding_retrieval,ONLY_when_present>",
+    "YAML_FRONTMATTER::LOSSLESS, natural language for BM25 and embedding retrieval, only when present",
     "ANCHOR_KERNEL::PITH items: one quoted note-form sentence per item (pith-spec.md, Skill kernels); the standard items come from that page"
   ]
   §2b::CANONICAL_SECTIONS
     RECOMMENDED_SECTIONS::[
-      "§1::CORE[what_this_skill_IS⊕mission⊕authority⊕identity_in_2_to_5_lines]",
-      "§2::PROTOCOL[what_agent_DOES⊕procedures⊕decision_trees⊕detection_checks]",
-      "§3::GOVERNANCE[boundaries⊕MUST_NEVER⊕BLOCKED⊕ALLOWED⊕escalation]",
-      "§4::EXAMPLES[1_to_2_concrete⊕1_anti⊕OPTIONAL_for_small_skills]",
-      "§5::ANCHOR_KERNEL[quoted_note_form_items⊕server_extractable]"
+      "§1::CORE: what the skill is, its mission, authority and identity, in 2 to 5 lines",
+      "§2::PROTOCOL: what the agent does, its procedures, decision trees and detection checks",
+      "§3::GOVERNANCE: boundaries, MUST_NEVER, BLOCKED, ALLOWED and escalation",
+      "§4::EXAMPLES: 1 to 2 concrete examples and 1 anti-example; optional for small skills",
+      "§5::ANCHOR_KERNEL: quoted note-form items the server can extract"
     ]
-    CATALOG_VARIANT::"section_per_item<anti_patterns⊕failure_patterns⊕each_item_is_a_section>"
+    CATALOG_VARIANT::"section per item: for anti-patterns and failure patterns, each item is a section"
 §3::DOCUMENT_TEMPLATE
   NOTE::"V9.1 template: YAML frontmatter shown but marked optional."
   V9_TEMPLATE_STRUCTURE:
@@ -83,7 +83,7 @@ NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallbac
   TARGET::"500 _lines_max"
   MAX_BREACH::"5 _files_over_500"
   HARD_LIMIT::"600 _lines"
-  OVERFLOW_STRATEGY::["progressive_disclosure<main→resources>"]
+  OVERFLOW_STRATEGY::["progressive disclosure: move deep dives from the main file to resources"]
   TOKEN_TARGET::"300 -700"
   EXAMPLE_DENSITY::"1 _per_200_tokens_of_abstraction"
   UNDERSIZED::below_200_tokens<skeleton_warning>
@@ -117,7 +117,7 @@ NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallbac
   ]
 §7::PLATFORM_ADAPTATION
   UNIVERSAL_FORMAT::pure_octave_all_platforms
-  PACKAGING::"directory_based<.claude∨.codex∨platform_agnostic>"
+  PACKAGING::"directory based: .claude, .codex or platform agnostic"
   YAML_FRONTMATTER_RULES:
     NOTE_PURPOSE::"YAML serves platform discovery (BM25, embedding retrieval, tool gating)."
     NOTE_ANCHOR::"The anchor ceremony reads OCTAVE META, not YAML."
@@ -128,7 +128,7 @@ NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallbac
         ".codex/skills/",
         "~/.claude/skills/"
       ]
-      YAML::"REQUIRED<platforms_use_YAML_for_discovery⊕triggers⊕tool_gating>"
+      YAML::"REQUIRED: platforms use YAML for discovery, triggers and tool gating"
       RATIONALE::"Claude Code, Desktop, and Codex parse YAML frontmatter for skill matching and allowed-tools enforcement"
     HUB_SKILLS:
       LOCATION::[".hestai-sys/library/skills/"]
@@ -176,10 +176,10 @@ NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallbac
     "cross_provider::works_via_anchor_print_to_any_LLM_context"
   ]
   ANCHOR_KERNEL_STRUCTURE::[
-    "TARGET::optional<single_line_purpose⊕what_this_skill_enforces>",
+    "TARGET::optional: a single-line purpose and what the skill enforces",
     "NEVER::required<list_of_forbidden_actions>",
     "MUST::required<list_of_mandatory_behaviors>",
-    "GATE::optional<decision_question⊕the_one_question_this_skill_answers>",
+    "GATE::optional: a decision question, the one question the skill answers",
     "LANE::optional<role_type_for_coordination_skills>",
     "DELEGATE::optional<task_type_to_agent_mappings>",
     "TEMPLATE::optional<handoff_or_output_template>",
@@ -211,9 +211,9 @@ NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallbac
   NOTE::"V5/V6/V7/V8 backward compatibility rules consolidated here."
   NOTE_FOCUS::"Keep the primary spec focused on current V9 standard."
   V8_MIGRATION::[
-    "ANCHOR_KERNEL_start→§5::ANCHOR_KERNEL::section_header_migration",
-    "META_TYPE::LLM_PROFILE→SKILL_DEFINITION",
-    "BODY_SECTIONS→CANONICAL_§1_§4_MAPPED"
+    "ANCHOR_KERNEL_start is migrated to §5::ANCHOR_KERNEL, the section header migration",
+    "META_TYPE::LLM_PROFILE is migrated to SKILL_DEFINITION",
+    "BODY_SECTIONS are mapped to the canonical §1 to §4"
   ]
   TRANSITION_WINDOW::[
     "GRACE_PERIOD::v9.0 through v9.x — parsers SHOULD accept both §5::ANCHOR_KERNEL and ANCHOR_KERNEL::start",
@@ -228,7 +228,7 @@ NOTE_GRACE::"Grace period: parsers SHOULD accept ANCHOR_KERNEL::start as fallbac
   ]
   V7_COMPAT::["V7_TEMPLATE::still_valid<kernel_omission_triggers_cascading_fallback>","REQUIRED_V7::[octave_envelope,anchor_kernel_recommended,no_markdown_headers,description_role_retrieval_only]"]
   V6_COMPAT::[
-    "V6_STANDARD::hybrid_format<yaml_header⊕octave_envelope>",
+    "V6_STANDARD::hybrid format: yaml header and octave envelope",
     "V6_READERS::can_read_v5_via_frontmatter_parsing",
     "MIGRATION::opt_in_per_skill<no_forced_upgrade>"
   ]
